@@ -1,6 +1,6 @@
 {
   "name": "pervootkryvateli-online-mvp",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "private": true,
   "description": "Мобильный онлайн-MVP настольной игры «Первооткрыватели», подготовленный для облачного запуска и установки как PWA на Android",
   "main": "server.js",
