@@ -5,7 +5,7 @@
 
 const MAP_META = {
   id: 'world-28-v2',
-  revision: 5,
+  revision: 6,
   rows: 28,
   cols: 28,
   coordinateBase: 0,
@@ -101,10 +101,64 @@ const CITADEL_CELLS = CITADEL.cells;
 const SPECIAL_LAND = CITADEL_CELLS;
 
 // Hazards remain separate from artwork and are interactive/passability data.
+// For protected islands the barrier is derived from island geometry, so moving
+// an island later cannot silently open an unprotected shore.
+function uniqueCells(cells) {
+  const seen = new Set();
+  return cells.filter(([row, col]) => {
+    const key = row + ',' + col;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function islandSeaPerimeter(islandId) {
+  const island = ISLAND_DEFS.find(def => def.id === islandId);
+  if (!island) return [];
+  const occupiedByIsland = new Set(
+    ISLAND_DEFS.flatMap(def => def.cells.map(([row, col]) => row + ',' + col))
+  );
+  const out = [];
+  for (const [row, col] of island.cells) {
+    for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      const nr = row + dr;
+      const nc = col + dc;
+      if (nr < 0 || nr >= MAP_META.rows || nc < 0 || nc >= MAP_META.cols) continue;
+      if (occupiedByIsland.has(nr + ',' + nc)) continue;
+      out.push([nr, nc]);
+    }
+  }
+  return uniqueCells(out);
+}
+
+const ABYSS_SHOAL_CELLS = [[11,25],[11,27],[12,25],[12,27],[13,25],[13,26],[13,27]];
+
 const HAZARDS = {
-  reef: { id: 'reef', name: 'Рифы', marker: 'black-triangle', cells: [[6,7],[6,10],[7,7],[7,10],[8,6],[8,10],[9,7],[9,8],[9,9],[9,10]] },
-  ice: { id: 'ice', name: 'Льды', marker: 'white-triangle', cells: [[23,0],[23,1],[23,2],[23,3],[23,4],[24,5],[25,5],[26,5],[27,5]] },
-  shoal: { id: 'shoal', name: 'Мели', marker: 'yellow-triangle', cells: [[0,21],[1,21],[2,21],[3,21],[4,18],[4,19],[4,20],[4,21],[11,25],[11,27],[12,25],[12,27],[13,25],[13,26],[13,27]] },
+  reef: {
+    id: 'reef',
+    name: 'Рифы',
+    marker: 'black-triangle',
+    protectsIslandId: 'chertonia',
+    passableBy: 'frigate',
+    cells: islandSeaPerimeter('chertonia'),
+  },
+  ice: {
+    id: 'ice',
+    name: 'Льды',
+    marker: 'white-triangle',
+    protectsIslandId: 'atlantia',
+    passableBy: 'carrack',
+    cells: islandSeaPerimeter('atlantia'),
+  },
+  shoal: {
+    id: 'shoal',
+    name: 'Мели',
+    marker: 'yellow-triangle',
+    protectsIslandId: 'maikan',
+    passableBy: 'brigantine',
+    cells: uniqueCells([...islandSeaPerimeter('maikan'), ...ABYSS_SHOAL_CELLS]),
+  },
 };
 
 const ANCHORS = {
