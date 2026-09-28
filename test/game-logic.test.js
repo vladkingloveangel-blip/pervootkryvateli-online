@@ -112,7 +112,7 @@ const {
   completeAssignment,
   legendaryPlaceAt,
 } = require('../game-logic');
-const { ASSIGNMENT_CARDS, FACTIONS, ESCORTS } = require('../game-data');
+const { ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS } = require('../game-data');
 
 function has(cells, row, col) { return cells.some(c => c.row === row && c.col === col); }
 
@@ -122,6 +122,51 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const brigantine = { row: 6, col: 6, shipClass: 'brigantine' };
   assert.equal(has(reachableCells(frigate, 1), 6, 7), true);
   assert.equal(has(reachableCells(brigantine, 1), 6, 7), false);
+}
+
+
+// Защитные препятствия полностью закрывают доступные морские стороны островов.
+// Клетки других островов не считаются морем и в периметр не включаются.
+{
+  const occupied = new Set(ISLAND_DEFS.flatMap(i => i.cells.map(([r, c]) => `${r},${c}`)));
+  const checks = [
+    ['chertonia', 'reef'],
+    ['maikan', 'shoal'],
+    ['atlantia', 'ice'],
+  ];
+  for (const [islandId, hazardType] of checks) {
+    const island = ISLAND_DEFS.find(i => i.id === islandId);
+    const barrier = new Set(HAZARDS[hazardType].map(([r, c]) => `${r},${c}`));
+    for (const [row, col] of island.cells) {
+      for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+        const nr = row + dr;
+        const nc = col + dc;
+        if (nr < 0 || nr > 27 || nc < 0 || nc > 27) continue;
+        if (occupied.has(`${nr},${nc}`)) continue;
+        assert.equal(
+          barrier.has(`${nr},${nc}`),
+          true,
+          `${hazardType} должен закрывать берег ${islandId} у ${nr},${nc}`
+        );
+      }
+    }
+  }
+}
+
+// Мель пропускает только бригантину.
+{
+  const brigantine = { row: 5, col: 18, shipClass: 'brigantine' };
+  const frigate = { row: 5, col: 18, shipClass: 'frigate' };
+  assert.equal(has(reachableCells(brigantine, 1), 4, 18), true);
+  assert.equal(has(reachableCells(frigate, 1), 4, 18), false);
+}
+
+// Льды пропускают только каракку.
+{
+  const carrack = { row: 22, col: 1, shipClass: 'carrack' };
+  const frigate = { row: 22, col: 1, shipClass: 'frigate' };
+  assert.equal(has(reachableCells(carrack, 1), 23, 1), true);
+  assert.equal(has(reachableCells(frigate, 1), 23, 1), false);
 }
 
 // Каравелла может пересечь одну клетку суши Ренаики: вода -> берег -> вода.
