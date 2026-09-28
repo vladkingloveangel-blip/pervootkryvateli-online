@@ -16,7 +16,7 @@
   <header class="topbar">
     <div>
       <strong>Первооткрыватели</strong>
-      <span class="tag">Online MVP 0.32.0</span>
+      <span class="tag">Online MVP 0.33.0</span>
     </div>
     <div id="connection" class="connection">подключение…</div>
   </header>
@@ -186,6 +186,15 @@
                   <button id="mapNavRollBtn" class="primary" type="button">🎲 Бросить d6</button>
                   <button id="mapNavStayBtn" type="button">Остаться</button>
                 </div>
+              </div>
+            </div>
+            <div id="mapContextOverlay" class="map-context-overlay hidden" aria-live="polite">
+              <div class="map-context-card">
+                <div class="map-context-copy">
+                  <strong id="mapContextTitle">—</strong>
+                  <span id="mapContextText">—</span>
+                </div>
+                <div id="mapContextActions" class="map-context-actions"></div>
               </div>
             </div>
             <div id="mapBoard" class="map-board canonical-map-art">
