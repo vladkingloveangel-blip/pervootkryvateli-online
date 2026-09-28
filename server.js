@@ -4,6 +4,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const { Pool } = require('pg');
+const { RoomStore, isUnfinished } = require('./room-store');
 const { SHIPS, SHIP_LEVELS, SHIP_UPGRADES, ESCORTS, COLORS, BUILDINGS, GOODS, CITADEL_CELLS, ANCHORS, FACTIONS, POLITICAL_FACTION_ORDER, ASSIGNMENT_CARDS, LEGENDARY_PLACES } = require('./game-data');
 const {
   cloneIslands,
@@ -128,6 +129,9 @@ const db = DATABASE_URL ? new Pool({
   connectionString: DATABASE_URL,
   ssl: process.env.DATABASE_SSL === 'require' ? { rejectUnauthorized: false } : undefined,
 }) : null;
+const roomStore = new RoomStore(db);
+let shuttingDown = false;
+let eventWrites = null;
 let dbReady = false;
 let dbInitError = null;
 
@@ -221,19 +225,14 @@ async function initDatabase() {
       await db.query('UPDATE users SET role = $2 WHERE username = $1', [username, 'admin']);
     }
   }
+  await roomStore.init(rooms);
   dbReady = true;
   dbInitError = null;
   console.log('Accounts database ready.');
 }
-if (db) {
-  initDatabase().catch(err => {
-    dbInitError = err;
-    dbReady = false;
-    console.error('Accounts database init failed:', err.message);
-  });
-}
-
 app.use(express.json({ limit: '64kb' }));
+
+app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 
 app.get('/api/auth/status', (_req, res) => {
   res.json({ accountsEnabled: Boolean(db), databaseReady: dbReady, error: dbInitError ? 'database-unavailable' : null });
@@ -301,6 +300,47 @@ app.post('/api/auth/change-password', async (req, res) => {
   return res.json({ ok: true });
 });
 
+function myRooms(accountId) {
+  return [...rooms.values()]
+    .filter(room => isUnfinished(room) && room.players.some(p => p.accountId === accountId))
+    .map(room => ({
+      code: room.code, started: Boolean(room.started), round: room.round, circle: room.circle,
+      playerCount: room.players.length, activePlayerName: currentPlayer(room)?.name || null,
+      isYourTurn: currentPlayer(room)?.accountId === accountId,
+      players: room.players.map(p => ({ name: p.name, connected: Boolean(p.connected) })),
+    }));
+}
+
+app.get('/api/my-games', (req, res) => {
+  const auth = verifyAccountToken(bearerToken(req));
+  if (!auth) return res.status(401).json({ ok: false, error: 'Войдите в аккаунт.' });
+  res.json({ ok: true, rooms: myRooms(auth.sub) });
+});
+
+function persistRoom(operation) {
+  if (eventWrites) eventWrites.push(operation);
+}
+
+// Existing game handlers remain synchronous. Send acknowledgements only after
+// their snapshots/deletions reach Postgres, including handlers that ack first.
+function onSocketEvent(socket, event, handler) {
+  socket.on(event, (...args) => {
+    const ack = typeof args[args.length - 1] === 'function' ? args.pop() : null;
+    if (event !== 'disconnect' && (shuttingDown || roomStore.lastError)) {
+      return ackSafe(ack, { ok: false, error: 'Сохранение игры временно недоступно. Повторите позже.' });
+    }
+    const writes = [];
+    const responses = [];
+    eventWrites = writes;
+    try {
+      handler(...args, payload => responses.push(payload));
+    } finally {
+      eventWrites = null;
+    }
+    Promise.all(writes).then(() => responses.forEach(payload => ackSafe(ack, payload)));
+  });
+}
+
 function makeCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   for (let tries = 0; tries < 50; tries++) {
@@ -341,7 +381,7 @@ function publicRoom(room, viewerId = null) {
     : [];
 
   return {
-    version: '0.19.1',
+    version: '0.20.0',
     code: room.code,
     started: room.started,
     hostId: room.hostId,
@@ -643,11 +683,13 @@ function closeRoomInternal(room, reason = 'Комната закрыта.') {
   }
   io.to(`admin-watch:${code}`).emit('adminRoomClosed', { code, reason });
   rooms.delete(code);
+  persistRoom(roomStore.remove(code));
 }
 
 function emitRoom(room) {
   queueIslandCorrectionIfNeeded(room);
   queueEscortCapacityDecisionsIfNeeded(room);
+  persistRoom(roomStore.save(room));
   for (const p of room.players) {
     if (p.socketId) io.to(p.socketId).emit('roomState', publicRoom(room, p.id));
   }
@@ -2194,6 +2236,25 @@ function handleArrival(room, player) {
 }
 
 function attachPlayer(socket, room, player) {
+  const previous = player.socketId && io.sockets.sockets.get(player.socketId);
+  if (previous && previous.id !== socket.id) {
+    previous.leave(room.code);
+    previous.data.roomCode = null;
+    previous.data.playerId = null;
+    previous.emit('removedFromRoom', { code: room.code, reason: 'Игра открыта на другом устройстве.' });
+  }
+  const oldRoom = getRoom(socket.data.roomCode);
+  const oldPlayer = oldRoom?.players.find(p => p.id === socket.data.playerId);
+  if (oldPlayer && oldPlayer !== player && oldPlayer.socketId === socket.id) {
+    oldPlayer.socketId = null;
+    oldPlayer.connected = false;
+    socket.leave(oldRoom.code);
+    emitRoom(oldRoom);
+  }
+  for (const joined of [...socket.rooms]) {
+    if (String(joined).startsWith('admin-watch:')) socket.leave(joined);
+  }
+  socket.data.adminWatching = null;
   player.socketId = socket.id;
   player.connected = true;
   socket.data.roomCode = room.code;
@@ -2252,14 +2313,37 @@ function newPlayer(socket, data, color) {
 }
 
 io.on('connection', socket => {
+  onSocketEvent(socket, 'listMyRooms', (data, ack) => {
+    const user = socketAccount(data);
+    if (!user) return ackSafe(ack, { ok: false, error: 'Войдите в аккаунт.' });
+    ackSafe(ack, { ok: true, rooms: myRooms(user.sub) });
+  });
 
-  socket.on('adminListRooms', (data, ack) => {
+  onSocketEvent(socket, 'goHome', (_data, ack) => {
+    const room = getRoom(socket.data.roomCode);
+    const player = room?.players.find(p => p.id === socket.data.playerId && p.socketId === socket.id);
+    if (player) {
+      player.socketId = null;
+      player.connected = false;
+      socket.leave(room.code);
+      emitRoom(room);
+    }
+    socket.data.roomCode = null;
+    socket.data.playerId = null;
+    for (const joined of [...socket.rooms]) {
+      if (String(joined).startsWith('admin-watch:')) socket.leave(joined);
+    }
+    socket.data.adminWatching = null;
+    ackSafe(ack, { ok: true });
+  });
+
+  onSocketEvent(socket, 'adminListRooms', (data, ack) => {
     const admin = requireAdminAccount(data, ack);
     if (!admin) return;
     ackSafe(ack, { ok: true, rooms: [...rooms.values()].map(adminRoomSummary) });
   });
 
-  socket.on('adminWatchRoom', (data, ack) => {
+  onSocketEvent(socket, 'adminWatchRoom', (data, ack) => {
     const admin = requireAdminAccount(data, ack);
     if (!admin) return;
     const room = getRoom(data?.code);
@@ -2272,7 +2356,7 @@ io.on('connection', socket => {
     ackSafe(ack, { ok: true, room: adminRoomState(room) });
   });
 
-  socket.on('adminStopWatching', (_data, ack) => {
+  onSocketEvent(socket, 'adminStopWatching', (_data, ack) => {
     for (const joined of [...socket.rooms]) {
       if (String(joined).startsWith('admin-watch:')) socket.leave(joined);
     }
@@ -2280,7 +2364,7 @@ io.on('connection', socket => {
     ackSafe(ack, { ok: true });
   });
 
-  socket.on('adminCloseRoom', (data, ack) => {
+  onSocketEvent(socket, 'adminCloseRoom', (data, ack) => {
     const admin = requireAdminAccount(data, ack);
     if (!admin) return;
     const room = getRoom(data?.code);
@@ -2289,7 +2373,7 @@ io.on('connection', socket => {
     ackSafe(ack, { ok: true });
   });
 
-  socket.on('createRoom', (data, ack) => {
+  onSocketEvent(socket, 'createRoom', (data, ack) => {
     const accountUser = requireSocketAccount(data, ack);
     if (db && !accountUser) return;
     const code = makeCode();
@@ -2339,7 +2423,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('joinRoom', (data, ack) => {
+  onSocketEvent(socket, 'joinRoom', (data, ack) => {
     const accountUser = requireSocketAccount(data, ack);
     if (db && !accountUser) return;
     const room = getRoom(data?.code);
@@ -2368,7 +2452,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('resumeRoom', (data, ack) => {
+  onSocketEvent(socket, 'resumeRoom', (data, ack) => {
     const accountUser = requireSocketAccount(data, ack);
     if (db && !accountUser) return;
     const room = getRoom(data?.code);
@@ -2381,7 +2465,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('changeShip', (data, ack) => {
+  onSocketEvent(socket, 'changeShip', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = room?.players.find(x => x.id === socket.data.playerId);
     if (!room || !p || room.started) return ackSafe(ack, { ok: false, error: 'Сейчас класс корабля менять нельзя.' });
@@ -2392,7 +2476,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('leaveRoom', (_data, ack) => {
+  onSocketEvent(socket, 'leaveRoom', (_data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const playerId = socket.data.playerId;
     if (!room) return ackSafe(ack, { ok: true });
@@ -2409,7 +2493,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('kickPlayer', (data, ack) => {
+  onSocketEvent(socket, 'kickPlayer', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     if (!room) return ackSafe(ack, { ok: false, error: 'Комната не найдена.' });
     if (room.started) return ackSafe(ack, { ok: false, error: 'Удалять игроков можно только до начала партии.' });
@@ -2435,7 +2519,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('closeRoom', (_data, ack) => {
+  onSocketEvent(socket, 'closeRoom', (_data, ack) => {
     const room = getRoom(socket.data.roomCode);
     if (!room) return ackSafe(ack, { ok: true });
     if (room.hostId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Закрыть комнату может только её создатель.' });
@@ -2443,7 +2527,7 @@ io.on('connection', socket => {
     ackSafe(ack, { ok: true });
   });
 
-  socket.on('startGame', (_data, ack) => {
+  onSocketEvent(socket, 'startGame', (_data, ack) => {
     const room = getRoom(socket.data.roomCode);
     if (!room) return ackSafe(ack, { ok: false, error: 'Комната не найдена.' });
     if (room.hostId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Начать игру может только создатель комнаты.' });
@@ -2488,7 +2572,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('rollMove', (_data, ack) => {
+  onSocketEvent(socket, 'rollMove', (_data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -2512,7 +2596,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('skipNavigation', (_data, ack) => {
+  onSocketEvent(socket, 'skipNavigation', (_data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -2528,7 +2612,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('moveTo', (data, ack) => {
+  onSocketEvent(socket, 'moveTo', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -2554,7 +2638,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('build', (data, ack) => {
+  onSocketEvent(socket, 'build', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -2571,7 +2655,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('upgradeBuilding', (data, ack) => {
+  onSocketEvent(socket, 'upgradeBuilding', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -2588,7 +2672,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('buildBastion', (data, ack) => {
+  onSocketEvent(socket, 'buildBastion', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -2603,7 +2687,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('prioritizeBastionSupport', (data, ack) => {
+  onSocketEvent(socket, 'prioritizeBastionSupport', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Переназначать поддержку бастионов можно в свой ход.' });
@@ -2617,7 +2701,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('formLandCompany', (data, ack) => {
+  onSocketEvent(socket, 'formLandCompany', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -2632,7 +2716,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('dismissLandCompany', (_data, ack) => {
+  onSocketEvent(socket, 'dismissLandCompany', (_data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Распустить роту можно в свой личный ход.' });
@@ -2645,7 +2729,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('buyCityGuard', (data, ack) => {
+  onSocketEvent(socket, 'buyCityGuard', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -2660,7 +2744,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('buyPermanentGarrison', (data, ack) => {
+  onSocketEvent(socket, 'buyPermanentGarrison', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -2675,7 +2759,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('buyShipLevel', (_data, ack) => {
+  onSocketEvent(socket, 'buyShipLevel', (_data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -2691,7 +2775,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('buyShipUpgrade', (data, ack) => {
+  onSocketEvent(socket, 'buyShipUpgrade', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -2707,7 +2791,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('removeShipUpgrade', (data, ack) => {
+  onSocketEvent(socket, 'removeShipUpgrade', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -2722,7 +2806,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('buyEscort', (data, ack) => {
+  onSocketEvent(socket, 'buyEscort', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -2737,7 +2821,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('loadCargo', (data, ack) => {
+  onSocketEvent(socket, 'loadCargo', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -2753,7 +2837,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('sellCargo', (_data, ack) => {
+  onSocketEvent(socket, 'sellCargo', (_data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -2779,7 +2863,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('respondEvent', (data, ack) => {
+  onSocketEvent(socket, 'respondEvent', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const pending = room?.pendingEvent;
     if (!room || !pending || pending.id !== String(data?.eventId || '')) return ackSafe(ack, { ok: false, error: 'Эта карта события уже не ожидает решения.' });
@@ -2809,7 +2893,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('useSavedCargo', (data, ack) => {
+  onSocketEvent(socket, 'useSavedCargo', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сохранённую карту можно применить только в свой личный ход.' });
@@ -2828,7 +2912,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('useShipMaster', (data, ack) => {
+  onSocketEvent(socket, 'useShipMaster', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Карту можно применить только в свой личный ход.' });
@@ -2847,7 +2931,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('useBlueprint', (data, ack) => {
+  onSocketEvent(socket, 'useBlueprint', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Чертёж можно применить только в свой личный ход.' });
@@ -2867,7 +2951,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('playLegendary', (data, ack) => {
+  onSocketEvent(socket, 'playLegendary', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Легендарную карту можно применить только в свой личный ход.' });
@@ -2971,7 +3055,7 @@ io.on('connection', socket => {
     ackSafe(ack, { ok: false, error: 'Этот вид легендарной карты пока не распознан.' });
   });
 
-  socket.on('respondLegendaryReaction', (data, ack) => {
+  onSocketEvent(socket, 'respondLegendaryReaction', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const pending = room?.pendingLegendaryReaction;
     if (!room || !pending || pending.id !== String(data?.reactionId || '')) return ackSafe(ack, { ok: false, error: 'Эта реакция больше не ожидается.' });
@@ -2983,7 +3067,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('requestAlliance', (data, ack) => {
+  onSocketEvent(socket, 'requestAlliance', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Предложить союз можно только в свой личный ход.' });
@@ -3001,7 +3085,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('respondAlliance', (data, ack) => {
+  onSocketEvent(socket, 'respondAlliance', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const request = room?.pendingAlliance;
     if (!room || !request || request.id !== String(data?.requestId || '')) return ackSafe(ack, { ok: false, error: 'Предложение союза больше не активно.' });
@@ -3029,7 +3113,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('cancelAllianceRequest', (data, ack) => {
+  onSocketEvent(socket, 'cancelAllianceRequest', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const request = room?.pendingAlliance;
     if (!room || !request || request.id !== String(data?.requestId || '')) return ackSafe(ack, { ok: false, error: 'Предложение союза больше не активно.' });
@@ -3042,7 +3126,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('breakAlliance', (data, ack) => {
+  onSocketEvent(socket, 'breakAlliance', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Разорвать союз можно только в начале своего личного хода.' });
@@ -3060,7 +3144,7 @@ io.on('connection', socket => {
 
 
 
-  socket.on('resolveFleetAdjustment', (data, ack) => {
+  onSocketEvent(socket, 'resolveFleetAdjustment', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const pending = room?.pendingFleetAdjustment;
     if (!room || !pending || pending.id !== String(data?.adjustmentId || '')) return ackSafe(ack, { ok: false, error: 'Эта настройка флотилии больше не ожидается.' });
@@ -3106,7 +3190,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('resolveIslandCorrection', (data, ack) => {
+  onSocketEvent(socket, 'resolveIslandCorrection', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const pending = room?.pendingIslandCorrection;
     if (!room || !pending || pending.id !== String(data?.correctionId || '')) return ackSafe(ack, { ok: false, error: 'Это исправление острова больше не ожидается.' });
@@ -3128,7 +3212,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('placeStatePrizeBuilding', (data, ack) => {
+  onSocketEvent(socket, 'placeStatePrizeBuilding', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const pending = room?.pendingStatePrize;
     if (!room || !pending || pending.id !== String(data?.prizeId || '')) return ackSafe(ack, { ok: false, error: 'Этот итоговый приз уже не ожидает размещения.' });
@@ -3146,7 +3230,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('enterVassalage', (data, ack) => {
+  onSocketEvent(socket, 'enterVassalage', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -3163,7 +3247,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('rebelVassalage', (_data, ack) => {
+  onSocketEvent(socket, 'rebelVassalage', (_data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -3177,7 +3261,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('respondFeud', (data, ack) => {
+  onSocketEvent(socket, 'respondFeud', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const pending = room?.pendingFeud;
     if (!room || !pending || pending.id !== String(data?.feudId || '')) return ackSafe(ack, { ok: false, error: 'Эта карта вражды больше не ожидает решения.' });
@@ -3188,7 +3272,7 @@ io.on('connection', socket => {
   });
 
 
-  socket.on('respondAssignmentChoice', (data, ack) => {
+  onSocketEvent(socket, 'respondAssignmentChoice', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const pending = room?.pendingAssignmentChoice;
     if (!room || !pending || pending.id !== String(data?.choiceId || '')) return ackSafe(ack, { ok: false, error: 'Это решение по поручению больше не ожидается.' });
@@ -3217,7 +3301,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('attackShip', (data, ack) => {
+  onSocketEvent(socket, 'attackShip', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -3253,7 +3337,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('assaultIsland', (data, ack) => {
+  onSocketEvent(socket, 'assaultIsland', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
@@ -3294,7 +3378,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('respondBattle', (data, ack) => {
+  onSocketEvent(socket, 'respondBattle', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const pending = room?.pendingBattle;
     if (!room || !pending || pending.id !== String(data?.battleId || '')) return ackSafe(ack, { ok: false, error: 'Этот бой уже не ожидает решения.' });
@@ -3320,7 +3404,7 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('endTurn', (_data, ack) => {
+  onSocketEvent(socket, 'endTurn', (_data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
     if (!room || room.phase === 'event' || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш личный ход.' });
@@ -3331,13 +3415,17 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  socket.on('disconnect', () => {
+  onSocketEvent(socket, 'disconnect', () => {
     const room = getRoom(socket.data.roomCode);
     if (!room) return;
     const p = room.players.find(x => x.id === socket.data.playerId);
-    if (!p) return;
+    if (!p || p.socketId !== socket.id) return;
     p.connected = false;
     p.socketId = null;
+    if (shuttingDown) {
+      persistRoom(roomStore.save(room));
+      return;
+    }
     if (room.pendingAlliance && (room.pendingAlliance.fromId === p.id || room.pendingAlliance.toId === p.id)) {
       room.pendingAlliance = null;
       log(room, `Незавершённое предложение союза отменено из-за отключения ${p.name}.`);
@@ -3368,8 +3456,29 @@ io.on('connection', socket => {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/health', (_req, res) => res.json({ ok: true, version: '0.19.1', rooms: rooms.size, accountsEnabled: Boolean(db), databaseReady: dbReady }));
+app.get('/health', (_req, res) => res.json({ ok: true, version: '0.20.0', rooms: rooms.size, accountsEnabled: Boolean(db), databaseReady: dbReady, roomPersistence: { enabled: Boolean(db), restored: roomStore.restored, pending: roomStore.pending.size, healthy: !roomStore.lastError } }));
 
-server.listen(PORT, HOST, () => {
-  console.log(`Первооткрыватели Online MVP 0.19.1: http://${HOST}:${PORT}`);
+async function startServer() {
+  // Never accept room creation before restoration or silently start empty on DB failure.
+  await initDatabase();
+  server.listen(PORT, HOST, () => {
+    console.log(`Первооткрыватели Online MVP 0.20.0: http://${HOST}:${PORT}`);
+  });
+}
+
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  const deadline = setTimeout(() => process.exit(1), 25000);
+  io.close();
+  await roomStore.flush();
+  if (db) await db.end();
+  clearTimeout(deadline);
+  process.exit(0);
+}
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+startServer().catch(err => {
+  console.error('Database startup failed:', err.message);
+  process.exit(1);
 });

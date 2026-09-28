@@ -54,8 +54,62 @@
     $('accountName').textContent = user?.displayName || user?.username || 'Игрок';
     $('accountRole').textContent = user?.role === 'admin' ? 'администратор' : 'игрок';
     $('adminOpenBtn').classList.toggle('hidden', user?.role !== 'admin');
+    loadMyGames();
     if (!$('nameInput').value) $('nameInput').value = user?.displayName || user?.username || '';
     if (!state.spectating && !state.room && $('adminPanel').classList.contains('hidden')) $('entry').classList.remove('hidden');
+  }
+
+  let myGamesRequest = 0;
+  async function loadMyGames() {
+    const token = state.accountToken;
+    const request = ++myGamesRequest;
+    const enabled = Boolean(state.accountUser && token);
+    $('myGamesPanel').classList.toggle('hidden', !enabled);
+    if (!enabled) { $('myGamesList').replaceChildren(); return; }
+    setError('myGamesError');
+    try {
+      const result = await apiJson('/api/my-games', { cache: 'no-store' });
+      if (request !== myGamesRequest || token !== state.accountToken) return;
+      if (!result?.ok) throw new Error(result?.error || 'Не удалось загрузить игры.');
+      const box = $('myGamesList');
+      box.replaceChildren();
+      if (!result.rooms.length) {
+        box.textContent = 'Активных игр пока нет. Создай комнату или присоединись к друзьям.';
+        return;
+      }
+      for (const room of result.rooms) {
+        const card = document.createElement('div');
+        card.className = 'admin-room-card';
+        const info = document.createElement('div');
+        const title = document.createElement('strong');
+        title.textContent = 'Комната ' + room.code;
+        const detail = document.createElement('div');
+        detail.className = 'muted';
+        detail.textContent = (room.started ? 'Игра · раунд ' + room.round + ', круг ' + room.circle : 'Лобби') +
+          ' · игроков ' + room.playerCount + '/5' + (room.isYourTurn ? ' · Твой ход' : room.activePlayerName ? ' · ход: ' + room.activePlayerName : '');
+        const names = document.createElement('div');
+        names.className = 'muted';
+        names.textContent = room.players.map(p => p.name).join(', ');
+        info.append(title, detail, names);
+        const button = document.createElement('button');
+        button.className = 'small primary';
+        button.textContent = 'Вернуться в игру';
+        button.addEventListener('click', () => {
+          if (!state.socketConnected) return setError('myGamesError', 'Нет связи с сервером. Дождись подключения.');
+          button.disabled = true;
+          socket.timeout(15000).emit('resumeRoom', { code: room.code, accountToken: state.accountToken }, (err, res) => {
+            button.disabled = false;
+            if (token !== state.accountToken) return;
+            if (err || !res?.ok) return setError('myGamesError', res?.error || 'Сервер не ответил. Попробуй ещё раз.');
+            acceptSession(res);
+          });
+        });
+        card.append(info, button);
+        box.append(card);
+      }
+    } catch (err) {
+      if (request === myGamesRequest && token === state.accountToken) setError('myGamesError', err.message || 'Не удалось загрузить игры.');
+    }
   }
 
   async function initAuth() {
@@ -216,6 +270,7 @@
     $('entry').classList.remove('hidden');
     setError('gameError', '');
     setError('entryError', message);
+    loadMyGames();
     try {
       const url = new URL(location.href);
       url.searchParams.delete('room');
@@ -226,6 +281,7 @@
   socket.on('connect', () => {
     setConnected(true);
     state.socketConnected = true;
+    loadMyGames();
     state.resumeAttempted = false;
     maybeResumeLastRoom();
   });
@@ -259,10 +315,15 @@
   socket.on('removedFromRoom', data => clearSession(data?.reason || 'Вы удалены из комнаты.'));
 
   function acceptSession(res) {
+    state.spectating = false;
+    document.body.classList.remove('spectator-mode');
+    $('spectatorBanner').classList.add('hidden');
+    $('adminPanel').classList.add('hidden');
     state.code = res.code;
     state.myId = res.playerId;
     state.playerToken = res.playerToken;
     saveSession();
+    if (state.room) render();
     $('entry').classList.add('hidden');
     $('game').classList.remove('hidden');
     try {
@@ -336,6 +397,7 @@
   $('adminOpenBtn').addEventListener('click', showAdminPanel);
   $('adminHomeBtn').addEventListener('click', () => {
     socket.emit('adminStopWatching', {}, () => {});
+    loadMyGames();
     state.spectating = false;
     document.body.classList.remove('spectator-mode');
     $('adminPanel').classList.add('hidden');
@@ -361,6 +423,17 @@
       $('entry').classList.remove('hidden');
     }
   });
+  $('myGamesRefreshBtn').addEventListener('click', loadMyGames);
+  $('myGamesOpenBtn').addEventListener('click', () => {
+    socket.emit('goHome', {}, res => {
+      if (!res?.ok) return handleGameAck(res);
+      state.spectating = false;
+      document.body.classList.remove('spectator-mode');
+      $('adminPanel').classList.add('hidden');
+      $('spectatorBanner').classList.add('hidden');
+      clearSession();
+    });
+  });
   $('adminRefreshBtn').addEventListener('click', loadAdminRooms);
   $('adminBackBtn').addEventListener('click', () => {
     socket.emit('adminStopWatching', {}, () => {});
@@ -371,6 +444,9 @@
     localStorage.removeItem('pervo:accountToken');
     state.accountToken = '';
     state.accountUser = null;
+    loadMyGames();
+    socket.disconnect();
+    socket.connect();
     state.spectating = false;
     state.room = null;
     state.myId = null;

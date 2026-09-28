@@ -202,3 +202,5 @@ body.spectator-mode .map-toolbar #centerMe { display: none; }
   .admin-room-card { grid-template-columns: 1fr; }
   .admin-room-actions { justify-content: flex-start; }
 }
+
+.my-games { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #36515a; }

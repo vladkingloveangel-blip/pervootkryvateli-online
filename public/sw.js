@@ -1,4 +1,4 @@
-const CACHE = 'pervootkryvateli-v0.19.1-static';
+const CACHE = 'pervootkryvateli-v0.20.0-static';
 const ASSETS = [
   '/', '/styles.css', '/app.js', '/manifest.webmanifest',
   '/assets/map.png', '/assets/icon-192.png', '/assets/icon-512.png'
@@ -12,7 +12,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const req = event.request;
   const url = new URL(req.url);
-  if (req.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/socket.io/')) return;
+  if (req.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/socket.io/') || url.pathname.startsWith('/api/') || url.pathname === '/health') return;
   event.respondWith(fetch(req).then(response => {
     const copy = response.clone();
     caches.open(CACHE).then(cache => cache.put(req, copy)).catch(() => {});
