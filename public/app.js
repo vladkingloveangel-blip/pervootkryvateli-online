@@ -1,7 +1,7 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mistCardRef: null };
+  const state = { room: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mistCardRef: null, accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false };
   const SHIP_NAMES = { brigantine: 'Бригантина', frigate: 'Фрегат', caravel: 'Каравелла', carrack: 'Каракка' };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
   let deferredInstallPrompt = null;
@@ -24,6 +24,174 @@
     deferredInstallPrompt = null;
     $('installAppBtn').classList.add('hidden');
   });
+
+
+  async function apiJson(url, options = {}) {
+    const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+    if (state.accountToken) headers.Authorization = `Bearer ${state.accountToken}`;
+    const res = await fetch(url, { ...options, headers });
+    let data = null;
+    try { data = await res.json(); } catch { data = { ok: false, error: 'Некорректный ответ сервера.' }; }
+    if (!res.ok && data?.ok !== false) data.ok = false;
+    return data;
+  }
+
+  function showAuth(message = '') {
+    $('authPanel').classList.remove('hidden');
+    $('accountBar').classList.add('hidden');
+    $('entry').classList.add('hidden');
+    $('adminPanel').classList.add('hidden');
+    if (!state.spectating) $('game').classList.add('hidden');
+    setError('authError', message);
+  }
+
+  function applyAccount(user, token = state.accountToken) {
+    state.accountUser = user;
+    state.accountToken = token || '';
+    if (state.accountToken) localStorage.setItem('pervo:accountToken', state.accountToken);
+    $('authPanel').classList.add('hidden');
+    $('accountBar').classList.remove('hidden');
+    $('accountName').textContent = user?.displayName || user?.username || 'Игрок';
+    $('accountRole').textContent = user?.role === 'admin' ? 'администратор' : 'игрок';
+    $('adminOpenBtn').classList.toggle('hidden', user?.role !== 'admin');
+    if (!$('nameInput').value) $('nameInput').value = user?.displayName || user?.username || '';
+    if (!state.spectating && !state.room && $('adminPanel').classList.contains('hidden')) $('entry').classList.remove('hidden');
+  }
+
+  async function initAuth() {
+    try {
+      const status = await apiJson('/api/auth/status');
+      state.accountsEnabled = Boolean(status?.accountsEnabled);
+      if (!state.accountsEnabled) {
+        state.authResolved = true;
+        $('authPanel').classList.add('hidden');
+        $('accountBar').classList.add('hidden');
+        $('entry').classList.remove('hidden');
+        maybeResumeLastRoom();
+        return;
+      }
+      if (state.accountToken) {
+        const me = await apiJson('/api/auth/me');
+        if (me?.ok) {
+          applyAccount(me.user, state.accountToken);
+        } else {
+          localStorage.removeItem('pervo:accountToken');
+          state.accountToken = '';
+          showAuth('Войдите в аккаунт.');
+        }
+      } else {
+        showAuth(status?.databaseReady === false ? 'База аккаунтов подключается. Попробуйте обновить страницу.' : '');
+      }
+    } catch {
+      showAuth('Не удалось проверить аккаунт.');
+    } finally {
+      state.authResolved = true;
+      maybeResumeLastRoom();
+    }
+  }
+
+  async function submitAuth(mode) {
+    setError('authError');
+    const username = $('authUsername').value.trim();
+    const password = $('authPassword').value;
+    const displayName = $('authDisplayName').value.trim();
+    const endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/login';
+    const data = await apiJson(endpoint, { method: 'POST', body: JSON.stringify({ username, password, displayName }) });
+    if (!data?.ok) return setError('authError', data?.error || 'Не удалось войти.');
+    applyAccount(data.user, data.token);
+    state.resumeAttempted = false;
+    maybeResumeLastRoom();
+  }
+
+  function maybeResumeLastRoom() {
+    if (!state.socketConnected || !state.authResolved || state.resumeAttempted || state.spectating) return;
+    if (state.accountsEnabled && !state.accountToken) return;
+    const last = localStorage.getItem('pervo:lastRoom');
+    if (!last) return;
+    state.resumeAttempted = true;
+    try {
+      const sess = JSON.parse(localStorage.getItem(keyFor(last)) || 'null');
+      if (sess?.code && sess?.playerToken) {
+        socket.emit('resumeRoom', { ...sess, accountToken: state.accountToken }, res => {
+          if (res?.ok) acceptSession(res);
+          else if (res?.error === 'Комната больше не существует.') {
+            localStorage.removeItem(keyFor(last));
+            localStorage.removeItem('pervo:lastRoom');
+          }
+        });
+      }
+    } catch {}
+  }
+
+  function renderAdminRooms(rooms) {
+    const box = $('adminRooms');
+    box.innerHTML = '';
+    if (!rooms?.length) {
+      box.innerHTML = '<div class="muted">Активных комнат сейчас нет.</div>';
+      return;
+    }
+    rooms.forEach(room => {
+      const card = document.createElement('div');
+      card.className = 'admin-room-card';
+      const players = room.players.map(p => `${escapeHtml(p.name)}${p.username ? ` (@${escapeHtml(p.username)})` : ''}${p.connected ? '' : ' · офлайн'}`).join('<br>');
+      card.innerHTML = `<div><strong>Комната ${escapeHtml(room.code)}</strong><div class="muted">${room.started ? `Игра · раунд ${room.round}, круг ${room.circle}` : 'Лобби'} · игроков ${room.players.length}/5${room.activePlayerName ? ` · ход: ${escapeHtml(room.activePlayerName)}` : ''}</div><div class="admin-players">${players}</div></div><div class="admin-room-actions"></div>`;
+      const actions = card.querySelector('.admin-room-actions');
+      const watch = document.createElement('button');
+      watch.className = 'small primary';
+      watch.textContent = 'Наблюдать';
+      watch.addEventListener('click', () => {
+        socket.emit('adminWatchRoom', { accountToken: state.accountToken, code: room.code }, res => {
+          if (!res?.ok) return setError('adminError', res?.error || 'Не удалось открыть комнату.');
+          state.spectating = true;
+          state.room = res.room;
+          state.myId = null;
+          state.code = null;
+          state.playerToken = null;
+          document.body.classList.add('spectator-mode');
+          $('adminPanel').classList.add('hidden');
+          $('entry').classList.add('hidden');
+          $('game').classList.remove('hidden');
+          $('spectatorBanner').classList.remove('hidden');
+          $('spectatorRoomCode').textContent = res.room.code;
+          render();
+        });
+      });
+      const close = document.createElement('button');
+      close.className = 'small danger-soft';
+      close.textContent = 'Закрыть';
+      close.addEventListener('click', () => {
+        if (!confirm(`Закрыть комнату ${room.code} для всех игроков?`)) return;
+        socket.emit('adminCloseRoom', { accountToken: state.accountToken, code: room.code }, res => {
+          if (!res?.ok) return setError('adminError', res?.error || 'Не удалось закрыть комнату.');
+          loadAdminRooms();
+        });
+      });
+      actions.append(watch, close);
+      box.appendChild(card);
+    });
+  }
+
+  function loadAdminRooms() {
+    if (state.accountUser?.role !== 'admin') return;
+    setError('adminError');
+    socket.emit('adminListRooms', { accountToken: state.accountToken }, res => {
+      if (!res?.ok) return setError('adminError', res?.error || 'Не удалось загрузить комнаты.');
+      renderAdminRooms(res.rooms || []);
+    });
+  }
+
+  function showAdminPanel() {
+    if (state.accountUser?.role !== 'admin') return;
+    state.spectating = false;
+    state.room = null;
+    document.body.classList.remove('spectator-mode');
+    $('spectatorBanner').classList.add('hidden');
+    $('game').classList.add('hidden');
+    $('entry').classList.add('hidden');
+    $('authPanel').classList.add('hidden');
+    $('adminPanel').classList.remove('hidden');
+    loadAdminRooms();
+  }
 
   function keyFor(code) { return `pervo:${String(code || '').toUpperCase()}`; }
   function saveSession() {
@@ -57,18 +225,36 @@
 
   socket.on('connect', () => {
     setConnected(true);
-    const last = localStorage.getItem('pervo:lastRoom');
-    if (last) {
-      try {
-        const sess = JSON.parse(localStorage.getItem(keyFor(last)) || 'null');
-        if (sess?.code && sess?.playerToken) {
-          socket.emit('resumeRoom', sess, res => { if (res?.ok) acceptSession(res); });
-        }
-      } catch {}
-    }
+    state.socketConnected = true;
+    state.resumeAttempted = false;
+    maybeResumeLastRoom();
   });
-  socket.on('disconnect', () => setConnected(false));
-  socket.on('roomState', room => { state.room = room; render(); });
+  socket.on('disconnect', () => {
+    setConnected(false);
+    state.socketConnected = false;
+    state.resumeAttempted = false;
+  });
+  socket.on('roomState', room => {
+    if (state.spectating) return;
+    state.room = room;
+    render();
+  });
+  socket.on('adminRoomState', room => {
+    if (!state.spectating) return;
+    state.room = room;
+    $('spectatorRoomCode').textContent = room.code;
+    render();
+  });
+  socket.on('adminRoomClosed', data => {
+    if (!state.spectating) return;
+    state.spectating = false;
+    state.room = null;
+    document.body.classList.remove('spectator-mode');
+    $('game').classList.add('hidden');
+    $('spectatorBanner').classList.add('hidden');
+    showAdminPanel();
+    setError('adminError', data?.reason || 'Комната закрыта.');
+  });
   socket.on('roomClosed', data => clearSession(data?.reason || 'Комната закрыта.'));
   socket.on('removedFromRoom', data => clearSession(data?.reason || 'Вы удалены из комнаты.'));
 
@@ -86,7 +272,7 @@
     } catch {}
   }
 
-  function profile() { return { name: $('nameInput').value, shipClass: $('shipSelect').value }; }
+  function profile() { return { name: $('nameInput').value, shipClass: $('shipSelect').value, accountToken: state.accountToken }; }
 
   $('createBtn').addEventListener('click', () => {
     setError('entryError');
@@ -142,6 +328,32 @@
         try { await navigator.clipboard.writeText(inviteUrl); } catch {}
       }
     }
+  });
+
+  $('loginBtn').addEventListener('click', () => submitAuth('login'));
+  $('registerBtn').addEventListener('click', () => submitAuth('register'));
+  $('authPassword').addEventListener('keydown', e => { if (e.key === 'Enter') submitAuth('login'); });
+  $('adminOpenBtn').addEventListener('click', showAdminPanel);
+  $('adminRefreshBtn').addEventListener('click', loadAdminRooms);
+  $('adminBackBtn').addEventListener('click', () => {
+    socket.emit('adminStopWatching', {}, () => {});
+    showAdminPanel();
+  });
+  $('logoutBtn').addEventListener('click', () => {
+    if (!confirm('Выйти из аккаунта на этом устройстве?')) return;
+    localStorage.removeItem('pervo:accountToken');
+    state.accountToken = '';
+    state.accountUser = null;
+    state.spectating = false;
+    state.room = null;
+    state.myId = null;
+    state.code = null;
+    state.playerToken = null;
+    document.body.classList.remove('spectator-mode');
+    $('game').classList.add('hidden');
+    $('adminPanel').classList.add('hidden');
+    $('accountBar').classList.add('hidden');
+    showAuth('Вы вышли из аккаунта.');
   });
 
   $('startBtn').addEventListener('click', () => socket.emit('startGame', {}, handleGameAck));
@@ -238,6 +450,7 @@
     const r = state.room;
     $('players').innerHTML = '';
     const isHost = r.hostId === state.myId;
+    const isSpectator = state.spectating;
     r.players.forEach(p => {
       const order = r.started ? r.order.indexOf(p.id) + 1 : null;
       const el = document.createElement('div');
@@ -246,7 +459,7 @@
       const suzerainName = p.suzerainId ? state.room.factions?.find(f => f.id === p.suzerainId)?.name : null;
       const politicalLabel = suzerainName ? ` · вассал ${suzerainName}` : (p.enemyFactionIds?.length ? ` · вражда ${p.enemyFactionIds.length}` : '');
       el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${!p.connected ? ' · офлайн' : ''}</div><div class="player-sub">${SHIP_NAMES[p.shipClass]} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · слава ${p.glory || 0} · островов ${p.islandCount} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${order ? `#${order}` : ''}</span></div>`;
-      if (isHost && !r.started && !p.isYou) {
+      if (!isSpectator && isHost && !r.started && !p.isYou) {
         const kick = document.createElement('button');
         kick.className = 'small danger-soft';
         kick.textContent = 'Удалить';
@@ -258,12 +471,12 @@
       }
       $('players').appendChild(el);
     });
-    $('startBtn').classList.toggle('hidden', r.started || !isHost);
+    $('startBtn').classList.toggle('hidden', isSpectator || r.started || !isHost);
     $('startBtn').disabled = r.players.length < 2 || r.players.length > 5;
     $('startBtn').textContent = r.players.length < 2 ? 'Нужен ещё 1 игрок' : 'Начать игру';
 
-    $('closeRoomBtn').classList.toggle('hidden', !isHost);
-    $('leaveRoomBtn').classList.toggle('hidden', isHost || r.started);
+    $('closeRoomBtn').classList.toggle('hidden', isSpectator || !isHost);
+    $('leaveRoomBtn').classList.toggle('hidden', isSpectator || isHost || r.started);
   }
 
   function renderControls() {
@@ -1670,4 +1883,6 @@
     });
   });
   applyZoom();
+
+  initAuth();
 })();
