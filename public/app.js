@@ -700,6 +700,18 @@
     return (state.room?.islands || []).filter(island => island.cells.some(([r, c]) => r === mine.row && c === mine.col));
   }
 
+  function currentAnchorCell() {
+    const mine = me();
+    if (!mine) return null;
+    return (state.room?.anchorCells || []).find(a => a.row === mine.row && a.col === mine.col) || null;
+  }
+
+  function currentLegendaryPlace() {
+    const mine = me();
+    if (!mine) return null;
+    return (state.room?.map?.legendaryPlaces || []).find(p => p.row === mine.row && p.col === mine.col) || null;
+  }
+
   function playerName(id) { return state.room?.players.find(p => p.id === id)?.name || 'Игрок'; }
   function isDecisionPending() { return Boolean(state.room?.pendingAlliance || state.room?.pendingBattle || state.room?.pendingEvent || state.room?.pendingFeud || state.room?.pendingAssignmentChoice || state.room?.pendingStatePrize || state.room?.pendingIslandCorrection || state.room?.pendingFleetAdjustment || state.room?.pendingLegendaryReaction); }
   function areAlliesClient(aId, bId) {
@@ -805,7 +817,7 @@
     const pendingAssignment = Boolean(r.pendingAssignmentChoice?.viewerCanRespond);
     const activeAssignment = Boolean(mine?.activeAssignment);
     const onIsland = currentIslands().length > 0;
-    const anchorRelevant = Boolean(mine?.lastAnchorEncounter);
+    const anchorRelevant = Boolean(currentAnchorCell());
     const pendingCombat = Boolean(r.pendingBattle || r.pendingLegendaryReaction);
     const myTurnActions = Boolean(r.started && mine && r.activePlayerId === state.myId && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0);
     const seaTargets = mine ? r.players.some(p => p.id !== state.myId && p.row === mine.row && p.col === mine.col && !areAlliesClient(state.myId, p.id)) : false;
@@ -1622,6 +1634,14 @@
       actions.appendChild(dismiss);
     }
 
+    if (!mine.atCitadel) {
+      const locked = document.createElement('div');
+      locked.className = 'citadel-shop-locked';
+      locked.innerHTML = '<strong>Магазин Цитадели недоступен</strong><span>Приплывите в Цитадель, чтобы повышать уровень корабля, устанавливать или снимать улучшения, покупать сопровождение и гарнизоны.</span>';
+      actions.appendChild(locked);
+      return;
+    }
+
     const levelLabel = document.createElement('div');
     levelLabel.className = 'action-group-label';
     levelLabel.textContent = 'Уровень основного корабля';
@@ -1755,8 +1775,11 @@
       : '<div class="cargo-meta">Сопровождения с грузовым трюмом нет.</div>';
     content.innerHTML = `${mainText}${escortText}<div class="cargo-meta">${mine.atCitadel ? 'Флотилия находится в Цитадели.' : 'Для продажи доставьте флотилию в Цитадель.'}</div>`;
 
+    sell.classList.toggle('hidden', !mine.atCitadel);
     sell.disabled = !mine.cargo || !canAct || !mine.atCitadel;
     sell.textContent = mine.cargo && mine.atCitadel ? `Продать основной груз за ${mine.cargo.value} дукатов` : 'Продать основной груз в Цитадели';
+
+    if (!mine.atCitadel) return;
 
     for (const e of cargoEscorts) {
       if (!e.cargo) continue;
@@ -1784,7 +1807,7 @@
     const cells = state.room.anchorCells || [];
     const here = cells.find(a => a.row === mine.row && a.col === mine.col) || null;
     const visitedHere = here && (mine.visitedAnchors || []).includes(`${mine.row},${mine.col}`);
-    const encounter = mine.lastAnchorEncounter;
+    const encounter = here ? mine.lastAnchorEncounter : null;
     const decks = state.room.anchorDecks || {};
     const deckLine = ['blue','yellow','red'].map(color => {
       const label = color === 'blue' ? 'Синяя' : color === 'yellow' ? 'Жёлтая' : 'Красная';
@@ -2302,7 +2325,12 @@
       meta.innerHTML = `<span>Морское сражение</span><span>Награда за победу: <strong>+${data.glory || 0} славы</strong></span>`;
     } else if (kind === 'legendary') {
       const reward = data.reward === 'legendary' ? 'случайная легендарная карта' : data.reward === 'treasure' ? 'случайная карта сокровища' : 'награда пока не определена';
-      meta.innerHTML = `<span>Морское легендарное место</span><span>Разовая награда: <strong>${escapeHtml(reward)}</strong></span>`;
+      const here = me() && Number(me().row) === Number(data.row) && Number(me().col) === Number(data.col);
+      const explored = Boolean(data.exploredBy);
+      const stateLine = explored
+        ? `Уже исследовано: <strong>${escapeHtml(playerName(data.exploredBy))}</strong>`
+        : (here ? '<strong>Вы на месте.</strong> Разовая награда разыгрывается автоматически при остановке.' : 'Остановитесь на этой клетке, чтобы исследовать место.');
+      meta.innerHTML = `<span>Морское легендарное место</span><span>Разовая награда: <strong>${escapeHtml(reward)}</strong></span><span>${stateLine}</span>`;
     } else if (kind === 'hazard') {
       const descriptions = {
         reef: 'Рифы. Сквозь них проходит только фрегат.',
