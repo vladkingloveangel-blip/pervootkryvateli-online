@@ -341,7 +341,7 @@ function publicRoom(room, viewerId = null) {
     : [];
 
   return {
-    version: '0.19.0',
+    version: '0.19.1',
     code: room.code,
     started: room.started,
     hostId: room.hostId,
@@ -3368,8 +3368,8 @@ io.on('connection', socket => {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/health', (_req, res) => res.json({ ok: true, version: '0.19.0', rooms: rooms.size, accountsEnabled: Boolean(db), databaseReady: dbReady }));
+app.get('/health', (_req, res) => res.json({ ok: true, version: '0.19.1', rooms: rooms.size, accountsEnabled: Boolean(db), databaseReady: dbReady }));
 
 server.listen(PORT, HOST, () => {
-  console.log(`Первооткрыватели Online MVP 0.19: http://${HOST}:${PORT}`);
+  console.log(`Первооткрыватели Online MVP 0.19.1: http://${HOST}:${PORT}`);
 });
