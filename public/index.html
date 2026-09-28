@@ -16,7 +16,7 @@
   <header class="topbar">
     <div>
       <strong>Первооткрыватели</strong>
-      <span class="tag">Online MVP 0.26.0</span>
+      <span class="tag">Online MVP 0.27.0</span>
     </div>
     <div id="connection" class="connection">подключение…</div>
   </header>
@@ -176,12 +176,22 @@
           </div>
 
           <div id="mapViewport" class="map-viewport" tabindex="0" aria-label="Игровая карта">
-            <div id="mapBoard" class="map-board">
-              <img src="/assets/map.png" alt="Карта настольной игры Первооткрыватели" draggable="false" />
+            <div id="mapBoard" class="map-board legacy-map-art">
+              <div id="mapArtLayer" class="map-art-layer" aria-hidden="true">
+                <img id="legacyMapArt" src="/assets/map.png" alt="" draggable="false" />
+              </div>
               <div id="gridLayer" class="grid-layer" aria-hidden="true"></div>
               <div id="ownershipLayer" class="ownership-layer" aria-hidden="true"></div>
+              <div id="mapObjectLayer" class="map-object-layer" aria-label="Объекты карты"></div>
+              <div id="mapLabelLayer" class="map-label-layer" aria-hidden="true"></div>
               <div id="highlightLayer" class="highlight-layer"></div>
               <div id="tokenLayer" class="token-layer"></div>
+              <div id="mapInfoCard" class="map-info-card hidden" role="dialog" aria-live="polite">
+                <button id="mapInfoClose" class="map-info-close" type="button" aria-label="Закрыть">✕</button>
+                <strong id="mapInfoTitle">—</strong>
+                <div id="mapInfoMeta" class="map-info-meta"></div>
+                <button id="mapInfoAction" class="primary small hidden" type="button">Открыть действия</button>
+              </div>
             </div>
           </div>
         </div>
