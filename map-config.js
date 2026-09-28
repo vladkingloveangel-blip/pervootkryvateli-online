@@ -5,14 +5,19 @@
 
 const MAP_META = {
   id: 'world-28-v2',
-  revision: 4,
+  revision: 5,
   rows: 28,
   cols: 28,
   coordinateBase: 0,
   visualLayers: {
-    sea: '/assets/map-sea.webp',
-    land: '/assets/map-land.webp',
+    base: '/assets/map-base-4096.webp',
     legacyReference: '/assets/map.png',
+  },
+  sourceArt: {
+    master: 'карта.psd',
+    masterSize: [6000, 6000],
+    runtimeSize: [4096, 4096],
+    note: 'Master PSD is visual-only; gameplay geometry lives in this config.',
   },
   onlineOnly: {
     showPrintedLabels: false,
