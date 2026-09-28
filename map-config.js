@@ -5,7 +5,7 @@
 
 const MAP_META = {
   id: 'world-28-v2',
-  revision: 7,
+  revision: 8,
   rows: 28,
   cols: 28,
   coordinateBase: 0,
@@ -196,6 +196,12 @@ const HAZARDS = {
       ...legendaryPlaceRing('abyss'),
     ]),
   },
+};
+
+const ANCHORS = {
+  blue: { id: 'blue', name: 'Синий якорь', battleTier: 1, glory: 1, cells: [[5,11],[9,1],[16,5],[22,11]] },
+  yellow: { id: 'yellow', name: 'Жёлтый якорь', visualColor: 'orange', battleTier: 2, glory: 3, cells: [[5,25],[10,16],[18,21]] },
+  red: { id: 'red', name: 'Красный якорь', battleTier: 3, glory: 6, cells: [[26,21]] },
 };
 
 // Board-game-only printed helpers. Kept as semantic data but hidden online.
