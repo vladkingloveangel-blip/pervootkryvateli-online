@@ -5,7 +5,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { Pool } = require('pg');
 const { RoomStore, isUnfinished } = require('./room-store');
-const { SHIPS, SHIP_LEVELS, SHIP_UPGRADES, ESCORTS, COLORS, BUILDINGS, GOODS, CITADEL_CELLS, ANCHORS, FACTIONS, POLITICAL_FACTION_ORDER, ASSIGNMENT_CARDS, LEGENDARY_PLACES } = require('./game-data');
+const { MAP_META, CITADEL, SHIPS, SHIP_LEVELS, SHIP_UPGRADES, ESCORTS, COLORS, BUILDINGS, GOODS, CITADEL_CELLS, ANCHORS, FACTIONS, POLITICAL_FACTION_ORDER, ASSIGNMENT_CARDS, LEGENDARY_PLACES } = require('./game-data');
 const {
   cloneIslands,
   reachableCells,
@@ -560,6 +560,20 @@ function publicRoom(room, viewerId = null) {
     log: room.log.slice(-100),
     reachableCells: reachable,
     mistReachableCells: mistReachable,
+    map: {
+      id: MAP_META.id,
+      revision: MAP_META.revision,
+      rows: MAP_META.rows,
+      cols: MAP_META.cols,
+      citadel: {
+        id: CITADEL.id,
+        name: CITADEL.name,
+        type: CITADEL.type,
+        ownable: CITADEL.ownable,
+        combatAllowed: CITADEL.combatAllowed,
+        services: [...CITADEL.services],
+      },
+    },
     citadelCells: CITADEL_CELLS,
     anchorCells: Object.entries(ANCHORS).flatMap(([color, def]) => def.cells.map(([row, col]) => ({ color, row, col, name: def.name, glory: def.glory }))),
     anchorDecks: Object.fromEntries(Object.entries(room.anchorDecks || {}).map(([color, deck]) => [color, { remaining: deck.drawPile?.length || 0, discard: deck.discard?.length || 0 }])),
