@@ -5,7 +5,7 @@
 
 const MAP_META = {
   id: 'world-28-v2',
-  revision: 3,
+  revision: 4,
   rows: 28,
   cols: 28,
   coordinateBase: 0,
