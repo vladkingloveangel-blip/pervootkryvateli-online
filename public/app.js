@@ -38,7 +38,30 @@
     return data;
   }
 
+
+  function setGameScreenActive(active) {
+    document.body.classList.toggle('game-active', Boolean(active));
+    if (!active) closeGameAccountMenu();
+  }
+
+  function openGameAccountMenu() {
+    if (!state.accountUser || !document.body.classList.contains('game-active')) return;
+    document.body.classList.add('game-account-open');
+    $('gameAccountBackdrop').classList.remove('hidden');
+  }
+
+  function closeGameAccountMenu() {
+    document.body.classList.remove('game-account-open');
+    $('gameAccountBackdrop').classList.add('hidden');
+  }
+
+  function toggleGameAccountMenu() {
+    if (document.body.classList.contains('game-account-open')) closeGameAccountMenu();
+    else openGameAccountMenu();
+  }
+
   function showAuth(message = '') {
+    setGameScreenActive(false);
     state.profileOpen = false;
     $('profilePanel').classList.add('hidden');
     $('authPanel').classList.remove('hidden');
@@ -85,6 +108,8 @@
 
   function openProfile() {
     if (!state.accountUser) return;
+    closeGameAccountMenu();
+    setGameScreenActive(false);
     state.profileReturn = !$('adminPanel').classList.contains('hidden') ? 'admin' : (!state.room ? 'entry' : 'game');
     state.profileOpen = true;
     $('profileUsername').value = state.accountUser.username || '';
@@ -109,6 +134,7 @@
       loadAdminRooms();
     } else if (state.room) {
       $('game').classList.remove('hidden');
+      setGameScreenActive(true);
       render();
     } else {
       $('entry').classList.remove('hidden');
@@ -362,6 +388,8 @@
 
   function showAdminPanel() {
     if (state.accountUser?.role !== 'admin') return;
+    closeGameAccountMenu();
+    setGameScreenActive(false);
     state.spectating = false;
     state.room = null;
     document.body.classList.remove('spectator-mode');
@@ -393,6 +421,7 @@
     state.code = null;
     state.playerToken = null;
     openMobileTab('map');
+    setGameScreenActive(false);
     $('game').classList.add('hidden');
     $('entry').classList.remove('hidden');
     setError('gameError', '');
@@ -440,6 +469,7 @@
   socket.on('adminRoomState', room => {
     if (!state.spectating) return;
     state.room = room;
+    setGameScreenActive(true);
     $('spectatorRoomCode').textContent = room.code;
     render();
   });
@@ -448,6 +478,7 @@
     state.spectating = false;
     state.room = null;
     document.body.classList.remove('spectator-mode');
+    setGameScreenActive(false);
     $('game').classList.add('hidden');
     $('spectatorBanner').classList.add('hidden');
     showAdminPanel();
@@ -465,6 +496,7 @@
     state.myId = res.playerId;
     state.playerToken = res.playerToken;
     openMobileTab('map');
+    setGameScreenActive(true);
     saveSession();
     if (state.room) render();
     $('entry').classList.add('hidden');
@@ -546,6 +578,7 @@
   $('registerBtn').addEventListener('click', () => submitAuth('register'));
   $('authPassword').addEventListener('keydown', e => { if (e.key === 'Enter') submitAuth('login'); });
   $('profileOpenBtn').addEventListener('click', openProfile);
+  $('gameAccountBackdrop').addEventListener('click', closeGameAccountMenu);
   $('profileBackBtn').addEventListener('click', closeProfile);
   $('profileSaveBtn').addEventListener('click', saveProfileName);
   $('profilePasswordBtn').addEventListener('click', changeProfilePassword);
@@ -581,6 +614,7 @@
   });
   $('myGamesRefreshBtn').addEventListener('click', loadMyGames);
   $('myGamesOpenBtn').addEventListener('click', () => {
+    closeGameAccountMenu();
     socket.emit('goHome', {}, res => {
       if (!res?.ok) return handleGameAck(res);
       state.spectating = false;
@@ -596,6 +630,7 @@
     showAdminPanel();
   });
   $('logoutBtn').addEventListener('click', () => {
+    closeGameAccountMenu();
     if (!confirm('Выйти из аккаунта на этом устройстве?')) return;
     localStorage.removeItem('pervo:accountToken');
     state.accountToken = '';
@@ -621,7 +656,7 @@
     btn.addEventListener('click', () => openMobileTab(btn.dataset.mobileNav));
   });
   $('mobileSheetClose').addEventListener('click', () => openMobileTab('map'));
-  $('hudPlayerBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : openMobileTab('ship'));
+  $('hudPlayerBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : toggleGameAccountMenu());
   $('hudDucatsBtn').addEventListener('click', () => openMobileTab('ship'));
   $('hudGloryBtn').addEventListener('click', () => openMobileTab('players'));
   $('hudCargoBtn').addEventListener('click', () => openMobileTab('ship'));
@@ -688,6 +723,7 @@
   };
 
   function openMobileTab(tab = 'map') {
+    closeGameAccountMenu();
     state.mobileTab = tab;
     const side = $('gameSidePanel');
     const isMap = tab === 'map';
@@ -751,6 +787,7 @@
   function render() {
     const r = state.room;
     if (!r) return;
+    setGameScreenActive(true);
     $('entry').classList.add('hidden');
     $('game').classList.remove('hidden');
     $('roomCode').textContent = r.code;
