@@ -1,0 +1,19 @@
+{
+  "name": "pervootkryvateli-online-mvp",
+  "version": "0.17.0",
+  "private": true,
+  "description": "Мобильный онлайн-MVP настольной игры «Первооткрыватели», подготовленный для облачного запуска и установки как PWA на Android",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node test/game-logic.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1"
+  }
+}
