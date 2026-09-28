@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b2730" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/assets/icon-192.png" />
+  <title>Первооткрыватели Online</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <strong>Первооткрыватели</strong>
+      <span class="tag">Online MVP 0.17</span>
+    </div>
+    <div id="connection" class="connection">подключение…</div>
+  </header>
+
+  <main>
+    <section id="entry" class="panel entry-panel">
+      <h1>Морская партия онлайн</h1>
+      <p class="muted">Создай комнату или введи код друга. Прототип рассчитан на 4–5 игроков.</p>
+
+      <label>Имя
+        <input id="nameInput" maxlength="24" autocomplete="nickname" placeholder="Капитан" />
+      </label>
+
+      <label>Класс корабля
+        <select id="shipSelect">
+          <option value="brigantine">Бригантина — арт. 3 · войско 3 · трюм 2 · ход +1 · мели</option>
+          <option value="frigate">Фрегат — арт. 5 · войско 3 · трюм 2 · рифы</option>
+          <option value="caravel">Каравелла — арт. 3 · войско 5 · трюм 2 · 1 клетка суши</option>
+          <option value="carrack">Каракка — арт. 3 · войско 4 · трюм 5 · ход −1 · льды</option>
+        </select>
+      </label>
+
+      <div class="entry-actions">
+        <button id="createBtn" class="primary">Создать комнату</button>
+        <div class="join-row">
+          <input id="codeInput" maxlength="5" autocapitalize="characters" placeholder="КОД" />
+          <button id="joinBtn">Войти</button>
+          <button id="installAppBtn" class="hidden">Установить на телефон</button>
+        </div>
+      </div>
+      <p id="entryError" class="error" role="alert"></p>
+    </section>
+
+    <section id="game" class="game hidden">
+      <section class="status panel">
+        <div class="room-line">
+          <div><span class="muted">Комната</span> <strong id="roomCode">—</strong></div>
+          <div class="room-actions"><button id="copyCodeBtn" class="small">Скопировать код</button><button id="shareInviteBtn" class="small">Поделиться ссылкой</button></div>
+        </div>
+        <div class="turn-line">
+          <span id="roundLabel">Раунд 1 · круг 1/5</span>
+          <strong id="turnLabel">Ожидание игроков</strong>
+        </div>
+      </section>
+
+      <section class="layout">
+        <div class="map-column">
+          <div class="map-toolbar panel">
+            <button id="zoomOut" aria-label="Уменьшить карту">−</button>
+            <span id="zoomLabel">100%</span>
+            <button id="zoomIn" aria-label="Увеличить карту">+</button>
+            <button id="centerMe">Мой корабль</button>
+          </div>
+
+          <div id="mapViewport" class="map-viewport" tabindex="0" aria-label="Игровая карта">
+            <div id="mapBoard" class="map-board">
+              <img src="/assets/map.png" alt="Карта настольной игры Первооткрыватели" draggable="false" />
+              <div id="gridLayer" class="grid-layer" aria-hidden="true"></div>
+              <div id="ownershipLayer" class="ownership-layer" aria-hidden="true"></div>
+              <div id="highlightLayer" class="highlight-layer"></div>
+              <div id="tokenLayer" class="token-layer"></div>
+            </div>
+          </div>
+          <p class="map-note">Навигация теперь учитывает сушу и специальные клетки карты: рифы доступны фрегату, льды — каракке, мели — бригантине; каравелла может пересечь одну последовательную клетку суши. Береговую клетку можно выбрать как конечную точку. В версии 0.17 проект также подготовлен для облачного запуска и установки на Android как веб-приложение. В игровой логике реализована потеря лишнего обычного сопровождения при нехватке мест верфи, а особое сопровождение Ландина заменяет одно из трёх судов и совмещает боевые и торговые функции (+6 артиллерии, трюм 5).</p>
+        </div>
+
+        <aside class="side-column">
+          <section class="panel controls">
+            <h2>Ход</h2>
+            <div id="youStatus" class="you-status">—</div>
+            <div id="moveResult" class="move-result">Навигация ещё не началась.</div>
+            <div class="button-stack">
+              <button id="rollBtn" class="primary">Бросить d6</button>
+              <button id="skipBtn">Остаться на месте</button>
+              <button id="endTurnBtn" class="danger-soft">Завершить ход</button>
+            </div>
+            <p id="gameError" class="error" role="alert"></p>
+          </section>
+
+          <section class="panel event-panel">
+            <div class="section-head">
+              <h2>Фаза событий</h2>
+              <span id="eventBadge" class="mini-badge">ожидание</span>
+            </div>
+            <div id="eventContent" class="muted">После пятого круга здесь появятся карты событий плавания.</div>
+            <div id="eventActions" class="event-actions"></div>
+          </section>
+
+          <section class="panel politics-panel">
+            <div class="section-head">
+              <h2>Государства</h2>
+              <span id="politicsBadge" class="mini-badge">—</span>
+            </div>
+            <div id="politicsContent" class="muted">Политические отношения появятся после начала партии.</div>
+            <div id="politicsActions" class="politics-actions"></div>
+          </section>
+
+          <section class="panel state-prize-panel">
+            <div class="section-head">
+              <h2>Итоговый приз государства</h2>
+              <span id="statePrizeBadge" class="mini-badge">—</span>
+            </div>
+            <div id="statePrizeContent" class="muted">Итоговый приз появится при первом полном подчинении государства.</div>
+            <div id="statePrizeActions" class="politics-actions"></div>
+          </section>
+
+          <section class="panel island-correction-panel">
+            <div class="section-head">
+              <h2>Исправление острова</h2>
+              <span id="islandCorrectionBadge" class="mini-badge">—</span>
+            </div>
+            <div id="islandCorrectionContent" class="muted">Если остров потеряет статус и перестанет помещаться по площади или пределу ветви, здесь появится обязательный выбор.</div>
+            <div id="islandCorrectionActions" class="build-actions"></div>
+          </section>
+
+          <section class="panel fleet-adjustment-panel">
+            <div class="section-head">
+              <h2>Настройка флотилии</h2>
+              <span id="fleetAdjustmentBadge" class="mini-badge">—</span>
+            </div>
+            <div id="fleetAdjustmentContent" class="muted">Здесь появятся обязательные решения после потери уровня или мест верфи, а также выбор заменяемого судна при получении сопровождения Ландина.</div>
+            <div id="fleetAdjustmentActions" class="build-actions"></div>
+          </section>
+
+          <section class="panel assignment-panel">
+            <div class="section-head">
+              <h2>Поручение сюзерена</h2>
+              <span id="assignmentBadge" class="mini-badge">—</span>
+            </div>
+            <div id="assignmentContent" class="muted">Поручение появится в общей Фазе событий после вступления в подданство.</div>
+            <div id="assignmentActions" class="event-actions"></div>
+          </section>
+
+          <section class="panel legendary-panel">
+            <div class="section-head">
+              <h2>Легендарные карты</h2>
+              <span id="legendaryBadge" class="mini-badge">0</span>
+            </div>
+            <div id="legendaryContent" class="muted">Легендарные карты появятся здесь после получения.</div>
+            <div id="legendaryActions" class="legendary-actions"></div>
+          </section>
+
+          <section class="panel fleet-panel">
+            <div class="section-head">
+              <h2>Корабль и флотилия</h2>
+              <span id="shipLevelBadge" class="mini-badge">ур. I</span>
+            </div>
+            <div id="fleetContent" class="muted">Данные корабля появятся после входа в комнату.</div>
+            <div id="fleetActions" class="build-actions"></div>
+          </section>
+
+          <section class="panel trade-panel">
+            <div class="section-head">
+              <h2>Трюм и торговля</h2>
+              <span id="cargoBadge" class="mini-badge">0/0</span>
+            </div>
+            <div id="cargoContent" class="muted">Трюм пуст.</div>
+            <button id="sellCargoBtn" class="primary trade-button" disabled>Продать основной груз в Цитадели</button>
+            <div id="escortCargoActions" class="escort-cargo-actions"></div>
+          </section>
+
+          <section class="panel anchor-panel">
+            <div class="section-head">
+              <h2>Морские якоря</h2>
+              <span id="anchorBadge" class="mini-badge">—</span>
+            </div>
+            <div id="anchorContent" class="muted">Остановитесь на клетке якоря после навигации.</div>
+          </section>
+
+          <section class="panel island-panel">
+            <div class="section-head">
+              <h2>Остров</h2>
+              <span id="islandAreaBadge" class="mini-badge hidden"></span>
+            </div>
+            <div id="islandContent" class="muted">Подойдите к берегу острова.</div>
+            <div id="islandActions" class="build-actions"></div>
+          </section>
+
+          <section class="panel combat-panel">
+            <div class="section-head">
+              <h2>Бои</h2>
+              <span id="combatBadge" class="mini-badge">мир</span>
+            </div>
+            <div id="combatContent" class="muted">Допустимые цели появятся после навигации.</div>
+            <div id="combatActions" class="combat-actions"></div>
+          </section>
+
+          <section class="panel alliance-panel">
+            <div class="section-head">
+              <h2>Союзы</h2>
+              <span id="allianceBadge" class="mini-badge">0</span>
+            </div>
+            <div id="allianceContent" class="muted">Союзы появятся после начала партии.</div>
+            <div id="allianceActions" class="alliance-actions"></div>
+          </section>
+
+          <section class="panel">
+            <div class="section-head">
+              <h2>Игроки</h2>
+              <button id="startBtn" class="primary small hidden">Начать игру</button>
+            </div>
+            <div id="players"></div>
+          </section>
+
+          <section class="panel">
+            <h2>Журнал</h2>
+            <div id="log" class="log" aria-live="polite"></div>
+          </section>
+        </aside>
+      </section>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
