@@ -16,7 +16,7 @@
   <header class="topbar">
     <div>
       <strong>Первооткрыватели</strong>
-      <span class="tag">Online MVP 0.22.0</span>
+      <span class="tag">Online MVP 0.23.0</span>
     </div>
     <div id="connection" class="connection">подключение…</div>
   </header>
@@ -135,7 +135,25 @@
         <div><strong>Режим наблюдателя</strong> · <span id="spectatorRoomCode">—</span></div>
         <button id="adminBackBtn" class="small">Вернуться в админ-панель</button>
       </section>
-      <section class="status panel">
+
+      <section id="gameHud" class="game-hud" aria-label="Параметры игрока">
+        <button id="hudPlayerBtn" class="hud-player" type="button">
+          <span class="hud-ship-icon">⛵</span>
+          <span><strong id="hudPlayerName">Игрок</strong><small id="hudShipLevel">ур. I</small></span>
+        </button>
+        <div id="hudResources" class="hud-resources">
+          <button class="hud-chip" id="hudDucatsBtn" type="button" aria-label="Дукаты"><span>🪙</span><strong id="hudDucats">0</strong></button>
+          <button class="hud-chip" id="hudGloryBtn" type="button" aria-label="Слава"><span>★</span><strong id="hudGlory">0</strong></button>
+          <button class="hud-chip" id="hudCargoBtn" type="button" aria-label="Трюм"><span>▣</span><strong id="hudCargo">0/0</strong></button>
+          <button class="hud-chip hud-debt hidden" id="hudDebtBtn" type="button" aria-label="Долг"><span>!</span><strong id="hudDebt">0</strong></button>
+        </div>
+        <button id="hudTurnBtn" class="hud-turn" type="button">
+          <small id="hudRound">Лобби</small>
+          <strong id="hudTurn">Ожидание</strong>
+        </button>
+      </section>
+
+      <section class="status panel legacy-status">
         <div class="room-line">
           <div><span class="muted">Комната</span> <strong id="roomCode">—</strong></div>
           <div class="room-actions"><button id="copyCodeBtn" class="small">Скопировать код</button><button id="shareInviteBtn" class="small">Поделиться ссылкой</button><button id="leaveRoomBtn" class="small danger-soft hidden">Выйти</button><button id="closeRoomBtn" class="small danger-soft hidden">Закрыть комнату</button></div>
@@ -164,11 +182,14 @@
               <div id="tokenLayer" class="token-layer"></div>
             </div>
           </div>
-          <p class="map-note">Навигация теперь учитывает сушу и специальные клетки карты: рифы доступны фрегату, льды — каракке, мели — бригантине; каравелла может пересечь одну последовательную клетку суши. Береговую клетку можно выбрать как конечную точку. В версии 0.18 проект также подготовлен для облачного запуска и установки на Android как веб-приложение. В игровой логике реализована потеря лишнего обычного сопровождения при нехватке мест верфи, а особое сопровождение Ландина заменяет одно из трёх судов и совмещает боевые и торговые функции (+6 артиллерии, трюм 5).</p>
         </div>
 
-        <aside class="side-column">
-          <section class="panel controls">
+        <aside id="gameSidePanel" class="side-column">
+          <div class="mobile-sheet-head">
+            <strong id="mobileSheetTitle">Действия</strong>
+            <button id="mobileSheetClose" class="small" type="button" aria-label="Закрыть">✕</button>
+          </div>
+          <section class="panel controls" data-ui-tab="actions">
             <h2>Ход</h2>
             <div id="youStatus" class="you-status">—</div>
             <div id="moveResult" class="move-result">Навигация ещё не началась.</div>
@@ -180,7 +201,7 @@
             <p id="gameError" class="error" role="alert"></p>
           </section>
 
-          <section class="panel event-panel">
+          <section class="panel event-panel" data-ui-tab="actions">
             <div class="section-head">
               <h2>Фаза событий</h2>
               <span id="eventBadge" class="mini-badge">ожидание</span>
@@ -189,7 +210,7 @@
             <div id="eventActions" class="event-actions"></div>
           </section>
 
-          <section class="panel politics-panel">
+          <section class="panel politics-panel" data-ui-tab="players">
             <div class="section-head">
               <h2>Государства</h2>
               <span id="politicsBadge" class="mini-badge">—</span>
@@ -198,7 +219,7 @@
             <div id="politicsActions" class="politics-actions"></div>
           </section>
 
-          <section class="panel state-prize-panel">
+          <section class="panel state-prize-panel" data-ui-tab="actions">
             <div class="section-head">
               <h2>Итоговый приз государства</h2>
               <span id="statePrizeBadge" class="mini-badge">—</span>
@@ -207,7 +228,7 @@
             <div id="statePrizeActions" class="politics-actions"></div>
           </section>
 
-          <section class="panel island-correction-panel">
+          <section class="panel island-correction-panel" data-ui-tab="actions">
             <div class="section-head">
               <h2>Исправление острова</h2>
               <span id="islandCorrectionBadge" class="mini-badge">—</span>
@@ -216,7 +237,7 @@
             <div id="islandCorrectionActions" class="build-actions"></div>
           </section>
 
-          <section class="panel fleet-adjustment-panel">
+          <section class="panel fleet-adjustment-panel" data-ui-tab="actions">
             <div class="section-head">
               <h2>Настройка флотилии</h2>
               <span id="fleetAdjustmentBadge" class="mini-badge">—</span>
@@ -225,7 +246,7 @@
             <div id="fleetAdjustmentActions" class="build-actions"></div>
           </section>
 
-          <section class="panel assignment-panel">
+          <section class="panel assignment-panel" data-ui-tab="actions">
             <div class="section-head">
               <h2>Поручение сюзерена</h2>
               <span id="assignmentBadge" class="mini-badge">—</span>
@@ -234,7 +255,7 @@
             <div id="assignmentActions" class="event-actions"></div>
           </section>
 
-          <section class="panel legendary-panel">
+          <section class="panel legendary-panel" data-ui-tab="ship">
             <div class="section-head">
               <h2>Легендарные карты</h2>
               <span id="legendaryBadge" class="mini-badge">0</span>
@@ -243,7 +264,7 @@
             <div id="legendaryActions" class="legendary-actions"></div>
           </section>
 
-          <section class="panel fleet-panel">
+          <section class="panel fleet-panel" data-ui-tab="ship">
             <div class="section-head">
               <h2>Корабль и флотилия</h2>
               <span id="shipLevelBadge" class="mini-badge">ур. I</span>
@@ -252,7 +273,7 @@
             <div id="fleetActions" class="build-actions"></div>
           </section>
 
-          <section class="panel trade-panel">
+          <section class="panel trade-panel" data-ui-tab="ship">
             <div class="section-head">
               <h2>Трюм и торговля</h2>
               <span id="cargoBadge" class="mini-badge">0/0</span>
@@ -262,7 +283,7 @@
             <div id="escortCargoActions" class="escort-cargo-actions"></div>
           </section>
 
-          <section class="panel anchor-panel">
+          <section class="panel anchor-panel" data-ui-tab="actions">
             <div class="section-head">
               <h2>Морские якоря</h2>
               <span id="anchorBadge" class="mini-badge">—</span>
@@ -270,7 +291,7 @@
             <div id="anchorContent" class="muted">Остановитесь на клетке якоря после навигации.</div>
           </section>
 
-          <section class="panel island-panel">
+          <section class="panel island-panel" data-ui-tab="actions">
             <div class="section-head">
               <h2>Остров</h2>
               <span id="islandAreaBadge" class="mini-badge hidden"></span>
@@ -279,7 +300,7 @@
             <div id="islandActions" class="build-actions"></div>
           </section>
 
-          <section class="panel combat-panel">
+          <section class="panel combat-panel" data-ui-tab="actions">
             <div class="section-head">
               <h2>Бои</h2>
               <span id="combatBadge" class="mini-badge">мир</span>
@@ -288,7 +309,7 @@
             <div id="combatActions" class="combat-actions"></div>
           </section>
 
-          <section class="panel alliance-panel">
+          <section class="panel alliance-panel" data-ui-tab="players">
             <div class="section-head">
               <h2>Союзы</h2>
               <span id="allianceBadge" class="mini-badge">0</span>
@@ -297,7 +318,7 @@
             <div id="allianceActions" class="alliance-actions"></div>
           </section>
 
-          <section id="playersPanel" class="panel">
+          <section id="playersPanel" class="panel" data-ui-tab="players">
             <div class="section-head">
               <h2>Игроки</h2>
               <button id="startBtn" class="primary small hidden">Начать игру</button>
@@ -305,12 +326,26 @@
             <div id="players"></div>
           </section>
 
-          <section id="logPanel" class="panel">
+          <section id="logPanel" class="panel" data-ui-tab="log">
             <h2>Журнал</h2>
             <div id="log" class="log" aria-live="polite"></div>
           </section>
         </aside>
       </section>
+
+      <section id="mobileActionDock" class="mobile-action-dock hidden" aria-label="Быстрые действия">
+        <button id="dockRollBtn" class="primary" type="button">🎲 Бросить</button>
+        <button id="dockSkipBtn" type="button">Остаться</button>
+        <button id="dockEndTurnBtn" class="danger-soft" type="button">Завершить</button>
+      </section>
+
+      <nav id="mobileGameNav" class="mobile-game-nav" aria-label="Разделы игры">
+        <button class="active" data-mobile-nav="map" type="button"><span>🗺</span><small>Карта</small></button>
+        <button id="mobileNavActions" data-mobile-nav="actions" type="button"><span>⚡</span><small>Действия</small></button>
+        <button id="mobileNavShip" data-mobile-nav="ship" type="button"><span>⛵</span><small>Корабль</small></button>
+        <button data-mobile-nav="players" type="button"><span>👥</span><small>Игроки</small></button>
+        <button data-mobile-nav="log" type="button"><span>☰</span><small>Журнал</small></button>
+      </nav>
     </section>
   </main>
 
