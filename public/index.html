@@ -16,7 +16,7 @@
   <header class="topbar">
     <div>
       <strong>Первооткрыватели</strong>
-      <span class="tag">Online MVP 0.31.0</span>
+      <span class="tag">Online MVP 0.32.0</span>
     </div>
     <div id="connection" class="connection">подключение…</div>
   </header>
@@ -176,6 +176,18 @@
           </div>
 
           <div id="mapViewport" class="map-viewport" tabindex="0" aria-label="Игровая карта">
+            <div id="mapNavOverlay" class="map-nav-overlay hidden" aria-live="polite">
+              <div class="map-nav-card">
+                <div class="map-nav-copy">
+                  <strong id="mapNavTitle">Ваш ход</strong>
+                  <span id="mapNavText">Бросьте кубик и выберите точку назначения.</span>
+                </div>
+                <div class="map-nav-actions">
+                  <button id="mapNavRollBtn" class="primary" type="button">🎲 Бросить d6</button>
+                  <button id="mapNavStayBtn" type="button">Остаться</button>
+                </div>
+              </div>
+            </div>
             <div id="mapBoard" class="map-board canonical-map-art">
               <div id="mapArtLayer" class="map-art-layer" aria-hidden="true">
                 <img id="mapBaseArt" class="map-base-art" src="/assets/map-base-4096.webp" alt="" draggable="false" />
