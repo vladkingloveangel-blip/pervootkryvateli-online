@@ -2333,7 +2333,12 @@
     }
 
     for (const anchor of r.anchorCells || []) {
-      addMapCellButton(layer, anchor.row, anchor.col, `map-object-hit anchor-hit anchor-${anchor.color}`, anchor.name, () => showMapInfo('anchor', anchor));
+      addMapMarker(
+        layer, anchor.row, anchor.col,
+        `anchor-marker anchor-${anchor.color}`,
+        '⚓', anchor.name,
+        () => showMapInfo('anchor', anchor)
+      );
     }
 
     for (const place of r.map?.legendaryPlaces || []) {
@@ -2351,6 +2356,9 @@
     const r = state.room;
     const { rows, cols } = mapSize();
     const board = $('mapBoard');
+    const baseArt = $('mapBaseArt');
+    const configuredArt = r.map?.visualLayers?.base;
+    if (configuredArt && baseArt.getAttribute('src') !== configuredArt) baseArt.src = configuredArt;
     board.style.setProperty('--map-rows', rows);
     board.style.setProperty('--map-cols', cols);
     const tokenLayer = $('tokenLayer');
