@@ -587,3 +587,42 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   body.game-active .hud-chip { min-width: 44px; }
   body.game-active.game-account-open #accountBar { top: 102px; }
 }
+
+/* v0.25 — контекстные игровые действия */
+@media (max-width: 900px) {
+  body.game-active #gameSidePanel[data-mobile-tab="actions"] .context-hidden {
+    display: none !important;
+  }
+
+  body.game-active #gameSidePanel[data-mobile-tab="actions"] .you-status {
+    display: none;
+  }
+
+  body.game-active #gameSidePanel[data-mobile-tab="actions"] .controls {
+    padding-top: 12px;
+  }
+
+  body.game-active #gameSidePanel[data-mobile-tab="actions"] .controls h2 {
+    margin-bottom: 7px;
+  }
+
+  body.game-active #gameSidePanel[data-mobile-tab="actions"] .move-result {
+    margin-bottom: 9px;
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  body.game-active #gameSidePanel[data-mobile-tab="actions"] .panel {
+    animation: panel-in .12s ease-out;
+  }
+
+  @keyframes panel-in {
+    from { opacity: .65; transform: translateY(3px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  body.game-active #mobileNavActions[data-count]:not([data-count="0"]) small::after {
+    content: ' · ' attr(data-count);
+    color: var(--accent);
+  }
+}
