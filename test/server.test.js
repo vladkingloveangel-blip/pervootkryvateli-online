@@ -47,6 +47,13 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   const stranger = (await api('/api/auth/register', null, { username: 'stranger', password: 'password3' })).data;
   const admin = (await api('/api/auth/login', null, { username: 'testadmin', password: 'testpassword' })).data;
   assert.equal(a.ok, true); assert.equal(b.ok, true); assert.equal(admin.ok, true);
+  const profileUpdate = await api('/api/auth/profile', a.token, { displayName: 'Captain One' });
+  assert.equal(profileUpdate.data.ok, true);
+  assert.equal(profileUpdate.data.user.displayName, 'Captain One');
+  a.token = profileUpdate.data.token;
+  assert.equal((await api('/api/auth/me', a.token)).data.user.displayName, 'Captain One');
+  assert.equal((await api('/api/auth/change-password', a.token, { oldPassword: 'password1', newPassword: 'password1b' })).data.ok, true);
+  assert.equal((await api('/api/auth/login', null, { username: 'playerone', password: 'password1b' })).data.ok, true);
   const first = await connect(); const second = await connect(); const watcher = await connect();
   const created = await emit(first, 'createRoom', { accountToken: a.token, name: 'One' });
   assert.equal(created.ok, true); assert.equal(rows().length, 1); // ack means durable
