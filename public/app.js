@@ -334,6 +334,33 @@
   $('registerBtn').addEventListener('click', () => submitAuth('register'));
   $('authPassword').addEventListener('keydown', e => { if (e.key === 'Enter') submitAuth('login'); });
   $('adminOpenBtn').addEventListener('click', showAdminPanel);
+  $('adminHomeBtn').addEventListener('click', () => {
+    socket.emit('adminStopWatching', {}, () => {});
+    state.spectating = false;
+    document.body.classList.remove('spectator-mode');
+    $('adminPanel').classList.add('hidden');
+    $('spectatorBanner').classList.add('hidden');
+    $('game').classList.add('hidden');
+    $('authPanel').classList.add('hidden');
+
+    if (state.code && state.playerToken) {
+      socket.emit('resumeRoom', { code: state.code, playerToken: state.playerToken, accountToken: state.accountToken }, res => {
+        if (res?.ok) {
+          acceptSession(res);
+          return;
+        }
+        state.room = null;
+        state.myId = null;
+        state.code = null;
+        state.playerToken = null;
+        $('entry').classList.remove('hidden');
+      });
+    } else {
+      state.room = null;
+      state.myId = null;
+      $('entry').classList.remove('hidden');
+    }
+  });
   $('adminRefreshBtn').addEventListener('click', loadAdminRooms);
   $('adminBackBtn').addEventListener('click', () => {
     socket.emit('adminStopWatching', {}, () => {});
