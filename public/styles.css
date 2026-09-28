@@ -665,35 +665,50 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 .map-info-card {
   position: absolute;
   z-index: 20;
-  left: 10px;
-  bottom: 10px;
-  width: min(310px, calc(100% - 20px));
+  left: 0;
+  top: 0;
+  right: auto;
+  bottom: auto;
+  width: min(260px, calc(100vw - 28px));
+  max-width: 260px;
+  max-height: 220px;
+  overflow: auto;
   display: grid;
-  gap: 7px;
-  padding: 11px 38px 11px 12px;
+  gap: 6px;
+  padding: 10px 36px 10px 11px;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(7,31,37,.94);
-  box-shadow: 0 8px 24px rgba(0,0,0,.38);
+  border-radius: 11px;
+  background: rgba(7,31,37,.96);
+  box-shadow: 0 8px 24px rgba(0,0,0,.42);
   backdrop-filter: blur(8px);
+  overscroll-behavior: contain;
 }
 .map-info-card.hidden { display: none; }
-.map-info-card > strong { font-size: 16px; }
-.map-info-meta { display: grid; gap: 3px; color: var(--muted); font-size: 12px; }
+.map-info-card > strong { font-size: 15px; line-height: 1.15; }
+.map-info-meta { display: grid; gap: 3px; color: var(--muted); font-size: 11px; line-height: 1.3; }
 .map-info-meta strong { color: var(--text); }
 .map-info-close {
   position: absolute;
-  right: 6px;
-  top: 6px;
-  width: 28px;
-  min-width: 28px;
-  min-height: 28px;
+  right: 5px;
+  top: 5px;
+  width: 27px;
+  min-width: 27px;
+  min-height: 27px;
   padding: 0;
   border: 0;
-  background: transparent;
+  background: rgba(255,255,255,.05);
 }
+.map-info-card .primary.small { min-height: 34px; padding: 6px 9px; font-size: 11px; }
 @media (max-width:900px) {
-  body.game-active .map-info-card { left: 7px; right: 7px; bottom: 7px; width: auto; }
+  body.game-active .map-info-card {
+    left: 0;
+    top: 0;
+    right: auto;
+    bottom: auto;
+    width: min(238px, calc(100vw - 28px));
+    max-width: 238px;
+    max-height: min(205px, calc(100dvh - 170px));
+  }
 }
 
 /* v0.28 — раздельные арт-слои и живое море */
