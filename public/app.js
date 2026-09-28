@@ -34,6 +34,27 @@
   function setError(id, msg = '') { $(id).textContent = msg; }
   function setConnected(yes) { $('connection').textContent = yes ? '● онлайн' : '○ нет связи'; }
 
+  function clearSession(message = '') {
+    const code = state.code;
+    if (code) {
+      localStorage.removeItem(keyFor(code));
+      if (localStorage.getItem('pervo:lastRoom') === code) localStorage.removeItem('pervo:lastRoom');
+    }
+    state.room = null;
+    state.myId = null;
+    state.code = null;
+    state.playerToken = null;
+    $('game').classList.add('hidden');
+    $('entry').classList.remove('hidden');
+    setError('gameError', '');
+    setError('entryError', message);
+    try {
+      const url = new URL(location.href);
+      url.searchParams.delete('room');
+      history.replaceState(null, '', url.pathname + url.search + url.hash);
+    } catch {}
+  }
+
   socket.on('connect', () => {
     setConnected(true);
     const last = localStorage.getItem('pervo:lastRoom');
@@ -48,6 +69,8 @@
   });
   socket.on('disconnect', () => setConnected(false));
   socket.on('roomState', room => { state.room = room; render(); });
+  socket.on('roomClosed', data => clearSession(data?.reason || 'Комната закрыта.'));
+  socket.on('removedFromRoom', data => clearSession(data?.reason || 'Вы удалены из комнаты.'));
 
   function acceptSession(res) {
     state.code = res.code;
@@ -122,6 +145,23 @@
   });
 
   $('startBtn').addEventListener('click', () => socket.emit('startGame', {}, handleGameAck));
+
+  $('leaveRoomBtn').addEventListener('click', () => {
+    if (!state.room || state.room.started) return;
+    if (!confirm('Выйти из этой комнаты?')) return;
+    socket.emit('leaveRoom', {}, res => {
+      if (!res?.ok) return handleGameAck(res);
+      clearSession('Вы вышли из комнаты.');
+    });
+  });
+
+  $('closeRoomBtn').addEventListener('click', () => {
+    if (!state.room || state.room.hostId !== state.myId) return;
+    if (!confirm('Закрыть комнату для всех игроков? Код комнаты перестанет работать.')) return;
+    socket.emit('closeRoom', {}, res => {
+      if (res && !res.ok) handleGameAck(res);
+    });
+  });
   $('rollBtn').addEventListener('click', () => socket.emit('rollMove', {}, handleGameAck));
   $('skipBtn').addEventListener('click', () => socket.emit('skipNavigation', {}, handleGameAck));
   $('endTurnBtn').addEventListener('click', () => socket.emit('endTurn', {}, handleGameAck));
@@ -197,6 +237,7 @@
   function renderPlayers() {
     const r = state.room;
     $('players').innerHTML = '';
+    const isHost = r.hostId === state.myId;
     r.players.forEach(p => {
       const order = r.started ? r.order.indexOf(p.id) + 1 : null;
       const el = document.createElement('div');
@@ -204,13 +245,25 @@
       const cargoLabel = p.landCompany ? ` · рота +${p.landCompany.army}` : (p.cargo ? ` · груз ${state.room.goodsCatalog?.[p.cargo.goodId]?.name || p.cargo.goodId} ×${p.cargo.quantity}` : '');
       const suzerainName = p.suzerainId ? state.room.factions?.find(f => f.id === p.suzerainId)?.name : null;
       const politicalLabel = suzerainName ? ` · вассал ${suzerainName}` : (p.enemyFactionIds?.length ? ` · вражда ${p.enemyFactionIds.length}` : '');
-      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${!p.connected ? ' · офлайн' : ''}</div><div class="player-sub">${SHIP_NAMES[p.shipClass]} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · слава ${p.glory || 0} · островов ${p.islandCount} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><span class="order-badge">${order ? `#${order}` : ''}</span>`;
+      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${!p.connected ? ' · офлайн' : ''}</div><div class="player-sub">${SHIP_NAMES[p.shipClass]} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · слава ${p.glory || 0} · островов ${p.islandCount} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${order ? `#${order}` : ''}</span></div>`;
+      if (isHost && !r.started && !p.isYou) {
+        const kick = document.createElement('button');
+        kick.className = 'small danger-soft';
+        kick.textContent = 'Удалить';
+        kick.addEventListener('click', () => {
+          if (!confirm(`Удалить ${p.name} из комнаты?`)) return;
+          socket.emit('kickPlayer', { playerId: p.id }, handleGameAck);
+        });
+        el.querySelector('.player-side-actions').appendChild(kick);
+      }
       $('players').appendChild(el);
     });
-    const isHost = r.hostId === state.myId;
     $('startBtn').classList.toggle('hidden', r.started || !isHost);
-    $('startBtn').disabled = r.players.length < 4 || r.players.length > 5;
-    $('startBtn').textContent = r.players.length < 4 ? `Нужно ещё ${4 - r.players.length}` : 'Начать игру';
+    $('startBtn').disabled = r.players.length < 2 || r.players.length > 5;
+    $('startBtn').textContent = r.players.length < 2 ? 'Нужен ещё 1 игрок' : 'Начать игру';
+
+    $('closeRoomBtn').classList.toggle('hidden', !isHost);
+    $('leaveRoomBtn').classList.toggle('hidden', isHost || r.started);
   }
 
   function renderControls() {
@@ -226,7 +279,7 @@
     $('skipBtn').disabled = !myTurn || phase !== 'navigation' || blocked;
     $('endTurnBtn').disabled = !myTurn || blocked;
 
-    if (!r.started) $('moveResult').textContent = 'Ждём 4–5 игроков и старта от создателя комнаты.';
+    if (!r.started) $('moveResult').textContent = 'Ждём 2–5 игроков и старта от создателя комнаты.';
     else if (r.eventPhase?.active) $('moveResult').textContent = r.pendingIslandCorrection?.viewerCanRespond ? `Остров ${r.pendingIslandCorrection.islandName} нужно немедленно исправить перед продолжением Фазы событий.` : r.pendingIslandCorrection ? `Фаза событий приостановлена: ${playerName(r.pendingIslandCorrection.playerId)} исправляет остров ${r.pendingIslandCorrection.islandName}.` : r.pendingAssignmentChoice?.viewerCanRespond ? 'Нужно решить, оставить или заменить поручение сюзерена.' : r.pendingFeud?.viewerCanRespond ? 'Нужно разрешить вашу карту вражды.' : r.pendingEvent?.viewerCanRespond ? 'Нужно принять решение по вашей карте события.' : `Идёт общая Фаза событий: ${playerName(r.eventPhase.currentPlayerId)}.`;
     else if (r.pendingStatePrize?.viewerCanRespond) $('moveResult').textContent = 'Разместите призовую постройку за полное подчинение государства.';
     else if (r.pendingStatePrize) $('moveResult').textContent = `Ожидается размещение итогового приза игроком ${playerName(r.pendingStatePrize.playerId)}.`;
