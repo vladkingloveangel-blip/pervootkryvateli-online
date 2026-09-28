@@ -1,0 +1,186 @@
+:root {
+  --bg: #0b2730;
+  --panel: #123842;
+  --panel-2: #0f3038;
+  --text: #eef8f9;
+  --muted: #a7c3c8;
+  --line: rgba(255,255,255,.14);
+  --accent: #f0c45b;
+  --danger: #ef7777;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+button, input, select { font: inherit; }
+button { min-height: 44px; border: 1px solid var(--line); border-radius: 10px; padding: 9px 13px; background: #1b4b56; color: var(--text); cursor: pointer; }
+button:disabled { opacity: .42; cursor: not-allowed; }
+button.primary { background: var(--accent); color: #182023; border-color: transparent; font-weight: 800; }
+button.small { min-height: 36px; padding: 6px 10px; font-size: 13px; }
+button.danger-soft { border-color: rgba(239,119,119,.55); }
+input, select { width: 100%; min-height: 46px; border-radius: 10px; border: 1px solid var(--line); background: #08252c; color: var(--text); padding: 10px 12px; font-size: 16px; }
+label { display: grid; gap: 7px; font-size: 14px; color: var(--muted); }
+h1, h2, p { margin-top: 0; }
+h1 { font-size: clamp(24px, 5vw, 38px); margin-bottom: 8px; }
+h2 { font-size: 17px; margin-bottom: 12px; }
+.hidden { display: none !important; }
+.muted { color: var(--muted); }
+.error { color: #ffb4b4; min-height: 1.2em; margin: 8px 0 0; }
+.topbar { min-height: 58px; padding: 10px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 16px; background: #08252c; position: sticky; top: 0; z-index: 50; }
+.topbar strong { font-size: 18px; }
+.tag { margin-left: 8px; font-size: 12px; color: var(--muted); }
+.connection { font-size: 12px; color: var(--muted); }
+main { width: min(1480px, 100%); margin: 0 auto; padding: 14px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.entry-panel { width: min(620px, 100%); margin: 7vh auto 0; display: grid; gap: 16px; }
+.entry-actions { display: grid; gap: 10px; }
+.join-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.game { display: grid; gap: 12px; }
+.status { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; }
+.room-line, .turn-line, .section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.turn-line { justify-content: flex-end; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; align-items: start; }
+.map-column { min-width: 0; }
+.side-column { display: grid; gap: 12px; }
+.map-toolbar { border-bottom-left-radius: 0; border-bottom-right-radius: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.map-toolbar button { min-width: 44px; }
+.map-viewport { overflow: auto; width: 100%; max-height: 72vh; background: #071f25; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 14px 14px; touch-action: pan-x pan-y pinch-zoom; }
+.map-board { position: relative; width: 980px; aspect-ratio: 1 / 1; transform-origin: top left; }
+.map-board > img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; pointer-events: none; }
+.grid-layer, .ownership-layer, .highlight-layer, .token-layer { position: absolute; inset: 0; }
+.grid-layer { z-index: 1; background-image: linear-gradient(to right, rgba(255,255,255,.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,.07) 1px, transparent 1px); background-size: calc(100% / 28) calc(100% / 28); pointer-events: none; }
+.ownership-layer { z-index: 2; pointer-events: none; }
+.highlight-layer { z-index: 3; }
+.token-layer { z-index: 4; pointer-events: none; }
+.owned-cell, .island-focus { position: absolute; width: calc(100% / 28); height: calc(100% / 28); pointer-events: none; }
+.owned-cell { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--owner-color) 72%, transparent); background: color-mix(in srgb, var(--owner-color) 12%, transparent); }
+.island-focus { box-shadow: inset 0 0 0 3px rgba(255,255,255,.72); background: rgba(255,255,255,.06); }
+.cell-hit { position: absolute; width: calc(100% / 28); height: calc(100% / 28); border: 0; border-radius: 0; padding: 0; min-height: 0; background: rgba(240,196,91,.26); outline: 1px solid rgba(240,196,91,.55); }
+.cell-hit.current { background: rgba(255,255,255,.2); }
+.cell-hit.shore { background: rgba(97, 208, 132, .28); outline-color: rgba(130, 235, 158, .8); }
+.token { position: absolute; width: calc(100% / 28 * .72); height: calc(100% / 28 * .72); transform: translate(19%, 19%); border-radius: 50%; display: grid; place-items: center; font-size: clamp(10px, 1.3vw, 20px); font-weight: 900; color: white; border: 2px solid rgba(255,255,255,.9); box-shadow: 0 2px 7px rgba(0,0,0,.5); pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,.75); }
+.token.you { outline: 3px solid var(--accent); outline-offset: 2px; }
+.map-note { color: var(--muted); font-size: 12px; margin: 8px 4px 0; }
+.controls .button-stack { display: grid; gap: 8px; }
+.you-status { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 8px; }
+.move-result { color: var(--muted); margin-bottom: 10px; font-size: 14px; }
+.player-card { display: grid; grid-template-columns: auto 1fr auto; gap: 9px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.player-card:last-child { border-bottom: 0; }
+.player-dot { width: 15px; height: 15px; border-radius: 50%; }
+.player-meta { min-width: 0; }
+.player-name { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-sub { color: var(--muted); font-size: 12px; }
+.order-badge { color: var(--accent); font-size: 12px; }
+.log { max-height: 260px; overflow: auto; display: grid; gap: 7px; font-size: 13px; }
+.log-entry { color: #d9e8ea; padding-bottom: 6px; border-bottom: 1px dashed rgba(255,255,255,.1); }
+
+@media (max-width: 900px) {
+  main { padding: 8px; }
+  .layout { grid-template-columns: 1fr; }
+  .side-column { grid-template-columns: 1fr; }
+  .map-viewport { max-height: 64vh; }
+  .status { grid-template-columns: 1fr; }
+  .turn-line { justify-content: space-between; }
+}
+
+@media (max-width: 480px) {
+  .topbar { padding: 8px 10px; }
+  .topbar .tag { display: none; }
+  .panel { padding: 11px; border-radius: 11px; }
+  .entry-panel { margin-top: 12px; }
+  .map-toolbar { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+  .map-viewport { border-radius: 0 0 11px 11px; }
+}
+
+
+.mini-badge { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 9px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); color: var(--accent); font-size: 12px; font-weight: 800; }
+.island-name { font-weight: 900; font-size: 18px; margin: 2px 0 10px; }
+.island-grid { display: grid; grid-template-columns: minmax(92px, .8fr) minmax(0, 1.2fr); gap: 6px 10px; font-size: 13px; }
+.island-grid span { color: var(--muted); }
+.island-grid strong { min-width: 0; overflow-wrap: anywhere; }
+.building-line, .reward-note { margin-top: 10px; font-size: 13px; line-height: 1.4; }
+.reward-note { padding: 9px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); }
+.build-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 12px; }
+.build-btn { min-width: 0; padding: 8px 9px; font-size: 12px; line-height: 1.2; }
+.island-switcher { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.island-choice.selected { border-color: var(--accent); color: var(--accent); }
+@media (max-width: 380px) { .build-actions { grid-template-columns: 1fr; } }
+
+/* v0.3 — трюм и торговля */
+.trade-button { width: 100%; margin-top: 10px; }
+.cargo-name { font-weight: 900; font-size: 16px; color: var(--text); }
+.cargo-meta { margin-top: 5px; color: var(--muted); font-size: 13px; line-height: 1.35; }
+.action-group-label { grid-column: 1 / -1; margin-top: 4px; padding-top: 7px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.action-group-label:first-child { border-top: 0; padding-top: 0; }
+.cargo-btn { border-color: rgba(94, 201, 170, .48); }
+.cell-hit.citadel { background: rgba(255, 215, 96, .34); outline-color: rgba(255, 225, 120, .9); }
+
+/* v0.4 — развитие корабля, верфи и сопровождение */
+.fleet-grid { display: grid; grid-template-columns: minmax(120px, 1fr) auto; gap: 6px 10px; font-size: 13px; }
+.fleet-grid span { color: var(--muted); }
+.fleet-grid strong { text-align: right; }
+.citadel-note { margin-top: 10px; padding: 8px 9px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); color: var(--muted); font-size: 12px; line-height: 1.35; }
+.escort-btn { border-color: rgba(240,196,91,.42); }
+.upgrade-building-btn { border-color: rgba(151,183,255,.42); }
+.cargo-hold { margin-top: 9px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 13px; }
+.escort-cargo-actions { display: grid; gap: 7px; margin-top: 8px; }
+.escort-cargo-actions .trade-button { margin-top: 0; }
+@media (max-width: 380px) {
+  .fleet-grid { grid-template-columns: 1fr; gap: 2px; }
+  .fleet-grid strong { text-align: left; margin-bottom: 6px; }
+}
+
+/* v0.5 — морские бои и штурмы */
+.combat-actions { display: grid; gap: 8px; margin-top: 10px; }
+.combat-target { display: grid; gap: 8px; padding: 9px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
+.combat-target > button { width: 100%; }
+.combat-button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.combat-note { margin-top: 6px; font-size: 13px; line-height: 1.4; color: var(--muted); }
+@media (max-width: 380px) { .combat-button-row { grid-template-columns: 1fr; } }
+
+/* v0.6 — союзы и совместные бои */
+.alliance-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 10px; }
+.alliance-note { margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.alliance-note strong { color: var(--text); }
+.alliance-actions .action-group-label { grid-column: 1 / -1; }
+@media (max-width: 380px) { .alliance-actions { grid-template-columns: 1fr; } }
+
+
+/* v0.7–0.8 — морские якоря, долг и события */
+.anchor-note, .anchor-result, .anchor-decks { margin-top: 7px; font-size: 13px; line-height: 1.4; color: var(--muted); }
+.anchor-result { padding: 9px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); color: var(--text); }
+.anchor-decks { font-size: 12px; }
+.anchor-cell { position: absolute; width: calc(100% / 28); height: calc(100% / 28); pointer-events: none; border-radius: 7px; box-shadow: inset 0 0 0 3px rgba(255,255,255,.35); }
+.anchor-cell.anchor-blue { box-shadow: inset 0 0 0 3px rgba(75,150,255,.75); }
+.anchor-cell.anchor-yellow { box-shadow: inset 0 0 0 3px rgba(245,197,75,.78); }
+.anchor-cell.anchor-red { box-shadow: inset 0 0 0 3px rgba(235,78,70,.82); }
+.cell-hit.anchor-destination.anchor-blue { outline: 3px solid rgba(75,150,255,.95); }
+.cell-hit.anchor-destination.anchor-yellow { outline: 3px solid rgba(245,197,75,.95); }
+.cell-hit.anchor-destination.anchor-red { outline: 3px solid rgba(235,78,70,.98); }
+
+.event-panel { border-color: rgba(240,196,91,.28); }
+.event-decks, .event-current, .event-card-line, .event-effect, .event-hand { margin-top: 8px; line-height: 1.4; }
+.event-current, .event-card-line, .event-effect, .event-hand { padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); color: var(--text); }
+.event-actions { display: grid; gap: 8px; margin-top: 10px; }
+.saved-event-card { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--line); }
+
+/* v0.9 — легендарные карты */
+.legendary-panel { border-color: rgba(154, 128, 236, .34); }
+.legendary-actions { display: grid; gap: 9px; margin-top: 10px; }
+.legendary-card, .legendary-reaction, .legendary-status, .legendary-map-hint, .legendary-empty {
+  padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); line-height: 1.4;
+}
+.legendary-card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 8px; }
+.legendary-card-actions > span { grid-column: 1 / -1; }
+.legendary-reaction { border-color: rgba(240,196,91,.55); }
+.legendary-map-hint { color: var(--accent); font-weight: 800; }
+.cell-hit.mist { background: rgba(157, 128, 245, .27); outline: 2px solid rgba(185, 162, 255, .85); }
+.cell-hit.mist.shore { background: rgba(126, 210, 158, .30); outline-color: rgba(170, 239, 194, .9); }
+@media (max-width: 380px) { .legendary-card-actions { grid-template-columns: 1fr; } }
+
+/* v0.16 — управление сопровождением, особое судно Ландина и обязательные решения флотилии */
+.politics-panel { border-color: rgba(112, 188, 214, .34); }
+.politics-actions { display: grid; gap: 8px; margin-top: 10px; }
+.politics-row { margin-top: 8px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
+.state-prize-panel { border-color: rgba(216, 177, 77, .38); }
+
+/* v0.17 — облачный запуск, приглашения и PWA */
+.room-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.room-actions .small{white-space:nowrap}#installAppBtn{width:100%}@media(max-width:520px){.room-line{align-items:flex-start}.room-actions{width:100%;justify-content:stretch}.room-actions .small{flex:1 1 140px}}
