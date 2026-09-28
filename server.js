@@ -381,7 +381,7 @@ function publicRoom(room, viewerId = null) {
     : [];
 
   return {
-    version: '0.20.0',
+    version: '0.21.0',
     code: room.code,
     started: room.started,
     hostId: room.hostId,
@@ -580,6 +580,7 @@ function publicRoom(room, viewerId = null) {
         row: p.row,
         col: p.col,
         connected: p.connected,
+        ready: Boolean(p.ready),
         islandCount: ownerIslandCount(room, p.id),
         suzerainId: p.suzerainId || null,
         vassalGiftIslandId: p.vassalGiftIslandId || null,
@@ -656,6 +657,7 @@ function adminRoomSummary(room) {
       name: p.name,
       username: p.accountUsername || null,
       connected: Boolean(p.connected),
+      ready: Boolean(p.ready),
       shipClass: p.shipClass,
     })),
     createdBy: room.players.find(p => p.id === room.hostId)?.accountUsername || null,
@@ -2269,6 +2271,7 @@ function newPlayer(socket, data, color) {
     token: token(),
     socketId: socket.id,
     connected: true,
+    ready: false,
     accountId: data?.accountUser?.sub || null,
     accountUsername: data?.accountUser?.username || null,
     name: cleanName(data?.name || data?.accountUser?.displayName || data?.accountUser?.username),
@@ -2471,8 +2474,20 @@ io.on('connection', socket => {
     if (!room || !p || room.started) return ackSafe(ack, { ok: false, error: 'Сейчас класс корабля менять нельзя.' });
     if (!SHIPS[data?.shipClass]) return ackSafe(ack, { ok: false, error: 'Неизвестный класс корабля.' });
     p.shipClass = data.shipClass;
-    log(room, `${p.name} выбрал: ${SHIPS[p.shipClass].name}.`);
+    p.ready = false;
+    log(room, `${p.name} выбрал: ${SHIPS[p.shipClass].name}. Готовность снята.`);
     ackSafe(ack, { ok: true });
+    emitRoom(room);
+  });
+
+  onSocketEvent(socket, 'setReady', (data, ack) => {
+    const room = getRoom(socket.data.roomCode);
+    const p = room?.players.find(x => x.id === socket.data.playerId);
+    if (!room || !p) return ackSafe(ack, { ok: false, error: 'Комната не найдена.' });
+    if (room.started) return ackSafe(ack, { ok: false, error: 'Партия уже началась.' });
+    p.ready = Boolean(data?.ready);
+    log(room, `${p.name}: ${p.ready ? 'готов к старту' : 'готовность снята'}.`);
+    ackSafe(ack, { ok: true, ready: p.ready });
     emitRoom(room);
   });
 
@@ -2533,6 +2548,8 @@ io.on('connection', socket => {
     if (room.hostId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Начать игру может только создатель комнаты.' });
     if (room.started) return ackSafe(ack, { ok: false, error: 'Игра уже началась.' });
     if (room.players.length < 2 || room.players.length > 5) return ackSafe(ack, { ok: false, error: 'Для старта нужно 2–5 игроков.' });
+    if (!room.players.every(p => p.connected)) return ackSafe(ack, { ok: false, error: 'Перед стартом все игроки должны быть онлайн.' });
+    if (!room.players.every(p => p.ready)) return ackSafe(ack, { ok: false, error: 'Перед стартом все игроки должны нажать «Готов».' });
 
     room.started = true;
     room.islands = cloneIslands();
@@ -3456,13 +3473,13 @@ io.on('connection', socket => {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/health', (_req, res) => res.json({ ok: true, version: '0.20.0', rooms: rooms.size, accountsEnabled: Boolean(db), databaseReady: dbReady, roomPersistence: { enabled: Boolean(db), restored: roomStore.restored, pending: roomStore.pending.size, healthy: !roomStore.lastError } }));
+app.get('/health', (_req, res) => res.json({ ok: true, version: '0.21.0', rooms: rooms.size, accountsEnabled: Boolean(db), databaseReady: dbReady, roomPersistence: { enabled: Boolean(db), restored: roomStore.restored, pending: roomStore.pending.size, healthy: !roomStore.lastError } }));
 
 async function startServer() {
   // Never accept room creation before restoration or silently start empty on DB failure.
   await initDatabase();
   server.listen(PORT, HOST, () => {
-    console.log(`Первооткрыватели Online MVP 0.20.0: http://${HOST}:${PORT}`);
+    console.log(`Первооткрыватели Online MVP 0.21.0: http://${HOST}:${PORT}`);
   });
 }
 
