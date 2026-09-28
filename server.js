@@ -284,7 +284,37 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', async (req, res) => {
   const auth = verifyAccountToken(bearerToken(req));
   if (!auth) return res.status(401).json({ ok: false, error: 'Сессия истекла.' });
-  return res.json({ ok: true, user: { id: auth.sub, username: auth.username, displayName: auth.displayName, role: auth.role } });
+  if (!db || !dbReady) return res.json({ ok: true, user: { id: auth.sub, username: auth.username, displayName: auth.displayName, role: auth.role } });
+  try {
+    const result = await db.query('SELECT id, username, display_name, role FROM users WHERE id = $1', [auth.sub]);
+    const user = result.rows[0];
+    if (!user) return res.status(401).json({ ok: false, error: 'Аккаунт не найден.' });
+    return res.json({ ok: true, user: { id: user.id, username: user.username, displayName: user.display_name, role: user.role } });
+  } catch (err) {
+    console.error('Account read error:', err);
+    return res.status(500).json({ ok: false, error: 'Не удалось загрузить профиль.' });
+  }
+});
+
+app.post('/api/auth/profile', async (req, res) => {
+  if (!db || !dbReady) return res.status(503).json({ ok: false, error: 'База аккаунтов недоступна.' });
+  const auth = verifyAccountToken(bearerToken(req));
+  if (!auth) return res.status(401).json({ ok: false, error: 'Сессия истекла.' });
+  const rawName = String(req.body?.displayName || '').trim().replace(/\s+/g, ' ');
+  if (rawName.length < 2 || rawName.length > 24) return res.status(400).json({ ok: false, error: 'Имя должно содержать от 2 до 24 символов.' });
+  try {
+    const result = await db.query(
+      'UPDATE users SET display_name = $2 WHERE id = $1 RETURNING id, username, display_name, role',
+      [auth.sub, rawName]
+    );
+    const user = result.rows[0];
+    if (!user) return res.status(404).json({ ok: false, error: 'Аккаунт не найден.' });
+    const token = signAccountToken(user);
+    return res.json({ ok: true, token, user: { id: user.id, username: user.username, displayName: user.display_name, role: user.role } });
+  } catch (err) {
+    console.error('Profile update error:', err);
+    return res.status(500).json({ ok: false, error: 'Не удалось сохранить профиль.' });
+  }
 });
 
 app.post('/api/auth/change-password', async (req, res) => {
@@ -381,7 +411,7 @@ function publicRoom(room, viewerId = null) {
     : [];
 
   return {
-    version: '0.21.0',
+    version: '0.22.0',
     code: room.code,
     started: room.started,
     hostId: room.hostId,
@@ -3473,13 +3503,13 @@ io.on('connection', socket => {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/health', (_req, res) => res.json({ ok: true, version: '0.21.0', rooms: rooms.size, accountsEnabled: Boolean(db), databaseReady: dbReady, roomPersistence: { enabled: Boolean(db), restored: roomStore.restored, pending: roomStore.pending.size, healthy: !roomStore.lastError } }));
+app.get('/health', (_req, res) => res.json({ ok: true, version: '0.22.0', rooms: rooms.size, accountsEnabled: Boolean(db), databaseReady: dbReady, roomPersistence: { enabled: Boolean(db), restored: roomStore.restored, pending: roomStore.pending.size, healthy: !roomStore.lastError } }));
 
 async function startServer() {
   // Never accept room creation before restoration or silently start empty on DB failure.
   await initDatabase();
   server.listen(PORT, HOST, () => {
-    console.log(`Первооткрыватели Online MVP 0.21.0: http://${HOST}:${PORT}`);
+    console.log(`Первооткрыватели Online MVP 0.22.0: http://${HOST}:${PORT}`);
   });
 }
 
