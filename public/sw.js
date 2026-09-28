@@ -1,7 +1,7 @@
-const CACHE = 'pervootkryvateli-v0.28.1-static';
+const CACHE = 'pervootkryvateli-v0.29.0-static';
 const ASSETS = [
   '/', '/styles.css', '/app.js', '/manifest.webmanifest',
-  '/assets/map.png', '/assets/icon-192.png', '/assets/icon-512.png'
+  '/assets/map-base-4096.webp', '/assets/map.png', '/assets/icon-192.png', '/assets/icon-512.png'
 ];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
