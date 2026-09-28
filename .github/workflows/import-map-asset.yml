@@ -1,0 +1,31 @@
+name: Import map asset
+
+on:
+  push:
+    paths:
+      - '.github/workflows/import-map-asset.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download exported map
+        shell: bash
+        run: |
+          mkdir -p public/assets
+          curl --fail --location --retry 3 'https://sdmntprdenmarkeast.oaiusercontent.com/files/00000000-c9d0-8210-b5ee-45c99119766d/raw?se=2026-09-28T20%3A34%3A05Z&sp=r&sv=2026-02-06&sr=b&scid=bf52fcac-3bdb-52cc-af70-1c94c46c2bb9&skoid=ba81670d-b682-4d2d-9682-ac0ffdfb3fa1&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-28T05%3A44%3A45Z&ske=2026-09-29T05%3A44%3A45Z&sks=b&skv=2026-02-06&sig=rWnFgM2NyDoGJS3bUNUmEC/JdlBKkLF3wV6wRyaxPW4%3D' -o public/assets/map-base-4096.webp
+          test "$(stat -c%s public/assets/map-base-4096.webp)" -gt 1000000
+          file public/assets/map-base-4096.webp
+      - name: Commit map asset
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/assets/map-base-4096.webp
+          git diff --cached --quiet && exit 0
+          git commit -m "Import 4096 map artwork from master PSD"
+          git push
