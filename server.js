@@ -141,11 +141,97 @@ function validUsername(value) {
 function hashPassword(password) {
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.scryptSync(String(password), salt, 64).toString('hex');
-  return `scrypt${salt}${hash}`;
+  return ['scrypt', salt, hash].join('$');
 }
 function verifyPassword(password, stored) {
   try {
-    const [kind, salt, expectedHex] = String(stored || '').split('
+    const parts = String(stored || '').split('$');
+    const kind = parts[0];
+    const salt = parts[1];
+    const expectedHex = parts[2];
+    if (kind !== 'scrypt' || !salt || !expectedHex) return false;
+    const actual = crypto.scryptSync(String(password), salt, 64);
+    const expected = Buffer.from(expectedHex, 'hex');
+    return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
+}
+function signAccountToken(user) {
+  const payload = {
+    sub: user.id,
+    username: user.username,
+    displayName: user.display_name || user.displayName || user.username,
+    role: user.role || 'player',
+    exp: Date.now() + 1000 * 60 * 60 * 24 * 30,
+  };
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = crypto.createHmac('sha256', AUTH_SECRET).update(body).digest('base64url');
+  return body + '.' + sig;
+}
+function verifyAccountToken(tokenValue) {
+  try {
+    const parts = String(tokenValue || '').split('.');
+    const body = parts[0];
+    const sig = parts[1];
+    if (!body || !sig) return null;
+    const expected = crypto.createHmac('sha256', AUTH_SECRET).update(body).digest();
+    const actual = Buffer.from(sig, 'base64url');
+    if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) return null;
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+    if (!payload || !payload.sub || Number(payload.exp) < Date.now()) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+function bearerToken(req) {
+  const h = String(req.headers.authorization || '');
+  return h.startsWith('Bearer ') ? h.slice(7).trim() : '';
+}
+function socketAccount(data) {
+  return verifyAccountToken(data && data.accountToken);
+}
+function requireSocketAccount(data, ack) {
+  if (!db) return null;
+  const user = socketAccount(data);
+  if (!user) ackSafe(ack, { ok: false, error: 'Войдите в аккаунт.' });
+  return user;
+}
+function requireAdminAccount(data, ack) {
+  const user = socketAccount(data);
+  if (!user || user.role !== 'admin') {
+    ackSafe(ack, { ok: false, error: 'Нужны права администратора.' });
+    return null;
+  }
+  return user;
+}
+async function initDatabase() {
+  if (!db) return;
+  await db.query('CREATE TABLE IF NOT EXISTS users (id UUID PRIMARY KEY, username TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT \'player\', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), last_login_at TIMESTAMPTZ)');
+  if (ADMIN_USERNAME && ADMIN_PASSWORD) {
+    const username = normalizeUsername(ADMIN_USERNAME);
+    const existing = await db.query('SELECT id FROM users WHERE username = $1', [username]);
+    if (!existing.rowCount) {
+      await db.query(
+        'INSERT INTO users (id, username, display_name, password_hash, role) VALUES ($1,$2,$3,$4,$5)',
+        [crypto.randomUUID(), username, ADMIN_USERNAME, hashPassword(ADMIN_PASSWORD), 'admin']
+      );
+    } else {
+      await db.query('UPDATE users SET role = $2 WHERE username = $1', [username, 'admin']);
+    }
+  }
+  dbReady = true;
+  dbInitError = null;
+  console.log('Accounts database ready.');
+}
+if (db) {
+  initDatabase().catch(err => {
+    dbInitError = err;
+    dbReady = false;
+    console.error('Accounts database init failed:', err.message);
+  });
+}
 
 app.use(express.json({ limit: '64kb' }));
 
