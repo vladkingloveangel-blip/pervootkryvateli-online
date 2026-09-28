@@ -16,15 +16,51 @@
   <header class="topbar">
     <div>
       <strong>Первооткрыватели</strong>
-      <span class="tag">Online MVP 0.17</span>
+      <span class="tag">Online MVP 0.19</span>
     </div>
     <div id="connection" class="connection">подключение…</div>
   </header>
 
   <main>
+    <section id="authPanel" class="panel entry-panel hidden">
+      <h1>Аккаунт игрока</h1>
+      <p class="muted">Войди в свой аккаунт или создай новый. Один аккаунт — одно место игрока в комнате.</p>
+      <label>Логин
+        <input id="authUsername" maxlength="24" autocomplete="username" placeholder="Капитан" />
+      </label>
+      <label>Пароль
+        <input id="authPassword" type="password" minlength="6" autocomplete="current-password" placeholder="Минимум 6 символов" />
+      </label>
+      <label>Имя в игре <span class="muted">(для регистрации)</span>
+        <input id="authDisplayName" maxlength="24" autocomplete="nickname" placeholder="Капитан" />
+      </label>
+      <div class="entry-actions auth-actions">
+        <button id="loginBtn" class="primary">Войти</button>
+        <button id="registerBtn">Создать аккаунт</button>
+      </div>
+      <p id="authError" class="error" role="alert"></p>
+    </section>
+
+    <section id="accountBar" class="panel account-bar hidden">
+      <div><strong id="accountName">—</strong> <span id="accountRole" class="mini-badge">игрок</span></div>
+      <div class="room-actions">
+        <button id="adminOpenBtn" class="small hidden">Админ-панель</button>
+        <button id="logoutBtn" class="small danger-soft">Выйти из аккаунта</button>
+      </div>
+    </section>
+
+    <section id="adminPanel" class="panel admin-panel hidden">
+      <div class="section-head">
+        <div><h1>Админ-панель</h1><div class="muted">Активные комнаты на этом сервере</div></div>
+        <button id="adminRefreshBtn" class="small">Обновить</button>
+      </div>
+      <div id="adminRooms" class="admin-room-list"></div>
+      <p id="adminError" class="error" role="alert"></p>
+    </section>
+
     <section id="entry" class="panel entry-panel">
       <h1>Морская партия онлайн</h1>
-      <p class="muted">Создай комнату или введи код друга. Прототип рассчитан на 4–5 игроков.</p>
+      <p class="muted">Создай комнату или введи код друга. Игра запускается для 2–5 игроков.</p>
 
       <label>Имя
         <input id="nameInput" maxlength="24" autocomplete="nickname" placeholder="Капитан" />
@@ -51,6 +87,10 @@
     </section>
 
     <section id="game" class="game hidden">
+      <section id="spectatorBanner" class="panel spectator-banner hidden">
+        <div><strong>Режим наблюдателя</strong> · <span id="spectatorRoomCode">—</span></div>
+        <button id="adminBackBtn" class="small">Вернуться в админ-панель</button>
+      </section>
       <section class="status panel">
         <div class="room-line">
           <div><span class="muted">Комната</span> <strong id="roomCode">—</strong></div>
@@ -213,7 +253,7 @@
             <div id="allianceActions" class="alliance-actions"></div>
           </section>
 
-          <section class="panel">
+          <section id="playersPanel" class="panel">
             <div class="section-head">
               <h2>Игроки</h2>
               <button id="startBtn" class="primary small hidden">Начать игру</button>
@@ -221,7 +261,7 @@
             <div id="players"></div>
           </section>
 
-          <section class="panel">
+          <section id="logPanel" class="panel">
             <h2>Журнал</h2>
             <div id="log" class="log" aria-live="polite"></div>
           </section>
