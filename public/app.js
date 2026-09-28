@@ -784,6 +784,49 @@
     $('mobileNavActions').classList.toggle('attention', Boolean(isDecisionPending()));
   }
 
+
+  function updateContextualActionPanels() {
+    const r = state.room;
+    const mine = me();
+    if (!r) return;
+
+    const set = (selector, relevant, order = 50) => {
+      const el = document.querySelector(selector);
+      if (!el) return;
+      el.classList.toggle('context-hidden', !relevant);
+      el.style.order = String(order);
+    };
+
+    const pendingEventForMe = Boolean(r.pendingEvent?.viewerCanRespond || r.pendingFeud?.viewerCanRespond);
+    const pendingStatePrize = Boolean(r.pendingStatePrize);
+    const pendingIslandCorrection = Boolean(r.pendingIslandCorrection);
+    const pendingFleetAdjustment = Boolean(r.pendingFleetAdjustment);
+    const pendingAssignment = Boolean(r.pendingAssignmentChoice?.viewerCanRespond);
+    const activeAssignment = Boolean(mine?.activeAssignment);
+    const onIsland = currentIslands().length > 0;
+    const anchorRelevant = Boolean(mine?.lastAnchorEncounter);
+    const pendingCombat = Boolean(r.pendingBattle || r.pendingLegendaryReaction);
+    const myTurnActions = Boolean(r.started && mine && r.activePlayerId === state.myId && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0);
+    const seaTargets = mine ? r.players.some(p => p.id !== state.myId && p.row === mine.row && p.col === mine.col && !areAlliesClient(state.myId, p.id)) : false;
+    const islandTargets = mine ? currentIslands().some(i => i.ownerId !== state.myId && !(i.kind === 'free' && !i.ownerId) && (!i.ownerId || !areAlliesClient(state.myId, i.ownerId))) : false;
+    const combatRelevant = pendingCombat || (myTurnActions && !mine?.inPeaceZone && (seaTargets || islandTargets));
+
+    set('.controls', true, 20);
+    set('.event-panel', Boolean(r.eventPhase?.active || pendingEventForMe), pendingEventForMe ? 1 : 12);
+    set('.state-prize-panel', pendingStatePrize, r.pendingStatePrize?.viewerCanRespond ? 0 : 4);
+    set('.island-correction-panel', pendingIslandCorrection, r.pendingIslandCorrection?.viewerCanRespond ? 0 : 4);
+    set('.fleet-adjustment-panel', pendingFleetAdjustment, r.pendingFleetAdjustment?.viewerCanRespond ? 0 : 4);
+    set('.assignment-panel', pendingAssignment || activeAssignment, pendingAssignment ? 2 : 30);
+    set('.anchor-panel', anchorRelevant, 40);
+    set('.island-panel', onIsland, 25);
+    set('.combat-panel', combatRelevant, pendingCombat ? 3 : 27);
+
+    const visible = [...document.querySelectorAll('#gameSidePanel [data-ui-tab="actions"]:not(.context-hidden)')];
+    const actionNav = $('mobileNavActions');
+    actionNav.dataset.count = String(Math.max(0, visible.length - 1));
+    actionNav.setAttribute('aria-label', visible.length > 1 ? `Действия, доступно разделов: ${visible.length}` : 'Действия');
+  }
+
   function render() {
     const r = state.room;
     if (!r) return;
@@ -826,6 +869,7 @@
     renderCombat();
     renderMap();
     renderLog();
+    updateContextualActionPanels();
   }
 
   function renderPlayers() {
@@ -1831,6 +1875,7 @@
       state.selectedIslandId = btn.dataset.islandChoice;
       renderIsland();
       renderMap();
+      updateContextualActionPanels();
     }));
 
     if (!island.ownerId || island.ownerId !== state.myId) return;
