@@ -36,6 +36,7 @@ main { width: min(1480px, 100%); margin: 0 auto; padding: 14px; }
 .game { display: grid; gap: 12px; }
 .status { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; }
 .room-line, .turn-line, .section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.section-actions, .player-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
 .turn-line { justify-content: flex-end; }
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; align-items: start; }
 .map-column { min-width: 0; }
