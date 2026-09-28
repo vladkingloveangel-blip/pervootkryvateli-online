@@ -1,7 +1,7 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mistCardRef: null, accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map' };
+  const state = { room: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map' };
   const SHIP_NAMES = { brigantine: 'Бригантина', frigate: 'Фрегат', caravel: 'Каравелла', carrack: 'Каракка' };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
   let deferredInstallPrompt = null;
@@ -420,6 +420,7 @@
     state.myId = null;
     state.code = null;
     state.playerToken = null;
+    closeMapInfo();
     openMobileTab('map');
     setGameScreenActive(false);
     $('game').classList.add('hidden');
@@ -2203,6 +2204,105 @@
     };
   }
 
+
+  function centroid(cells = []) {
+    if (!cells.length) return { row: 0, col: 0 };
+    const sum = cells.reduce((a, [row, col]) => ({ row: a.row + row, col: a.col + col }), { row: 0, col: 0 });
+    return { row: sum.row / cells.length, col: sum.col / cells.length };
+  }
+
+  function closeMapInfo() {
+    state.mapSelection = null;
+    $('mapInfoCard').classList.add('hidden');
+  }
+
+  function showMapInfo(kind, data) {
+    state.mapSelection = { kind, id: data.id || data.name };
+    const card = $('mapInfoCard');
+    const title = $('mapInfoTitle');
+    const meta = $('mapInfoMeta');
+    const action = $('mapInfoAction');
+    title.textContent = data.name || 'Объект';
+    action.classList.add('hidden');
+    action.onclick = null;
+
+    if (kind === 'island') {
+      const owner = data.ownerId ? playerName(data.ownerId) : (data.faction || (data.kind === 'free' ? 'Свободный остров' : data.kind === 'independent' ? 'Независимый остров' : 'Нет владельца'));
+      const resources = data.resources?.length ? data.resources.join(', ') : 'нет';
+      meta.innerHTML = `<span>Владелец: <strong>${escapeHtml(owner)}</strong></span><span>Площадь: <strong>${data.area}</strong></span><span>Гарнизон: <strong>${data.army ?? 0}</strong></span><span>Ресурс: <strong>${escapeHtml(resources)}</strong></span>`;
+      const here = currentIslands().some(i => i.id === data.id);
+      if (here) {
+        state.selectedIslandId = data.id;
+        action.textContent = 'Действия на острове';
+        action.classList.remove('hidden');
+        action.onclick = () => openMobileTab('actions');
+      }
+    } else if (kind === 'citadel') {
+      meta.innerHTML = '<span>Нейтральный торговый хаб</span><span>Продажа грузов · улучшения корабля · сопровождение</span><span>Владеть Цитаделью нельзя · бои запрещены</span>';
+      if (me()?.atCitadel) {
+        action.textContent = 'Открыть корабль и торговлю';
+        action.classList.remove('hidden');
+        action.onclick = () => openMobileTab('ship');
+      }
+    } else if (kind === 'anchor') {
+      meta.innerHTML = `<span>Морское сражение</span><span>Награда за победу: <strong>+${data.glory || 0} славы</strong></span>`;
+    } else if (kind === 'legendary') {
+      const reward = data.reward === 'legendary' ? 'случайная легендарная карта' : data.reward === 'treasure' ? 'случайная карта сокровища' : 'награда пока не определена';
+      meta.innerHTML = `<span>Морское легендарное место</span><span>Разовая награда: <strong>${escapeHtml(reward)}</strong></span>`;
+    }
+    card.classList.remove('hidden');
+  }
+
+  function addMapCellButton(layer, row, col, className, label, onClick) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = className;
+    b.setAttribute('aria-label', label);
+    b.title = label;
+    placeCell(b, row, col);
+    b.addEventListener('click', ev => { ev.stopPropagation(); onClick(); });
+    layer.appendChild(b);
+  }
+
+  function renderMapObjects() {
+    const r = state.room;
+    const layer = $('mapObjectLayer');
+    const labels = $('mapLabelLayer');
+    layer.innerHTML = '';
+    labels.innerHTML = '';
+
+    for (const island of r.islands || []) {
+      for (const [row, col] of island.cells || []) {
+        addMapCellButton(layer, row, col, 'map-object-hit island-hit', island.name, () => showMapInfo('island', island));
+      }
+      const c = centroid(island.cells || []);
+      const l = document.createElement('span');
+      l.className = 'map-label island-label';
+      l.textContent = island.name;
+      l.style.left = `${((c.col + .5) / mapSize().cols) * 100}%`;
+      l.style.top = `${((c.row + .5) / mapSize().rows) * 100}%`;
+      labels.appendChild(l);
+    }
+
+    for (const [row, col] of r.citadelCells || []) {
+      addMapCellButton(layer, row, col, 'map-object-hit citadel-hit', 'Цитадель', () => showMapInfo('citadel', { id: 'citadel', name: 'Цитадель' }));
+    }
+
+    for (const anchor of r.anchorCells || []) {
+      addMapCellButton(layer, anchor.row, anchor.col, `map-object-hit anchor-hit anchor-${anchor.color}`, anchor.name, () => showMapInfo('anchor', anchor));
+    }
+
+    for (const place of r.map?.legendaryPlaces || []) {
+      addMapCellButton(layer, place.row, place.col, 'map-object-hit legendary-hit', place.name, () => showMapInfo('legendary', place));
+      const l = document.createElement('span');
+      l.className = 'map-label legendary-label';
+      l.textContent = place.name;
+      l.style.left = `${((place.col + .5) / mapSize().cols) * 100}%`;
+      l.style.top = `${((place.row + .5) / mapSize().rows) * 100}%`;
+      labels.appendChild(l);
+    }
+  }
+
   function renderMap() {
     const r = state.room;
     const { rows, cols } = mapSize();
@@ -2215,6 +2315,7 @@
     tokenLayer.innerHTML = '';
     highlightLayer.innerHTML = '';
     ownershipLayer.innerHTML = '';
+    renderMapObjects();
 
     const current = currentIslands();
     const selected = current.find(i => i.id === state.selectedIslandId) || current[0];
@@ -2326,6 +2427,10 @@
     $('mapBoard').style.width = `${px}px`;
     $('zoomLabel').textContent = `${Math.round(state.zoom * 100)}%`;
   }
+  $('mapInfoClose').addEventListener('click', closeMapInfo);
+  $('mapBoard').addEventListener('click', ev => {
+    if (ev.target === $('mapBoard') || ev.target === $('legacyMapArt') || ev.target === $('mapArtLayer')) closeMapInfo();
+  });
   $('zoomIn').addEventListener('click', () => { state.zoom += .15; applyZoom(); });
   $('zoomOut').addEventListener('click', () => { state.zoom -= .15; applyZoom(); });
   $('centerMe').addEventListener('click', () => {
