@@ -64,7 +64,7 @@
 
   function maybeJoinInvite() {
     if (!inviteRoomCode || inviteJoinAttempted || state.room || state.spectating) return false;
-    if (!state.socketConnected || (state.accountsEnabled && !state.accountToken)) return false;
+    if (!state.authResolved || !state.socketConnected || (state.accountsEnabled && !state.accountToken)) return false;
     inviteJoinAttempted = true;
     setError('entryError', `Входим по приглашению в комнату ${inviteRoomCode}…`);
     joinRoomByCode(inviteRoomCode, true);
