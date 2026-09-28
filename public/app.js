@@ -7,7 +7,9 @@
   let deferredInstallPrompt = null;
 
   const roomFromUrl = new URLSearchParams(location.search).get('room');
-  if (roomFromUrl) $('codeInput').value = String(roomFromUrl).toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 5);
+  const inviteRoomCode = String(roomFromUrl || '').toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 5);
+  let inviteJoinAttempted = false;
+  if (inviteRoomCode) $('codeInput').value = inviteRoomCode;
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
@@ -57,6 +59,16 @@
     loadMyGames();
     if (!$('nameInput').value) $('nameInput').value = user?.displayName || user?.username || '';
     if (!state.spectating && !state.room && $('adminPanel').classList.contains('hidden')) $('entry').classList.remove('hidden');
+    maybeJoinInvite();
+  }
+
+  function maybeJoinInvite() {
+    if (!inviteRoomCode || inviteJoinAttempted || state.room || state.spectating) return false;
+    if (!state.socketConnected || (state.accountsEnabled && !state.accountToken)) return false;
+    inviteJoinAttempted = true;
+    setError('entryError', `Входим по приглашению в комнату ${inviteRoomCode}…`);
+    joinRoomByCode(inviteRoomCode, true);
+    return true;
   }
 
   let myGamesRequest = 0;
@@ -160,6 +172,10 @@
   function maybeResumeLastRoom() {
     if (!state.socketConnected || !state.authResolved || state.resumeAttempted || state.spectating) return;
     if (state.accountsEnabled && !state.accountToken) return;
+    if (inviteRoomCode) {
+      maybeJoinInvite();
+      return;
+    }
     const last = localStorage.getItem('pervo:lastRoom');
     if (!last) return;
     state.resumeAttempted = true;
@@ -283,7 +299,7 @@
     state.socketConnected = true;
     loadMyGames();
     state.resumeAttempted = false;
-    maybeResumeLastRoom();
+    if (!maybeJoinInvite()) maybeResumeLastRoom();
   });
   socket.on('disconnect', () => {
     setConnected(false);
@@ -343,16 +359,24 @@
     });
   });
 
-  $('joinBtn').addEventListener('click', () => {
+  function joinRoomByCode(rawCode, automatic = false) {
     setError('entryError');
-    const code = $('codeInput').value.trim().toUpperCase();
+    const code = String(rawCode || '').trim().toUpperCase();
     if (code.length < 4) return setError('entryError', 'Введите код комнаты.');
     const saved = (() => { try { return JSON.parse(localStorage.getItem(keyFor(code)) || 'null'); } catch { return null; } })();
     socket.emit('joinRoom', { ...profile(), code, playerToken: saved?.playerToken || null }, res => {
-      if (!res?.ok) return setError('entryError', res?.error || 'Не удалось войти.');
+      if (!res?.ok) {
+        if (automatic) {
+          $('entry').classList.remove('hidden');
+          return setError('entryError', `Не удалось войти по приглашению: ${res?.error || 'комната недоступна.'}`);
+        }
+        return setError('entryError', res?.error || 'Не удалось войти.');
+      }
       acceptSession(res);
     });
-  });
+  }
+
+  $('joinBtn').addEventListener('click', () => joinRoomByCode($('codeInput').value));
 
   $('codeInput').addEventListener('input', e => {
     e.target.value = e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 5);
@@ -561,7 +585,15 @@
       const cargoLabel = p.landCompany ? ` · рота +${p.landCompany.army}` : (p.cargo ? ` · груз ${state.room.goodsCatalog?.[p.cargo.goodId]?.name || p.cargo.goodId} ×${p.cargo.quantity}` : '');
       const suzerainName = p.suzerainId ? state.room.factions?.find(f => f.id === p.suzerainId)?.name : null;
       const politicalLabel = suzerainName ? ` · вассал ${suzerainName}` : (p.enemyFactionIds?.length ? ` · вражда ${p.enemyFactionIds.length}` : '');
-      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${!p.connected ? ' · офлайн' : ''}</div><div class="player-sub">${SHIP_NAMES[p.shipClass]} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · слава ${p.glory || 0} · островов ${p.islandCount} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${order ? `#${order}` : ''}</span></div>`;
+      const readyLabel = !r.started ? (p.ready ? ' · ✓ готов' : ' · не готов') : '';
+      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${SHIP_NAMES[p.shipClass]} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · слава ${p.glory || 0} · островов ${p.islandCount} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${order ? `#${order}` : ''}</span></div>`;
+      if (!isSpectator && !r.started && p.isYou) {
+        const readyBtn = document.createElement('button');
+        readyBtn.className = p.ready ? 'small danger-soft' : 'small primary';
+        readyBtn.textContent = p.ready ? 'Снять готовность' : 'Готов';
+        readyBtn.addEventListener('click', () => socket.emit('setReady', { ready: !p.ready }, handleGameAck));
+        el.querySelector('.player-side-actions').appendChild(readyBtn);
+      }
       if (!isSpectator && isHost && !r.started && !p.isYou) {
         const kick = document.createElement('button');
         kick.className = 'small danger-soft';
@@ -574,9 +606,11 @@
       }
       $('players').appendChild(el);
     });
+    const allReady = r.players.length >= 2 && r.players.every(p => p.ready && p.connected);
+    const waitingReady = r.players.filter(p => !p.ready || !p.connected).length;
     $('startBtn').classList.toggle('hidden', isSpectator || r.started || !isHost);
-    $('startBtn').disabled = r.players.length < 2 || r.players.length > 5;
-    $('startBtn').textContent = r.players.length < 2 ? 'Нужен ещё 1 игрок' : 'Начать игру';
+    $('startBtn').disabled = r.players.length < 2 || r.players.length > 5 || !allReady;
+    $('startBtn').textContent = r.players.length < 2 ? 'Нужен ещё 1 игрок' : (!allReady ? `Ждём готовности: ${waitingReady}` : 'Начать игру');
 
     $('closeRoomBtn').classList.toggle('hidden', isSpectator || !isHost);
     $('leaveRoomBtn').classList.toggle('hidden', isSpectator || isHost || r.started);
@@ -595,7 +629,7 @@
     $('skipBtn').disabled = !myTurn || phase !== 'navigation' || blocked;
     $('endTurnBtn').disabled = !myTurn || blocked;
 
-    if (!r.started) $('moveResult').textContent = 'Ждём 2–5 игроков и старта от создателя комнаты.';
+    if (!r.started) $('moveResult').textContent = 'Выберите корабль, затем каждый игрок нажимает «Готов». Когда все онлайн и готовы, создатель запускает партию.';
     else if (r.eventPhase?.active) $('moveResult').textContent = r.pendingIslandCorrection?.viewerCanRespond ? `Остров ${r.pendingIslandCorrection.islandName} нужно немедленно исправить перед продолжением Фазы событий.` : r.pendingIslandCorrection ? `Фаза событий приостановлена: ${playerName(r.pendingIslandCorrection.playerId)} исправляет остров ${r.pendingIslandCorrection.islandName}.` : r.pendingAssignmentChoice?.viewerCanRespond ? 'Нужно решить, оставить или заменить поручение сюзерена.' : r.pendingFeud?.viewerCanRespond ? 'Нужно разрешить вашу карту вражды.' : r.pendingEvent?.viewerCanRespond ? 'Нужно принять решение по вашей карте события.' : `Идёт общая Фаза событий: ${playerName(r.eventPhase.currentPlayerId)}.`;
     else if (r.pendingStatePrize?.viewerCanRespond) $('moveResult').textContent = 'Разместите призовую постройку за полное подчинение государства.';
     else if (r.pendingStatePrize) $('moveResult').textContent = `Ожидается размещение итогового приза игроком ${playerName(r.pendingStatePrize.playerId)}.`;
