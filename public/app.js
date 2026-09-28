@@ -2213,12 +2213,66 @@
 
   function closeMapInfo() {
     state.mapSelection = null;
-    $('mapInfoCard').classList.add('hidden');
+    const card = $('mapInfoCard');
+    card.classList.add('hidden');
+    card.style.visibility = '';
+    card.style.maxHeight = '';
   }
 
-  function showMapInfo(kind, data) {
-    state.mapSelection = { kind, id: data.id || data.name };
+  function positionMapInfoAt(row, col) {
     const card = $('mapInfoCard');
+    if (card.classList.contains('hidden')) return;
+
+    const board = $('mapBoard');
+    const viewport = $('mapViewport');
+    const { rows, cols } = mapSize();
+    const margin = 8;
+    const gap = 8;
+    const cellW = board.clientWidth / cols;
+    const cellH = board.clientHeight / rows;
+    const anchorX = (Number(col) + .5) * cellW;
+    const anchorY = (Number(row) + .5) * cellH;
+
+    const visibleLeft = viewport.scrollLeft + margin;
+    const visibleTop = viewport.scrollTop + margin;
+    const visibleRight = viewport.scrollLeft + viewport.clientWidth - margin;
+    const visibleBottom = viewport.scrollTop + viewport.clientHeight - margin;
+
+    card.style.right = 'auto';
+    card.style.bottom = 'auto';
+    card.style.maxHeight = `${Math.max(120, viewport.clientHeight - margin * 2)}px`;
+
+    const width = card.offsetWidth;
+    const height = card.offsetHeight;
+    let left = anchorX + cellW * .5 + gap;
+    if (left + width > visibleRight) left = anchorX - cellW * .5 - gap - width;
+    const maxLeft = Math.max(visibleLeft, visibleRight - width);
+    left = Math.max(visibleLeft, Math.min(left, maxLeft));
+
+    let top = anchorY - height / 2;
+    const maxTop = Math.max(visibleTop, visibleBottom - height);
+    top = Math.max(visibleTop, Math.min(top, maxTop));
+
+    card.style.left = `${Math.round(left)}px`;
+    card.style.top = `${Math.round(top)}px`;
+    card.style.visibility = 'visible';
+  }
+
+  function repositionOpenMapInfo() {
+    const anchor = state.mapSelection?.anchor;
+    if (!anchor || $('mapInfoCard').classList.contains('hidden')) return;
+    positionMapInfoAt(anchor.row, anchor.col);
+  }
+
+  function showMapInfo(kind, data, anchor = null) {
+    const resolvedAnchor = anchor || (
+      Number.isFinite(Number(data.row)) && Number.isFinite(Number(data.col))
+        ? { row: Number(data.row), col: Number(data.col) }
+        : { row: 14, col: 14 }
+    );
+    state.mapSelection = { kind, id: data.id || data.name, anchor: resolvedAnchor };
+    const card = $('mapInfoCard');
+    card.style.visibility = 'hidden';
     const title = $('mapInfoTitle');
     const meta = $('mapInfoMeta');
     const action = $('mapInfoAction');
@@ -2235,14 +2289,14 @@
         state.selectedIslandId = data.id;
         action.textContent = 'Действия на острове';
         action.classList.remove('hidden');
-        action.onclick = () => openMobileTab('actions');
+        action.onclick = () => { closeMapInfo(); openMobileTab('actions'); };
       }
     } else if (kind === 'citadel') {
       meta.innerHTML = '<span>Нейтральный торговый хаб</span><span>Продажа грузов · улучшения корабля · сопровождение</span><span>Владеть Цитаделью нельзя · бои запрещены</span>';
       if (me()?.atCitadel) {
         action.textContent = 'Открыть корабль и торговлю';
         action.classList.remove('hidden');
-        action.onclick = () => openMobileTab('ship');
+        action.onclick = () => { closeMapInfo(); openMobileTab('ship'); };
       }
     } else if (kind === 'anchor') {
       meta.innerHTML = `<span>Морское сражение</span><span>Награда за победу: <strong>+${data.glory || 0} славы</strong></span>`;
@@ -2251,13 +2305,14 @@
       meta.innerHTML = `<span>Морское легендарное место</span><span>Разовая награда: <strong>${escapeHtml(reward)}</strong></span>`;
     } else if (kind === 'hazard') {
       const descriptions = {
-        reef: 'Рифы. Проходимость зависит от класса и свойств корабля.',
-        shoal: 'Мель. Проходимость зависит от класса и свойств корабля.',
-        ice: 'Льды. Проходимость зависит от класса и свойств корабля.',
+        reef: 'Рифы. Сквозь них проходит только фрегат.',
+        shoal: 'Мель. Через неё проходит только бригантина.',
+        ice: 'Льды. Сквозь них проходит только каракка.',
       };
       meta.innerHTML = `<span>${escapeHtml(descriptions[data.type] || 'Опасная морская клетка.')}</span>`;
     }
     card.classList.remove('hidden');
+    positionMapInfoAt(resolvedAnchor.row, resolvedAnchor.col);
   }
 
   function addMapCellButton(layer, row, col, className, label, onClick) {
@@ -2267,7 +2322,10 @@
     b.setAttribute('aria-label', label);
     b.title = label;
     placeCell(b, row, col);
-    b.addEventListener('click', ev => { ev.stopPropagation(); onClick(); });
+    b.addEventListener('click', ev => {
+      ev.stopPropagation();
+      onClick({ row, col, event: ev, element: b });
+    });
     layer.appendChild(b);
   }
 
@@ -2282,7 +2340,10 @@
     el.style.top = `${((row + .5) / rows) * 100}%`;
     if (onClick) {
       el.setAttribute('aria-label', title || text);
-      el.addEventListener('click', ev => { ev.stopPropagation(); onClick(); });
+      el.addEventListener('click', ev => {
+        ev.stopPropagation();
+        onClick({ row, col, event: ev, element: el });
+      });
     }
     layer.appendChild(el);
   }
@@ -2296,7 +2357,7 @@
 
     for (const island of r.islands || []) {
       for (const [row, col] of island.cells || []) {
-        addMapCellButton(layer, row, col, 'map-object-hit island-hit', island.name, () => showMapInfo('island', island));
+        addMapCellButton(layer, row, col, 'map-object-hit island-hit', island.name, hit => showMapInfo('island', island, hit));
       }
       const c = centroid(island.cells || []);
       const l = document.createElement('span');
@@ -2308,7 +2369,7 @@
     }
 
     for (const [row, col] of r.citadelCells || []) {
-      addMapCellButton(layer, row, col, 'map-object-hit citadel-hit', 'Цитадель', () => showMapInfo('citadel', { id: 'citadel', name: 'Цитадель' }));
+      addMapCellButton(layer, row, col, 'map-object-hit citadel-hit', 'Цитадель', hit => showMapInfo('citadel', { id: 'citadel', name: 'Цитадель' }, hit));
     }
     if ((r.citadelCells || []).length) {
       const c = centroid(r.citadelCells);
@@ -2328,7 +2389,7 @@
         `hazard-marker hazard-${hazard.type}`,
         hazardGlyphs[hazard.type] || '▲',
         hazardNames[hazard.type] || 'Опасность',
-        () => showMapInfo('hazard', { ...hazard, name: hazardNames[hazard.type] || 'Опасность' })
+        hit => showMapInfo('hazard', { ...hazard, name: hazardNames[hazard.type] || 'Опасность' }, hit)
       );
     }
 
@@ -2337,12 +2398,12 @@
         layer, anchor.row, anchor.col,
         `anchor-marker anchor-${anchor.color}`,
         '⚓', anchor.name,
-        () => showMapInfo('anchor', anchor)
+        hit => showMapInfo('anchor', anchor, hit)
       );
     }
 
     for (const place of r.map?.legendaryPlaces || []) {
-      addMapCellButton(layer, place.row, place.col, 'map-object-hit legendary-hit', place.name, () => showMapInfo('legendary', place));
+      addMapCellButton(layer, place.row, place.col, 'map-object-hit legendary-hit', place.name, hit => showMapInfo('legendary', place, hit));
       const l = document.createElement('span');
       l.className = 'map-label legendary-label';
       l.textContent = place.name;
@@ -2483,8 +2544,15 @@
   $('mapBoard').addEventListener('click', ev => {
     if (ev.target === $('mapBoard') || ev.target === $('mapBaseArt') || ev.target === $('mapArtLayer')) closeMapInfo();
   });
-  $('zoomIn').addEventListener('click', () => { state.zoom += .15; applyZoom(); });
-  $('zoomOut').addEventListener('click', () => { state.zoom -= .15; applyZoom(); });
+  let mapInfoRepositionFrame = 0;
+  const scheduleMapInfoReposition = () => {
+    cancelAnimationFrame(mapInfoRepositionFrame);
+    mapInfoRepositionFrame = requestAnimationFrame(repositionOpenMapInfo);
+  };
+  $('mapViewport').addEventListener('scroll', scheduleMapInfoReposition, { passive: true });
+  window.addEventListener('resize', scheduleMapInfoReposition);
+  $('zoomIn').addEventListener('click', () => { state.zoom += .15; applyZoom(); scheduleMapInfoReposition(); });
+  $('zoomOut').addEventListener('click', () => { state.zoom -= .15; applyZoom(); scheduleMapInfoReposition(); });
   $('centerMe').addEventListener('click', () => {
     const mine = me();
     if (!mine) return;
