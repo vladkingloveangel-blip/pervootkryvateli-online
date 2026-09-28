@@ -796,3 +796,61 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 .static-map-art .map-label-layer,
 .static-map-art .hazard-marker,
 .static-map-art .anchor-cell { display: none !important; }
+
+/* v0.29 — каноническая карта: арт отдельно, игровая разметка отдельно */
+.canonical-map-art .map-art-layer { background: #27b8cc; }
+.canonical-map-art .map-base-art {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  filter: none;
+  opacity: 1;
+}
+.canonical-map-art .grid-layer {
+  display: block !important;
+  background-image:
+    linear-gradient(to right, rgba(4,42,50,.42) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(4,42,50,.42) 1px, transparent 1px);
+}
+.canonical-map-art .map-label-layer,
+.canonical-map-art .hazard-marker,
+.canonical-map-art .anchor-cell { display: block !important; }
+
+.anchor-marker {
+  position: absolute;
+  z-index: 4;
+  transform: translate(-50%,-50%);
+  width: calc(100% / var(--map-cols,28) * .78);
+  height: calc(100% / var(--map-rows,28) * .78);
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(4,30,36,.28);
+  display: grid;
+  place-items: center;
+  font-size: clamp(14px,1.7vw,25px);
+  line-height: 1;
+  cursor: pointer;
+  text-shadow: 0 1px 2px rgba(0,0,0,.75);
+}
+.anchor-marker.anchor-blue { color: #458fff; }
+.anchor-marker.anchor-yellow { color: #d89024; }
+.anchor-marker.anchor-red { color: #e24f47; }
+.anchor-marker:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+
+@media(max-width:900px) {
+  body.game-active .anchor-marker { font-size: 18px; }
+  body.game-active .canonical-map-art .grid-layer {
+    background-image:
+      linear-gradient(to right, rgba(4,42,50,.34) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(4,42,50,.34) 1px, transparent 1px);
+  }
+}
