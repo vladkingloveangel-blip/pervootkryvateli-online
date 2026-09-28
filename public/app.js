@@ -2196,8 +2196,19 @@
     }
   }
 
+  function mapSize() {
+    return {
+      rows: Math.max(1, Number(state.room?.map?.rows) || 28),
+      cols: Math.max(1, Number(state.room?.map?.cols) || 28),
+    };
+  }
+
   function renderMap() {
     const r = state.room;
+    const { rows, cols } = mapSize();
+    const board = $('mapBoard');
+    board.style.setProperty('--map-rows', rows);
+    board.style.setProperty('--map-cols', cols);
     const tokenLayer = $('tokenLayer');
     const highlightLayer = $('highlightLayer');
     const ownershipLayer = $('ownershipLayer');
@@ -2240,8 +2251,8 @@
     r.players.forEach((p, idx) => {
       const t = document.createElement('div');
       t.className = `token${p.id === state.myId ? ' you' : ''}`;
-      t.style.left = `calc(${p.col} * 100% / 28 + ${(idx % 3) * 4}px)`;
-      t.style.top = `calc(${p.row} * 100% / 28 + ${Math.floor(idx / 3) * 4}px)`;
+      t.style.left = `calc(${p.col} * 100% / ${cols} + ${(idx % 3) * 4}px)`;
+      t.style.top = `calc(${p.row} * 100% / ${rows} + ${Math.floor(idx / 3) * 4}px)`;
       t.style.background = p.color;
       t.textContent = '⚓';
       t.title = p.name;
@@ -2288,8 +2299,9 @@
   }
 
   function placeCell(el, row, col) {
-    el.style.left = `${(col / 28) * 100}%`;
-    el.style.top = `${(row / 28) * 100}%`;
+    const { rows, cols } = mapSize();
+    el.style.left = `${(col / cols) * 100}%`;
+    el.style.top = `${(row / rows) * 100}%`;
   }
 
   function renderLog() {
@@ -2321,7 +2333,8 @@
     if (!mine) return;
     const vp = $('mapViewport');
     const board = $('mapBoard');
-    const cell = board.clientWidth / 28;
+    const { cols } = mapSize();
+    const cell = board.clientWidth / cols;
     vp.scrollTo({
       left: mine.col * cell - vp.clientWidth / 2 + cell / 2,
       top: mine.row * cell - vp.clientHeight / 2 + cell / 2,
