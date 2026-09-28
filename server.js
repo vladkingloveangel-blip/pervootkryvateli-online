@@ -411,7 +411,7 @@ function publicRoom(room, viewerId = null) {
     : [];
 
   return {
-    version: '0.30.2',
+    version: '0.31.0',
     code: room.code,
     started: room.started,
     hostId: room.hostId,
@@ -577,6 +577,7 @@ function publicRoom(room, viewerId = null) {
         row: place.row,
         col: place.col,
         reward: place.reward || null,
+        exploredBy: room.legendaryPlacesExplored?.[place.id] || null,
       })),
       citadel: {
         id: CITADEL.id,
@@ -2810,6 +2811,7 @@ io.on('connection', socket => {
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
     if (room.phase !== 'actions') return ackSafe(ack, { ok: false, error: 'Сначала завершите навигацию.' });
     if (room.actionsLeft <= 0) return ackSafe(ack, { ok: false, error: 'Действий больше нет.' });
+    if (!isCitadelCell(p.row, p.col)) return ackSafe(ack, { ok: false, error: 'Это действие доступно только в Цитадели.' });
     const result = buyCityGuard(room, p, String(data?.islandId || ''));
     if (!result.ok) return ackSafe(ack, result);
     room.actionsLeft -= 1;
@@ -2825,6 +2827,7 @@ io.on('connection', socket => {
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
     if (room.phase !== 'actions') return ackSafe(ack, { ok: false, error: 'Сначала завершите навигацию.' });
     if (room.actionsLeft <= 0) return ackSafe(ack, { ok: false, error: 'Действий больше нет.' });
+    if (!isCitadelCell(p.row, p.col)) return ackSafe(ack, { ok: false, error: 'Это действие доступно только в Цитадели.' });
     const result = buyPermanentGarrison(room, p, String(data?.islandId || ''));
     if (!result.ok) return ackSafe(ack, result);
     room.actionsLeft -= 1;
@@ -2840,6 +2843,7 @@ io.on('connection', socket => {
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
     if (room.phase !== 'actions') return ackSafe(ack, { ok: false, error: 'Сначала завершите навигацию.' });
     if (room.actionsLeft <= 0) return ackSafe(ack, { ok: false, error: 'Действий больше нет.' });
+    if (!isCitadelCell(p.row, p.col)) return ackSafe(ack, { ok: false, error: 'Это действие доступно только в Цитадели.' });
     const result = buyShipLevel(p);
     if (!result.ok) return ackSafe(ack, result);
     room.actionsLeft -= 1;
@@ -2856,6 +2860,7 @@ io.on('connection', socket => {
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
     if (room.phase !== 'actions') return ackSafe(ack, { ok: false, error: 'Сначала завершите навигацию.' });
     if (room.actionsLeft <= 0) return ackSafe(ack, { ok: false, error: 'Действий больше нет.' });
+    if (!isCitadelCell(p.row, p.col)) return ackSafe(ack, { ok: false, error: 'Это действие доступно только в Цитадели.' });
     const result = buyShipUpgrade(p, String(data?.upgradeId || ''));
     if (!result.ok) return ackSafe(ack, result);
     room.actionsLeft -= 1;
@@ -2872,6 +2877,7 @@ io.on('connection', socket => {
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
     if (room.phase !== 'actions') return ackSafe(ack, { ok: false, error: 'Сначала завершите навигацию.' });
     if (room.actionsLeft <= 0) return ackSafe(ack, { ok: false, error: 'Действий больше нет.' });
+    if (!isCitadelCell(p.row, p.col)) return ackSafe(ack, { ok: false, error: 'Это действие доступно только в Цитадели.' });
     const result = removeShipUpgrade(p, String(data?.upgradeId || ''));
     if (!result.ok) return ackSafe(ack, result);
     room.actionsLeft -= 1;
@@ -2887,6 +2893,7 @@ io.on('connection', socket => {
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
     if (room.phase !== 'actions') return ackSafe(ack, { ok: false, error: 'Сначала завершите навигацию.' });
     if (room.actionsLeft <= 0) return ackSafe(ack, { ok: false, error: 'Действий больше нет.' });
+    if (!isCitadelCell(p.row, p.col)) return ackSafe(ack, { ok: false, error: 'Это действие доступно только в Цитадели.' });
     const result = buyEscort(room, p, String(data?.escortType || ''));
     if (!result.ok) return ackSafe(ack, result);
     room.actionsLeft -= 1;
@@ -2918,6 +2925,7 @@ io.on('connection', socket => {
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
     if (room.phase !== 'actions') return ackSafe(ack, { ok: false, error: 'Сначала завершите навигацию.' });
     if (room.actionsLeft <= 0) return ackSafe(ack, { ok: false, error: 'Действий больше нет.' });
+    if (!isCitadelCell(p.row, p.col)) return ackSafe(ack, { ok: false, error: 'Это действие доступно только в Цитадели.' });
 
     const result = sellCargo(room, p, String(_data?.holdId || 'main'));
     if (!result.ok) return ackSafe(ack, result);
@@ -3530,13 +3538,13 @@ io.on('connection', socket => {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/health', (_req, res) => res.json({ ok: true, version: '0.30.2', rooms: rooms.size, accountsEnabled: Boolean(db), databaseReady: dbReady, roomPersistence: { enabled: Boolean(db), restored: roomStore.restored, pending: roomStore.pending.size, healthy: !roomStore.lastError } }));
+app.get('/health', (_req, res) => res.json({ ok: true, version: '0.31.0', rooms: rooms.size, accountsEnabled: Boolean(db), databaseReady: dbReady, roomPersistence: { enabled: Boolean(db), restored: roomStore.restored, pending: roomStore.pending.size, healthy: !roomStore.lastError } }));
 
 async function startServer() {
   // Never accept room creation before restoration or silently start empty on DB failure.
   await initDatabase();
   server.listen(PORT, HOST, () => {
-    console.log(`Первооткрыватели Online MVP 0.30.2: http://${HOST}:${PORT}`);
+    console.log(`Первооткрыватели Online MVP 0.31.0: http://${HOST}:${PORT}`);
   });
 }
 
