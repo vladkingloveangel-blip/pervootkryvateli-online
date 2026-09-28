@@ -411,7 +411,7 @@ function publicRoom(room, viewerId = null) {
     : [];
 
   return {
-    version: '0.28.0',
+    version: '0.28.1',
     code: room.code,
     started: room.started,
     hostId: room.hostId,
@@ -565,7 +565,7 @@ function publicRoom(room, viewerId = null) {
       revision: MAP_META.revision,
       rows: MAP_META.rows,
       cols: MAP_META.cols,
-      artMode: 'layered-v1',
+      artMode: 'static-reference-v1',
       visualLayers: { ...MAP_META.visualLayers },
       hazards: Object.entries(HAZARDS).flatMap(([type, cells]) =>
         cells.map(([row, col]) => ({ type, row, col }))
@@ -3530,13 +3530,13 @@ io.on('connection', socket => {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/health', (_req, res) => res.json({ ok: true, version: '0.28.0', rooms: rooms.size, accountsEnabled: Boolean(db), databaseReady: dbReady, roomPersistence: { enabled: Boolean(db), restored: roomStore.restored, pending: roomStore.pending.size, healthy: !roomStore.lastError } }));
+app.get('/health', (_req, res) => res.json({ ok: true, version: '0.28.1', rooms: rooms.size, accountsEnabled: Boolean(db), databaseReady: dbReady, roomPersistence: { enabled: Boolean(db), restored: roomStore.restored, pending: roomStore.pending.size, healthy: !roomStore.lastError } }));
 
 async function startServer() {
   // Never accept room creation before restoration or silently start empty on DB failure.
   await initDatabase();
   server.listen(PORT, HOST, () => {
-    console.log(`Первооткрыватели Online MVP 0.28.0: http://${HOST}:${PORT}`);
+    console.log(`Первооткрыватели Online MVP 0.28.1: http://${HOST}:${PORT}`);
   });
 }
 
