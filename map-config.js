@@ -5,7 +5,7 @@
 
 const MAP_META = {
   id: 'world-28-v2',
-  revision: 6,
+  revision: 7,
   rows: 28,
   cols: 28,
   coordinateBase: 0,
@@ -132,41 +132,6 @@ function islandSeaPerimeter(islandId) {
   return uniqueCells(out);
 }
 
-const ABYSS_SHOAL_CELLS = [[11,25],[11,27],[12,25],[12,27],[13,25],[13,26],[13,27]];
-
-const HAZARDS = {
-  reef: {
-    id: 'reef',
-    name: 'Рифы',
-    marker: 'black-triangle',
-    protectsIslandId: 'chertonia',
-    passableBy: 'frigate',
-    cells: islandSeaPerimeter('chertonia'),
-  },
-  ice: {
-    id: 'ice',
-    name: 'Льды',
-    marker: 'white-triangle',
-    protectsIslandId: 'atlantia',
-    passableBy: 'carrack',
-    cells: islandSeaPerimeter('atlantia'),
-  },
-  shoal: {
-    id: 'shoal',
-    name: 'Мели',
-    marker: 'yellow-triangle',
-    protectsIslandId: 'maikan',
-    passableBy: 'brigantine',
-    cells: uniqueCells([...islandSeaPerimeter('maikan'), ...ABYSS_SHOAL_CELLS]),
-  },
-};
-
-const ANCHORS = {
-  blue: { id: 'blue', name: 'Синий якорь', battleTier: 1, glory: 1, cells: [[5,11],[9,1],[16,5],[22,11]] },
-  yellow: { id: 'yellow', name: 'Жёлтый якорь', visualColor: 'orange', battleTier: 2, glory: 3, cells: [[5,25],[10,16],[18,21]] },
-  red: { id: 'red', name: 'Красный якорь', battleTier: 3, glory: 6, cells: [[26,21]] },
-};
-
 const LEGENDARY_PLACES = {
   kraken: { id: 'kraken', name: 'Кракен', type: 'legendary-sea-place', row: 24, col: 6, reward: 'legendary' },
   abyss: { id: 'abyss', name: 'Бездна', type: 'legendary-sea-place', row: 12, col: 26, reward: 'treasure' },
@@ -175,6 +140,62 @@ const LEGENDARY_PLACES = {
   vortex: { id: 'vortex', name: 'Воронка', type: 'legendary-sea-place', row: 15, col: 1, reward: null },
   icebergs: { id: 'icebergs', name: 'Асберги', type: 'legendary-sea-place', row: 27, col: 12, reward: null },
   rose: { id: 'rose', name: 'Роза', type: 'legendary-sea-place', row: 1, col: 15, reward: null },
+};
+
+function legendaryPlaceRing(placeId) {
+  const place = LEGENDARY_PLACES[placeId];
+  if (!place) return [];
+  const out = [];
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      if (dr === 0 && dc === 0) continue;
+      const row = place.row + dr;
+      const col = place.col + dc;
+      if (row < 0 || row >= MAP_META.rows || col < 0 || col >= MAP_META.cols) continue;
+      out.push([row, col]);
+    }
+  }
+  return uniqueCells(out);
+}
+
+const HAZARDS = {
+  reef: {
+    id: 'reef',
+    name: 'Рифы',
+    marker: 'black-triangle',
+    protectsIslandIds: ['chertonia'],
+    protectsLegendaryPlaceIds: ['pearl'],
+    passableBy: 'frigate',
+    cells: uniqueCells([
+      ...islandSeaPerimeter('chertonia'),
+      ...legendaryPlaceRing('pearl'),
+    ]),
+  },
+  ice: {
+    id: 'ice',
+    name: 'Льды',
+    marker: 'white-triangle',
+    protectsIslandIds: ['atlantia'],
+    protectsLegendaryPlaceIds: ['kraken'],
+    passableBy: 'carrack',
+    cells: uniqueCells([
+      ...islandSeaPerimeter('atlantia'),
+      ...legendaryPlaceRing('kraken'),
+    ]),
+  },
+  shoal: {
+    id: 'shoal',
+    name: 'Мели',
+    marker: 'yellow-triangle',
+    protectsIslandIds: ['maikan', 'mao'],
+    protectsLegendaryPlaceIds: ['abyss'],
+    passableBy: 'brigantine',
+    cells: uniqueCells([
+      ...islandSeaPerimeter('maikan'),
+      ...islandSeaPerimeter('mao'),
+      ...legendaryPlaceRing('abyss'),
+    ]),
+  },
 };
 
 // Board-game-only printed helpers. Kept as semantic data but hidden online.
