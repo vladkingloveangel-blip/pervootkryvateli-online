@@ -660,7 +660,7 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   text-shadow: 0 1px 2px rgba(0,0,0,.9);
 }
 .legendary-label { color: var(--accent); }
-.legacy-map-art .map-label-layer { display: none; }
+
 
 .map-info-card {
   position: absolute;
@@ -694,4 +694,81 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 }
 @media (max-width:900px) {
   body.game-active .map-info-card { left: 7px; right: 7px; bottom: 7px; width: auto; }
+}
+
+/* v0.28 — раздельные арт-слои и живое море */
+.map-sea-art, .map-land-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.map-sea-art { z-index: 0; }
+.sea-motion-layer {
+  position: absolute;
+  z-index: 1;
+  inset: -8%;
+  pointer-events: none;
+  opacity: .13;
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(255,255,255,.28) 0 1px, transparent 2px 100%),
+    radial-gradient(circle at 75% 65%, rgba(105,234,255,.25) 0 1px, transparent 2px 100%),
+    linear-gradient(115deg, transparent 35%, rgba(255,255,255,.12) 48%, transparent 61%);
+  background-size: 96px 96px, 132px 132px, 310px 310px;
+  animation: sea-drift 14s linear infinite;
+}
+.map-land-art { z-index: 2; }
+@keyframes sea-drift {
+  from { transform: translate3d(-2%, -1%, 0); }
+  to { transform: translate3d(3%, 2%, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sea-motion-layer { animation: none; }
+}
+
+.layered-map-art .map-label-layer { display: block; }
+.map-label {
+  background: rgba(4,24,30,.42);
+  border: 1px solid rgba(255,255,255,.13);
+  backdrop-filter: blur(2px);
+}
+.island-label { color: #f5fbfc; }
+.citadel-label { color: #fff; font-size: clamp(10px,1.08vw,15px); }
+.legendary-label { color: #ffe56f; }
+
+.hazard-marker {
+  position: absolute;
+  z-index: 3;
+  transform: translate(-50%,-50%);
+  width: calc(100% / var(--map-cols,28) * .62);
+  height: calc(100% / var(--map-rows,28) * .62);
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  font-size: clamp(12px,1.5vw,22px);
+  line-height: 1;
+  cursor: pointer;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.55));
+}
+.hazard-reef { color: #172126; }
+.hazard-shoal { color: #d8c64b; }
+.hazard-ice { color: #f3fbff; }
+.hazard-marker:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+  border-radius: 50%;
+}
+
+@media (max-width:900px) {
+  body.game-active .map-label {
+    font-size: 10px;
+    padding: 2px 4px;
+    background: rgba(4,24,30,.5);
+  }
+  body.game-active .hazard-marker { font-size: 16px; }
 }

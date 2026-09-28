@@ -5,13 +5,13 @@
 
 const MAP_META = {
   id: 'world-28-v2',
-  revision: 2,
+  revision: 3,
   rows: 28,
   cols: 28,
   coordinateBase: 0,
   visualLayers: {
-    sea: '/assets/map-sea.png',
-    land: '/assets/map-land.png',
+    sea: '/assets/map-sea.webp',
+    land: '/assets/map-land.webp',
     legacyReference: '/assets/map.png',
   },
   onlineOnly: {

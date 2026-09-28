@@ -2249,6 +2249,13 @@
     } else if (kind === 'legendary') {
       const reward = data.reward === 'legendary' ? 'случайная легендарная карта' : data.reward === 'treasure' ? 'случайная карта сокровища' : 'награда пока не определена';
       meta.innerHTML = `<span>Морское легендарное место</span><span>Разовая награда: <strong>${escapeHtml(reward)}</strong></span>`;
+    } else if (kind === 'hazard') {
+      const descriptions = {
+        reef: 'Рифы. Проходимость зависит от класса и свойств корабля.',
+        shoal: 'Мель. Проходимость зависит от класса и свойств корабля.',
+        ice: 'Льды. Проходимость зависит от класса и свойств корабля.',
+      };
+      meta.innerHTML = `<span>${escapeHtml(descriptions[data.type] || 'Опасная морская клетка.')}</span>`;
     }
     card.classList.remove('hidden');
   }
@@ -2262,6 +2269,22 @@
     placeCell(b, row, col);
     b.addEventListener('click', ev => { ev.stopPropagation(); onClick(); });
     layer.appendChild(b);
+  }
+
+  function addMapMarker(layer, row, col, className, text, title, onClick = null) {
+    const el = onClick ? document.createElement('button') : document.createElement('span');
+    if (onClick) el.type = 'button';
+    el.className = className;
+    el.textContent = text;
+    el.title = title || '';
+    const { rows, cols } = mapSize();
+    el.style.left = `${((col + .5) / cols) * 100}%`;
+    el.style.top = `${((row + .5) / rows) * 100}%`;
+    if (onClick) {
+      el.setAttribute('aria-label', title || text);
+      el.addEventListener('click', ev => { ev.stopPropagation(); onClick(); });
+    }
+    layer.appendChild(el);
   }
 
   function renderMapObjects() {
@@ -2287,6 +2310,27 @@
     for (const [row, col] of r.citadelCells || []) {
       addMapCellButton(layer, row, col, 'map-object-hit citadel-hit', 'Цитадель', () => showMapInfo('citadel', { id: 'citadel', name: 'Цитадель' }));
     }
+    if ((r.citadelCells || []).length) {
+      const c = centroid(r.citadelCells);
+      const l = document.createElement('span');
+      l.className = 'map-label citadel-label';
+      l.textContent = 'Цитадель';
+      l.style.left = `${((c.col + .5) / mapSize().cols) * 100}%`;
+      l.style.top = `${((c.row + .5) / mapSize().rows) * 100}%`;
+      labels.appendChild(l);
+    }
+
+    const hazardNames = { reef: 'Рифы', shoal: 'Мель', ice: 'Льды' };
+    const hazardGlyphs = { reef: '▲', shoal: '▲', ice: '▲' };
+    for (const hazard of r.map?.hazards || []) {
+      addMapMarker(
+        layer, hazard.row, hazard.col,
+        `hazard-marker hazard-${hazard.type}`,
+        hazardGlyphs[hazard.type] || '▲',
+        hazardNames[hazard.type] || 'Опасность',
+        () => showMapInfo('hazard', { ...hazard, name: hazardNames[hazard.type] || 'Опасность' })
+      );
+    }
 
     for (const anchor of r.anchorCells || []) {
       addMapCellButton(layer, anchor.row, anchor.col, `map-object-hit anchor-hit anchor-${anchor.color}`, anchor.name, () => showMapInfo('anchor', anchor));
@@ -2307,6 +2351,10 @@
     const r = state.room;
     const { rows, cols } = mapSize();
     const board = $('mapBoard');
+    const seaArt = $('mapSeaArt');
+    const landArt = $('mapLandArt');
+    if (r.map?.visualLayers?.sea && seaArt.getAttribute('src') !== r.map.visualLayers.sea) seaArt.src = r.map.visualLayers.sea;
+    if (r.map?.visualLayers?.land && landArt.getAttribute('src') !== r.map.visualLayers.land) landArt.src = r.map.visualLayers.land;
     board.style.setProperty('--map-rows', rows);
     board.style.setProperty('--map-cols', cols);
     const tokenLayer = $('tokenLayer');
@@ -2429,7 +2477,7 @@
   }
   $('mapInfoClose').addEventListener('click', closeMapInfo);
   $('mapBoard').addEventListener('click', ev => {
-    if (ev.target === $('mapBoard') || ev.target === $('legacyMapArt') || ev.target === $('mapArtLayer')) closeMapInfo();
+    if (ev.target === $('mapBoard') || ev.target === $('mapSeaArt') || ev.target === $('mapLandArt') || ev.target === $('mapArtLayer')) closeMapInfo();
   });
   $('zoomIn').addEventListener('click', () => { state.zoom += .15; applyZoom(); });
   $('zoomOut').addEventListener('click', () => { state.zoom -= .15; applyZoom(); });
