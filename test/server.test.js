@@ -52,6 +52,9 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(created.ok, true); assert.equal(rows().length, 1); // ack means durable
   const code = created.code;
   assert.equal((await emit(second, 'joinRoom', { code, accountToken: b.token, name: 'Two' })).ok, true);
+  assert.equal((await emit(first, 'startGame')).ok, false);
+  assert.equal((await emit(first, 'setReady', { ready: true })).ok, true);
+  assert.equal((await emit(second, 'setReady', { ready: true })).ok, true);
   assert.equal((await emit(first, 'startGame')).ok, true);
   const started = rows()[0].state;
   assert.equal(started.started, true);
