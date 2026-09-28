@@ -1,7 +1,7 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mistCardRef: null, accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false };
+  const state = { room: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mistCardRef: null, accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false };
   const SHIP_NAMES = { brigantine: 'Бригантина', frigate: 'Фрегат', caravel: 'Каравелла', carrack: 'Каракка' };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
   let deferredInstallPrompt = null;
@@ -39,6 +39,8 @@
   }
 
   function showAuth(message = '') {
+    state.profileOpen = false;
+    $('profilePanel').classList.add('hidden');
     $('authPanel').classList.remove('hidden');
     $('accountBar').classList.add('hidden');
     $('entry').classList.add('hidden');
@@ -58,8 +60,111 @@
     $('adminOpenBtn').classList.toggle('hidden', user?.role !== 'admin');
     loadMyGames();
     if (!$('nameInput').value) $('nameInput').value = user?.displayName || user?.username || '';
-    if (!state.spectating && !state.room && $('adminPanel').classList.contains('hidden')) $('entry').classList.remove('hidden');
+    if (!state.profileOpen && !state.spectating && !state.room && $('adminPanel').classList.contains('hidden')) $('entry').classList.remove('hidden');
     maybeJoinInvite();
+  }
+
+
+  function showConnectionBanner(message, kind = 'warning', autoHideMs = 0) {
+    const el = $('connectionBanner');
+    if (!el) return;
+    clearTimeout(showConnectionBanner.timer);
+    el.textContent = message;
+    el.className = 'connection-banner ' + kind;
+    if (autoHideMs) {
+      showConnectionBanner.timer = setTimeout(() => el.classList.add('hidden'), autoHideMs);
+    }
+  }
+
+  function hideConnectionBanner() {
+    const el = $('connectionBanner');
+    if (!el) return;
+    clearTimeout(showConnectionBanner.timer);
+    el.classList.add('hidden');
+  }
+
+  function openProfile() {
+    if (!state.accountUser) return;
+    state.profileReturn = !$('adminPanel').classList.contains('hidden') ? 'admin' : (!state.room ? 'entry' : 'game');
+    state.profileOpen = true;
+    $('profileUsername').value = state.accountUser.username || '';
+    $('profileDisplayName').value = state.accountUser.displayName || '';
+    $('profileOldPassword').value = '';
+    $('profileNewPassword').value = '';
+    $('profileNewPassword2').value = '';
+    $('profileSaveStatus').textContent = '';
+    $('profilePasswordStatus').textContent = '';
+    $('entry').classList.add('hidden');
+    $('adminPanel').classList.add('hidden');
+    $('game').classList.add('hidden');
+    $('authPanel').classList.add('hidden');
+    $('profilePanel').classList.remove('hidden');
+  }
+
+  function closeProfile() {
+    state.profileOpen = false;
+    $('profilePanel').classList.add('hidden');
+    if (state.profileReturn === 'admin' && state.accountUser?.role === 'admin') {
+      $('adminPanel').classList.remove('hidden');
+      loadAdminRooms();
+    } else if (state.room) {
+      $('game').classList.remove('hidden');
+      render();
+    } else {
+      $('entry').classList.remove('hidden');
+      loadMyGames();
+    }
+  }
+
+  async function saveProfileName() {
+    const button = $('profileSaveBtn');
+    const displayName = $('profileDisplayName').value.trim();
+    $('profileSaveStatus').textContent = '';
+    button.disabled = true;
+    try {
+      const result = await apiJson('/api/auth/profile', { method: 'POST', body: JSON.stringify({ displayName }) });
+      if (!result?.ok) throw new Error(result?.error || 'Не удалось сохранить имя.');
+      state.accountUser = result.user;
+      state.accountToken = result.token;
+      localStorage.setItem('pervo:accountToken', result.token);
+      $('accountName').textContent = result.user.displayName || result.user.username;
+      $('nameInput').value = result.user.displayName || result.user.username;
+      $('profileDisplayName').value = result.user.displayName || '';
+      $('profileSaveStatus').textContent = 'Имя сохранено.';
+    } catch (err) {
+      $('profileSaveStatus').textContent = err.message || 'Не удалось сохранить имя.';
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function changeProfilePassword() {
+    const button = $('profilePasswordBtn');
+    const oldPassword = $('profileOldPassword').value;
+    const newPassword = $('profileNewPassword').value;
+    const repeated = $('profileNewPassword2').value;
+    $('profilePasswordStatus').textContent = '';
+    if (newPassword !== repeated) {
+      $('profilePasswordStatus').textContent = 'Новые пароли не совпадают.';
+      return;
+    }
+    if (newPassword.length < 6) {
+      $('profilePasswordStatus').textContent = 'Новый пароль должен быть не короче 6 символов.';
+      return;
+    }
+    button.disabled = true;
+    try {
+      const result = await apiJson('/api/auth/change-password', { method: 'POST', body: JSON.stringify({ oldPassword, newPassword }) });
+      if (!result?.ok) throw new Error(result?.error || 'Не удалось сменить пароль.');
+      $('profileOldPassword').value = '';
+      $('profileNewPassword').value = '';
+      $('profileNewPassword2').value = '';
+      $('profilePasswordStatus').textContent = 'Пароль изменён.';
+    } catch (err) {
+      $('profilePasswordStatus').textContent = err.message || 'Не удалось сменить пароль.';
+    } finally {
+      button.disabled = false;
+    }
   }
 
   function maybeJoinInvite() {
@@ -183,10 +288,15 @@
       const sess = JSON.parse(localStorage.getItem(keyFor(last)) || 'null');
       if (sess?.code && sess?.playerToken) {
         socket.emit('resumeRoom', { ...sess, accountToken: state.accountToken }, res => {
-          if (res?.ok) acceptSession(res);
-          else if (res?.error === 'Комната больше не существует.') {
+          if (res?.ok) {
+            acceptSession(res);
+            if (state.everConnected) showConnectionBanner('Связь восстановлена. Вы снова в партии.', 'success', 2200);
+          } else if (res?.error === 'Комната больше не существует.') {
             localStorage.removeItem(keyFor(last));
             localStorage.removeItem('pervo:lastRoom');
+            hideConnectionBanner();
+          } else if (state.everConnected) {
+            showConnectionBanner(res?.error || 'Связь восстановлена, но вернуться в партию не удалось.', 'error');
           }
         });
       }
@@ -295,16 +405,31 @@
   }
 
   socket.on('connect', () => {
+    const wasReconnecting = state.everConnected && !state.socketConnected;
     setConnected(true);
     state.socketConnected = true;
+    document.body.classList.remove('connection-lost');
     loadMyGames();
     state.resumeAttempted = false;
+    if (wasReconnecting) showConnectionBanner(state.code || state.room ? 'Связь восстановлена. Возвращаем вас в партию…' : 'Связь восстановлена.', 'success', state.code || state.room ? 0 : 2200);
     if (!maybeJoinInvite()) maybeResumeLastRoom();
+    state.everConnected = true;
   });
   socket.on('disconnect', () => {
     setConnected(false);
     state.socketConnected = false;
     state.resumeAttempted = false;
+    document.body.classList.add('connection-lost');
+    showConnectionBanner('Связь потеряна. Переподключаемся автоматически…', 'warning');
+  });
+  socket.io.on('reconnect_attempt', () => {
+    showConnectionBanner('Переподключаемся к серверу…', 'warning');
+  });
+  socket.io.on('reconnect_failed', () => {
+    showConnectionBanner('Не удалось восстановить связь. Проверьте интернет и обновите страницу.', 'error');
+  });
+  socket.on('connect_error', () => {
+    if (state.everConnected) showConnectionBanner('Сервер пока недоступен. Продолжаем переподключение…', 'warning');
   });
   socket.on('roomState', room => {
     if (state.spectating) return;
@@ -418,6 +543,11 @@
   $('loginBtn').addEventListener('click', () => submitAuth('login'));
   $('registerBtn').addEventListener('click', () => submitAuth('register'));
   $('authPassword').addEventListener('keydown', e => { if (e.key === 'Enter') submitAuth('login'); });
+  $('profileOpenBtn').addEventListener('click', openProfile);
+  $('profileBackBtn').addEventListener('click', closeProfile);
+  $('profileSaveBtn').addEventListener('click', saveProfileName);
+  $('profilePasswordBtn').addEventListener('click', changeProfilePassword);
+  $('profileNewPassword2').addEventListener('keydown', e => { if (e.key === 'Enter') changeProfilePassword(); });
   $('adminOpenBtn').addEventListener('click', showAdminPanel);
   $('adminHomeBtn').addEventListener('click', () => {
     socket.emit('adminStopWatching', {}, () => {});
@@ -468,6 +598,8 @@
     localStorage.removeItem('pervo:accountToken');
     state.accountToken = '';
     state.accountUser = null;
+    state.profileOpen = false;
+    $('profilePanel').classList.add('hidden');
     loadMyGames();
     socket.disconnect();
     socket.connect();
