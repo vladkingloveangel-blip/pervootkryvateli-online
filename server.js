@@ -134,6 +134,14 @@ function cleanName(name) {
   const s = String(name || '').trim().replace(/\s+/g, ' ');
   return s.slice(0, 24) || 'Мореплаватель';
 }
+function nextPlayerColor(room) {
+  const used = new Set((room?.players || []).map(p => p.color));
+  return COLORS.find(color => !used.has(color)) || COLORS[(room?.players?.length || 0) % COLORS.length];
+}
+function clearSocketRoom(socket) {
+  socket.data.roomCode = null;
+  socket.data.playerId = null;
+}
 function getRoom(code) { return rooms.get(String(code || '').trim().toUpperCase()); }
 function rollD6() { return 1 + Math.floor(Math.random() * 6); }
 function ackSafe(ack, payload) { if (typeof ack === 'function') ack(payload); }
@@ -159,7 +167,7 @@ function publicRoom(room, viewerId = null) {
     : [];
 
   return {
-    version: '0.17.0',
+    version: '0.18.0',
     code: room.code,
     started: room.started,
     hostId: room.hostId,
@@ -2088,7 +2096,7 @@ io.on('connection', socket => {
     if (room.started) return ackSafe(ack, { ok: false, error: 'Партия уже началась.' });
     if (room.players.length >= 5) return ackSafe(ack, { ok: false, error: 'В комнате уже 5 игроков.' });
 
-    const player = newPlayer(socket, data, COLORS[room.players.length]);
+    const player = newPlayer(socket, data, nextPlayerColor(room));
     room.players.push(player);
     attachPlayer(socket, room, player);
     log(room, `${player.name} присоединился.`);
@@ -2117,12 +2125,83 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
+  socket.on('leaveRoom', (_data, ack) => {
+    const room = getRoom(socket.data.roomCode);
+    const player = room?.players.find(p => p.id === socket.data.playerId);
+    if (!room || !player) return ackSafe(ack, { ok: true });
+
+    if (room.started) {
+      player.connected = false;
+      player.socketId = null;
+      socket.leave(room.code);
+      clearSocketRoom(socket);
+      log(room, `${player.name} вышел из комнаты. Его место сохранено для возвращения.`);
+      ackSafe(ack, { ok: true, seatSaved: true });
+      emitRoom(room);
+      return;
+    }
+
+    if (player.id === room.hostId) {
+      const code = room.code;
+      log(room, `${player.name} закрыл комнату.`);
+      ackSafe(ack, { ok: true, closed: true });
+      io.to(code).emit('roomClosed', { reason: 'Создатель закрыл комнату.' });
+      rooms.delete(code);
+      socket.leave(code);
+      clearSocketRoom(socket);
+      return;
+    }
+
+    room.players = room.players.filter(p => p.id !== player.id);
+    socket.leave(room.code);
+    clearSocketRoom(socket);
+    log(room, `${player.name} вышел из комнаты.`);
+    ackSafe(ack, { ok: true });
+    emitRoom(room);
+  });
+
+  socket.on('closeRoom', (_data, ack) => {
+    const room = getRoom(socket.data.roomCode);
+    if (!room) return ackSafe(ack, { ok: false, error: 'Комната не найдена.' });
+    if (room.hostId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Закрыть комнату может только создатель.' });
+
+    const code = room.code;
+    const host = room.players.find(p => p.id === room.hostId);
+    if (host) log(room, `${host.name} закрыл комнату.`);
+    ackSafe(ack, { ok: true });
+    io.to(code).emit('roomClosed', { reason: 'Комната закрыта создателем.' });
+    rooms.delete(code);
+  });
+
+  socket.on('kickPlayer', (data, ack) => {
+    const room = getRoom(socket.data.roomCode);
+    if (!room) return ackSafe(ack, { ok: false, error: 'Комната не найдена.' });
+    if (room.hostId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Удалять игроков может только создатель комнаты.' });
+    if (room.started) return ackSafe(ack, { ok: false, error: 'После старта удалять игроков из партии нельзя.' });
+
+    const targetId = String(data?.playerId || '');
+    const target = room.players.find(p => p.id === targetId);
+    if (!target) return ackSafe(ack, { ok: false, error: 'Игрок не найден.' });
+    if (target.id === room.hostId) return ackSafe(ack, { ok: false, error: 'Создателя комнаты удалить нельзя.' });
+
+    room.players = room.players.filter(p => p.id !== target.id);
+    const targetSocket = target.socketId ? io.sockets.sockets.get(target.socketId) : null;
+    if (targetSocket) {
+      targetSocket.emit('kickedFromRoom', { reason: 'Создатель комнаты удалил вас из лобби.' });
+      targetSocket.leave(room.code);
+      clearSocketRoom(targetSocket);
+    }
+    log(room, `${target.name} удалён из лобби создателем комнаты.`);
+    ackSafe(ack, { ok: true });
+    emitRoom(room);
+  });
+
   socket.on('startGame', (_data, ack) => {
     const room = getRoom(socket.data.roomCode);
     if (!room) return ackSafe(ack, { ok: false, error: 'Комната не найдена.' });
     if (room.hostId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Начать игру может только создатель комнаты.' });
     if (room.started) return ackSafe(ack, { ok: false, error: 'Игра уже началась.' });
-    if (room.players.length < 4 || room.players.length > 5) return ackSafe(ack, { ok: false, error: 'Для старта нужно 4–5 игроков.' });
+    if (room.players.length < 2 || room.players.length > 5) return ackSafe(ack, { ok: false, error: 'Для старта нужно 2–5 игроков.' });
 
     room.started = true;
     room.islands = cloneIslands();
@@ -3042,8 +3121,8 @@ io.on('connection', socket => {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/health', (_req, res) => res.json({ ok: true, version: '0.17.0', rooms: rooms.size }));
+app.get('/health', (_req, res) => res.json({ ok: true, version: '0.18.0', rooms: rooms.size }));
 
 server.listen(PORT, HOST, () => {
-  console.log(`Первооткрыватели Online MVP 0.17: http://${HOST}:${PORT}`);
+  console.log(`Первооткрыватели Online MVP 0.18: http://${HOST}:${PORT}`);
 });
