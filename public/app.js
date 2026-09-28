@@ -872,6 +872,7 @@
     renderPlayers();
     renderControls();
     renderMapNavigation();
+    renderMapContext();
     renderEvents();
     renderPolitics();
     renderStatePrize();
@@ -1006,6 +1007,119 @@
       renderMapNavigation();
       renderMap();
     });
+  }
+
+  function renderMapContext() {
+    const r = state.room;
+    const mine = me();
+    const overlay = $('mapContextOverlay');
+    const title = $('mapContextTitle');
+    const text = $('mapContextText');
+    const actions = $('mapContextActions');
+    actions.innerHTML = '';
+
+    if (!r?.started || !mine || state.spectating) {
+      overlay.classList.add('hidden');
+      return;
+    }
+
+    const myTurn = r.activePlayerId === state.myId;
+    const blocked = isDecisionPending();
+    if (!myTurn || mine.phase !== 'actions') {
+      overlay.classList.add('hidden');
+      return;
+    }
+
+    const addAction = (label, tab, className = '') => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      if (className) b.className = className;
+      b.textContent = label;
+      b.addEventListener('click', () => openMobileTab(tab));
+      actions.appendChild(b);
+    };
+
+    if (blocked) {
+      let label = 'Требуется решение';
+      if (r.pendingBattle?.viewerInvite) label = 'Решение по совместному бою';
+      else if (r.pendingEvent?.viewerCanRespond) label = 'Решение по событию';
+      else if (r.pendingFeud?.viewerCanRespond) label = 'Решение по вражде';
+      else if (r.pendingAssignmentChoice?.viewerCanRespond) label = 'Решение по поручению';
+      else if (r.pendingStatePrize?.viewerCanRespond) label = 'Размещение приза';
+      else if (r.pendingIslandCorrection?.viewerCanRespond) label = 'Исправление острова';
+      else if (r.pendingFleetAdjustment?.viewerCanRespond) label = 'Настройка флотилии';
+      else if (r.pendingLegendaryReaction) label = 'Решение по легендарной карте';
+      title.textContent = label;
+      text.textContent = 'Продолжение хода ждёт вашего выбора.';
+      addAction('Открыть решение', 'actions', 'primary');
+      overlay.classList.remove('hidden');
+      return;
+    }
+
+    const hereIslands = currentIslands();
+    const hereIsland = hereIslands.find(i => i.id === state.selectedIslandId) || hereIslands[0] || null;
+    const hereAnchor = currentAnchorCell();
+    const hereLegendary = currentLegendaryPlace();
+    const seaTargets = r.players.filter(p => p.id !== state.myId && p.row === mine.row && p.col === mine.col && !areAlliesClient(state.myId, p.id));
+    const islandTargets = hereIslands.filter(i => i.ownerId !== state.myId && !(i.kind === 'free' && !i.ownerId) && (!i.ownerId || !areAlliesClient(state.myId, i.ownerId)));
+
+    if (mine.atCitadel) {
+      title.textContent = 'Цитадель';
+      text.textContent = `Торговля, улучшения и сопровождение · действий осталось: ${mine.actionsLeft ?? 0}`;
+      addAction('Корабль и торговля', 'ship', 'primary');
+      overlay.classList.remove('hidden');
+      return;
+    }
+
+    if (hereIsland) {
+      state.selectedIslandId = hereIsland.id;
+      title.textContent = hereIsland.name;
+      if (hereIsland.ownerId === state.myId) {
+        text.textContent = `Ваш остров · действий осталось: ${mine.actionsLeft ?? 0}`;
+        addAction('Управление островом', 'actions', 'primary');
+      } else {
+        const owner = islandOwnerLabel(hereIsland);
+        text.textContent = `${owner} · защита ${hereIsland.defenseArmy ?? hereIsland.army ?? 0} · действий: ${mine.actionsLeft ?? 0}`;
+        if (islandTargets.length && !mine.inPeaceZone) addAction('Штурм и действия', 'actions', 'danger-soft');
+        else addAction('Информация', 'actions');
+      }
+      if (seaTargets.length && !mine.inPeaceZone) addAction('Морской бой', 'actions', 'danger-soft');
+      overlay.classList.remove('hidden');
+      return;
+    }
+
+    if (seaTargets.length && !mine.inPeaceZone) {
+      title.textContent = 'Корабль противника рядом';
+      text.textContent = `Целей: ${seaTargets.length} · ваша артиллерия: ${mine.fleetArtillery ?? 0}`;
+      addAction('Открыть морской бой', 'actions', 'danger-soft');
+      overlay.classList.remove('hidden');
+      return;
+    }
+
+    if (hereAnchor) {
+      const encounter = mine.lastAnchorEncounter;
+      title.textContent = hereAnchor.name;
+      if (encounter) {
+        const outcome = encounter.outcome === 'win' ? 'Победа' : encounter.outcome === 'loss' ? 'Поражение' : encounter.outcome === 'tie' ? 'Ничья' : 'Тихое море';
+        text.textContent = `${outcome} · результат столкновения уже разыгран автоматически`;
+        addAction('Посмотреть результат', 'actions');
+      } else {
+        text.textContent = 'Столкновение на якоре разыгрывается автоматически при остановке.';
+      }
+      overlay.classList.remove('hidden');
+      return;
+    }
+
+    if (hereLegendary) {
+      title.textContent = hereLegendary.name;
+      text.textContent = hereLegendary.exploredBy
+        ? `Место уже исследовано: ${playerName(hereLegendary.exploredBy)}`
+        : 'Разовая награда разыгрывается автоматически при остановке.';
+      overlay.classList.remove('hidden');
+      return;
+    }
+
+    overlay.classList.add('hidden');
   }
 
   function renderControls() {
