@@ -204,3 +204,30 @@ body.spectator-mode .map-toolbar #centerMe { display: none; }
 }
 
 .my-games { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #36515a; }
+
+/* v0.22 — профиль и восстановление соединения */
+.profile-panel { margin-bottom: 12px; }
+.profile-grid { display: grid; gap: 10px; margin-top: 12px; }
+.profile-note { margin: 8px 0 12px; }
+.profile-divider { height: 1px; background: var(--line); margin: 20px 0; }
+.profile-status { min-height: 20px; margin: 8px 0 0; color: var(--muted); }
+.connection-banner {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  margin: 0 auto 10px;
+  max-width: 980px;
+  padding: 10px 14px;
+  border-radius: 0 0 10px 10px;
+  text-align: center;
+  font-weight: 800;
+  box-shadow: 0 5px 18px rgba(0,0,0,.25);
+}
+.connection-banner.warning { background: #6b5318; color: #fff4c9; }
+.connection-banner.success { background: #1e5b42; color: #dcffef; }
+.connection-banner.error { background: #6f2d33; color: #ffe5e7; }
+body.connection-lost #game button,
+body.connection-lost #entry button { pointer-events: none; opacity: .55; }
+@media (min-width: 680px) {
+  .profile-grid { grid-template-columns: 1fr 1fr; }
+}
