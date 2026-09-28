@@ -2351,10 +2351,6 @@
     const r = state.room;
     const { rows, cols } = mapSize();
     const board = $('mapBoard');
-    const seaArt = $('mapSeaArt');
-    const landArt = $('mapLandArt');
-    if (r.map?.visualLayers?.sea && seaArt.getAttribute('src') !== r.map.visualLayers.sea) seaArt.src = r.map.visualLayers.sea;
-    if (r.map?.visualLayers?.land && landArt.getAttribute('src') !== r.map.visualLayers.land) landArt.src = r.map.visualLayers.land;
     board.style.setProperty('--map-rows', rows);
     board.style.setProperty('--map-cols', cols);
     const tokenLayer = $('tokenLayer');
@@ -2477,7 +2473,7 @@
   }
   $('mapInfoClose').addEventListener('click', closeMapInfo);
   $('mapBoard').addEventListener('click', ev => {
-    if (ev.target === $('mapBoard') || ev.target === $('mapSeaArt') || ev.target === $('mapLandArt') || ev.target === $('mapArtLayer')) closeMapInfo();
+    if (ev.target === $('mapBoard') || ev.target === $('mapBaseArt') || ev.target === $('mapArtLayer')) closeMapInfo();
   });
   $('zoomIn').addEventListener('click', () => { state.zoom += .15; applyZoom(); });
   $('zoomOut').addEventListener('click', () => { state.zoom -= .15; applyZoom(); });
