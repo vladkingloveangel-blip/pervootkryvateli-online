@@ -5,7 +5,7 @@
   "description": "Мобильный онлайн-MVP настольной игры «Первооткрыватели», подготовленный для облачного запуска и установки как PWA на Android",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node --check server.js && node --check public/app.js && node server.js",
     "dev": "node server.js",
     "test": "node test/game-logic.test.js"
   },
