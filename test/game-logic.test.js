@@ -132,6 +132,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const checks = [
     ['chertonia', 'reef'],
     ['maikan', 'shoal'],
+    ['mao', 'shoal'],
     ['atlantia', 'ice'],
   ];
   for (const [islandId, hazardType] of checks) {
@@ -147,6 +148,37 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
           barrier.has(`${nr},${nc}`),
           true,
           `${hazardType} должен закрывать берег ${islandId} у ${nr},${nc}`
+        );
+      }
+    }
+  }
+}
+
+// Легендарные места также полностью окружены своими препятствиями.
+{
+  const placeChecks = [
+    ['pearl', 'reef'],
+    ['abyss', 'shoal'],
+    ['kraken', 'ice'],
+  ];
+  const placeCoords = {
+    pearl: [10, 10],
+    abyss: [12, 26],
+    kraken: [24, 6],
+  };
+  for (const [placeId, hazardType] of placeChecks) {
+    const [row, col] = placeCoords[placeId];
+    const barrier = new Set(HAZARDS[hazardType].map(([r, c]) => `${r},${c}`));
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dr === 0 && dc === 0) continue;
+        const nr = row + dr;
+        const nc = col + dc;
+        if (nr < 0 || nr > 27 || nc < 0 || nc > 27) continue;
+        assert.equal(
+          barrier.has(`${nr},${nc}`),
+          true,
+          `${hazardType} должен полностью окружать ${placeId} у ${nr},${nc}`
         );
       }
     }
