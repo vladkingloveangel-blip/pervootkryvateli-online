@@ -1,0 +1,17 @@
+name: One-time test 0.33
+
+on:
+  push:
+    paths:
+      - '.github/workflows/test-033.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install
+      - run: npm test
