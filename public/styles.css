@@ -69,6 +69,7 @@ main { width: min(1480px, 100%); margin: 0 auto; padding: 14px; }
 .player-name { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .player-sub { color: var(--muted); font-size: 12px; }
 .order-badge { color: var(--accent); font-size: 12px; }
+.player-side-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
 .log { max-height: 260px; overflow: auto; display: grid; gap: 7px; font-size: 13px; }
 .log-entry { color: #d9e8ea; padding-bottom: 6px; border-bottom: 1px dashed rgba(255,255,255,.1); }
 
