@@ -16,7 +16,7 @@
   <header class="topbar">
     <div>
       <strong>Первооткрыватели</strong>
-      <span class="tag">Online MVP 0.23.0</span>
+      <span class="tag">Online MVP 0.24.0</span>
     </div>
     <div id="connection" class="connection">подключение…</div>
   </header>
@@ -43,8 +43,9 @@
       <p id="authError" class="error" role="alert"></p>
     </section>
 
+    <div id="gameAccountBackdrop" class="game-account-backdrop hidden"></div>
     <section id="accountBar" class="panel account-bar hidden">
-      <div><strong id="accountName">—</strong> <span id="accountRole" class="mini-badge">игрок</span></div>
+      <div class="account-summary"><strong id="accountName">—</strong> <span id="accountRole" class="mini-badge">игрок</span></div>
       <div class="room-actions">
         <button id="myGamesOpenBtn" class="small">Мои игры</button>
         <button id="profileOpenBtn" class="small">Профиль</button>
@@ -137,9 +138,10 @@
       </section>
 
       <section id="gameHud" class="game-hud" aria-label="Параметры игрока">
-        <button id="hudPlayerBtn" class="hud-player" type="button">
+        <button id="hudPlayerBtn" class="hud-player" type="button" aria-label="Меню игрока">
           <span class="hud-ship-icon">⛵</span>
           <span><strong id="hudPlayerName">Игрок</strong><small id="hudShipLevel">ур. I</small></span>
+          <span class="hud-menu-chevron">⌄</span>
         </button>
         <div id="hudResources" class="hud-resources">
           <button class="hud-chip" id="hudDucatsBtn" type="button" aria-label="Дукаты"><span>🪙</span><strong id="hudDucats">0</strong></button>
