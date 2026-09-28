@@ -1,7 +1,7 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mistCardRef: null, accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false };
+  const state = { room: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mistCardRef: null, accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map' };
   const SHIP_NAMES = { brigantine: 'Бригантина', frigate: 'Фрегат', caravel: 'Каравелла', carrack: 'Каракка' };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
   let deferredInstallPrompt = null;
@@ -392,6 +392,7 @@
     state.myId = null;
     state.code = null;
     state.playerToken = null;
+    openMobileTab('map');
     $('game').classList.add('hidden');
     $('entry').classList.remove('hidden');
     setError('gameError', '');
@@ -463,6 +464,7 @@
     state.code = res.code;
     state.myId = res.playerId;
     state.playerToken = res.playerToken;
+    openMobileTab('map');
     saveSession();
     if (state.room) render();
     $('entry').classList.add('hidden');
@@ -615,6 +617,17 @@
     showAuth('Вы вышли из аккаунта.');
   });
 
+  document.querySelectorAll('[data-mobile-nav]').forEach(btn => {
+    btn.addEventListener('click', () => openMobileTab(btn.dataset.mobileNav));
+  });
+  $('mobileSheetClose').addEventListener('click', () => openMobileTab('map'));
+  $('hudPlayerBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : openMobileTab('ship'));
+  $('hudDucatsBtn').addEventListener('click', () => openMobileTab('ship'));
+  $('hudGloryBtn').addEventListener('click', () => openMobileTab('players'));
+  $('hudCargoBtn').addEventListener('click', () => openMobileTab('ship'));
+  $('hudDebtBtn').addEventListener('click', () => openMobileTab('ship'));
+  $('hudTurnBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : openMobileTab('actions'));
+
   $('startBtn').addEventListener('click', () => socket.emit('startGame', {}, handleGameAck));
 
   $('leaveRoomBtn').addEventListener('click', () => {
@@ -636,6 +649,9 @@
   $('rollBtn').addEventListener('click', () => socket.emit('rollMove', {}, handleGameAck));
   $('skipBtn').addEventListener('click', () => socket.emit('skipNavigation', {}, handleGameAck));
   $('endTurnBtn').addEventListener('click', () => socket.emit('endTurn', {}, handleGameAck));
+  $('dockRollBtn').addEventListener('click', () => socket.emit('rollMove', {}, handleGameAck));
+  $('dockSkipBtn').addEventListener('click', () => socket.emit('skipNavigation', {}, handleGameAck));
+  $('dockEndTurnBtn').addEventListener('click', () => socket.emit('endTurn', {}, handleGameAck));
   $('sellCargoBtn').addEventListener('click', () => socket.emit('sellCargo', {}, handleGameAck));
 
   function handleGameAck(res) { setError('gameError', res?.ok ? '' : (res?.error || 'Действие отклонено.')); }
@@ -663,6 +679,75 @@
     return island.faction || 'Государство';
   }
 
+
+  const MOBILE_TAB_TITLES = {
+    actions: 'Действия',
+    ship: 'Корабль и имущество',
+    players: 'Игроки и отношения',
+    log: 'Журнал партии',
+  };
+
+  function openMobileTab(tab = 'map') {
+    state.mobileTab = tab;
+    const side = $('gameSidePanel');
+    const isMap = tab === 'map';
+    side.classList.toggle('mobile-open', !isMap);
+    document.body.classList.toggle('mobile-sheet-open', !isMap);
+    if (!isMap) {
+      side.dataset.mobileTab = tab;
+      $('mobileSheetTitle').textContent = MOBILE_TAB_TITLES[tab] || 'Раздел';
+      side.scrollTop = 0;
+    } else {
+      delete side.dataset.mobileTab;
+    }
+    document.querySelectorAll('[data-mobile-nav]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mobileNav === tab);
+    });
+  }
+
+  function cargoSummary(player, room) {
+    if (!player) return { quantity: 0, capacity: 0 };
+    const escortCatalog = room?.escortCatalog || {};
+    const cargoEscorts = (player.escorts || []).filter(e => e.active && (escortCatalog[e.type]?.cargo || 0) > 0);
+    const quantity = (player.cargo?.quantity || 0) + cargoEscorts.reduce((sum, e) => sum + (e.cargo?.quantity || 0), 0);
+    return { quantity, capacity: player.totalCargoCapacity || player.cargoCapacity || 0 };
+  }
+
+  function renderMobileHud() {
+    const r = state.room;
+    if (!r) return;
+    const mine = me();
+    const activePlayer = active();
+    $('hudResources').classList.toggle('hidden', !mine);
+    $('mobileNavActions').classList.toggle('hidden', state.spectating);
+    $('mobileNavShip').classList.toggle('hidden', state.spectating);
+
+    if (mine) {
+      const cargo = cargoSummary(mine, r);
+      $('hudPlayerName').textContent = mine.name;
+      $('hudShipLevel').textContent = `${SHIP_NAMES[mine.shipClass] || 'Корабль'} · ${ROMAN[mine.level] || mine.level}`;
+      $('hudDucats').textContent = mine.ducats ?? 0;
+      $('hudGlory').textContent = mine.glory ?? 0;
+      $('hudCargo').textContent = `${cargo.quantity}/${cargo.capacity}`;
+      $('hudDebtBtn').classList.toggle('hidden', !(mine.debt > 0));
+      $('hudDebt').textContent = mine.debt || 0;
+    } else {
+      $('hudPlayerName').textContent = state.spectating ? 'Наблюдение' : 'Игрок';
+      $('hudShipLevel').textContent = state.spectating ? `Комната ${r.code}` : '—';
+      $('hudDebtBtn').classList.add('hidden');
+    }
+
+    $('hudRound').textContent = !r.started ? `Лобби · ${r.players.length}/5` : `Раунд ${r.round} · круг ${r.circle}/5`;
+    $('hudTurn').textContent = !r.started
+      ? 'Ожидание старта'
+      : r.eventPhase?.active
+        ? `События · ${playerName(r.eventPhase.currentPlayerId)}`
+        : activePlayer
+          ? (activePlayer.id === state.myId ? 'Ваш ход' : `Ход: ${activePlayer.name}`)
+          : 'Ожидание';
+    $('mobileNavActions').classList.toggle('attention', Boolean(isDecisionPending()));
+  }
+
   function render() {
     const r = state.room;
     if (!r) return;
@@ -675,6 +760,7 @@
     $('turnLabel').textContent = !r.started ? `Игроков: ${r.players.length}/5` : r.eventPhase?.active ? `Событие: ${eventPlayer?.name || '—'}` : (a ? `Ход: ${a.name}` : '—');
 
     const mine = me();
+    renderMobileHud();
     if (mine) {
       const cards = mine.specialCards?.length ? ` · особые карты: ${mine.specialCards.join(', ')}` : '';
       const cargo = mine.landCompany ? ` · трюм: рота +${mine.landCompany.army}` : (mine.cargo ? ` · трюм: ${state.room.goodsCatalog?.[mine.cargo.goodId]?.name || mine.cargo.goodId} ×${mine.cargo.quantity}` : ' · трюм пуст');
@@ -760,6 +846,15 @@
     $('rollBtn').disabled = !myTurn || phase !== 'navigation' || rolled || blocked;
     $('skipBtn').disabled = !myTurn || phase !== 'navigation' || blocked;
     $('endTurnBtn').disabled = !myTurn || blocked;
+
+    const dock = $('mobileActionDock');
+    dock.classList.toggle('hidden', state.spectating || !r.started);
+    $('dockRollBtn').disabled = $('rollBtn').disabled;
+    $('dockSkipBtn').disabled = $('skipBtn').disabled;
+    $('dockEndTurnBtn').disabled = $('endTurnBtn').disabled;
+    $('dockRollBtn').classList.toggle('hidden', !myTurn || phase !== 'navigation' || rolled || blocked);
+    $('dockSkipBtn').classList.toggle('hidden', !myTurn || phase !== 'navigation' || blocked);
+    $('dockEndTurnBtn').classList.toggle('hidden', !myTurn || blocked);
 
     if (!r.started) $('moveResult').textContent = 'Выберите корабль, затем каждый игрок нажимает «Готов». Когда все онлайн и готовы, создатель запускает партию.';
     else if (r.eventPhase?.active) $('moveResult').textContent = r.pendingIslandCorrection?.viewerCanRespond ? `Остров ${r.pendingIslandCorrection.islandName} нужно немедленно исправить перед продолжением Фазы событий.` : r.pendingIslandCorrection ? `Фаза событий приостановлена: ${playerName(r.pendingIslandCorrection.playerId)} исправляет остров ${r.pendingIslandCorrection.islandName}.` : r.pendingAssignmentChoice?.viewerCanRespond ? 'Нужно решить, оставить или заменить поручение сюзерена.' : r.pendingFeud?.viewerCanRespond ? 'Нужно разрешить вашу карту вражды.' : r.pendingEvent?.viewerCanRespond ? 'Нужно принять решение по вашей карте события.' : `Идёт общая Фаза событий: ${playerName(r.eventPhase.currentPlayerId)}.`;
