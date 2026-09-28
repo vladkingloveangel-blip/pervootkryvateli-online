@@ -46,17 +46,17 @@ main { width: min(1480px, 100%); margin: 0 auto; padding: 14px; }
 .map-board { position: relative; width: 980px; aspect-ratio: 1 / 1; transform-origin: top left; }
 .map-board > img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; pointer-events: none; }
 .grid-layer, .ownership-layer, .highlight-layer, .token-layer { position: absolute; inset: 0; }
-.grid-layer { z-index: 1; background-image: linear-gradient(to right, rgba(255,255,255,.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,.07) 1px, transparent 1px); background-size: calc(100% / 28) calc(100% / 28); pointer-events: none; }
+.grid-layer { z-index: 1; background-image: linear-gradient(to right, rgba(255,255,255,.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,.07) 1px, transparent 1px); background-size: calc(100% / var(--map-cols, 28)) calc(100% / var(--map-rows, 28)); pointer-events: none; }
 .ownership-layer { z-index: 2; pointer-events: none; }
 .highlight-layer { z-index: 3; }
 .token-layer { z-index: 4; pointer-events: none; }
-.owned-cell, .island-focus { position: absolute; width: calc(100% / 28); height: calc(100% / 28); pointer-events: none; }
+.owned-cell, .island-focus { position: absolute; width: calc(100% / var(--map-cols, 28)); height: calc(100% / var(--map-rows, 28)); pointer-events: none; }
 .owned-cell { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--owner-color) 72%, transparent); background: color-mix(in srgb, var(--owner-color) 12%, transparent); }
 .island-focus { box-shadow: inset 0 0 0 3px rgba(255,255,255,.72); background: rgba(255,255,255,.06); }
-.cell-hit { position: absolute; width: calc(100% / 28); height: calc(100% / 28); border: 0; border-radius: 0; padding: 0; min-height: 0; background: rgba(240,196,91,.26); outline: 1px solid rgba(240,196,91,.55); }
+.cell-hit { position: absolute; width: calc(100% / var(--map-cols, 28)); height: calc(100% / var(--map-rows, 28)); border: 0; border-radius: 0; padding: 0; min-height: 0; background: rgba(240,196,91,.26); outline: 1px solid rgba(240,196,91,.55); }
 .cell-hit.current { background: rgba(255,255,255,.2); }
 .cell-hit.shore { background: rgba(97, 208, 132, .28); outline-color: rgba(130, 235, 158, .8); }
-.token { position: absolute; width: calc(100% / 28 * .72); height: calc(100% / 28 * .72); transform: translate(19%, 19%); border-radius: 50%; display: grid; place-items: center; font-size: clamp(10px, 1.3vw, 20px); font-weight: 900; color: white; border: 2px solid rgba(255,255,255,.9); box-shadow: 0 2px 7px rgba(0,0,0,.5); pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,.75); }
+.token { position: absolute; width: calc(100% / var(--map-cols, 28) * .72); height: calc(100% / var(--map-rows, 28) * .72); transform: translate(19%, 19%); border-radius: 50%; display: grid; place-items: center; font-size: clamp(10px, 1.3vw, 20px); font-weight: 900; color: white; border: 2px solid rgba(255,255,255,.9); box-shadow: 0 2px 7px rgba(0,0,0,.5); pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,.75); }
 .token.you { outline: 3px solid var(--accent); outline-offset: 2px; }
 .map-note { color: var(--muted); font-size: 12px; margin: 8px 4px 0; }
 .controls .button-stack { display: grid; gap: 8px; }
@@ -149,7 +149,7 @@ main { width: min(1480px, 100%); margin: 0 auto; padding: 14px; }
 .anchor-note, .anchor-result, .anchor-decks { margin-top: 7px; font-size: 13px; line-height: 1.4; color: var(--muted); }
 .anchor-result { padding: 9px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); color: var(--text); }
 .anchor-decks { font-size: 12px; }
-.anchor-cell { position: absolute; width: calc(100% / 28); height: calc(100% / 28); pointer-events: none; border-radius: 7px; box-shadow: inset 0 0 0 3px rgba(255,255,255,.35); }
+.anchor-cell { position: absolute; width: calc(100% / var(--map-cols, 28)); height: calc(100% / var(--map-rows, 28)); pointer-events: none; border-radius: 7px; box-shadow: inset 0 0 0 3px rgba(255,255,255,.35); }
 .anchor-cell.anchor-blue { box-shadow: inset 0 0 0 3px rgba(75,150,255,.75); }
 .anchor-cell.anchor-yellow { box-shadow: inset 0 0 0 3px rgba(245,197,75,.78); }
 .anchor-cell.anchor-red { box-shadow: inset 0 0 0 3px rgba(235,78,70,.82); }
