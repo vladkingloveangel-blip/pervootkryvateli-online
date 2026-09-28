@@ -1,7 +1,7 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map' };
+  const state = { room: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '' };
   const SHIP_NAMES = { brigantine: 'Бригантина', frigate: 'Фрегат', caravel: 'Каравелла', carrack: 'Каракка' };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
   let deferredInstallPrompt = null;
@@ -465,6 +465,8 @@
   socket.on('roomState', room => {
     if (state.spectating) return;
     state.room = room;
+    const incomingMine = room?.players?.find(p => p.id === state.myId);
+    if (!incomingMine || incomingMine.phase !== 'navigation') state.mapMovePending = false;
     render();
   });
   socket.on('adminRoomState', room => {
@@ -688,6 +690,8 @@
   $('dockRollBtn').addEventListener('click', () => socket.emit('rollMove', {}, handleGameAck));
   $('dockSkipBtn').addEventListener('click', () => socket.emit('skipNavigation', {}, handleGameAck));
   $('dockEndTurnBtn').addEventListener('click', () => socket.emit('endTurn', {}, handleGameAck));
+  $('mapNavRollBtn').addEventListener('click', () => socket.emit('rollMove', {}, handleGameAck));
+  $('mapNavStayBtn').addEventListener('click', () => socket.emit('skipNavigation', {}, handleGameAck));
   $('sellCargoBtn').addEventListener('click', () => socket.emit('sellCargo', {}, handleGameAck));
 
   function handleGameAck(res) { setError('gameError', res?.ok ? '' : (res?.error || 'Действие отклонено.')); }
@@ -867,6 +871,7 @@
 
     renderPlayers();
     renderControls();
+    renderMapNavigation();
     renderEvents();
     renderPolitics();
     renderStatePrize();
@@ -928,6 +933,81 @@
     $('leaveRoomBtn').classList.toggle('hidden', isSpectator || isHost || r.started);
   }
 
+  function centerMapOnMe(behavior = 'smooth') {
+    const mine = me();
+    if (!mine) return;
+    const vp = $('mapViewport');
+    const board = $('mapBoard');
+    const { rows, cols } = mapSize();
+    const cellW = board.clientWidth / cols;
+    const cellH = board.clientHeight / rows;
+    vp.scrollTo({
+      left: mine.col * cellW - vp.clientWidth / 2 + cellW / 2,
+      top: mine.row * cellH - vp.clientHeight / 2 + cellH / 2,
+      behavior,
+    });
+  }
+
+  function renderMapNavigation() {
+    const r = state.room;
+    const mine = me();
+    const overlay = $('mapNavOverlay');
+    const title = $('mapNavTitle');
+    const text = $('mapNavText');
+    const roll = $('mapNavRollBtn');
+    const stay = $('mapNavStayBtn');
+    const blocked = isDecisionPending();
+    const myTurn = Boolean(r?.started && mine && r.activePlayerId === state.myId);
+    const activeNavigation = Boolean(myTurn && mine.phase === 'navigation' && !blocked && !state.spectating);
+
+    overlay.classList.toggle('hidden', !activeNavigation);
+    if (!activeNavigation) {
+      state.mapMovePending = false;
+      return;
+    }
+
+    stay.disabled = state.mapMovePending;
+    if (mine.roll === null) {
+      title.textContent = 'Ваш ход';
+      text.textContent = 'Бросьте кубик, затем выберите точку назначения прямо на карте.';
+      roll.classList.remove('hidden');
+      roll.disabled = false;
+      stay.textContent = 'Остаться';
+      state.lastAutoCenterSignature = '';
+      return;
+    }
+
+    const destinations = (r.reachableCells || []).filter(c => c.row !== mine.row || c.col !== mine.col);
+    title.textContent = `Дальность: ${mine.movePoints}`;
+    text.textContent = destinations.length
+      ? `Доступно точек: ${destinations.length}. Нажмите на подсвеченную клетку.`
+      : 'Доступных точек нет — останьтесь на месте.';
+    roll.classList.add('hidden');
+    stay.textContent = 'Остаться здесь';
+
+    const signature = [r.round, r.circle, r.activePlayerId, mine.roll, mine.movePoints, mine.row, mine.col].join(':');
+    if (state.lastAutoCenterSignature !== signature) {
+      state.lastAutoCenterSignature = signature;
+      requestAnimationFrame(() => centerMapOnMe('smooth'));
+    }
+  }
+
+  function moveToMapCell(cell) {
+    if (state.mapMovePending) return;
+    state.mapMovePending = true;
+    $('mapBoard').classList.add('move-pending');
+    document.querySelectorAll('#highlightLayer .navigation-hit').forEach(button => { button.disabled = true; });
+    $('mapNavStayBtn').disabled = true;
+    socket.emit('moveTo', { row: cell.row, col: cell.col }, res => {
+      handleGameAck(res);
+      if (res?.ok) return;
+      state.mapMovePending = false;
+      $('mapBoard').classList.remove('move-pending');
+      renderMapNavigation();
+      renderMap();
+    });
+  }
+
   function renderControls() {
     const r = state.room;
     const mine = me();
@@ -942,13 +1022,14 @@
     $('endTurnBtn').disabled = !myTurn || blocked;
 
     const dock = $('mobileActionDock');
-    dock.classList.toggle('hidden', state.spectating || !r.started);
+    const mapNavigationActive = myTurn && phase === 'navigation' && !blocked;
+    dock.classList.toggle('hidden', state.spectating || !r.started || !myTurn || mapNavigationActive || blocked);
     $('dockRollBtn').disabled = $('rollBtn').disabled;
     $('dockSkipBtn').disabled = $('skipBtn').disabled;
     $('dockEndTurnBtn').disabled = $('endTurnBtn').disabled;
-    $('dockRollBtn').classList.toggle('hidden', !myTurn || phase !== 'navigation' || rolled || blocked);
-    $('dockSkipBtn').classList.toggle('hidden', !myTurn || phase !== 'navigation' || blocked);
-    $('dockEndTurnBtn').classList.toggle('hidden', !myTurn || blocked);
+    $('dockRollBtn').classList.add('hidden');
+    $('dockSkipBtn').classList.add('hidden');
+    $('dockEndTurnBtn').classList.toggle('hidden', !myTurn || phase !== 'actions' || blocked);
 
     if (!r.started) $('moveResult').textContent = 'Выберите корабль, затем каждый игрок нажимает «Готов». Когда все онлайн и готовы, создатель запускает партию.';
     else if (r.eventPhase?.active) $('moveResult').textContent = r.pendingIslandCorrection?.viewerCanRespond ? `Остров ${r.pendingIslandCorrection.islandName} нужно немедленно исправить перед продолжением Фазы событий.` : r.pendingIslandCorrection ? `Фаза событий приостановлена: ${playerName(r.pendingIslandCorrection.playerId)} исправляет остров ${r.pendingIslandCorrection.islandName}.` : r.pendingAssignmentChoice?.viewerCanRespond ? 'Нужно решить, оставить или заменить поручение сюзерена.' : r.pendingFeud?.viewerCanRespond ? 'Нужно разрешить вашу карту вражды.' : r.pendingEvent?.viewerCanRespond ? 'Нужно принять решение по вашей карте события.' : `Идёт общая Фаза событий: ${playerName(r.eventPhase.currentPlayerId)}.`;
@@ -2445,6 +2526,7 @@
     const r = state.room;
     const { rows, cols } = mapSize();
     const board = $('mapBoard');
+    board.classList.toggle('move-pending', Boolean(state.mapMovePending));
     const baseArt = $('mapBaseArt');
     const configuredArt = r.map?.visualLayers?.base;
     if (configuredArt && baseArt.getAttribute('src') !== configuredArt) baseArt.src = configuredArt;
@@ -2524,18 +2606,22 @@
     if (mine.phase !== 'navigation' || mine.roll === null) return;
 
     for (const cell of r.reachableCells || []) {
+      if (cell.row === mine.row && cell.col === mine.col) continue;
       const b = document.createElement('button');
       b.type = 'button';
       const island = r.islands.find(i => i.cells.some(([rr, cc]) => rr === cell.row && cc === cell.col));
       const citadel = (r.citadelCells || []).some(([rr, cc]) => rr === cell.row && cc === cell.col);
       const coast = Boolean(island) || citadel;
       const anchor = (r.anchorCells || []).find(a => a.row === cell.row && a.col === cell.col);
-      b.className = `cell-hit${cell.dist === 0 ? ' current' : ''}${coast ? ' shore' : ''}${citadel ? ' citadel' : ''}${anchor ? ` anchor-destination anchor-${anchor.color}` : ''}`;
+      const legendary = (r.map?.legendaryPlaces || []).find(p => p.row === cell.row && p.col === cell.col);
+      b.className = `cell-hit navigation-hit${coast ? ' shore' : ''}${citadel ? ' citadel' : ''}${legendary ? ' legendary-destination' : ''}${anchor ? ` anchor-destination anchor-${anchor.color}` : ''}`;
+      b.disabled = state.mapMovePending;
+      b.dataset.distance = String(cell.dist);
       placeCell(b, cell.row, cell.col);
-      const placeName = island?.name || (citadel ? 'Цитадель' : '') || anchor?.name || '';
+      const placeName = island?.name || (citadel ? 'Цитадель' : '') || anchor?.name || legendary?.name || '';
       b.setAttribute('aria-label', `Перейти на клетку ${cell.col + 1}:${cell.row + 1}, путь ${cell.dist}${placeName ? `, ${placeName}` : ''}`);
       b.title = placeName ? `${placeName} · ${cell.dist} клет.` : `${cell.dist} клет.`;
-      b.addEventListener('click', () => socket.emit('moveTo', { row: cell.row, col: cell.col }, handleGameAck));
+      b.addEventListener('click', () => moveToMapCell(cell));
       highlightLayer.appendChild(b);
     }
   }
@@ -2581,19 +2667,7 @@
   window.addEventListener('resize', scheduleMapInfoReposition);
   $('zoomIn').addEventListener('click', () => { state.zoom += .15; applyZoom(); scheduleMapInfoReposition(); });
   $('zoomOut').addEventListener('click', () => { state.zoom -= .15; applyZoom(); scheduleMapInfoReposition(); });
-  $('centerMe').addEventListener('click', () => {
-    const mine = me();
-    if (!mine) return;
-    const vp = $('mapViewport');
-    const board = $('mapBoard');
-    const { cols } = mapSize();
-    const cell = board.clientWidth / cols;
-    vp.scrollTo({
-      left: mine.col * cell - vp.clientWidth / 2 + cell / 2,
-      top: mine.row * cell - vp.clientHeight / 2 + cell / 2,
-      behavior: 'smooth',
-    });
-  });
+  $('centerMe').addEventListener('click', () => centerMapOnMe('smooth'));
   applyZoom();
 
   initAuth();
