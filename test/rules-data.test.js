@@ -37,6 +37,32 @@ test('validator rejects corruption rather than merely accepting the shipped samp
   assert.ok(validateRules(rules,badMap).some(e=>e.includes('coordinate')));
 });
 
+test('validator rejects drift in overview fields, building chains and deferred references', () => {
+  const cases = [
+    x => { x.economy.buildings.farm.price += 1; },
+    x => { x.economy.buildings.fort.defense += 1; },
+    x => { x.economy.buildings.market.income += 1; },
+    x => { x.economy.buildings.mine.resource = 'wrong'; },
+    x => { x.economy.buildings.mine.produces = 'diamonds'; },
+    x => { x.economy.buildings.farm.levels[2].area += 1; },
+    x => { delete x.economy.buildings.farm.levels[2].next; },
+    x => { x.economy.buildings.farm.levels[3].next = {type:'bank',level:1}; },
+    x => { x.economy.buildingBranches[0].types.push('mine'); },
+    x => { x.politics.factions.lionia.originalIslandIds.pop(); },
+    x => { x.legends.treasures[0].multiplier += 1; },
+    x => { x.legends.treasures.at(-1).cargoGoodId = 'wood'; },
+    x => { x.legends.namedCards[0].name = 'wrong'; },
+    x => { x.legends.expeditions[0].reward.count += 1; },
+    x => { x.scoring.army.capture[1].min += 1; },
+    x => { x.economy.landCompany.armyByArsenalLevel.pop(); },
+    x => { x.implementation.pendingConsumers[0].path = 'missing.path'; },
+  ];
+  for (const mutate of cases) {
+    const value=copy(rules); mutate(value);
+    assert.ok(validateRules(value,map).length > 0, mutate.toString());
+  }
+});
+
 test('ship classes, levels, upgrades, navigation and escorts match source tables', () => {
   for (const row of fixture.tables.ships) {
     const ship=Object.values(rules.fleet.ships).find(s=>s.name===row[0]);
@@ -124,6 +150,7 @@ test('complete known sea, assignment, feud and event decks match appendix rows',
 });
 
 test('unknown physical copies and author decisions remain explicit, never guessed', () => {
+  for (const id of ['R05','R06','R21','R29','remaining-prize-buildings']) assert.ok(rules.metadata.unresolved.includes(id));
   assert.equal(rules.legends.legendaryDeck.copiesByKind,null);
   assert.equal(rules.legends.legendaryDeck.reshuffle,null);
   assert.equal(rules.legends.treasureDeck.copiesByKind,null);

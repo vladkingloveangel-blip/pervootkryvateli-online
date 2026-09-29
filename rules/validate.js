@@ -132,8 +132,14 @@ function validateRules(rules, map) {
     check(Number.isInteger(s.moveMod), s.id, 'missing moveMod');
     check(['shoal','reef','ice','land1'].includes(s.passability), s.id, 'invalid passability');
   }
+  check(Array.isArray(fleet.escortPrices) && fleet.escortPrices.length > 0, 'escortPrices', 'missing prices');
+  for (const [index, price] of (fleet.escortPrices || []).entries()) positive(price, `escortPrices.${index}`);
+  for (const escort of Object.values(fleet.escorts)) for (const key of ['artillery','army','cargo']) integer(escort[key], `${escort.id}.${key}`);
+  positive(fleet.maxBranchUpgrades, 'fleet.maxBranchUpgrades');
   for (const u of Object.values(fleet.upgrades)) {
     integer(u.price, u.id); integer(u.order, u.id, 1);
+    check(u.order <= fleet.maxBranchUpgrades, u.id, 'upgrade order exceeds branch limit');
+    if (u.order > 1) required(u,['requires'],u.id);
     if (u.requires) {
       const previous = fleet.upgrades[u.requires];
       check(previous && previous.branch === u.branch && previous.order < u.order, u.id, 'invalid prerequisite');
@@ -141,25 +147,48 @@ function validateRules(rules, map) {
   }
   for (const g of Object.values(economy.goods)) integer(g.price, g.id);
   for (const r of Object.values(economy.resources)) ref(r.goodId, goods, r.id);
+  unique(economy.buildingBranches.map(b => b.id), 'buildingBranches');
+  const listedBuildingTypes = [];
   for (const branch of economy.buildingBranches) {
     unique(branch.types, branch.id);
-    for (const type of branch.types) ref(type, buildings, branch.id);
+    for (const type of branch.types) {
+      ref(type, buildings, branch.id);
+      listedBuildingTypes.push(type);
+      check(economy.buildings[type]?.branch === branch.id, branch.id, `building branch mismatch ${type}`);
+    }
   }
+  unique(listedBuildingTypes, 'buildingBranches.types');
   for (const b of Object.values(economy.buildings)) {
     integer(b.price, b.id); check(b.area === 1, b.id, 'building must occupy one area');
     check(b.price === b.levels?.[1]?.price, b.id, 'price differs from level I');
+    if (branches.has(b.branch)) check(listedBuildingTypes.includes(b.id), b.id, 'missing from building branch');
     if (b.produces) ref(b.produces, goods, b.id);
-    if (b.resourceId) ref(b.resourceId, resources, b.id);
+    if (b.resourceId) {
+      ref(b.resourceId, resources, b.id);
+      check(b.resource === economy.resources[b.resourceId]?.name, b.id, 'resource label/id mismatch');
+      check(b.produces === economy.resources[b.resourceId]?.goodId, b.id, 'resource/product mismatch');
+    }
+    for (const key of ['defense','income']) if (b[key] !== undefined) check(b[key] === b.levels?.[1]?.[key], b.id, `${key} differs from level I`);
+    if (b.limitPerIsland !== undefined) positive(b.limitPerIsland, `${b.id}.limitPerIsland`);
     check(Object.keys(b.levels || {}).length > 0, b.id, 'missing levels');
+    const levels = Object.keys(b.levels || {}).map(Number).sort((a,c) => a-c);
+    const branch = economy.buildingBranches.find(item => item.types.includes(b.id));
+    const nextType = branch?.types[branch.types.indexOf(b.id) + 1];
     for (const [level, d] of Object.entries(b.levels || {})) {
       check(d.level === +level, b.id, 'invalid level');
       for (const key of ['price','foodStage','area']) integer(d[key], `${b.id}.${level}.${key}`);
+      check(d.area === b.area, `${b.id}.${level}`, 'level/overview area mismatch');
       if (d.next) {
         const target = economy.buildings[d.next.type]?.levels[d.next.level];
         check(Boolean(target), b.id, 'invalid next level');
         check(d.next.type !== b.id || d.next.level > d.level, b.id, 'cyclic level chain');
       }
+      const index = levels.indexOf(+level);
+      const expected = levels[index + 1] ? {type:b.id,level:levels[index + 1]} : nextType ? {type:nextType,level:1} : null;
+      check(expected ? d.next?.type === expected.type && d.next?.level === expected.level : d.next === undefined,
+        `${b.id}.${level}.next`, 'incomplete or incorrect level chain');
     }
+    for (const [index, level] of levels.entries()) check(level === index + 1, `${b.id}.levels`, 'missing level');
     if (b.effect) effect(b.effect, b.id);
   }
   unique(politics.order, 'politics.order');
@@ -172,6 +201,7 @@ function validateRules(rules, map) {
       check(rules.islands.find(i => i.id === id)?.factionId === f.id, f.id, 'island/faction mismatch');
     }
     if (f.giftIslandId) check(f.originalIslandIds.includes(f.giftIslandId), f.id, 'invalid gift island');
+    for (const island of rules.islands.filter(i => i.factionId === f.id)) check(f.originalIslandIds.includes(island.id), f.id, `missing original island ${island.id}`);
   }
   const assignmentTypes = new Set(['capture-island','build-branch','build-type','ship-level','anchor-win','visit-place','stat-upgrade','delivery','attack-player-island','treasure-resolved','visit-island','visit-route']);
   const allAssignments = Object.values(politics.assignments).flat();
@@ -275,16 +305,79 @@ function validateRules(rules, map) {
   }
   for (const key of ['namedCards','expeditions']) {
     deck(legends[key], 10, key); unique(legends[key].map(c=>c.placeId), key);
-    for (const c of legends[key]) ref(c.placeId, places, c.id);
+    for (const c of legends[key]) {
+      ref(c.placeId, places, c.id);
+      check(c.name === legends.places.find(p => p.id === c.placeId)?.name, c.id, 'place card/name mismatch');
+      check(c.quantity === 1, c.id, 'expected one named card per place');
+      if (key === 'namedCards') check(c.visibility === 'public', c.id, 'named place cards are public');
+      else check(c.reward?.type === 'treasure' && c.reward.count === 1, c.id, 'invalid expedition reward');
+    }
   }
   records(legends.legendary, 'legendary'); records(legends.treasures, 'treasures');
   for (const c of [...legends.legendary,...legends.treasures]) effect(c.effect, c.id);
+  for (const c of legends.treasures) {
+    if (c.effect.type === 'income-multiple') check(c.multiplier === c.effect.multiplier && c.minimum === c.effect.minimum, c.id, 'treasure overview/effect mismatch');
+    if (c.effect.type === 'fill-hold') {
+      ref(c.cargoGoodId, goods, c.id);
+      check(c.cargoGoodId === c.effect.goodId, c.id, 'cargo overview/effect mismatch');
+    }
+  }
   // Unknown copies stay nullable; do not turn a temporary runtime choice into a rule.
   records(rules.characters.characters, 'characters');
   check(rules.characters.characters.length === 6, 'characters', 'expected six characters');
   for (const c of rules.characters.characters) {
     check(Boolean(economy.buildings.admiralty.levels[c.admiraltyLevel]), c.id, 'invalid admiralty level');
+    positive(c.acquireActionCost, `${c.id}.acquireActionCost`);
+    integer(c.useActionCost, `${c.id}.useActionCost`);
+    positive(c.uses, `${c.id}.uses`);
     effect(c.effect, c.id);
+  }
+  const { session, scoring, implementation, metadata } = rules;
+  for (const key of ['min','max']) positive(session.players?.[key], `session.players.${key}`);
+  check(session.players.min <= session.players.max, 'session.players', 'invalid player range');
+  for (const key of ['startingDucats','circlesPerRound','eventCircle','actionsPerTurn','dieSides','taxUnderpaymentActionLimit']) positive(session[key], `session.${key}`);
+  check(session.eventCircle <= session.circlesPerRound, 'session', 'event circle beyond round');
+  check(session.taxUnderpaymentActionLimit <= session.actionsPerTurn, 'session', 'tax action limit exceeds normal limit');
+  for (const key of ['guard','permanentUpgrade','permanentDirect']) {
+    positive(economy.garrisons[key]?.price, `garrisons.${key}.price`);
+    positive(economy.garrisons[key]?.defense, `garrisons.${key}.defense`);
+  }
+  const companyArmy = economy.landCompany?.armyByArsenalLevel;
+  check(Array.isArray(companyArmy), 'landCompany.armyByArsenalLevel', 'missing army table');
+  for (const [index, army] of (companyArmy || []).entries()) integer(army, `landCompany.armyByArsenalLevel.${index}`);
+  check(companyArmy?.length === Object.keys(economy.buildings.arsenal.levels).length + 1,
+    'landCompany.armyByArsenalLevel', 'arsenal level coverage mismatch');
+  for (const color of Object.keys(rules.sea)) positive(scoring.fleet.anchor[color], `scoring.fleet.anchor.${color}`);
+  for (const key of ['playerVictory','defenseVictory','perOpponentPerRound']) positive(scoring.fleet[key], `scoring.fleet.${key}`);
+  positive(scoring.army.defenseVictory, 'scoring.army.defenseVictory');
+  positive(scoring.army.perOpponentPerRound, 'scoring.army.perOpponentPerRound');
+  for (const [index, band] of scoring.army.capture.entries()) {
+    integer(band.min, `scoring.army.capture.${index}.min`);
+    if (band.max !== null) integer(band.max, `scoring.army.capture.${index}.max`, band.min);
+    integer(band.points, `scoring.army.capture.${index}.points`);
+    if (index) check(band.min === scoring.army.capture[index - 1].max + 1, `scoring.army.capture.${index}`, 'gap or overlap');
+  }
+  check(scoring.army.capture.at(-1)?.max === null, 'scoring.army.capture', 'last band must be open');
+  for (const key of ['lootMax','attacksPerOpponentPerRound','alliancePartners']) positive(scoring.combat[key], `scoring.combat.${key}`);
+  positive(scoring.combat.anchorLoss.minimum, 'scoring.combat.anchorLoss.minimum');
+  check(scoring.combat.anchorLoss.ratio > 0 && scoring.combat.anchorLoss.ratio <= 1, 'scoring.combat.anchorLoss.ratio', 'invalid ratio');
+  check(scoring.combat.capturedBuildingsKeptRatio > 0 && scoring.combat.capturedBuildingsKeptRatio <= 1, 'scoring.combat.capturedBuildingsKeptRatio', 'invalid ratio');
+  unique(scoring.titles.map(t => t.id), 'scoring.titles');
+  check(scoring.titles.length === 6, 'scoring.titles', 'expected six titles');
+  for (const title of scoring.titles) required(title,['id','name','metric'],'scoring.titles');
+  unique(metadata.unresolved, 'metadata.unresolved');
+  const pathExists = (value, segments) => {
+    if (!segments.length) return true;
+    if (!value || typeof value !== 'object') return false;
+    const [head,...tail] = segments;
+    return head === '*' ? Object.values(value).some(item => pathExists(item,tail))
+      : Object.hasOwn(value,head) && pathExists(value[head],tail);
+  };
+  unique(implementation.pendingConsumers.map(item => item.path), 'implementation.pendingConsumers');
+  for (const item of implementation.pendingConsumers) {
+    check(pathExists(rules,item.path.split('.')), item.path, 'unknown pending-consumer path');
+    check(item.status === 'data-ready' && Number.isInteger(item.consumerStage) && item.consumerStage >= 2 && item.consumerStage <= 7,
+      item.path, 'invalid pending-consumer stage');
   }
   const coordinate = (cell, path) => check(Array.isArray(cell) && cell.length === 2 && cell.every(Number.isInteger)
     && cell[0] >= 0 && cell[0] < map.MAP_META.rows && cell[1] >= 0 && cell[1] < map.MAP_META.cols, path, 'invalid coordinate');
