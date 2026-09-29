@@ -134,6 +134,7 @@ const {
   politicalCargoOptions,
   discardRandomHeldCard,
   createAssignmentDecks,
+  normalizeAssignmentCompatibility,
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,
@@ -1998,6 +1999,40 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(second.error, 'У игрока уже есть активное поручение.');
 }
 
+// Совместимость 5.8 переводит старое состояние поручений без потери остального состояния комнаты.
+{
+  const moriCard = ASSIGNMENT_CARDS.mori.find(c => c.id === 'mori-1');
+  const islands = cloneIslands();
+  const target = islands.find(i => i.id === moriCard.islandId);
+  const p = {
+    id: 'p1', row: target.cells[0][0], col: target.cells[0][1], ducats: 4, debt: 0,
+    replacedAssignmentConditions: ['old-paid-condition'],
+    activeAssignment: { factionId: 'mori', card: { ...moriCard }, issuedRound: 3 },
+  };
+  const room = {
+    round: 6, islands, players: [p],
+    assignmentDecks: { lionia: { drawPile: [], discard: [] } },
+    pendingAssignmentChoice: { id: 'old-paid-choice', playerId: 'p1', factionId: 'mori' },
+    eventPhase: { active: true, stage: 'assignment-replace', assignmentQueue: [{ playerId: 'p1', factionId: 'mori' }], replacementQueue: ['p1'], replacementIndex: 0 },
+  };
+  const result = normalizeAssignmentCompatibility(room, () => 0.5);
+  assert.equal(result.changed, true);
+  assert.equal(result.resumeEventPhase, true);
+  assert.deepEqual(Object.keys(room.assignmentDecks), ['lionia','kadingir','mori','suniksiya','pirates']);
+  assert.equal(room.assignmentDecks.mori.drawPile.length, 9); // активная карта не дублируется в восстановленной колоде
+  assert.deepEqual(room.assignmentDecks.lionia.removed, []);
+  assert.equal(Object.hasOwn(p, 'replacedAssignmentConditions'), false);
+  assert.match(p.activeAssignment.instanceId, /^legacy:p1:mori:mori-1:/);
+  assert.equal(p.activeAssignment.progress.kind, 'mori-service');
+  assert.equal(p.activeAssignment.progress.departureRequired, true);
+  assert.equal(p.activeAssignment.progress.departureSatisfied, false);
+  assert.equal(room.pendingAssignmentChoice, null);
+  assert.equal(room.eventPhase.stage, 'assignment');
+  assert.equal(room.eventPhase.assignmentIndex, room.eventPhase.assignmentQueue.length);
+  assert.equal(Object.hasOwn(room.eventPhase, 'replacementQueue'), false);
+  assert.equal(Object.hasOwn(room.eventPhase, 'replacementIndex'), false);
+  assert.equal(normalizeAssignmentCompatibility(room, () => 0.5).changed, false);
+}
 // Координаты морских легендарных мест доступны серверу для поручений посещения.
 {
   assert.equal(legendaryPlaceAt(24, 6)?.id, 'kraken');

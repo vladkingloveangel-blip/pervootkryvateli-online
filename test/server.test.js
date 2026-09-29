@@ -46,7 +46,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(canonical.metadata.schemaVersion, 1);
   assert.equal(canonical.politics.factions.kadingir.fullConquestPrize.ducats, 50);
   assert.equal(canonical.islands.length, 28);
-  assert.equal(canonical.implementation.activeProfile, 'stage-5-combat-politics-5.8.4');
+  assert.equal(canonical.implementation.activeProfile, 'stage-5-combat-politics-5.8.5');
   assert.equal(canonical.implementation.pendingConsumers.every(item => item.consumerStage >= 5), true);
   const a = (await api('/api/auth/register', null, { username: 'playerone', password: 'password1' })).data;
   const b = (await api('/api/auth/register', null, { username: 'playertwo', password: 'password2' })).data;
@@ -107,7 +107,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.ruleset.rulesetVersion, canonical.metadata.rulesetVersion);
   assert.equal(watch.room.balanceCatalog.bastion.price, canonical.economy.buildings.bastion.price);
   assert.equal(watch.room.balanceCatalog.bastion.defense, canonical.economy.buildings.bastion.defense);
-  assert.equal(watch.room.runtimeProfile, 'stage-5-combat-politics-5.8.4');
+  assert.equal(watch.room.runtimeProfile, 'stage-5-combat-politics-5.8.5');
   assert.equal(watch.room.shipCatalog.brigantine.artillery, canonical.fleet.ships.brigantine.artillery);
   assert.deepEqual(watch.room.balanceCatalog.landCompany, canonical.economy.landCompany);
   assert.deepEqual(watch.room.balanceCatalog.garrisons, canonical.economy.garrisons);
@@ -164,6 +164,17 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   legacyRoom.treasureDeck.drawPile[0] = {id:'full-ore-hold',name:'Полный трюм руды',cargoGoodId:'ore',copy:1};
   legacyRoom.pendingFleetAdjustment = {id:'old-choice',playerId:oldPlayer.id,stage:'landin-replace',required:1,
     options:[{id:'old-landin',name:'Особое сопровождение Ландина'}]};
+  // Stage 5.8 compatibility: emulate an old assignment save without Mori deck/progress
+  // and with the removed paid-replacement state. Other legacy state must remain untouched.
+  delete legacyRoom.assignmentDecks.mori;
+  delete legacyRoom.assignmentDecks.lionia.removed;
+  const legacyMoriCard = structuredClone(canonical.politics.assignments.mori[0]);
+  const legacyMoriIsland = legacyRoom.islands.find(i => i.id === legacyMoriCard.islandId);
+  oldPlayer.row = legacyMoriIsland.cells[0][0]; oldPlayer.col = legacyMoriIsland.cells[0][1];
+  oldPlayer.suzerainId = 'mori';
+  oldPlayer.activeAssignment = { factionId:'mori', card:legacyMoriCard, issuedRound:3 };
+  oldPlayer.replacedAssignmentConditions = ['old-paid-condition'];
+  legacyRoom.pendingAssignmentChoice = { id:'old-paid-assignment-choice', playerId:oldPlayer.id, factionId:'mori' };
   fs.writeFileSync(file,JSON.stringify(savedDatabase));
   beforeRestart = structuredClone(legacyRoom);
   await start();
@@ -185,7 +196,23 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   const resumed = await emit(newDevice, 'resumeRoom', { code, accountToken: a.token });
   assert.equal(resumed.ok, true); assert.equal(resumed.playerId, created.playerId);
   const afterRestart = rows()[0].state;
-  assert.deepEqual(afterRestart, beforeRestart);
+  const afterOldPlayer = afterRestart.players.find(p => p.id === created.playerId);
+  assert.deepEqual(Object.keys(afterRestart.assignmentDecks), ['lionia','kadingir','suniksiya','pirates','mori']);
+  assert.equal(afterRestart.assignmentDecks.mori.drawPile.length, 9); // активная карта не возвращается в восстановленную колоду
+  assert.deepEqual(afterRestart.assignmentDecks.lionia.removed, []);
+  assert.equal(afterRestart.pendingAssignmentChoice, null);
+  assert.equal(Object.hasOwn(afterOldPlayer,'replacedAssignmentConditions'), false);
+  assert.match(afterOldPlayer.activeAssignment.instanceId, /^legacy:/);
+  assert.equal(afterOldPlayer.activeAssignment.progress.kind, 'mori-service');
+  assert.equal(afterOldPlayer.activeAssignment.progress.departureRequired, true);
+  assert.equal(afterOldPlayer.activeAssignment.progress.departureSatisfied, false);
+  const stripAssignmentMigration = value => {
+    const copy = structuredClone(value);
+    delete copy.assignmentDecks; delete copy.pendingAssignmentChoice;
+    for (const player of copy.players) { delete player.activeAssignment; delete player.replacedAssignmentConditions; }
+    return copy;
+  };
+  assert.deepEqual(stripAssignmentMigration(afterRestart), stripAssignmentMigration(beforeRestart));
   const anotherDevice = await connect();
   assert.equal((await emit(anotherDevice, 'resumeRoom', { code, accountToken: a.token })).ok, true);
   assert.equal((await emit(newDevice, 'closeRoom')).ok, true); // detached socket cannot close another device's room

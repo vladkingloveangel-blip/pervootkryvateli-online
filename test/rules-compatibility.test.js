@@ -1,5 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const rules = require('../rules');
 const legacy = require('../rules/compatibility/legacy.json');
 const runtime = require('../rules/runtime');
@@ -8,6 +10,7 @@ const copy = value => JSON.parse(JSON.stringify(value));
 
 test('legacy profile references remain valid while canonical master data stays separate', () => {
   assert.deepEqual(validateCompatibility(rules,legacy),[]);
+  assert.equal(runtime.RUNTIME_PROFILE,'stage-5-combat-politics-5.8.5');
   assert.equal(runtime.BALANCE.session.startingDucats,rules.session.startingDucats);
   assert.equal(runtime.BALANCE.session.players.min,4);
   assert.equal(runtime.BALANCE.session.players.max,6);
@@ -71,4 +74,18 @@ test('compatibility validator rejects broken saved-state references and projecti
     const value=copy(legacy); mutate(value);
     assert.notDeepEqual(validateCompatibility(rules,value),[],`mutation ${index + 1} was accepted`);
   }
+});
+
+test('stage 5.8 assignment UI exposes current rules and contains no paid-replacement controls', () => {
+  const app = fs.readFileSync(path.join(__dirname,'..','public','app.js'),'utf8');
+  const html = fs.readFileSync(path.join(__dirname,'..','public','index.html'),'utf8');
+  assert.match(app,/Лионии, Кадингира, Мори, Вольной Суниксии и пиратов/);
+  assert.match(app,/Поручение имеет приоритет/);
+  assert.match(app,/Маршрут Мори/);
+  assert.match(app,/Посольство: выберите одно из допустимых поручений/);
+  assert.match(app,/убрано как невыполнимые/);
+  assert.match(html,/личном ходу шестого круга/);
+  assert.doesNotMatch(app,/assignmentReplacementPrice/);
+  assert.doesNotMatch(app,/платно замен/iu);
+  assert.doesNotMatch(app,/replacedAssignmentConditions/);
 });

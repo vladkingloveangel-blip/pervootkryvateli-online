@@ -472,6 +472,68 @@ function advanceMoriAssignmentNavigation(room, player, from = null) {
   };
 }
 
+function normalizeAssignmentCompatibility(room, rng = Math.random) {
+  if (!room || !Array.isArray(room.players)) return { changed: false, resumeEventPhase: false };
+  let changed = false;
+  let resumeEventPhase = false;
+  const canonicalDecks = createAssignmentDecks(rng);
+  room.assignmentDecks ||= {};
+
+  for (const factionId of Object.keys(ASSIGNMENT_CARDS)) {
+    if (!room.assignmentDecks[factionId]) {
+      const reservedIds = new Set(room.players
+        .map(player => player.activeAssignment)
+        .filter(assignment => assignment?.factionId === factionId && assignment.card?.id)
+        .map(assignment => assignment.card.id));
+      if (room.pendingAssignmentChoice?.kind === 'embassy' && room.pendingAssignmentChoice.factionId === factionId) {
+        for (const card of room.pendingAssignmentChoice.options || []) if (card?.id) reservedIds.add(card.id);
+      }
+      const restoredDeck = canonicalDecks[factionId];
+      restoredDeck.drawPile = restoredDeck.drawPile.filter(card => !reservedIds.has(card.id));
+      room.assignmentDecks[factionId] = restoredDeck;
+      changed = true;
+      continue;
+    }
+    const deck = room.assignmentDecks[factionId];
+    for (const key of ['drawPile', 'discard', 'removed']) {
+      if (!Array.isArray(deck[key])) { deck[key] = []; changed = true; }
+    }
+  }
+
+  for (const player of room.players) {
+    if (Object.hasOwn(player, 'replacedAssignmentConditions')) {
+      delete player.replacedAssignmentConditions;
+      changed = true;
+    }
+    const assignment = player.activeAssignment;
+    if (!assignment?.card) continue;
+    if (!assignment.instanceId) {
+      assignment.instanceId = ['legacy', player.id || 'player', assignment.factionId || 'unknown', assignment.card.id || assignment.card.conditionKey || 'assignment', Number(assignment.issuedRound) || Number(room.round) || 1].join(':');
+      changed = true;
+    }
+    if (assignment.factionId === 'mori' && ['visit-island', 'visit-route'].includes(assignment.card.type) && !assignment.progress) {
+      assignment.progress = createMoriAssignmentProgress(room, player, assignment.card);
+      changed = true;
+    }
+  }
+
+  if (room.pendingAssignmentChoice && room.pendingAssignmentChoice.kind !== 'embassy') {
+    room.pendingAssignmentChoice = null;
+    changed = true;
+  }
+
+  if (room.eventPhase?.active && room.eventPhase.stage === 'assignment-replace') {
+    room.eventPhase.stage = 'assignment';
+    room.eventPhase.assignmentQueue ||= [];
+    room.eventPhase.assignmentIndex = room.eventPhase.assignmentQueue.length;
+    delete room.eventPhase.replacementQueue;
+    delete room.eventPhase.replacementIndex;
+    changed = true;
+    resumeEventPhase = true;
+  }
+
+  return { changed, resumeEventPhase };
+}
 function assignAssignmentCard(room, player, factionId, card, rng = Math.random) {
   ensureAssignmentPlayer(player);
   if (player.activeAssignment) return { ok: false, error: 'У игрока уже есть активное поручение.' };
@@ -3334,6 +3396,7 @@ module.exports = {
   createFeudDecks,
   drawFeudCard,
   createAssignmentDecks,
+  normalizeAssignmentCompatibility,
   drawAssignmentCard,
   issueAssignment,
   offerAssignmentCards,

@@ -103,6 +103,7 @@ const {
   createFeudDecks,
   drawFeudCard,
   createAssignmentDecks,
+  normalizeAssignmentCompatibility,
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,
@@ -253,6 +254,11 @@ async function initDatabase() {
     }
   }
   await roomStore.init(rooms);
+  for (const room of rooms.values()) {
+    const compatibility = normalizeAssignmentCompatibility(room);
+    if (compatibility.resumeEventPhase) processEventPhase(room);
+    if (compatibility.changed || compatibility.resumeEventPhase) await roomStore.save(room);
+  }
   dbReady = true;
   dbInitError = null;
   console.log('Accounts database ready.');
@@ -486,18 +492,15 @@ function publicRoom(room, viewerId = null) {
       viewerCanRespond: room.pendingFeud.playerId === viewerId,
       options: room.pendingFeud.playerId === viewerId ? (room.pendingFeud.options || []).map(o => ({ ...o })) : [],
     } : null,
-    pendingAssignmentChoice: room.pendingAssignmentChoice ? {
+    pendingAssignmentChoice: room.pendingAssignmentChoice?.kind === 'embassy' ? {
       id: room.pendingAssignmentChoice.id,
-      kind: room.pendingAssignmentChoice.kind || 'replace',
+      kind: 'embassy',
       playerId: room.pendingAssignmentChoice.playerId,
       factionId: room.pendingAssignmentChoice.factionId,
       factionName: FACTIONS[room.pendingAssignmentChoice.factionId]?.name || room.pendingAssignmentChoice.factionId,
-      assignment: assignmentPublic(room.pendingAssignmentChoice.assignment),
       options: room.pendingAssignmentChoice.playerId === viewerId ? (room.pendingAssignmentChoice.options || []).map(card => ({
         id: card.id, text: card.text, reward: Number(card.reward) || 0, type: card.type,
       })) : [],
-      canReplace: Boolean(room.pendingAssignmentChoice.canReplace),
-      replaceError: room.pendingAssignmentChoice.replaceError || null,
       viewerCanRespond: room.pendingAssignmentChoice.playerId === viewerId,
     } : null,
     pendingStatePrize: room.pendingStatePrize ? {
@@ -578,7 +581,7 @@ function publicRoom(room, viewerId = null) {
       };
     }),
     feudDecks: Object.fromEntries(POLITICAL_FACTION_ORDER.map(id => [id, { remaining: room.feudDecks?.[id]?.drawPile?.length || 0, discard: room.feudDecks?.[id]?.discard?.length || 0 }])),
-    assignmentDecks: Object.fromEntries(Object.keys(ASSIGNMENT_CARDS).map(id => [id, { remaining: room.assignmentDecks?.[id]?.drawPile?.length || 0, discard: room.assignmentDecks?.[id]?.discard?.length || 0 }])),
+    assignmentDecks: Object.fromEntries(Object.keys(ASSIGNMENT_CARDS).map(id => [id, { remaining: room.assignmentDecks?.[id]?.drawPile?.length || 0, discard: room.assignmentDecks?.[id]?.discard?.length || 0, removed: room.assignmentDecks?.[id]?.removed?.length || 0 }])),
     legendaryPlaces: Object.values(LEGENDARY_PLACES).map(place => ({ ...place, exploredBy: room.legendaryPlacesExplored?.[place.id] || null })),
     alliances: (room.alliances || []).map(pair => [...pair]),
     pendingAlliance: room.pendingAlliance && (room.pendingAlliance.fromId === viewerId || room.pendingAlliance.toId === viewerId)
@@ -705,7 +708,9 @@ function publicRoom(room, viewerId = null) {
         attackedPlayerIdsThisRound: p.id === viewerId ? attackTargetsThisRound(room, p) : [],
         activeAssignment: p.id === viewerId ? assignmentPublic(p.activeAssignment) : null,
         hasActiveAssignment: Boolean(p.activeAssignment),
-        replacedAssignmentConditions: p.id === viewerId ? [...(p.replacedAssignmentConditions || [])] : [],
+        assignmentPriority: p.id === viewerId && active?.id === p.id && room.phase === 'actions' && !hasPendingDecision(room)
+          ? (() => { const required = assignmentRequiredAction(room, p, room.actionsLeft); return required ? { kind: required.kind, text: required.text } : null; })()
+          : null,
         nextActionLimit: p.id === viewerId ? (p.nextActionLimit || null) : null,
         specialCards: p.id === viewerId ? [...(p.specialCards || [])] : [],
         specialCardCount: (p.specialCards || []).length,
@@ -854,6 +859,7 @@ function assignmentPublic(assignment) {
       kind: assignment.progress.kind || null,
       nextStopIndex: Number(assignment.progress.nextStopIndex) || 0,
       completedStopCount: Number(assignment.progress.completedStopCount) || 0,
+      totalStops: card.type === 'visit-route' ? Math.max(0, card.route?.length || 0) : (card.type === 'visit-island' ? 1 : 0),
       departureRequired: Boolean(assignment.progress.departureRequired),
       departureSatisfied: Boolean(assignment.progress.departureSatisfied),
       completedStops: (assignment.progress.completedStops || []).filter(Boolean).map(stop => ({ ...stop })),
@@ -2760,7 +2766,6 @@ function newPlayer(socket, data, color) {
     enemyFactionIds: [],
     nextActionLimit: null,
     activeAssignment: null,
-    replacedAssignmentConditions: [],
   };
 }
 
@@ -3073,7 +3078,7 @@ io.on('connection', socket => {
     room.factionState = {};
     room.players.forEach(p => {
       p.row = 0; p.col = 0; p.ducats = BALANCE.session.startingDucats; p.debt = 0; p.level = 1; p.specialCards = []; p.cargo = null; p.upgrades = []; p.disabledUpgradeIds = []; p.escorts = []; p.levelInactiveEscortIds = []; p.nextEscortId = 0;
-      p.glory = 0; p.fleetPoints = 0; p.fleetPointRound = room.round; p.fleetPointOpponentIds = []; p.armyPoints = 0; p.armyPointRound = room.round; p.armyPointOpponentIds = []; p.skipTurns = 0; p.personalTurnNo = 0; p.attackLimitRound = room.round; p.attackCountsThisRound = {}; p.brokenAlliesThisTurn = []; p.pendingLegendary = 0; p.pendingLandinEscort = false; p.legendaryCards = []; p.legendaryEffects = { seaCurses: [] }; p.savedEventCards = []; p.nextTurnEffects = {}; p.activeTurnEffects = {}; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignment = null; p.replacedAssignmentConditions = []; p.landCompany = null; p.bastionPriority = []; p.inactiveBastionIslandIds = []; p.character = null; p.characterReplacedRound = null; p.palaceUsed = false;
+      p.glory = 0; p.fleetPoints = 0; p.fleetPointRound = room.round; p.fleetPointOpponentIds = []; p.armyPoints = 0; p.armyPointRound = room.round; p.armyPointOpponentIds = []; p.skipTurns = 0; p.personalTurnNo = 0; p.attackLimitRound = room.round; p.attackCountsThisRound = {}; p.brokenAlliesThisTurn = []; p.pendingLegendary = 0; p.pendingLandinEscort = false; p.legendaryCards = []; p.legendaryEffects = { seaCurses: [] }; p.savedEventCards = []; p.nextTurnEffects = {}; p.activeTurnEffects = {}; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignment = null; p.landCompany = null; p.bastionPriority = []; p.inactiveBastionIslandIds = []; p.character = null; p.characterReplacedRound = null; p.palaceUsed = false;
     });
     refreshFactionExistence(room);
     log(room, `Партия началась. Порядок: ${room.order.map(id => room.players.find(p => p.id === id)?.name).join(' → ')}.`);
@@ -4131,14 +4136,6 @@ io.on('connection', socket => {
         invite.response = false;
         log(room, `${p.name} автоматически не участвует в совместном бою из-за отключения.`);
         if (allBattleInvitesAnswered(room.pendingBattle)) resolvePendingBattle(room);
-      }
-    }
-    if (room.pendingAssignmentChoice?.playerId === p.id) {
-      log(room, `${p.name}: предложение платной замены поручения пропущено из-за отключения; текущее поручение сохранено.`);
-      room.pendingAssignmentChoice = null;
-      if (room.eventPhase?.active) {
-        room.eventPhase.replacementIndex += 1;
-        processEventPhase(room);
       }
     }
     log(room, `${p.name} отключился. Его место сохранено.`);

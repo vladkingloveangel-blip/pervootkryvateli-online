@@ -1740,57 +1740,63 @@
     if (!mine) { badge.textContent = '—'; content.textContent = 'Данные поручения недоступны.'; return; }
 
     const assignment = mine.activeAssignment;
+    const pending = r.pendingAssignmentChoice;
     const suzerain = mine.suzerainId ? r.factions?.find(f => f.id === mine.suzerainId) : null;
-    badge.textContent = assignment ? 'активно' : (suzerain ? 'ожидание' : 'нет');
-    const deck = suzerain ? r.assignmentDecks?.[suzerain.id] : null;
+    const assignmentFaction = assignment ? (r.factions?.find(f => f.id === assignment.factionId) || suzerain) : suzerain;
+    const priority = mine.assignmentPriority || null;
+    badge.textContent = pending?.viewerCanRespond ? 'выбор' : (priority ? 'обязательно' : assignment ? 'активно' : (suzerain ? 'ожидание' : 'нет'));
+    const deckFactionId = assignment?.factionId || suzerain?.id || pending?.factionId || null;
+    const deck = deckFactionId ? r.assignmentDecks?.[deckFactionId] : null;
     let html = '';
-    if (!suzerain) {
-      html = '<div class="event-current">Вы не состоите в подданстве. Поручения выдаются только вассалам Лионии, Кадингира, Суниксии и пиратов.</div>';
+    if (!suzerain && !assignment) {
+      html = '<div class="event-current">Вы не состоите в подданстве. Поручения получают вассалы Лионии, Кадингира, Мори, Вольной Суниксии и пиратов.</div>';
     } else if (assignment) {
-      const share = Number(suzerain.rewardShare) || 0;
+      const share = Number(assignmentFaction?.rewardShare) || 0;
       const withheld = share ? Math.floor(assignment.reward * share) : 0;
       const net = assignment.reward - withheld;
-      html = `<div class="event-current"><strong>${escapeHtml(suzerain.name)}</strong><br>«${escapeHtml(assignment.text)}»</div><div class="event-effect">Награда: ${assignment.reward} дукатов${withheld ? ` · сюзерен удержит ${withheld}, вам ${net}` : ''}.</div>`;
-      if (assignment.type === 'delivery') html += `<div class="cargo-meta">Для доставки засчитывается только полный трюм, полученный после выдачи этого поручения. Подходящая продажа в Цитадели автоматически получает контрактную премию +${r.balanceCatalog.contractBonusRatio * 100}%.</div>`;
-      if (mine.replacedAssignmentConditions?.length) html += `<div class="cargo-meta">Уже платно заменённых условий: ${mine.replacedAssignmentConditions.length}.</div>`;
+      html = `<div class="event-current"><strong>${escapeHtml(assignmentFaction?.name || assignment.factionId || 'Сюзерен')}</strong><br>«${escapeHtml(assignment.text)}»</div><div class="event-effect">Награда: ${assignment.reward} дукатов${withheld ? ` · сюзерен удержит ${withheld}, вам ${net}` : ' · выплачивается полностью'}.</div>`;
+      if (priority) {
+        const priorityLabels = { building: 'строительство или улучшение', 'ship-level': 'повышение уровня корабля', 'ship-upgrade': 'улучшение корабля', anchor: 'бой на морском якоре', delivery: 'доставка груза', assault: 'штурм острова', treasure: 'разрешение сокровища' };
+        html += `<div class="assignment-priority"><strong>Поручение имеет приоритет.</strong><br>Сейчас доступно обязательное действие: ${escapeHtml(priorityLabels[priority.kind] || priority.kind || 'выполнение условия')}.</div>`;
+      }
+      const progress = assignment.progress;
+      if (progress?.kind === 'mori-service') {
+        const completed = Number(progress.completedStopCount) || 0;
+        const total = Math.max(1, Number(progress.totalStops) || (assignment.type === 'visit-route' ? 2 : 1));
+        if (progress.departureRequired && !progress.departureSatisfied) {
+          html += '<div class="assignment-progress"><strong>Служба Мори:</strong> карта выдана у первого пункта. Сначала покиньте все его береговые клетки; после этого вернитесь и завершите навигацию у нужного берега.</div>';
+        } else if (total > 1) {
+          const marked = (progress.completedStops || []).map(stop => stop.label).filter(Boolean);
+          html += `<div class="assignment-progress"><strong>Маршрут Мори:</strong> ${completed}/${total} пунктов${marked.length ? ` · отмечено: ${escapeHtml(marked.join(' → '))}` : ''}. Пункты выполняются только по порядку завершением навигации.</div>`;
+        } else {
+          html += `<div class="assignment-progress"><strong>Служба Мори:</strong> ${completed}/${total}. Завершите навигацию на береговой клетке указанного острова.</div>`;
+        }
+      }
+      if (assignment.type === 'delivery') html += `<div class="cargo-meta">Засчитывается только полный трюм, полученный после выдачи этого поручения. Продажа в Цитадели получает обычную контрактную премию +${r.balanceCatalog.contractBonusRatio * 100}% отдельно от награды поручения.</div>`;
     } else {
-      html = `<div class="event-current"><strong>${escapeHtml(suzerain.name)}</strong><br>Активного поручения нет. Новое выдаётся в ближайшей общей Фазе событий по правилам.</div>`;
+      html = `<div class="event-current"><strong>${escapeHtml(suzerain.name)}</strong><br>Активного поручения нет. Если в начале вашего следующего личного хода шестого круга вы всё ещё вассал без поручения, карта будет выдана тогда.</div>`;
     }
-    if (deck) html += `<div class="event-decks">Колода поручений: ${deck.remaining} · сброс: ${deck.discard}</div>`;
+    if (deck) html += `<div class="event-decks">Колода поручений: ${deck.remaining} · сброс: ${deck.discard}${deck.removed ? ` · убрано как невыполнимые: ${deck.removed}` : ''}</div>`;
     content.innerHTML = html;
 
-    const pending = r.pendingAssignmentChoice;
-    if (pending?.viewerCanRespond) {
-      if (pending.kind === 'embassy') {
-        const label = document.createElement('div');
-        label.className = 'action-group-label';
-        label.textContent = 'Посольство: выберите одно из двух допустимых поручений';
-        actions.appendChild(label);
-        for (const option of pending.options || []) {
-          const b = document.createElement('button');
-          b.type = 'button'; b.className = 'build-btn primary';
-          b.textContent = `«${option.text}» · ${option.reward} дук.`;
-          b.addEventListener('click', () => socket.emit('respondAssignmentChoice', { choiceId: pending.id, assignmentId: option.id }, handleGameAck));
-          actions.appendChild(b);
-        }
-        return;
-      }
+    if (pending?.viewerCanRespond && pending.kind === 'embassy') {
+      const faction = r.factions?.find(f => f.id === pending.factionId);
+      const optionShare = Number(faction?.rewardShare) || 0;
       const label = document.createElement('div');
       label.className = 'action-group-label';
-      label.textContent = `Оставить поручение «${pending.assignment?.text || 'текущее'}» или заменить за ${r.balanceCatalog.assignmentReplacementPrice} дуката?`;
+      label.textContent = 'Посольство: выберите одно из допустимых поручений';
       actions.appendChild(label);
-      const keep = document.createElement('button');
-      keep.type = 'button'; keep.className = 'build-btn'; keep.textContent = 'Оставить поручение';
-      keep.addEventListener('click', () => socket.emit('respondAssignmentChoice', { choiceId: pending.id, replace: false }, handleGameAck));
-      actions.appendChild(keep);
-      const repl = document.createElement('button');
-      repl.type = 'button'; repl.className = 'build-btn primary'; repl.textContent = `Заменить за ${r.balanceCatalog.assignmentReplacementPrice} дуката`; repl.disabled = !pending.canReplace;
-      repl.title = pending.replaceError || '';
-      repl.addEventListener('click', () => socket.emit('respondAssignmentChoice', { choiceId: pending.id, replace: true }, handleGameAck));
-      actions.appendChild(repl);
+      for (const option of pending.options || []) {
+        const optionWithheld = optionShare ? Math.floor((Number(option.reward) || 0) * optionShare) : 0;
+        const optionNet = (Number(option.reward) || 0) - optionWithheld;
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'build-btn primary';
+        b.textContent = `«${option.text}» · награда ${option.reward} дук.${optionWithheld ? ` · вам ${optionNet}` : ''}`;
+        b.addEventListener('click', () => socket.emit('respondAssignmentChoice', { choiceId: pending.id, assignmentId: option.id }, handleGameAck));
+        actions.appendChild(b);
+      }
     }
   }
-
   function renderLegendary() {
     const r = state.room;
     const mine = me();
