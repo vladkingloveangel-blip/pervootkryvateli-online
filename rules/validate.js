@@ -297,4 +297,81 @@ function validateRules(rules, map) {
   for (const c of [...map.CITADEL_CELLS,...map.LAND_CELLS,...map.SPECIAL_LAND]) coordinate(c,'map');
   return errors;
 }
-module.exports = { validateRules };
+// The legacy profile describes existing rooms, not a second source of master balance.
+function validateCompatibility(rules, legacy) {
+  const errors = [];
+  const check = (ok, path, message) => { if (!ok) errors.push(`${path}: ${message}`); };
+  const integer = (value, path, min = 0) => check(Number.isInteger(value) && value >= min, path, `expected integer >= ${min}`);
+  const sameKeys = (actual, expected, path) => {
+    for (const id of Object.keys(actual || {})) check(expected.includes(id), `${path}.${id}`, 'unknown key');
+    for (const id of expected) check(Object.hasOwn(actual || {},id), `${path}.${id}`, 'missing key');
+  };
+  const building = (spec, path) => {
+    check(Boolean(rules.economy.buildings[spec?.type]?.levels?.[spec?.level]), path, 'unknown building level');
+  };
+  const factions = Object.keys(rules.politics.factions).filter(id => !rules.politics.factions[id].availability);
+  const islandIds = new Set(rules.islands.map(i => i.id));
+  integer(legacy.session?.players?.min, 'legacy.session.players.min', 1);
+  integer(legacy.session?.players?.max, 'legacy.session.players.max', legacy.session?.players?.min || 1);
+  integer(legacy.session?.startingDucats, 'legacy.session.startingDucats');
+  integer(legacy.session?.circlesPerRound, 'legacy.session.circlesPerRound', 1);
+  check(legacy.shipLevel7?.level === rules.fleet.maxLevel + 1, 'legacy.shipLevel7', 'expected next retired level');
+  for (const key of ['price','statBonus','moveBonus']) integer(legacy.shipLevel7?.[key], `legacy.shipLevel7.${key}`);
+  const oldUpgrade = legacy.removedUpgrade;
+  check(Boolean(oldUpgrade?.id) && !rules.fleet.upgrades[oldUpgrade.id], 'legacy.removedUpgrade', 'must be retired');
+  check(Object.values(rules.fleet.upgrades).some(u => u.id === oldUpgrade?.requires && u.branch === oldUpgrade.branch && u.order < oldUpgrade.order), 'legacy.removedUpgrade.requires', 'invalid prerequisite');
+  integer(oldUpgrade?.price, 'legacy.removedUpgrade.price');
+  const oldEscort = legacy.removedEscort;
+  check(Boolean(oldEscort?.id) && !rules.fleet.escorts[oldEscort.id], 'legacy.removedEscort', 'must be retired');
+  for (const key of ['artillery','army','cargo']) integer(oldEscort?.[key], `legacy.removedEscort.${key}`);
+  for (const [id, area] of Object.entries(legacy.buildingAreas || {})) {
+    check(Boolean(rules.economy.buildings[id]), `legacy.buildingAreas.${id}`, 'unknown building');
+    integer(area, `legacy.buildingAreas.${id}`, 1);
+  }
+  sameKeys(legacy.branchLimits, Object.keys(rules.economy.ranks), 'legacy.branchLimits');
+  for (const [id, limit] of Object.entries(legacy.branchLimits || {})) integer(limit, `legacy.branchLimits.${id}`, 1);
+  sameKeys(legacy.garrisons, ['guard','permanentUpgrade'], 'legacy.garrisons');
+  for (const [id, data] of Object.entries(legacy.garrisons || {})) for (const key of ['price','defense']) integer(data[key], `legacy.garrisons.${id}.${key}`, 1);
+  sameKeys(legacy.feud, factions, 'legacy.feud');
+  for (const [id, cards] of Object.entries(legacy.feud || {})) {
+    check(Array.isArray(cards) && cards.length > 0, `legacy.feud.${id}`, 'missing cards');
+    const seen = new Set();
+    for (const card of cards || []) {
+      check(!seen.has(card.masterCardId), `legacy.feud.${id}`, `duplicate ${card.masterCardId}`);
+      seen.add(card.masterCardId);
+      check(Boolean(rules.events.feud[id]?.find(c => c.id === card.masterCardId)), `legacy.feud.${id}.${card.id}`, 'unknown master card');
+    }
+  }
+  for (const [id, specs] of Object.entries(legacy.militaryRewardBuildings || {})) {
+    check(islandIds.has(id), `legacy.militaryRewardBuildings.${id}`, 'unknown island');
+    check(Array.isArray(specs), `legacy.militaryRewardBuildings.${id}`, 'expected list');
+    for (const [index, spec] of (specs || []).entries()) building(spec, `legacy.militaryRewardBuildings.${id}.${index}`);
+  }
+  sameKeys(legacy.factionPrizeBuildings, factions, 'legacy.factionPrizeBuildings');
+  for (const [id, specs] of Object.entries(legacy.factionPrizeBuildings || {})) {
+    check(Array.isArray(specs), `legacy.factionPrizeBuildings.${id}`, 'expected list');
+    for (const [index, spec] of (specs || []).entries()) building(spec, `legacy.factionPrizeBuildings.${id}.${index}`);
+  }
+  sameKeys(legacy.legendaryQuantities, rules.legends.legendary.map(c => c.id), 'legacy.legendaryQuantities');
+  for (const [id, quantity] of Object.entries(legacy.legendaryQuantities || {})) integer(quantity, `legacy.legendaryQuantities.${id}`, 1);
+  check(Boolean(legacy.treasure?.id) && !rules.legends.treasures.some(c => c.id === legacy.treasure.id), 'legacy.treasure', 'must be retired');
+  check(Boolean(rules.economy.goods[legacy.treasure?.cargoGoodId]), 'legacy.treasure.cargoGoodId', 'unknown good');
+  for (const [id, points] of Object.entries(legacy.anchorGlory || {})) {
+    check(Boolean(rules.sea[id]), `legacy.anchorGlory.${id}`, 'unknown sea deck');
+    integer(points, `legacy.anchorGlory.${id}`);
+  }
+  sameKeys(legacy.anchorGlory, Object.keys(rules.sea), 'legacy.anchorGlory');
+  check(Array.isArray(legacy.gloryCapture) && legacy.gloryCapture.length > 0, 'legacy.gloryCapture', 'missing bands');
+  for (const [index, band] of (legacy.gloryCapture || []).entries()) {
+    integer(band.min, `legacy.gloryCapture.${index}.min`);
+    if (band.max !== null) integer(band.max, `legacy.gloryCapture.${index}.max`, band.min);
+    integer(band.points, `legacy.gloryCapture.${index}.points`);
+    if (index) check(band.min === legacy.gloryCapture[index - 1].max + 1, `legacy.gloryCapture.${index}`, 'gap or overlap');
+  }
+  integer(legacy.assignmentReplacementPrice, 'legacy.assignmentReplacementPrice');
+  check(typeof legacy.treasuryLossRatio === 'number' && legacy.treasuryLossRatio >= 0 && legacy.treasuryLossRatio <= 1, 'legacy.treasuryLossRatio', 'invalid ratio');
+  integer(legacy.attackHistoryWindow, 'legacy.attackHistoryWindow', 1);
+  integer(legacy.attackRebellionThreshold, 'legacy.attackRebellionThreshold', 1);
+  return errors;
+}
+module.exports = { validateRules, validateCompatibility };

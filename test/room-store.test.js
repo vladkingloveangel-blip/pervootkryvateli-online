@@ -8,11 +8,15 @@ function pool() { const { Pool } = newDb({ noAstCoverageCheck: true }).adapters.
 
 test('unversioned rooms retain retired content, old deck copies, islands and pending decisions', async () => {
   const original = room();
-  Object.assign(original.players[0], { level: 7, shipClass: 'carrack', upgrades: ['foreMarsel'],
+  Object.assign(original.players[0], { level: 7, shipClass: 'carrack', upgrades: ['foreStengha','foreMarsel'],
     escorts: [{ id: 'landin-old', type: 'landin', special: true, cargo: { goodId: 'ore', quantity: 5 } }],
     pendingLandinEscort: true, replacedAssignmentConditions: ['ship-level'] });
   original.islands = [{ id: 'asigoriy', army: 12, area: 4, resources: ['Рудная жила'], ownerId: null, buildings: [] }];
   original.anchorDecks = { red: { drawPile: [{ id: 'abyss-armada', artillery: 23, reward: 34 }], discard: [] } };
+  original.eventDeck = { drawPile: [{ id: 'old-tailwind', type: 'next-turn', effect: 'moveBonus', value: 2 }], discard: [] };
+  original.treasureDeck = { drawPile: [{ id: 'full-ore-hold', cargoGoodId: 'ore' }], discard: [] };
+  original.legendaryDeck = { drawPile: [{ id: 'sea-veil', copy: 2 }], discard: [] };
+  original.feudDecks = { lionia: { drawPile: [{ id: 'treasury-50', type: 'treasury-percent', percent: 50 }], discard: [] } };
   original.pendingAssignmentChoice = { playerId: 'p1', id: 'old-choice' };
   const db = pool(); const store = new RoomStore(db, { logger });
   await store.init(new Map()); await store.save(original);
@@ -20,9 +24,19 @@ test('unversioned rooms retain retired content, old deck copies, islands and pen
   const saved = restored.get(original.code);
   assert.deepEqual(saved, { ...original, players: [{ ...original.players[0], connected: false, socketId: null }] });
   assert.equal(saved.rulesDataVersion, undefined);
-  const { shipStats } = require('../game-logic');
+  const { shipStats, drawAnchorCard, drawSailingEventCard, drawTreasureCard, drawLegendaryCard, drawFeudCard } = require('../game-logic');
+  const { SHIPS, SHIP_LEVELS, SHIP_UPGRADES } = require('../game-data');
   assert.doesNotThrow(() => shipStats(saved.players[0]));
   assert.equal(saved.players[0].level, 7);
+  assert.equal(shipStats(saved.players[0]).artillery, SHIPS.carrack.artillery + SHIP_LEVELS[7].statBonus);
+  assert.equal(shipStats(saved.players[0]).moveMod, SHIPS.carrack.moveMod + SHIP_LEVELS[7].moveBonus + SHIP_UPGRADES.foreStengha.movement + SHIP_UPGRADES.foreMarsel.movement);
+  const playable = structuredClone(saved);
+  assert.equal(drawAnchorCard(playable,'red').card.artillery,23);
+  assert.equal(drawSailingEventCard(playable).id,'old-tailwind');
+  assert.equal(drawTreasureCard(playable).id,'full-ore-hold');
+  assert.equal(drawLegendaryCard(playable).copy,2);
+  assert.equal(drawFeudCard(playable,'lionia').percent,50);
+  assert.equal(playable.pendingAssignmentChoice.id,'old-choice');
 });
 
 test('JSONB round trip preserves full state, clears connections and skips finished games', async () => {

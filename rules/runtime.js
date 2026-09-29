@@ -1,6 +1,9 @@
 // Stage-1 projection for the existing engine, NOT an alternative master ruleset.
 const rules = require('./index');
 const legacy = require('./compatibility/legacy.json');
+const { validateCompatibility } = require('./validate');
+const compatibilityErrors = validateCompatibility(rules, legacy);
+if (compatibilityErrors.length) throw new Error(`Invalid legacy rules profile:\n${compatibilityErrors.join('\n')}`);
 const copy = value => JSON.parse(JSON.stringify(value));
 const BUILDINGS = copy(rules.economy.buildings);
 for (const [id, area] of Object.entries(legacy.buildingAreas)) BUILDINGS[id].area = area;
@@ -15,8 +18,8 @@ for (const [id, building] of Object.entries(BUILDINGS)) {
 }
 const SHIP_UPGRADES = Object.fromEntries(Object.entries(rules.fleet.upgrades).filter(([, u]) => !u.availability));
 // Read retired content from old saves, but do not sell it again.
-SHIP_UPGRADES.foreMarsel = { ...legacy.removedUpgrade, retired: true };
-const SHIP_LEVELS = { ...rules.fleet.levels, 7: { ...legacy.shipLevel7, retired: true } };
+SHIP_UPGRADES[legacy.removedUpgrade.id] = { ...legacy.removedUpgrade, retired: true };
+const SHIP_LEVELS = { ...rules.fleet.levels, [legacy.shipLevel7.level]: { ...legacy.shipLevel7, retired: true } };
 const MILITARY_REWARDS = {};
 for (const island of rules.islands.filter(i => i.kind !== 'free')) {
   MILITARY_REWARDS[island.id] = { ...island.reward,
@@ -53,7 +56,7 @@ module.exports = {
     legendaryEffects: Object.fromEntries(rules.legends.legendary.map(c => [c.id, c.effect])),
   },
   SHIPS: rules.fleet.ships, SHIP_LEVELS, SHIP_UPGRADES,
-  ESCORTS: { ...rules.fleet.escorts, landin: { ...legacy.removedEscort, retired: true } },
+  ESCORTS: { ...rules.fleet.escorts, [legacy.removedEscort.id]: { ...legacy.removedEscort, retired: true } },
   GOODS: rules.economy.goods, BUILDINGS, BUILDING_UPGRADES, MILITARY_REWARDS, FACTIONS,
   POLITICAL_FACTION_ORDER: rules.politics.order.filter(id => id in FACTIONS),
   ASSIGNMENT_CARDS: Object.fromEntries(Object.entries(rules.politics.assignments).filter(([id]) => id in FACTIONS)),
@@ -62,6 +65,6 @@ module.exports = {
     ? { ...card, type: 'next-turn', timing: 'next-personal-turn' } : card),
   FEUD_CARDS,
   LEGENDARY_CARDS: rules.legends.legendary.map(card => ({ ...card, quantity: legacy.legendaryQuantities[card.id] })),
-  TREASURE_CARDS: [...rules.legends.treasures.slice(0, 3), legacy.treasure],
+  TREASURE_CARDS: [...rules.legends.treasures.filter(card => card.effect.type === 'income-multiple'), legacy.treasure],
   ANCHOR_GLORY: legacy.anchorGlory,
 };

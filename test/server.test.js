@@ -72,7 +72,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   const active = started.order[0] === created.playerId ? first : second;
   assert.equal((await emit(active, 'skipNavigation')).ok, true);
   assert.equal((await emit(active, 'endTurn')).ok, true);
-  const beforeRestart = rows()[0].state;
+  let beforeRestart = rows()[0].state;
   const list = await api('/api/my-games?accountId=' + b.user.id, a.token);
   assert.equal(list.response.headers.get('cache-control'), 'no-store');
   assert.equal(list.data.rooms[0].code, code);
@@ -95,6 +95,22 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.shipUpgradeCatalog.foreMarsel, undefined);
   assert.equal(watch.room.buildingCatalog.admiralty, undefined);
   await stop(); // Abrupt restart: pending state must survive without disconnect handlers.
+  // Emulate a persisted room created before rulesDataVersion existed. Keep the complete
+  // pre-stage-1 decks and an unfinished fleet decision instead of rebuilding them.
+  const savedDatabase = JSON.parse(fs.readFileSync(file,'utf8'));
+  const legacyRoom = savedDatabase.game_rooms[0].state;
+  delete legacyRoom.rulesDataVersion; delete legacyRoom.rulesSchemaVersion; delete legacyRoom.runtimeProfile;
+  const oldPlayer = legacyRoom.players.find(p => p.id === created.playerId);
+  Object.assign(oldPlayer,{ shipClass:'brigantine',level:7,upgrades:['foreStengha','foreMarsel'],
+    escorts:[{id:'old-landin',type:'landin',special:true,cargo:{goodId:'ore',quantity:5}}],nextEscortId:1 });
+  const oldIsland = legacyRoom.islands.find(i => i.id === 'asigoriy');
+  Object.assign(oldIsland,{area:4,army:12,resources:['Рудная жила']});
+  legacyRoom.anchorDecks.red.drawPile[0].artillery = 23;
+  legacyRoom.treasureDeck.drawPile[0] = {id:'full-ore-hold',name:'Полный трюм руды',cargoGoodId:'ore',copy:1};
+  legacyRoom.pendingFleetAdjustment = {id:'old-choice',playerId:oldPlayer.id,stage:'landin-replace',required:1,
+    options:[{id:'old-landin',name:'Особое сопровождение Ландина'}]};
+  fs.writeFileSync(file,JSON.stringify(savedDatabase));
+  beforeRestart = structuredClone(legacyRoom);
   await start();
   assert.match(output, /Restored 1 unfinished rooms/);
   const health = (await api('/health')).data;
@@ -102,6 +118,14 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   const newDevice = await connect(); const restoredWatcher = await connect();
   const restored = await emit(restoredWatcher, 'adminWatchRoom', { code, accountToken: admin.token });
   assert.equal(restored.room.players.every(p => !p.connected), true);
+  const restoredPlayer = restored.room.players.find(p => p.id === created.playerId);
+  assert.equal(restoredPlayer.level,7);
+  assert.equal(restoredPlayer.stats.artillery,canonical.fleet.ships.brigantine.artillery + 6);
+  assert.equal(restoredPlayer.escorts[0].type,'landin');
+  assert.equal(restored.room.pendingFleetAdjustment.id,'old-choice');
+  assert.equal(restored.room.islands.find(i => i.id === 'asigoriy').area,4);
+  assert.equal(restored.room.anchorDecks.red.remaining,legacyRoom.anchorDecks.red.drawPile.length);
+  assert.equal(restored.room.ruleset.rulesetVersion,canonical.metadata.rulesetVersion);
   assert.equal((await emit(newDevice, 'resumeRoom', { code, accountToken: stranger.token, playerToken: created.playerToken })).ok, false);
   const resumed = await emit(newDevice, 'resumeRoom', { code, accountToken: a.token });
   assert.equal(resumed.ok, true); assert.equal(resumed.playerId, created.playerId);
