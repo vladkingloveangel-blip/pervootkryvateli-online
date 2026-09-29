@@ -1,8 +1,7 @@
 {
-  "activeProfile": "stage-1-compatible",
-  "note": "Read rules/ as master data. Runtime exceptions are explicit in compatibility/legacy.json and runtime.js.",
+  "activeProfile": "stage-2-party-clock",
+  "note": "Read rules/ as master data. Deferred runtime exceptions remain explicit in compatibility/legacy.json and runtime.js.",
   "pendingConsumers": [
-    { "path": "session", "consumerStage": 2, "status": "data-ready" },
     { "path": "fleet.upgrades.*.passability", "consumerStage": 3, "status": "data-ready" },
     { "path": "economy.buildings.*.area", "consumerStage": 4, "status": "data-ready" },
     { "path": "economy.ranks.*.branchLimit", "consumerStage": 4, "status": "data-ready" },

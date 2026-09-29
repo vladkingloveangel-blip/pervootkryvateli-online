@@ -7,7 +7,7 @@
   "scripts": {
     "start": "npm run check && node server.js",
     "dev": "node server.js",
-    "test": "node test/game-logic.test.js && node --test test/rules-data.test.js test/rules-effects.test.js test/rules-compatibility.test.js test/room-store.test.js test/server.test.js",
+    "test": "node test/game-logic.test.js && node --test test/rules-data.test.js test/rules-effects.test.js test/rules-compatibility.test.js test/room-store.test.js test/server.test.js test/party-clock.test.js",
     "check": "node --check server.js && node --check room-store.js && node --check public/app.js && node --check public/sw.js && node --check game-data.js && node --check game-logic.js && node --check map-config.js && node --check rules/index.js && node --check rules/runtime.js && node --check rules/views.js && node --check rules/validate.js",
     "test:data": "node --test test/rules-data.test.js test/rules-effects.test.js test/rules-compatibility.test.js"
   },

@@ -8,8 +8,10 @@ const copy = value => JSON.parse(JSON.stringify(value));
 
 test('legacy profile references remain valid while canonical master data stays separate', () => {
   assert.deepEqual(validateCompatibility(rules,legacy),[]);
-  assert.equal(runtime.BALANCE.session.startingDucats,legacy.session.startingDucats);
-  assert.equal(rules.session.startingDucats,15);
+  assert.equal(runtime.BALANCE.session.startingDucats,rules.session.startingDucats);
+  assert.equal(runtime.BALANCE.session.players.min,4);
+  assert.equal(runtime.BALANCE.session.players.max,6);
+  assert.equal(runtime.BALANCE.session.circlesPerRound,6);
   assert.deepEqual(runtime.SHIP_LEVELS[legacy.shipLevel7.level],{...legacy.shipLevel7,retired:true});
   assert.deepEqual(runtime.SHIP_UPGRADES[legacy.removedUpgrade.id],{...legacy.removedUpgrade,retired:true});
   assert.deepEqual(runtime.ESCORTS[legacy.removedEscort.id],{...legacy.removedEscort,retired:true});

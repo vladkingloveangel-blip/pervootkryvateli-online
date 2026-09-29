@@ -2,7 +2,7 @@
 const runtime = require('./rules/runtime');
 const map = require('./map-config');
 const rules = require('./rules');
-const COLORS = ['#e53935', '#1e88e5', '#43a047', '#8e24aa', '#fb8c00'];
+const COLORS = ['#e53935', '#1e88e5', '#43a047', '#8e24aa', '#fb8c00', '#00acc1'];
 function cellKey(row, col) { return `${row},${col}`; }
 const HAZARDS = Object.fromEntries(Object.entries(map.HAZARDS).map(([id, def]) => [id, def.cells]));
 const ISLAND_BY_CELL = new Map();

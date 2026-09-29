@@ -388,7 +388,7 @@ function cleanName(name) {
   return s.slice(0, 24) || 'Мореплаватель';
 }
 function getRoom(code) { return rooms.get(String(code || '').trim().toUpperCase()); }
-function rollD6() { return 1 + Math.floor(Math.random() * 6); }
+function rollD6() { return 1 + Math.floor(Math.random() * BALANCE.session.dieSides); }
 function ackSafe(ack, payload) { if (typeof ack === 'function') ack(payload); }
 const ROMAN_SERVER = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 
@@ -416,15 +416,18 @@ function publicRoom(room, viewerId = null) {
     code: room.code,
     started: room.started,
     hostId: room.hostId,
+    leaderId: room.leaderId || null,
+    seatingOrder: (room.seatingOrder || room.players.map(p => p.id)).filter(id => room.players.some(p => p.id === id)),
     round: room.round,
     circle: room.circle,
     turnIndex: room.turnIndex,
     activePlayerId: active?.id || null,
     eventPhase: room.eventPhase ? {
       active: Boolean(room.eventPhase.active),
+      personalTurn: Boolean(room.eventPhase.personalTurn),
       currentPlayerId: room.eventPhase.currentPlayerId || null,
       playerIndex: Number(room.eventPhase.playerIndex) || 0,
-      totalPlayers: room.order.length,
+      totalPlayers: room.eventPhase.personalTurn ? 1 : room.order.length,
       stage: room.eventPhase.stage || 'sailing',
       feudIndex: Number(room.eventPhase.feudIndex) || 0,
       feudTotal: room.eventPhase.feudQueue?.length || 0,
@@ -892,7 +895,7 @@ function hasPendingDecision(room) {
 function pendingDecisionError(room) {
   if (room?.pendingAlliance) return 'Сначала завершите предложение союза.';
   if (room?.pendingBattle) return 'Сначала завершите текущий совместный бой.';
-  if (room?.pendingEvent) return 'Сначала разрешите карту общей Фазы событий.';
+  if (room?.pendingEvent) return 'Сначала разрешите карту события.';
   if (room?.pendingFeud) return 'Сначала разрешите карту вражды.';
   if (room?.pendingAssignmentChoice) return 'Сначала решите, оставлять ли поручение сюзерена.';
   if (room?.pendingStatePrize) return 'Сначала разместите призовые здания за полное подчинение государства.';
@@ -1526,12 +1529,12 @@ function saveHeldEventCard(player, card, kind, extra = {}) {
   return saved;
 }
 
-function applyNextTurnEffect(player, effect, value) {
-  player.nextTurnEffects ||= {};
+function applyNextTurnEffect(room, player, effect, value) {
+  const target = room.eventPhase?.personalTurn ? (player.activeTurnEffects ||= {}) : (player.nextTurnEffects ||= {});
   if (effect === 'moveBonus' || effect === 'movePenalty') {
-    player.nextTurnEffects[effect] = (Number(player.nextTurnEffects[effect]) || 0) + (Number(value) || 0);
+    target[effect] = (Number(target[effect]) || 0) + (Number(value) || 0);
   } else {
-    player.nextTurnEffects[effect] = Boolean(value);
+    target[effect] = Boolean(value);
   }
 }
 
@@ -1629,7 +1632,7 @@ function resolveSailingEventCard(room, player, card) {
   }
 
   if (card.type === 'next-turn') {
-    applyNextTurnEffect(player, card.effect, card.value);
+    applyNextTurnEffect(room, player, card.effect, card.value);
     const descriptions = {
       moveBonus: `к обычной навигации +${card.value}`,
       movePenalty: `к обычной навигации −${card.value}`,
@@ -1637,7 +1640,7 @@ function resolveSailingEventCard(room, player, card) {
       noNavigation: 'обычная навигация запрещена',
       noIncome: 'доход рынков и банков не начисляется',
     };
-    log(room, `${player.name}: «${card.name}». В ближайший личный ход: ${descriptions[card.effect] || 'временный эффект'}.`);
+    log(room, `${player.name}: «${card.name}». В этом личном ходу: ${descriptions[card.effect] || 'временный эффект'}.`);
     return resultBase;
   }
 
@@ -1717,7 +1720,7 @@ function applyVassalTaxes(room, snapshot) {
     player.ducats = before - paid;
     if (paid < tax) {
       player.nextActionLimit = Math.min(Number(player.nextActionLimit) || BALANCE.session.actionsPerTurn, BALANCE.session.taxUnderpaymentActionLimit);
-      log(room, `${player.name}: налог ${FACTIONS[suzerainId].name} — уплачено ${paid} из ${tax}. Долг не возникает; в ближайшем личном ходу максимум два действия.`);
+      log(room, `${player.name}: налог ${FACTIONS[suzerainId].name} — уплачено ${paid} из ${tax}. Долг не возникает; в этом личном ходу максимум ${BALANCE.session.taxUnderpaymentActionLimit} действия.`);
     } else {
       log(room, `${player.name} платит налог ${FACTIONS[suzerainId].name}: ${tax} дуката.`);
     }
@@ -1777,8 +1780,8 @@ function resolveFeudCard(room, player, factionId, card) {
     return immediate;
   }
   if (card.type === 'skip-income') {
-    applyNextTurnEffect(player, 'noIncome', true);
-    log(room, `${player.name}: карта вражды ${factionName} — в ближайшем личном ходу доход рынков и банков пропускается.`);
+    applyNextTurnEffect(room, player, 'noIncome', true);
+    log(room, `${player.name}: карта вражды ${factionName} — в этом личном ходу доход рынков и банков пропускается.`);
     return immediate;
   }
   if (card.type === 'ship-level-loss') {
@@ -1877,14 +1880,15 @@ function processEventPhase(room) {
   while (room.eventPhase.active && !room.pendingEvent && !room.pendingFeud && !room.pendingAssignmentChoice && !room.pendingIslandCorrection && !room.pendingFleetAdjustment && safety++ < 160) {
     if (room.eventPhase.stage === 'sailing') {
       const index = Number(room.eventPhase.playerIndex) || 0;
-      if (index >= room.order.length) {
+      const playerIds = room.eventPhase.personalTurn ? [room.eventPhase.turnPlayerId] : room.order;
+      if (index >= playerIds.length) {
         room.eventPhase.stage = 'feud';
         room.eventPhase.feudIndex = 0;
         room.eventPhase.currentPlayerId = room.eventPhase.feudQueue?.[0]?.playerId || null;
         log(room, 'Фаза событий: карты плавания разрешены. Начинается выдача карт вражды по статусам, зафиксированным в начале фазы.');
         continue;
       }
-      const playerId = room.order[index];
+      const playerId = playerIds[index];
       const player = playerById(room, playerId);
       room.eventPhase.currentPlayerId = playerId;
       if (!player) { room.eventPhase.playerIndex += 1; continue; }
@@ -1931,7 +1935,9 @@ function processEventPhase(room) {
       const queue = room.eventPhase.assignmentQueue || [];
       if (index >= queue.length) {
         room.eventPhase.stage = 'assignment-replace';
-        room.eventPhase.replacementQueue = buildAssignmentReplaceQueue(room);
+        room.eventPhase.replacementQueue = room.eventPhase.personalTurn
+          ? buildAssignmentReplaceQueue(room).filter(id => id === room.eventPhase.turnPlayerId)
+          : buildAssignmentReplaceQueue(room);
         room.eventPhase.replacementIndex = 0;
         room.eventPhase.currentPlayerId = room.eventPhase.replacementQueue?.[0] || null;
         log(room, `Фаза событий: выдача поручений завершена. Вассалы могут по одному разу заменить активное поручение за ${BALANCE.assignmentReplacementPrice} дуката.`);
@@ -1975,6 +1981,8 @@ function processEventPhase(room) {
 }
 
 function startEventPhase(room) {
+  const player = currentPlayer(room);
+  if (!player) return;
   room.phase = 'event';
   room.roll = null;
   room.movePoints = null;
@@ -1987,31 +1995,44 @@ function startEventPhase(room) {
   room.pendingFleetAdjustment = null;
   room.fleetAdjustmentQueue = [];
   room.pendingLegendaryReaction = null;
-  const snapshot = eventPoliticalSnapshot(room);
+  const snapshot = { [player.id]: eventPoliticalSnapshot(room)[player.id] };
   room.eventPhase = {
-    active: true, stage: 'sailing', playerIndex: 0, currentPlayerId: room.order[0] || null, lastCard: null,
+    active: true, personalTurn: true, turnPlayerId: player.id, stage: 'sailing', playerIndex: 0, currentPlayerId: player.id, lastCard: null,
     politicalSnapshot: snapshot,
     feudQueue: buildFeudQueue(room, snapshot), feudIndex: 0,
     assignmentQueue: buildAssignmentQueue(room, snapshot), assignmentIndex: 0,
     replacementQueue: [], replacementIndex: 0,
   };
-  log(room, `Раунд ${room.round}: начинается общая Фаза событий. Политические статусы, активные поручения и вражда зафиксированы.`);
+  log(room, `Раунд ${room.round}, шестой круг: ${player.name} получает карты перед своим личным ходом.`);
   applyVassalTaxes(room, snapshot);
   processEventPhase(room);
 }
 
 function finishEventPhase(room) {
+  if (room.eventPhase?.personalTurn) {
+    room.eventPhase.active = false;
+    room.eventPhase = null;
+    room.pendingEvent = null;
+    room.pendingFeud = null;
+    room.pendingAssignmentChoice = null;
+    continueTurnAfterCards(room);
+    return;
+  }
   if (room.eventPhase) room.eventPhase.active = false;
   room.pendingEvent = null;
   room.pendingFeud = null;
   room.pendingAssignmentChoice = null;
+  advanceRound(room);
+  beginTurn(room);
+}
+
+function advanceRound(room) {
   room.round += 1;
   room.circle = 1;
   for (const island of room.islands) island.loadedRound = null;
   for (const player of room.players) player.visitedAnchors = [];
   refreshFactionExistence(room);
-  log(room, `Фаза событий завершена. Начинается раунд ${room.round}: ограничения погрузки и отметки посещённых якорей сброшены.`);
-  beginTurn(room);
+  log(room, `Начинается раунд ${room.round}: ограничения погрузки и отметки посещённых якорей сброшены.`);
 }
 
 function finishPendingFeudCard(room, pending) {
@@ -2136,30 +2157,9 @@ function takeSavedCard(player, savedCardId) {
 }
 
 function determineOrder(room) {
-  const unresolved = new Set(room.players.map(p => p.id));
-  const scores = new Map();
-  let safety = 0;
-  while (unresolved.size && safety++ < 100) {
-    const groups = new Map();
-    for (const id of unresolved) {
-      const r = rollD6();
-      if (!groups.has(r)) groups.set(r, []);
-      groups.get(r).push(id);
-    }
-    unresolved.clear();
-    for (const [r, ids] of groups.entries()) {
-      if (ids.length === 1) scores.set(ids[0], (scores.get(ids[0]) || 0) * 10 + r);
-      else {
-        for (const id of ids) {
-          scores.set(id, (scores.get(id) || 0) * 10 + r);
-          unresolved.add(id);
-        }
-      }
-    }
-  }
-  return [...room.players]
-    .sort((a, b) => (scores.get(b.id) || 0) - (scores.get(a.id) || 0))
-    .map(p => p.id);
+  const seats = room.seatingOrder || room.players.map(p => p.id);
+  const leaderIndex = seats.indexOf(room.leaderId);
+  return [...seats.slice(leaderIndex), ...seats.slice(0, leaderIndex)];
 }
 
 function beginTurn(room) {
@@ -2173,11 +2173,24 @@ function beginTurn(room) {
   p.personalTurnNo = (Number(p.personalTurnNo) || 0) + 1;
   p.attackedThisTurn = [];
   p.brokenAlliesThisTurn = [];
+  p.activeTurnEffects = { ...(p.nextTurnEffects || {}) };
+  p.nextTurnEffects = {};
+  if (room.circle === BALANCE.session.eventCircle) {
+    startEventPhase(room);
+    return;
+  }
+  continueTurnAfterCards(room);
+}
+
+function continueTurnAfterCards(room) {
+  const p = currentPlayer(room);
+  if (!p) return;
+  room.phase = 'navigation';
+  room.roll = null;
+  room.movePoints = null;
   const actionLimit = Math.max(0, Math.min(BALANCE.session.actionsPerTurn, Number(p.nextActionLimit) || BALANCE.session.actionsPerTurn));
   room.actionsLeft = actionLimit;
   p.nextActionLimit = null;
-  p.activeTurnEffects = { ...(p.nextTurnEffects || {}) };
-  p.nextTurnEffects = {};
   if (actionLimit < BALANCE.session.actionsPerTurn) log(room, `${p.name}: из-за недоплаченного налога в этом личном ходу доступно максимум ${actionLimit} действия.`);
 
   if ((Number(p.skipTurns) || 0) > 0) {
@@ -2225,8 +2238,7 @@ function endTurnInternal(room) {
   if (room.completedTurns % n === 0) {
     room.circle += 1;
     if (room.circle > BALANCE.session.circlesPerRound) {
-      startEventPhase(room);
-      return;
+      advanceRound(room);
     }
   }
   beginTurn(room);
@@ -2458,6 +2470,8 @@ io.on('connection', socket => {
       rulesSchemaVersion: RULESET.schemaVersion,
       runtimeProfile: RUNTIME_PROFILE,
       hostId: player.id,
+      leaderId: null,
+      seatingOrder: [player.id],
       players: [player],
       islands: cloneIslands(),
       started: false,
@@ -2523,6 +2537,8 @@ io.on('connection', socket => {
     const availableColor = COLORS.find(color => !room.players.some(p => p.color === color)) || COLORS[room.players.length % COLORS.length];
     const player = newPlayer(socket, { ...data, accountUser }, availableColor);
     room.players.push(player);
+    room.seatingOrder ||= room.players.filter(p => p.id !== player.id).map(p => p.id);
+    room.seatingOrder.push(player.id);
     attachPlayer(socket, room, player);
     log(room, `${player.name} присоединился.`);
     ackSafe(ack, { ok: true, code: room.code, playerId: player.id, playerToken: player.token });
@@ -2547,6 +2563,7 @@ io.on('connection', socket => {
     const p = room?.players.find(x => x.id === socket.data.playerId);
     if (!room || !p || room.started) return ackSafe(ack, { ok: false, error: 'Сейчас класс корабля менять нельзя.' });
     if (!SHIPS[data?.shipClass]) return ackSafe(ack, { ok: false, error: 'Неизвестный класс корабля.' });
+    if (p.id === room.leaderId && data.shipClass !== 'carrack') return ackSafe(ack, { ok: false, error: 'Ведущий играет за каракку.' });
     p.shipClass = data.shipClass;
     p.ready = false;
     log(room, `${p.name} выбрал: ${SHIPS[p.shipClass].name}. Готовность снята.`);
@@ -2565,6 +2582,33 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
+  onSocketEvent(socket, 'setLeader', (data, ack) => {
+    const room = getRoom(socket.data.roomCode);
+    if (!room || room.started || room.hostId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Ведущего выбирают до начала партии.' });
+    const player = playerById(room, data?.playerId);
+    if (!player) return ackSafe(ack, { ok: false, error: 'Игрок не найден.' });
+    room.seatingOrder ||= room.players.map(p => p.id);
+    room.leaderId = player.id;
+    player.shipClass = 'carrack';
+    for (const member of room.players) member.ready = false;
+    log(room, `${player.name} выбран ведущим и играет за каракку.`);
+    ackSafe(ack, { ok: true });
+    emitRoom(room);
+  });
+
+  onSocketEvent(socket, 'setSeatingOrder', (data, ack) => {
+    const room = getRoom(socket.data.roomCode);
+    if (!room || room.started || room.hostId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Порядок мест задают до начала партии.' });
+    const ids = data?.playerIds;
+    if (!Array.isArray(ids) || ids.length !== room.players.length || new Set(ids).size !== ids.length ||
+      ids.some(id => !room.players.some(p => p.id === id))) return ackSafe(ack, { ok: false, error: 'Укажите всех игроков ровно по одному разу.' });
+    room.seatingOrder = [...ids];
+    for (const member of room.players) member.ready = false;
+    log(room, 'Порядок мест по часовой стрелке обновлён.');
+    ackSafe(ack, { ok: true });
+    emitRoom(room);
+  });
+
   onSocketEvent(socket, 'leaveRoom', (_data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const playerId = socket.data.playerId;
@@ -2574,6 +2618,8 @@ io.on('connection', socket => {
 
     const player = room.players.find(p => p.id === playerId);
     room.players = room.players.filter(p => p.id !== playerId);
+    room.seatingOrder = (room.seatingOrder || []).filter(id => id !== playerId);
+    if (room.leaderId === playerId) room.leaderId = null;
     socket.leave(room.code);
     socket.data.roomCode = null;
     socket.data.playerId = null;
@@ -2594,6 +2640,8 @@ io.on('connection', socket => {
     if (!target) return ackSafe(ack, { ok: false, error: 'Игрок не найден.' });
 
     room.players = room.players.filter(p => p.id !== targetId);
+    room.seatingOrder = (room.seatingOrder || []).filter(id => id !== targetId);
+    if (room.leaderId === targetId) room.leaderId = null;
     const targetSocket = target.socketId ? io.sockets.sockets.get(target.socketId) : null;
     if (targetSocket) {
       targetSocket.emit('removedFromRoom', { code: room.code, reason: 'Создатель комнаты удалил вас из лобби.' });
@@ -2622,6 +2670,11 @@ io.on('connection', socket => {
     if (room.hostId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Начать игру может только создатель комнаты.' });
     if (room.started) return ackSafe(ack, { ok: false, error: 'Игра уже началась.' });
     if (room.players.length < BALANCE.session.players.min || room.players.length > BALANCE.session.players.max) return ackSafe(ack, { ok: false, error: `Для старта нужно ${BALANCE.session.players.min}–${BALANCE.session.players.max} игроков.` });
+    if (!room.leaderId || !room.players.some(p => p.id === room.leaderId)) return ackSafe(ack, { ok: false, error: 'Перед стартом выберите ведущего.' });
+    if (playerById(room, room.leaderId)?.shipClass !== 'carrack') return ackSafe(ack, { ok: false, error: 'Ведущий должен играть за каракку.' });
+    if (!Array.isArray(room.seatingOrder) || room.seatingOrder.length !== room.players.length ||
+      new Set(room.seatingOrder).size !== room.players.length || room.seatingOrder.some(id => !playerById(room, id)))
+      return ackSafe(ack, { ok: false, error: 'Проверьте порядок мест по часовой стрелке.' });
     if (!room.players.every(p => p.connected)) return ackSafe(ack, { ok: false, error: 'Перед стартом все игроки должны быть онлайн.' });
     if (!room.players.every(p => p.ready)) return ackSafe(ack, { ok: false, error: 'Перед стартом все игроки должны нажать «Готов».' });
 
