@@ -186,9 +186,24 @@ test('runtime consumers use canonical prices, characteristics, income and safe m
   }
   for(const [id,b] of Object.entries(rules.economy.buildings)) {
     assert.equal(data.BUILDINGS[id].price,b.price);
+    assert.equal(data.BUILDINGS[id].area,b.area);
+    for(const [level,levelData] of Object.entries(b.levels)) {
+      assert.equal(levelData.area,1,`${id} ${level} must occupy exactly one area cell`);
+    }
     for(const [level,next] of Object.entries(data.BUILDING_UPGRADES[id] || {})) {
       assert.equal(next.price,rules.economy.buildings[next.type].levels[next.level].price);
     }
+  }
+  assert.deepEqual(data.BALANCE.branchLimits,{settlement:1,city:2,port:2});
+  assert.equal(data.BUILDINGS.bastion.countsAsAdvanced,true);
+  const runtimeIslands=logic.cloneIslands();
+  assert.equal(runtimeIslands.length,28);
+  for(const source of rules.islands) {
+    const island=runtimeIslands.find(i=>i.id===source.id);
+    assert.ok(island,`missing runtime island ${source.id}`);
+    assert.equal(island.area,source.area);
+    assert.equal(island.army,source.army);
+    assert.deepEqual(island.resourceIds,source.resourceIds);
   }
   for(let count=0;count<3;count++) assert.equal(logic.escortPurchasePrice({escorts:Array(count).fill({})}),rules.fleet.escortPrices[count]);
   assert.deepEqual(data.GOODS,rules.economy.goods);

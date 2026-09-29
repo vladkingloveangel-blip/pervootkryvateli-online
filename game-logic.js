@@ -979,9 +979,8 @@ function branchCount(island, branch) {
 
 function buildingStage(building) {
   const level = Math.max(1, Math.min(3, Number(building?.level) || 1));
-  if (['farm', 'lumbermill', 'quarry', 'mine', 'fort', 'market'].includes(building?.type)) return level;
-  if (['manor', 'shipyard', 'stoneworks', 'arsenal', 'fortress', 'bank'].includes(building?.type)) return 3 + level;
-  return level;
+  const stage = BUILDINGS[building?.type]?.levels?.[level]?.foodStage;
+  return Math.max(1, Number(stage) || level);
 }
 
 function foodStage(island) {
@@ -992,18 +991,29 @@ function foodStage(island) {
   return max;
 }
 
+function buildingArea(building) {
+  const level = Math.max(1, Math.min(3, Number(building?.level) || 1));
+  const def = BUILDINGS[building?.type];
+  return Math.max(0, Number(def?.levels?.[level]?.area ?? def?.area) || 0);
+}
+
 function usedArea(island) {
-  return island.buildings.reduce((sum, b) => sum + (BUILDINGS[b.type]?.area || 0), 0);
+  return island.buildings.reduce((sum, b) => sum + buildingArea(b), 0);
+}
+
+function countsAsAdvancedForStatus(building) {
+  const def = BUILDINGS[building?.type];
+  return Boolean(def?.advanced || def?.countsAsAdvanced);
 }
 
 function islandStatus(island) {
   const manors = island.buildings.filter(b => b.type === 'manor');
   const bestManor = manors.reduce((m, b) => Math.max(m, Number(b.level) || 1), 0);
   const nonFood = island.buildings.filter(b => BUILDINGS[b.type]?.branch !== 'food');
-  const advancedNonFood = nonFood.filter(b => BUILDINGS[b.type]?.advanced).length;
+  const advancedNonFood = nonFood.filter(countsAsAdvancedForStatus).length;
 
   if (bestManor >= BALANCE.ranks.port.manorLevel && nonFood.length >= BALANCE.ranks.port.otherBuildings && advancedNonFood >= BALANCE.ranks.port.advancedOtherBuildings) return 'Крупный порт';
-  if (bestManor >= BALANCE.ranks.city.manorLevel && island.buildings.length - 1 >= BALANCE.ranks.city.otherBuildings) return 'Город';
+  if (bestManor >= BALANCE.ranks.city.manorLevel && nonFood.length >= BALANCE.ranks.city.otherBuildings) return 'Город';
   if (island.buildings.some(b => BUILDINGS[b.type]?.branch === 'food')) return 'Поселение';
   return 'Без поселения';
 }
@@ -1064,7 +1074,7 @@ function islandCorrectionOptions(island) {
     name: buildingDisplayName(building),
     type: building.type,
     level: Number(building.level) || 1,
-    area: BUILDINGS[building.type]?.area || 0,
+    area: buildingArea(building),
     branch: BUILDINGS[building.type]?.branch || null,
     branchName: BUILDING_BRANCH_NAMES[BUILDINGS[building.type]?.branch] || null,
   }));

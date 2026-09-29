@@ -615,6 +615,7 @@
       "buildable": false,
       "fixedName": true,
       "limitPerIsland": 1,
+      "countsAsAdvanced": true,
       "levels": {
         "1": {
           "level": 1,

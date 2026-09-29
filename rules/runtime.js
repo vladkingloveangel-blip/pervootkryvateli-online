@@ -6,7 +6,8 @@ const compatibilityErrors = validateCompatibility(rules, legacy);
 if (compatibilityErrors.length) throw new Error(`Invalid legacy rules profile:\n${compatibilityErrors.join('\n')}`);
 const copy = value => JSON.parse(JSON.stringify(value));
 const BUILDINGS = copy(rules.economy.buildings);
-for (const [id, area] of Object.entries(legacy.buildingAreas)) BUILDINGS[id].area = area;
+const BRANCH_LIMITS = Object.fromEntries(Object.entries(rules.economy.ranks)
+  .map(([id, rank]) => [id, rank.branchLimit]));
 const BUILDING_UPGRADES = {};
 for (const [id, building] of Object.entries(BUILDINGS)) {
   if (building.category === 'public') continue;
@@ -41,13 +42,13 @@ const FEUD_CARDS = Object.fromEntries(Object.entries(legacy.feud).map(([id, card
   }),
 ]));
 module.exports = {
-  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-3-fleet-navigation-final',
+  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-4-islands-economy-4.1',
   BALANCE: {
     session: rules.session,
     maxShipLevel: rules.fleet.maxLevel, maxReadableShipLevel: legacy.shipLevel7.level,
     escortPrices: rules.fleet.escortPrices, maxBranchUpgrades: rules.fleet.maxBranchUpgrades,
     maxEscorts: rules.fleet.escortPrices.length,
-    garrisons: legacy.garrisons, branchLimits: legacy.branchLimits, ranks: rules.economy.ranks,
+    garrisons: legacy.garrisons, branchLimits: BRANCH_LIMITS, ranks: rules.economy.ranks,
     landCompany: rules.economy.landCompany, combat: rules.scoring.combat,
     contractBonusRatio: rules.economy.contractBonusRatio,
     assignmentReplacementPrice: legacy.assignmentReplacementPrice,
