@@ -170,6 +170,82 @@ main { width: min(1480px, 100%); margin: 0 auto; padding: 14px; }
 .event-actions { display: grid; gap: 8px; margin-top: 10px; }
 .saved-event-card { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--line); }
 
+/* Stage 6.7 — легендарные места, именные карты и экспедиции */
+.legendary-places-panel { border-color: rgba(116, 174, 239, .34); }
+.legendary-places-actions { display: grid; gap: 8px; margin-top: 10px; }
+.legendary-journey-summary,
+.active-expedition,
+.expedition-public,
+.expedition-history {
+  margin-top: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  line-height: 1.4;
+}
+.active-expedition strong,
+.expedition-public strong,
+.expedition-history strong,
+.legendary-journey-summary strong { color: var(--text); }
+.expedition-warning {
+  margin-top: 8px;
+  padding: 8px 9px;
+  border: 1px solid rgba(240,196,91,.48);
+  border-radius: 9px;
+  color: var(--accent);
+  background: rgba(240,196,91,.07);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.expedition-public-row,
+.expedition-history-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 7px;
+  font-size: 12px;
+}
+.expedition-public-row span,
+.expedition-history-row span:last-child { color: var(--muted); }
+.named-place-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-top: 9px;
+}
+.named-place-card {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px dashed var(--line);
+  border-radius: 9px;
+  background: rgba(7,31,37,.38);
+}
+.named-place-card strong { overflow-wrap: anywhere; }
+.named-place-card span { color: var(--muted); font-size: 11px; }
+.named-place-card.claimed { border-style: solid; border-color: rgba(154,128,236,.48); }
+.named-place-card.mine { border-color: rgba(240,196,91,.65); box-shadow: inset 0 0 0 1px rgba(240,196,91,.12); }
+.cell-hit.navigation-hit.expedition-destination {
+  box-shadow: inset 0 0 0 3px rgba(116,174,239,.92);
+}
+.cell-hit.navigation-hit.expedition-destination::after {
+  content: '✦';
+  position: absolute;
+  right: -3px;
+  top: -8px;
+  z-index: 2;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  text-shadow: 0 1px 4px rgba(0,0,0,.9);
+}
+@media (max-width: 380px) {
+  .named-place-grid { grid-template-columns: 1fr; }
+  .expedition-public-row, .expedition-history-row { align-items: flex-start; flex-direction: column; gap: 2px; }
+}
+
 /* v0.9 — легендарные карты */
 .legendary-panel { border-color: rgba(154, 128, 236, .34); }
 .legendary-actions { display: grid; gap: 9px; margin-top: 10px; }

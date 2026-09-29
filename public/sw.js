@@ -1,4 +1,4 @@
-const CACHE = 'pervootkryvateli-v0.33.0-stage-2-round-clock';
+const CACHE = 'pervootkryvateli-v0.33.0-stage-6-events-legends-6.7';
 const ASSETS = [
   '/', '/styles.css', '/app.js', '/manifest.webmanifest',
   '/assets/map-base-4096.webp', '/assets/map.png', '/assets/icon-192.png', '/assets/icon-512.png'

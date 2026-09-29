@@ -860,6 +860,7 @@
     const pendingFleetAdjustment = Boolean(r.pendingFleetAdjustment);
     const pendingAssignment = Boolean(r.pendingAssignmentChoice?.viewerCanRespond);
     const activeAssignment = Boolean(mine?.activeAssignment);
+    const legendsRelevant = Boolean(r.started);
     const onIsland = currentIslands().length > 0;
     const anchorRelevant = Boolean(currentAnchorCell());
     const pendingCombat = Boolean(r.pendingBattle || r.pendingLegendaryReaction);
@@ -873,6 +874,7 @@
     set('.island-correction-panel', pendingIslandCorrection, r.pendingIslandCorrection?.viewerCanRespond ? 0 : 4);
     set('.fleet-adjustment-panel', pendingFleetAdjustment, r.pendingFleetAdjustment?.viewerCanRespond ? 0 : 4);
     set('.assignment-panel', pendingAssignment || activeAssignment, pendingAssignment ? 2 : 30);
+    set('.legendary-places-panel', legendsRelevant, mine?.activeExpedition || mine?.canTakeExpedition ? 18 : 32);
     set('.anchor-panel', anchorRelevant, 40);
     set('.island-panel', onIsland, 25);
     set('.combat-panel', combatRelevant, pendingCombat ? 3 : 27);
@@ -917,6 +919,7 @@
     renderIslandCorrection();
     renderFleetAdjustment();
     renderAssignments();
+    renderLegendaryPlaces();
     renderLegendary();
     renderFleet();
     renderTrade();
@@ -948,7 +951,7 @@
       const suzerainName = p.suzerainId ? state.room.factions?.find(f => f.id === p.suzerainId)?.name : null;
       const politicalLabel = suzerainName ? ` · вассал ${suzerainName}` : (p.enemyFactionIds?.length ? ` · вражда ${p.enemyFactionIds.length}` : '');
       const readyLabel = !r.started ? (p.ready ? ' · ✓ готов' : ' · не готов') : '';
-      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${p.id === r.leaderId ? ' · ведущий' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · армия ${p.armyPoints || 0} · флот ${p.fleetPoints || 0} · слава ${p.glory || 0} · островов ${p.islandCount} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
+      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${p.id === r.leaderId ? ' · ведущий' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · армия ${p.armyPoints || 0} · флот ${p.fleetPoints || 0} · слава ${p.glory || 0} · островов ${p.islandCount} · именных ${p.namedPlaceCardCount || 0} · экспедиций ${p.expeditionHistoryCount || 0} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
       if (!isSpectator && isHost && !r.started) {
         const actions = el.querySelector('.player-side-actions');
         if (p.id !== r.leaderId) {
@@ -1156,12 +1159,16 @@
     if (hereIsland) {
       state.selectedIslandId = hereIsland.id;
       title.textContent = hereIsland.name;
+      const legendaryIsland = (r.legendaryPlaces || []).find(place => place.kind === 'island' && place.islandId === hereIsland.id);
+      const legendarySuffix = legendaryIsland
+        ? ` · легендарное место: ${legendaryIsland.exploredBy ? `открыто ${playerName(legendaryIsland.exploredBy)}` : 'ещё не открыто'}`
+        : '';
       if (hereIsland.ownerId === state.myId) {
-        text.textContent = `Ваш остров · действий осталось: ${mine.actionsLeft ?? 0}`;
+        text.textContent = `Ваш остров · действий осталось: ${mine.actionsLeft ?? 0}${legendarySuffix}`;
         addAction('Управление островом', 'actions', 'primary');
       } else {
         const owner = islandOwnerLabel(hereIsland);
-        text.textContent = `${owner} · защита ${hereIsland.defenseArmy ?? hereIsland.army ?? 0} · действий: ${mine.actionsLeft ?? 0}`;
+        text.textContent = `${owner} · защита ${hereIsland.defenseArmy ?? hereIsland.army ?? 0} · действий: ${mine.actionsLeft ?? 0}${legendarySuffix}`;
         if (islandTargets.length && !mine.inPeaceZone) addAction('Штурм и действия', 'actions', 'danger-soft');
         else addAction('Информация', 'actions');
       }
@@ -1271,7 +1278,6 @@
     const decks = r.eventDecks || {};
     const sailing = decks.sailing || { remaining: 0, discard: 0 };
     const treasure = decks.treasure || { remaining: 0, discard: 0 };
-    const legendary = decks.legendary || { remaining: 0, discard: 0 };
     const phase = r.eventPhase;
     const pending = r.pendingEvent;
     const nextEffects = mine.nextTurnEffects || {};
@@ -1289,7 +1295,7 @@
     const stageLabel = phase?.stage === 'feud' ? 'вражда' : phase?.stage === 'assignment' ? 'поручения' : phase?.stage === 'assignment-replace' ? 'замена поручений' : 'плавание';
     badge.textContent = phase?.active ? (phase.stage === 'feud' ? `вражда ${(phase.feudIndex || 0) + 1}/${phase.feudTotal || 0}` : phase.stage === 'assignment' ? `поручения ${(phase.assignmentIndex || 0) + 1}/${phase.assignmentTotal || 0}` : phase.stage === 'assignment-replace' ? `замена ${(phase.replacementIndex || 0) + 1}/${phase.replacementTotal || 0}` : `${(phase.playerIndex || 0) + 1}/${phase.totalPlayers || r.players.length}`) : `${sailing.remaining}`;
     const feudCounts = Object.entries(r.feudDecks || {}).map(([id,d]) => `${r.factions?.find(f => f.id === id)?.name || id}: ${d.remaining}`).join(' · ');
-    let html = `<div class="event-decks">События: ${sailing.remaining} / сброс ${sailing.discard} · сокровища: ${treasure.remaining} / ${treasure.discard} · легендарные: ${legendary.remaining}</div>${feudCounts ? `<div class="event-decks">Вражда: ${escapeHtml(feudCounts)}</div>` : ''}`;
+    let html = `<div class="event-decks">События: ${sailing.remaining} / сброс ${sailing.discard} · сокровища: ${treasure.remaining} / ${treasure.discard} · экспедиции: ${decks.expeditions?.remaining || 0}</div><div class="event-decks">Легендарные карты: цифровой случайный пул из ${r.legendaryPool?.typeIds?.length || 4} видов, без отдельной колоды и сброса.</div>${feudCounts ? `<div class="event-decks">Вражда: ${escapeHtml(feudCounts)}</div>` : ''}`;
     if (phase?.active) {
       const currentName = playerName(phase.currentPlayerId);
       html += `<div class="event-current"><strong>${phase.personalTurn ? 'Шестой круг' : 'Фаза событий'} · ${escapeHtml(stageLabel)}</strong><br>Текущий игрок: ${escapeHtml(currentName)}.</div>`;
@@ -1747,6 +1753,82 @@
       }
     }
   }
+
+  function renderLegendaryPlaces() {
+    const r = state.room;
+    const mine = me();
+    const content = $('legendaryPlacesContent');
+    const actions = $('legendaryPlacesActions');
+    const badge = $('legendaryPlacesBadge');
+    actions.innerHTML = '';
+    if (!mine) {
+      badge.textContent = '0/10';
+      content.textContent = 'Данные легендарных мест недоступны.';
+      return;
+    }
+
+    const places = r.legendaryPlaces || [];
+    const placeById = Object.fromEntries(places.map(place => [place.id, place]));
+    const namedCards = r.namedPlaceCards || [];
+    const claimedCount = namedCards.filter(card => card.claimedBy).length;
+    badge.textContent = `${claimedCount}/${namedCards.length || 10}`;
+
+    let html = '<div class="legendary-journey-summary"><strong>Первое посещение</strong><br>Первый посетитель каждого легендарного места получает его открытую именную карту и одну случайную легендарную карту. Повторное посещение награду места не повторяет.</div>';
+
+    const openExpeditions = (r.players || []).filter(player => player.activeExpedition);
+    if (openExpeditions.length) {
+      html += '<div class="expedition-public"><strong>Открытые экспедиции</strong>';
+      for (const player of openExpeditions) {
+        const active = player.activeExpedition;
+        html += `<div class="expedition-public-row"><span>${escapeHtml(player.name)}</span><strong>${escapeHtml(active.name || placeById[active.placeId]?.name || active.placeId)}</strong></div>`;
+      }
+      html += '</div>';
+    }
+
+    const activeExpedition = mine.activeExpedition;
+    if (activeExpedition) {
+      const target = placeById[activeExpedition.placeId];
+      const targetKind = target?.kind === 'island' ? 'легендарный остров' : 'морское легендарное место';
+      const leaveRule = activeExpedition.requiresLeaveAndReturn
+        ? '<div class="expedition-warning"><strong>Сначала покиньте место.</strong> Эта экспедиция была получена уже в точке назначения; после выхода нужно вернуться.</div>'
+        : '<div class="cargo-meta">Завершится автоматически при следующем допустимом прибытии; отдельное действие не требуется.</div>';
+      html += `<div class="active-expedition"><strong>Ваша экспедиция: ${escapeHtml(activeExpedition.name || target?.name || activeExpedition.placeId)}</strong><div class="cargo-meta">Цель: ${escapeHtml(targetKind)} · получена в раунде ${activeExpedition.acceptedRound || r.round} · награда: случайное сокровище.</div>${leaveRule}</div>`;
+    } else {
+      const roundStatus = mine.expeditionTakenThisRound ? 'В этом раунде новая экспедиция уже получалась.' : 'Новой экспедиции в этом раунде ещё не было.';
+      html += `<div class="active-expedition muted">Активной экспедиции нет. ${escapeHtml(roundStatus)} Чтобы взять карту, завершите навигацию у своего острова с Картографической палатой и потратьте 1 действие.</div>`;
+    }
+
+    const history = mine.expeditionHistory || [];
+    html += `<div class="expedition-history"><strong>Ваша история экспедиций · ${history.length}/${places.length || 10}</strong>`;
+    if (history.length) {
+      html += history.map(item => `<div class="expedition-history-row"><span>${escapeHtml(item.name || placeById[item.placeId]?.name || item.placeId)}</span><span>раунд ${item.completedRound || '—'}</span></div>`).join('');
+    } else {
+      html += '<div class="cargo-meta">Завершённых мест пока нет.</div>';
+    }
+    html += '</div>';
+
+    html += '<div class="named-place-grid">';
+    for (const card of namedCards) {
+      const place = placeById[card.placeId];
+      const owner = card.claimedBy ? playerName(card.claimedBy) : 'не открыто';
+      const mineClass = card.claimedBy === state.myId ? ' mine' : '';
+      const claimedClass = card.claimedBy ? ' claimed' : '';
+      const kind = place?.kind === 'island' ? 'остров' : 'море';
+      html += `<div class="named-place-card${claimedClass}${mineClass}"><strong>${escapeHtml(card.name)}</strong><span>${escapeHtml(kind)} · ${escapeHtml(owner)}</span></div>`;
+    }
+    html += '</div>';
+    content.innerHTML = html;
+
+    if (mine.canTakeExpedition) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'primary';
+      button.textContent = 'Взять случайную экспедицию · 1 действие';
+      button.addEventListener('click', () => socket.emit('takeExpedition', {}, handleGameAck));
+      actions.appendChild(button);
+    }
+  }
+
   function renderLegendary() {
     const r = state.room;
     const mine = me();
@@ -1777,7 +1859,13 @@
     if (reaction) {
       const source = playerName(reaction.sourcePlayerId);
       const island = reaction.islandId ? r.islands.find(i => i.id === reaction.islandId) : null;
-      const what = reaction.kind === 'sea-attack' ? `морскую атаку ${source}` : reaction.kind === 'assault' ? `штурм ${island?.name || 'острова'} игроком ${source}` : `«Пламя Ада» против ${island?.name || 'острова'} от ${source}`;
+      const what = reaction.kind === 'sea-attack'
+        ? `морскую атаку ${source}`
+        : reaction.kind === 'assault'
+          ? `штурм ${island?.name || 'острова'} игроком ${source}`
+          : reaction.kind === 'sea-curse'
+            ? `«Морское проклятие» от ${source}`
+            : `«Пламя Ада» против ${island?.name || 'острова'} от ${source}`;
       html += `<div class="legendary-reaction"><strong>Реакция «Покров моря»</strong><br>${reaction.viewerCanRespond ? `Можно отменить ${escapeHtml(what)}.` : `Ожидается решение защитника: ${escapeHtml(playerName(reaction.targetPlayerId))}.`}</div>`;
       content.innerHTML = html;
       if (reaction.viewerCanRespond) {
@@ -1810,7 +1898,7 @@
 
     const descriptions = {
       'sea-veil': `Защитить свою флотилию или один свой остров на ${r.balanceCatalog.legendaryEffects['sea-veil'].durationPersonalTurns} следующих личных хода.`,
-      hellfire: 'На клетке чужого острова понизить каждую постройку выше I уровня на одну ступень.',
+      hellfire: 'На клетке чужого острова понизить каждую постройку на одну строительную ступень; исходная I удаляется.',
       'mist-path': 'Перенести флотилию на любую клетку, достижимую без запрещённых препятствий.',
       'sea-curse': `На одной клетке с чужим кораблём дать −${r.balanceCatalog.legendaryEffects['sea-curse'].amount} к обычному движению на ${r.balanceCatalog.legendaryEffects['sea-curse'].durationPersonalTurns} следующих личных хода.`,
     };
@@ -1843,9 +1931,9 @@
       } else if (ref.kind === 'hellfire') {
         for (const island of foreignHere) {
           const owner = island.ownerId ? r.players.find(p => p.id === island.ownerId) : null;
-          const blocked = !canUse || mine.inPeaceZone || Boolean(island.legendaryVeil?.remaining) || (owner && (r.round === 1 || areAlliesClient(state.myId, owner.id)));
+          const blocked = !canUse || mine.inPeaceZone || (owner && (r.round === 1 || areAlliesClient(state.myId, owner.id)));
           const b = document.createElement('button');
-          b.type = 'button'; b.className = 'danger-soft'; b.textContent = `Пламя → ${island.name}${island.legendaryVeil?.remaining ? ' · под Покровом' : ''}`; b.disabled = blocked;
+          b.type = 'button'; b.className = 'danger-soft'; b.textContent = `Пламя → ${island.name}${island.legendaryVeil?.remaining ? ' · Покров отменит карту' : ''}`; b.disabled = blocked;
           b.addEventListener('click', () => socket.emit('playLegendary', { source: ref.source, index: ref.index, islandId: island.id }, handleGameAck));
           row.appendChild(b);
         }
@@ -2974,13 +3062,18 @@
       const coast = Boolean(island) || citadel;
       const anchor = (r.anchorCells || []).find(a => a.row === cell.row && a.col === cell.col);
       const legendary = (r.map?.legendaryPlaces || []).find(p => p.row === cell.row && p.col === cell.col);
-      b.className = `cell-hit navigation-hit${coast ? ' shore' : ''}${citadel ? ' citadel' : ''}${legendary ? ' legendary-destination' : ''}${anchor ? ` anchor-destination anchor-${anchor.color}` : ''}`;
+      const expeditionPlace = mine.activeExpedition ? (r.legendaryPlaces || []).find(place => place.id === mine.activeExpedition.placeId) : null;
+      const expeditionTarget = Boolean(expeditionPlace && (
+        (expeditionPlace.kind === 'sea' && legendary?.id === expeditionPlace.id)
+        || (expeditionPlace.kind === 'island' && island?.id === expeditionPlace.islandId)
+      ));
+      b.className = `cell-hit navigation-hit${coast ? ' shore' : ''}${citadel ? ' citadel' : ''}${legendary ? ' legendary-destination' : ''}${expeditionTarget ? ' expedition-destination' : ''}${anchor ? ` anchor-destination anchor-${anchor.color}` : ''}`;
       b.disabled = state.mapMovePending;
       b.dataset.distance = String(cell.dist);
       placeCell(b, cell.row, cell.col);
       const placeName = island?.name || (citadel ? 'Цитадель' : '') || anchor?.name || legendary?.name || '';
       b.setAttribute('aria-label', `Перейти на клетку ${cell.col + 1}:${cell.row + 1}, путь ${cell.dist}${placeName ? `, ${placeName}` : ''}`);
-      b.title = placeName ? `${placeName} · ${cell.dist} клет.` : `${cell.dist} клет.`;
+      b.title = placeName ? `${placeName} · ${cell.dist} клет.${expeditionTarget ? ' · цель экспедиции' : ''}` : `${cell.dist} клет.${expeditionTarget ? ' · цель экспедиции' : ''}`;
       b.addEventListener('click', () => moveToMapCell(cell));
       highlightLayer.appendChild(b);
     }

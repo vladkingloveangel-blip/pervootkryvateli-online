@@ -585,6 +585,98 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
 
   return { changed, resumeEventPhase };
 }
+
+function normalizeStage6Compatibility(room, rng = Math.random) {
+  const base = normalizeAssignmentCompatibility(room, rng);
+  if (!room || !Array.isArray(room.players)) return base;
+  let changed = Boolean(base.changed);
+
+  if (!room.legendaryPlacesExplored || typeof room.legendaryPlacesExplored !== 'object' || Array.isArray(room.legendaryPlacesExplored)) {
+    room.legendaryPlacesExplored = {};
+    changed = true;
+  }
+
+  // Recover the public first-discovery registry from any saved named cards before
+  // filling missing player-facing arrays.
+  for (const player of room.players) {
+    if (!Array.isArray(player.namedPlaceCards)) continue;
+    for (const saved of player.namedPlaceCards) {
+      const canonical = NAMED_PLACE_CARDS.find(card => card.id === saved?.id || card.placeId === saved?.placeId);
+      if (!canonical || room.legendaryPlacesExplored[canonical.placeId]) continue;
+      room.legendaryPlacesExplored[canonical.placeId] = player.id;
+      changed = true;
+    }
+  }
+
+  for (const player of room.players) {
+    if (!Array.isArray(player.namedPlaceCards)) {
+      player.namedPlaceCards = [];
+      changed = true;
+    }
+    for (const card of NAMED_PLACE_CARDS) {
+      if (room.legendaryPlacesExplored[card.placeId] !== player.id) continue;
+      if (player.namedPlaceCards.some(saved => saved?.id === card.id)) continue;
+      player.namedPlaceCards.push(JSON.parse(JSON.stringify(card)));
+      changed = true;
+    }
+
+    if (!Array.isArray(player.expeditionHistory)) {
+      player.expeditionHistory = [];
+      changed = true;
+    }
+    if (!Object.hasOwn(player, 'activeExpedition')) {
+      player.activeExpedition = null;
+      changed = true;
+    }
+    if (player.activeExpedition) {
+      const active = player.activeExpedition;
+      const canonical = EXPEDITION_CARDS.find(card => card.id === active.cardId || card.placeId === active.placeId);
+      if (canonical) {
+        if (!active.cardId) { active.cardId = canonical.id; changed = true; }
+        if (!active.name) { active.name = canonical.name; changed = true; }
+        if (!active.placeId) { active.placeId = canonical.placeId; changed = true; }
+        if (!active.card) { active.card = { ...canonical }; changed = true; }
+      }
+    }
+    if (!Object.hasOwn(player, 'expeditionDrawRound')) {
+      player.expeditionDrawRound = null;
+      changed = true;
+    }
+    if (!Number.isFinite(Number(player.expeditionsDrawnThisRound))) {
+      player.expeditionsDrawnThisRound = 0;
+      changed = true;
+    }
+    if (!Array.isArray(player.legendaryCards)) {
+      player.legendaryCards = [];
+      changed = true;
+    }
+    if (!player.legendaryEffects || typeof player.legendaryEffects !== 'object' || Array.isArray(player.legendaryEffects)) {
+      player.legendaryEffects = { seaCurses: [] };
+      changed = true;
+    } else if (!Array.isArray(player.legendaryEffects.seaCurses)) {
+      player.legendaryEffects.seaCurses = [];
+      changed = true;
+    }
+    if (!Array.isArray(player.savedEventCards)) {
+      player.savedEventCards = [];
+      changed = true;
+    }
+  }
+
+  const reservedExpeditionIds = new Set(room.players.map(player => player.activeExpedition?.cardId).filter(Boolean));
+  if (!room.expeditionDeck || !Array.isArray(room.expeditionDeck.drawPile)) {
+    room.expeditionDeck = createExpeditionDeck(rng);
+    room.expeditionDeck.drawPile = room.expeditionDeck.drawPile.filter(card => !reservedExpeditionIds.has(card.id));
+    changed = true;
+  }
+  if (!Array.isArray(room.pendingExpeditionRewards)) {
+    room.pendingExpeditionRewards = [];
+    changed = true;
+  }
+
+  return { ...base, changed };
+}
+
 function assignAssignmentCard(room, player, factionId, card, rng = Math.random) {
   ensureAssignmentPlayer(player);
   if (player.activeAssignment) return { ok: false, error: 'У игрока уже есть активное поручение.' };
@@ -3596,6 +3688,7 @@ module.exports = {
   drawFeudCard,
   createAssignmentDecks,
   normalizeAssignmentCompatibility,
+  normalizeStage6Compatibility,
   drawAssignmentCard,
   issueAssignment,
   offerAssignmentCards,

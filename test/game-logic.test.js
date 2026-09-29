@@ -135,6 +135,7 @@ const {
   discardRandomHeldCard,
   createAssignmentDecks,
   normalizeAssignmentCompatibility,
+  normalizeStage6Compatibility,
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,
@@ -2176,8 +2177,38 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(Object.hasOwn(room.eventPhase, 'replacementIndex'), false);
   assert.equal(normalizeAssignmentCompatibility(room, () => 0.5).changed, false);
 }
+
+// Финализация 6.7 восстанавливает отсутствующие поля этапа 6 из сохранения,
+// не дублирует открытую именную карту и резервирует активную экспедицию вне колоды.
+{
+  const p = {
+    id:'stage6-legacy',
+    namedPlaceCards:[],
+    legendaryCards:[],
+    legendaryEffects:{ seaCurses:[] },
+    activeExpedition:{ cardId:'expedition-abyss', placeId:'abyss', name:'Бездна', acceptedRound:4, startedAtTarget:false, departedAfterIssue:false },
+  };
+  const room = {
+    round:5,
+    islands:cloneIslands(),
+    players:[p],
+    legendaryPlacesExplored:{ kraken:p.id },
+    assignmentDecks:createAssignmentDecks(()=>0.5),
+  };
+  const result = normalizeStage6Compatibility(room,()=>0.5);
+  assert.equal(result.changed,true);
+  assert.deepEqual(p.namedPlaceCards.map(card=>card.id),['place-kraken']);
+  assert.deepEqual(p.expeditionHistory,[]);
+  assert.equal(p.expeditionDrawRound,null);
+  assert.equal(p.expeditionsDrawnThisRound,0);
+  assert.equal(room.expeditionDeck.drawPile.length,9);
+  assert.equal(room.expeditionDeck.drawPile.some(card=>card.id==='expedition-abyss'),false);
+  assert.deepEqual(room.pendingExpeditionRewards,[]);
+  assert.equal(normalizeStage6Compatibility(room,()=>0.5).changed,false);
+}
+
 // Семь морских легендарных мест остаются координатными объектами карты, а три
-// легендарных острова имеют отдельный военный триггер первого открытия.
+// легендарных острова связаны с островами и открываются первым посещением в 6.6.
 {
   assert.equal(legendaryPlaceAt(24, 6)?.id, 'kraken');
   assert.equal(legendaryPlaceAt(12, 26)?.id, 'abyss');

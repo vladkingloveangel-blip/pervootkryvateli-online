@@ -171,9 +171,9 @@ test('complete known sea, assignment, feud and event decks match appendix rows',
   assert.deepEqual(rules.politics.assignments.mori.slice(0,8).map(c=>c.islandId),['renaika','chertog','kisalinia','yukon','erkalon','asigoriy','atlantia','adia']);
 });
 
-test('stage 6.6 resolves digital legendary rewards while stage 7 consumers remain pending', () => {
-  assert.equal(rules.implementation.activeProfile,'stage-6-events-legends-6.6');
-  assert.equal(data.RUNTIME_PROFILE,'stage-6-events-legends-6.6');
+test('stage 6.7 finalizes stage 6 while stage 7 consumers remain pending', () => {
+  assert.equal(rules.implementation.activeProfile,'stage-6-events-legends-6.7');
+  assert.equal(data.RUNTIME_PROFILE,'stage-6-events-legends-6.7');
   assert.equal(rules.implementation.pendingConsumers.some(item => item.consumerStage <= 6),false);
   assert.deepEqual(rules.implementation.pendingConsumers.map(item => item.consumerStage),[7,7]);
   assert.equal(rules.implementation.pendingConsumers.some(item => item.path === 'events.sailing.*.timing'),false);

@@ -104,7 +104,7 @@ const {
   createFeudDecks,
   drawFeudCard,
   createAssignmentDecks,
-  normalizeAssignmentCompatibility,
+  normalizeStage6Compatibility,
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,
@@ -262,7 +262,7 @@ async function initDatabase() {
   }
   await roomStore.init(rooms);
   for (const room of rooms.values()) {
-    const compatibility = normalizeAssignmentCompatibility(room);
+    const compatibility = normalizeStage6Compatibility(room);
     if (compatibility.resumeEventPhase) processEventPhase(room);
     if (compatibility.changed || compatibility.resumeEventPhase) await roomStore.save(room);
   }
@@ -588,6 +588,7 @@ function publicRoom(room, viewerId = null) {
       mapPlaceId: place.mapPlaceId || null,
       islandId: place.islandId || null,
       reward: place.unresolved ? null : (place.reward?.type || null),
+      rewardCount: place.unresolved ? 0 : Math.max(0, Number(place.reward?.count) || 0),
       rewardStatus: place.rewardStatus || null,
       unresolved: place.unresolved || null,
       exploredBy: room.legendaryPlacesExplored?.[place.id] || null,
@@ -746,7 +747,7 @@ function publicRoom(room, viewerId = null) {
         expeditionHistory: p.id === viewerId ? (p.expeditionHistory || []).map(item => ({ ...item })) : [],
         expeditionHistoryCount: (p.expeditionHistory || []).length,
         expeditionTakenThisRound: p.id === viewerId ? Number(p.expeditionDrawRound) === Number(room.round) : false,
-        canTakeExpedition: p.id === viewerId && active?.id === p.id && !room.eventPhase?.active && !hasPendingDecision(room)
+        canTakeExpedition: p.id === viewerId && active?.id === p.id && room.phase === 'actions' && (Number(room.actionsLeft) || 0) > 0 && !room.eventPhase?.active && !hasPendingDecision(room)
           ? canTakeExpedition(room, p).ok : false,
         legendaryCards: p.id === viewerId ? (p.legendaryCards || []).map((c, handIndex) => ({ id: c.id, name: c.name, handIndex })) : [],
         legendaryCardCount: (p.legendaryCards || []).length,

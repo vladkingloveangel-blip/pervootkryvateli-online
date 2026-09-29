@@ -1,6 +1,6 @@
 {
-  "activeProfile": "stage-6-events-legends-6.6",
-  "note": "Read rules/ as master data plus explicit author overrides from 2026-09-30. Stage 6.6 resolves R05/R06 for the mobile game: random legendary rewards use a uniform four-type pool with replacement and no physical deck/discard; the first visit to every legendary place grants its named card plus one random legendary card; Cartographic Chamber expeditions grant one random treasure. Legacy pendingLegendary is migrated into real random cards and legacy legendaryDeck state is retired.",
+  "activeProfile": "stage-6-events-legends-6.7",
+  "note": "Read rules/ as master data plus explicit author overrides from 2026-09-30. Stage 6.7 finalizes Stage 6: event/Observatory UI, all ten public named place cards, open expeditions with personal completion history, digital legendary-card UI/reactions, map target hints, and saved-room compatibility are active. No Stage 6 pending consumers remain; only Stage 7 consumers stay pending.",
   "pendingConsumers": [
     {
       "path": "scoring.titles",
