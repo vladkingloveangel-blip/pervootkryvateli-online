@@ -2180,15 +2180,16 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(normalizeAssignmentCompatibility(room, () => 0.5).changed, false);
 }
 
-// Финализация 6.7 восстанавливает отсутствующие поля этапа 6 из сохранения,
-// не дублирует открытую именную карту и резервирует активную экспедицию вне колоды.
+// Финализация 6.7 восстанавливает поля этапа 6 и удаляет из старых сохранений
+// отменённые экспедиции на Атлантию, Адию и Череп.
 {
   const p = {
     id:'stage6-legacy',
     namedPlaceCards:[],
     legendaryCards:[],
     legendaryEffects:{ seaCurses:[] },
-    activeExpedition:{ cardId:'expedition-abyss', placeId:'abyss', name:'Бездна', acceptedRound:4, startedAtTarget:false, departedAfterIssue:false },
+    activeExpedition:{ cardId:'expedition-atlantia', placeId:'atlantia', name:'Атлантия', acceptedRound:4, startedAtTarget:false, departedAfterIssue:false },
+    expeditionHistory:[{ placeId:'atlantia', name:'Атлантия', cardId:'expedition-atlantia', completedRound:3 }],
   };
   const room = {
     round:5,
@@ -2196,15 +2197,17 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
     players:[p],
     legendaryPlacesExplored:{ kraken:p.id },
     assignmentDecks:createAssignmentDecks(()=>0.5),
+    expeditionDeck:{ drawPile:createExpeditionDeck(()=>0.5).drawPile.concat([{ id:'expedition-atlantia', placeId:'atlantia', name:'Атлантия' }]) },
   };
   const result = normalizeStage6Compatibility(room,()=>0.5);
   assert.equal(result.changed,true);
   assert.deepEqual(p.namedPlaceCards.map(card=>card.id),['place-kraken']);
   assert.deepEqual(p.expeditionHistory,[]);
+  assert.equal(p.activeExpedition,null);
   assert.equal(p.expeditionDrawRound,null);
   assert.equal(p.expeditionsDrawnThisRound,0);
-  assert.equal(room.expeditionDeck.drawPile.length,9);
-  assert.equal(room.expeditionDeck.drawPile.some(card=>card.id==='expedition-abyss'),false);
+  assert.equal(room.expeditionDeck.drawPile.length,7);
+  assert.equal(room.expeditionDeck.drawPile.some(card=>['expedition-atlantia','expedition-adia','expedition-skull'].includes(card.id)),false);
   assert.deepEqual(room.pendingExpeditionRewards,[]);
   assert.equal(normalizeStage6Compatibility(room,()=>0.5).changed,false);
 }
@@ -2276,11 +2279,11 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(room.legendaryPlacesExplored.atlantia, 'p1');
 }
 
-// Экспедиционная колода содержит 10 физических карт. Получение возможно только
+// Экспедиционная колода содержит только 7 морских мест. Получение возможно только
 // за одно действие на клетке собственного острова с Картографической палатой.
 {
   const expeditionDeck = createExpeditionDeck(() => 0.5);
-  assert.equal(expeditionDeck.drawPile.length, 10);
+  assert.equal(expeditionDeck.drawPile.length, 7);
   const krakenIndex = expeditionDeck.drawPile.findIndex(card => card.id === 'expedition-kraken');
   const [krakenCard] = expeditionDeck.drawPile.splice(krakenIndex, 1);
   expeditionDeck.drawPile.unshift(krakenCard);
@@ -2316,7 +2319,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(completed.completed, true);
   assert.equal(p.activeExpedition, null);
   assert.deepEqual(p.expeditionHistory.map(item=>item.placeId), ['kraken']);
-  assert.equal(room.expeditionDeck.drawPile.length, 10);
+  assert.equal(room.expeditionDeck.drawPile.length, 7);
   assert.equal(canTakeExpedition(room, p).ok, false); // не у своего острова и выдача этого раунда использована
 
   room.round = 3;
@@ -2330,59 +2333,13 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(room.expeditionDeck.drawPile.some(card => card.id === 'expedition-kraken'), true); // затем возвращается и перемешивается
 }
 
-// Если экспедиция выдана непосредственно на её цели, корабль должен сначала
-// покинуть все клетки места и лишь затем вернуться.
+// Новый цифровой канон: экспедиций на Атлантию, Адию и Череп нет.
 {
-  const deck = createExpeditionDeck(() => 0.5);
-  const atlantiaIndex = deck.drawPile.findIndex(card => card.id === 'expedition-atlantia');
-  const [atlantiaCard] = deck.drawPile.splice(atlantiaIndex, 1);
-  deck.drawPile.unshift(atlantiaCard);
-  const islands = cloneIslands();
-  const atlantia = islands.find(island => island.id === 'atlantia');
-  atlantia.ownerId = 'p-leave';
-  atlantia.buildings = [{ type:'farm', level:1 }, { type:'cartography', level:1 }];
-  const [row,col] = atlantia.cells[0];
-  const p = { id:'p-leave', row, col, activeExpedition:null, expeditionHistory:[], expeditionDrawRound:null, expeditionsDrawnThisRound:0 };
-  const room = { round:2, islands, players:[p], expeditionDeck:deck };
-
-  const taken = takeExpedition(room, p, () => 0.5);
-  assert.equal(taken.expedition.placeId, 'atlantia');
-  assert.equal(taken.requiresLeaveAndReturn, true);
-  assert.equal(completeExpeditionAtArrival(room,p,()=>0.5).requiresLeaveAndReturn,true);
-
-  p.row = 0; p.col = 0;
-  assert.equal(completeExpeditionAtArrival(room,p,()=>0.5).departedAfterIssue,true);
-  [p.row,p.col] = atlantia.cells[1] || atlantia.cells[0];
-  assert.equal(completeExpeditionAtArrival(room,p,()=>0.5).completed,true);
+  const expeditionDeck = createExpeditionDeck(() => 0.5);
+  assert.equal(expeditionDeck.drawPile.length, 7);
+  assert.equal(expeditionDeck.drawPile.some(card => ['atlantia','adia','skull'].includes(card.placeId)), false);
+  assert.equal(EXPEDITION_CARDS.some(card => ['atlantia','adia','skull'].includes(card.placeId)), false);
 }
-
-// Для островной экспедиции достаточно прибыть на допустимую клетку берега;
-// военный захват, необходимый для первоначальной легендарной награды, не требуется.
-{
-  const deck = createExpeditionDeck(() => 0.5);
-  const atlantiaIndex = deck.drawPile.findIndex(card => card.id === 'expedition-atlantia');
-  const [atlantiaCard] = deck.drawPile.splice(atlantiaIndex, 1);
-  deck.drawPile.unshift(atlantiaCard);
-  const islands = cloneIslands();
-  const home = islands.find(island => island.id === 'maikan');
-  home.ownerId = 'p2';
-  home.buildings = [{ type:'farm', level:1 }, { type:'cartography', level:1 }];
-  const atlantia = islands.find(island => island.id === 'atlantia');
-  const [homeRow,homeCol] = home.cells[0];
-  const p = { id:'p2', row:homeRow, col:homeCol, activeExpedition:null, expeditionHistory:[], expeditionDrawRound:null, expeditionsDrawnThisRound:0 };
-  const room = { round:2, islands, players:[p], expeditionDeck:deck };
-  const taken = takeExpedition(room, p, () => 0.5);
-  assert.equal(taken.expedition.placeId, 'atlantia');
-  assert.equal(playerAtExpeditionPlace(room, p, 'atlantia'), false);
-  [p.row,p.col] = atlantia.cells[0];
-  assert.equal(playerAtExpeditionPlace(room, p, 'atlantia'), true);
-  const completed = completeExpeditionAtArrival(room, p, () => 0.5);
-  assert.equal(completed.completed, true);
-  assert.equal(atlantia.ownerId, null);
-  assert.deepEqual(p.expeditionHistory.map(item=>item.placeId), ['atlantia']);
-  assert.equal(room.expeditionDeck.drawPile.length, 10);
-}
-
 
 // Все шесть государств присутствуют в политическом runtime. Итоговые призы — только денежные;
 // авторское решение фиксирует итоговый приз Кадингира в 50 дукатов.

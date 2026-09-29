@@ -186,7 +186,9 @@ test('stage 6.7 finalizes stage 6 while stage 7 consumers remain pending', () =>
   assert.equal(data.NAMED_PLACE_CARDS.length,10);
   assert.equal(data.NAMED_PLACE_CARDS.every(card=>card.visibility==='public' && card.quantity===1),true);
   assert.deepEqual(data.EXPEDITION_CARDS,rules.legends.expeditions);
-  assert.equal(data.EXPEDITION_CARDS.length,10);
+  assert.equal(data.EXPEDITION_CARDS.length,7);
+  assert.deepEqual(data.EXPEDITION_CARDS.map(card=>card.placeId),['kraken','abyss','pharaoh','pearl','vortex','icebergs','rose']);
+  assert.equal(data.EXPEDITION_CARDS.some(card=>['atlantia','adia','skull'].includes(card.placeId)),false);
   assert.deepEqual(data.BALANCE.expeditionLimits,rules.legends.expeditionLimits);
   assert.deepEqual(data.BALANCE.legendaryEffects,Object.fromEntries(rules.legends.legendary.map(card=>[card.id,card.effect])));
   assert.deepEqual(data.BALANCE.legendaryPool,rules.legends.legendaryPool);
@@ -268,6 +270,7 @@ test('author decisions R05/R06 are resolved digitally while unrelated unknowns s
   assert.equal(rules.legends.legendaryPool.selection,'uniform');
   assert.deepEqual(rules.legends.legendaryPool.typeIds,['sea-veil','hellfire','mist-path','sea-curse']);
   assert.equal(rules.legends.legendaryPool.consumedOnUse,true);
+  assert.deepEqual(rules.legends.expeditions.map(card=>card.placeId),['kraken','abyss','pharaoh','pearl','vortex','icebergs','rose']);
   assert.equal(Object.hasOwn(rules.legends,'legendaryDeck'),false);
   assert.equal(rules.legends.legendary.every(card=>!Object.hasOwn(card,'quantity')),true);
   for(const place of rules.legends.places) {

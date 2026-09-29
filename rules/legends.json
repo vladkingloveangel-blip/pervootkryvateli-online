@@ -378,51 +378,6 @@
         "consumerStage": 6
       },
       "iconKey": "card.expedition"
-    },
-    {
-      "id": "expedition-atlantia",
-      "name": "Атлантия",
-      "placeId": "atlantia",
-      "quantity": 1,
-      "reward": {
-        "type": "treasure",
-        "count": 1
-      },
-      "availability": {
-        "status": "data-ready",
-        "consumerStage": 6
-      },
-      "iconKey": "card.expedition"
-    },
-    {
-      "id": "expedition-adia",
-      "name": "Адия",
-      "placeId": "adia",
-      "quantity": 1,
-      "reward": {
-        "type": "treasure",
-        "count": 1
-      },
-      "availability": {
-        "status": "data-ready",
-        "consumerStage": 6
-      },
-      "iconKey": "card.expedition"
-    },
-    {
-      "id": "expedition-skull",
-      "name": "Череп",
-      "placeId": "skull",
-      "quantity": 1,
-      "reward": {
-        "type": "treasure",
-        "count": 1
-      },
-      "availability": {
-        "status": "data-ready",
-        "consumerStage": 6
-      },
-      "iconKey": "card.expedition"
     }
   ],
   "expeditionLimits": {

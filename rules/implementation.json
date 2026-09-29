@@ -1,6 +1,6 @@
 {
   "activeProfile": "stage-6-events-legends-6.7",
-  "note": "Read rules/ as master data plus explicit author overrides from 2026-09-30. Stage 6.7 finalizes Stage 6: event/Observatory UI, all ten public named place cards, open expeditions with personal completion history, digital legendary-card UI/reactions, map target hints, and saved-room compatibility are active. No Stage 6 pending consumers remain; only Stage 7 consumers stay pending.",
+  "note": "Read rules/ as master data plus explicit author overrides from 2026-09-30. Stage 6.7 finalizes Stage 6: event/Observatory UI, all ten public named place cards, seven sea-place expeditions with personal completion history, digital legendary-card UI/reactions, map target hints, and saved-room compatibility are active. No Stage 6 pending consumers remain; only Stage 7 consumers stay pending.",
   "pendingConsumers": [
     {
       "path": "scoring.titles",

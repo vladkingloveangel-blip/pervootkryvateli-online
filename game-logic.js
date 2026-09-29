@@ -623,6 +623,13 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
     if (!Array.isArray(player.expeditionHistory)) {
       player.expeditionHistory = [];
       changed = true;
+    } else {
+      const validExpeditionPlaces = new Set(EXPEDITION_CARDS.map(card => card.placeId));
+      const filteredHistory = player.expeditionHistory.filter(item => validExpeditionPlaces.has(item?.placeId));
+      if (filteredHistory.length !== player.expeditionHistory.length) {
+        player.expeditionHistory = filteredHistory;
+        changed = true;
+      }
     }
     if (!Object.hasOwn(player, 'activeExpedition')) {
       player.activeExpedition = null;
@@ -631,7 +638,10 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
     if (player.activeExpedition) {
       const active = player.activeExpedition;
       const canonical = EXPEDITION_CARDS.find(card => card.id === active.cardId || card.placeId === active.placeId);
-      if (canonical) {
+      if (!canonical) {
+        player.activeExpedition = null;
+        changed = true;
+      } else {
         if (!active.cardId) { active.cardId = canonical.id; changed = true; }
         if (!active.name) { active.name = canonical.name; changed = true; }
         if (!active.placeId) { active.placeId = canonical.placeId; changed = true; }
@@ -668,6 +678,13 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
     room.expeditionDeck = createExpeditionDeck(rng);
     room.expeditionDeck.drawPile = room.expeditionDeck.drawPile.filter(card => !reservedExpeditionIds.has(card.id));
     changed = true;
+  } else {
+    const canonicalIds = new Set(EXPEDITION_CARDS.map(card => card.id));
+    const filteredDeck = room.expeditionDeck.drawPile.filter(card => canonicalIds.has(card?.id) && !reservedExpeditionIds.has(card.id));
+    if (filteredDeck.length !== room.expeditionDeck.drawPile.length) {
+      room.expeditionDeck.drawPile = filteredDeck;
+      changed = true;
+    }
   }
   if (!Array.isArray(room.pendingExpeditionRewards)) {
     room.pendingExpeditionRewards = [];

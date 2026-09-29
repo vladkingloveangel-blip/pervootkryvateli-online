@@ -1799,7 +1799,8 @@
     }
 
     const history = mine.expeditionHistory || [];
-    html += `<div class="expedition-history"><strong>Ваша история экспедиций · ${history.length}/${places.length || 10}</strong>`;
+    const expeditionTargetCount = places.filter(place => place.kind === 'sea').length || 7;
+    html += `<div class="expedition-history"><strong>Ваша история экспедиций · ${history.length}/${expeditionTargetCount}</strong>`;
     if (history.length) {
       html += history.map(item => `<div class="expedition-history-row"><span>${escapeHtml(item.name || placeById[item.placeId]?.name || item.placeId)}</span><span>раунд ${item.completedRound || '—'}</span></div>`).join('');
     } else {
@@ -3063,10 +3064,7 @@
       const anchor = (r.anchorCells || []).find(a => a.row === cell.row && a.col === cell.col);
       const legendary = (r.map?.legendaryPlaces || []).find(p => p.row === cell.row && p.col === cell.col);
       const expeditionPlace = mine.activeExpedition ? (r.legendaryPlaces || []).find(place => place.id === mine.activeExpedition.placeId) : null;
-      const expeditionTarget = Boolean(expeditionPlace && (
-        (expeditionPlace.kind === 'sea' && legendary?.id === expeditionPlace.id)
-        || (expeditionPlace.kind === 'island' && island?.id === expeditionPlace.islandId)
-      ));
+      const expeditionTarget = Boolean(expeditionPlace?.kind === 'sea' && legendary?.id === expeditionPlace.id);
       b.className = `cell-hit navigation-hit${coast ? ' shore' : ''}${citadel ? ' citadel' : ''}${legendary ? ' legendary-destination' : ''}${expeditionTarget ? ' expedition-destination' : ''}${anchor ? ` anchor-destination anchor-${anchor.color}` : ''}`;
       b.disabled = state.mapMovePending;
       b.dataset.distance = String(cell.dist);

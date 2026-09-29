@@ -327,15 +327,21 @@ function validateRules(rules, map) {
     check(p.reward?.type === 'legendary', p.id, 'legendary place first-discovery reward must be legendary');
     positive(p.reward?.count, `${p.id}.reward.count`);
   }
-  for (const key of ['namedCards','expeditions']) {
-    deck(legends[key], 10, key); unique(legends[key].map(c=>c.placeId), key);
-    for (const c of legends[key]) {
-      ref(c.placeId, places, c.id);
-      check(c.name === legends.places.find(p => p.id === c.placeId)?.name, c.id, 'place card/name mismatch');
-      check(c.quantity === 1, c.id, 'expected one named card per place');
-      if (key === 'namedCards') check(c.visibility === 'public', c.id, 'named place cards are public');
-      else check(c.reward?.type === 'treasure' && c.reward.count === 1, c.id, 'invalid expedition reward');
-    }
+  deck(legends.namedCards, 10, 'namedCards'); unique(legends.namedCards.map(c=>c.placeId), 'namedCards');
+  for (const c of legends.namedCards) {
+    ref(c.placeId, places, c.id);
+    check(c.name === legends.places.find(p => p.id === c.placeId)?.name, c.id, 'place card/name mismatch');
+    check(c.quantity === 1, c.id, 'expected one named card per place');
+    check(c.visibility === 'public', c.id, 'named place cards are public');
+  }
+  deck(legends.expeditions, 7, 'expeditions'); unique(legends.expeditions.map(c=>c.placeId), 'expeditions');
+  const seaPlaceIds = new Set(legends.places.filter(p => p.kind === 'sea').map(p => p.id));
+  check(seaPlaceIds.size === 7, 'expeditions', 'expected seven sea legendary places');
+  for (const c of legends.expeditions) {
+    ref(c.placeId, seaPlaceIds, c.id);
+    check(c.name === legends.places.find(p => p.id === c.placeId)?.name, c.id, 'place card/name mismatch');
+    check(c.quantity === 1, c.id, 'expected one expedition per sea place');
+    check(c.reward?.type === 'treasure' && c.reward.count === 1, c.id, 'invalid expedition reward');
   }
   records(legends.legendary, 'legendary'); records(legends.treasures, 'treasures');
   check(legends.legendary.length === 4, 'legendary', 'expected four digital legendary types');
