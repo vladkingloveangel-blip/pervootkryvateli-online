@@ -21,6 +21,7 @@ const {
   LEGENDARY_PLACES,
   LEGENDARY_PLACE_RULES,
   NAMED_PLACE_CARDS,
+  EXPEDITION_CARDS,
   ASSIGNMENT_CARDS,
   FACTIONS,
   POLITICAL_FACTION_ORDER,
@@ -157,6 +158,10 @@ function createTreasureDeck(rng = Math.random) {
 
 function createLegendaryDeck(rng = Math.random) {
   return { drawPile: shuffleCards(expandCardDefinitions(LEGENDARY_CARDS), rng), discard: [] };
+}
+
+function createExpeditionDeck(rng = Math.random) {
+  return { drawPile: shuffleCards(expandCardDefinitions(EXPEDITION_CARDS), rng) };
 }
 
 function drawCyclingDeckCard(deck, rng = Math.random) {
@@ -918,6 +923,109 @@ function claimLegendaryPlaceDiscovery(room, player, placeId) {
     player.namedPlaceCards.push(namedCard);
   }
   return { ok: true, first: true, place, exploredBy: player.id, namedCard };
+}
+
+function expeditionHistory(player) {
+  player.expeditionHistory ||= [];
+  return player.expeditionHistory;
+}
+
+function expeditionCompletionCount(player, placeId) {
+  return expeditionHistory(player).filter(item => item.placeId === String(placeId || '')).length;
+}
+
+function playerAtExpeditionPlace(room, player, placeId) {
+  const place = legendaryPlaceRule(placeId);
+  if (!room || !player || !place) return false;
+  if (place.kind === 'sea') {
+    const mapPlace = LEGENDARY_PLACES[place.mapPlaceId || place.id];
+    return Boolean(mapPlace && Number(player.row) === Number(mapPlace.row) && Number(player.col) === Number(mapPlace.col));
+  }
+  const island = room.islands?.find(item => item.id === place.islandId);
+  return Boolean(island && playerOnIsland(player, island));
+}
+
+function expeditionCardEligibleForPlayer(player, card) {
+  const limit = Math.max(1, Number(BALANCE.expeditionLimits?.completionsPerPlacePerPlayer) || 1);
+  return Boolean(card?.placeId) && expeditionCompletionCount(player, card.placeId) < limit;
+}
+
+function canTakeExpedition(room, player) {
+  if (!room || !player) return { ok: false, error: 'Игрок экспедиции не найден.' };
+  if (BUILDINGS.cartography?.effect?.type !== 'expedition-access' || !hasOwnedBuilding(room, player.id, 'cartography')) {
+    return { ok: false, error: 'Для получения экспедиции нужна собственная Картографическая палата.' };
+  }
+  if (player.activeExpedition) return { ok: false, error: 'Сначала завершите текущую экспедицию.' };
+  const perRound = Math.max(1, Number(BALANCE.expeditionLimits?.drawsPerRound) || 1);
+  const takenThisRound = Number(player.expeditionDrawRound) === Number(room.round)
+    ? Math.max(1, Number(player.expeditionsDrawnThisRound) || 1)
+    : 0;
+  if (takenThisRound >= perRound) return { ok: false, error: 'В текущем общем раунде экспедиция уже получалась.' };
+  room.expeditionDeck ||= createExpeditionDeck();
+  if (!(room.expeditionDeck.drawPile || []).some(card => expeditionCardEligibleForPlayer(player, card))) {
+    return { ok: false, error: 'В колоде нет доступной экспедиции на ещё не завершённое вами место.' };
+  }
+  return { ok: true };
+}
+
+function takeExpedition(room, player, rng = Math.random) {
+  const allowed = canTakeExpedition(room, player);
+  if (!allowed.ok) return allowed;
+  const deck = room.expeditionDeck;
+  const skipped = [];
+  let card = null;
+  while (deck.drawPile.length) {
+    const candidate = deck.drawPile.shift();
+    if (expeditionCardEligibleForPlayer(player, candidate)) { card = candidate; break; }
+    skipped.push(candidate);
+  }
+  deck.drawPile.push(...skipped);
+  if (!card) return { ok: false, error: 'В колоде нет доступной экспедиции.' };
+
+  const startedAtTarget = playerAtExpeditionPlace(room, player, card.placeId);
+  player.activeExpedition = {
+    card: { ...card },
+    cardId: card.id,
+    name: card.name,
+    placeId: card.placeId,
+    acceptedRound: Number(room.round) || 1,
+    startedAtTarget,
+    departedAfterIssue: false,
+  };
+  player.expeditionDrawRound = Number(room.round) || 1;
+  player.expeditionsDrawnThisRound = 1;
+  return { ok: true, expedition: player.activeExpedition, requiresLeaveAndReturn: startedAtTarget };
+}
+
+function completeExpeditionAtArrival(room, player) {
+  const active = player?.activeExpedition;
+  if (!room || !player || !active) return { ok: true, active: false, completed: false };
+  const atTarget = playerAtExpeditionPlace(room, player, active.placeId);
+  if (!atTarget) {
+    if (active.startedAtTarget) active.departedAfterIssue = true;
+    return { ok: true, active: true, completed: false, departedAfterIssue: Boolean(active.departedAfterIssue) };
+  }
+  if (active.startedAtTarget && !active.departedAfterIssue) {
+    return { ok: true, active: true, completed: false, requiresLeaveAndReturn: true };
+  }
+
+  const card = active.card || EXPEDITION_CARDS.find(item => item.id === active.cardId);
+  if (!card) return { ok: false, active: true, completed: false, error: 'Карта активной экспедиции не найдена.' };
+  const place = legendaryPlaceRule(active.placeId);
+  const history = expeditionHistory(player);
+  if (!history.some(item => item.placeId === active.placeId)) {
+    history.push({
+      placeId: active.placeId,
+      name: place?.name || card.name,
+      cardId: card.id,
+      completedRound: Number(room.round) || 1,
+    });
+  }
+  room.expeditionDeck ||= createExpeditionDeck();
+  room.expeditionDeck.drawPile ||= [];
+  room.expeditionDeck.drawPile.push({ ...card });
+  player.activeExpedition = null;
+  return { ok: true, active: false, completed: true, card: { ...card }, place, reward: card.reward ? { ...card.reward } : null };
 }
 
 function factionIdByName(name) {
@@ -3392,6 +3500,7 @@ module.exports = {
   createTreasureDeck,
   drawTreasureCard,
   createLegendaryDeck,
+  createExpeditionDeck,
   createFeudDecks,
   drawFeudCard,
   createAssignmentDecks,
@@ -3410,6 +3519,10 @@ module.exports = {
   legendaryPlaceRule,
   legendaryPlaceForIsland,
   claimLegendaryPlaceDiscovery,
+  canTakeExpedition,
+  takeExpedition,
+  completeExpeditionAtArrival,
+  playerAtExpeditionPlace,
   factionIdForIsland,
   stateExists,
   refreshFactionExistence,

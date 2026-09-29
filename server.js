@@ -98,6 +98,7 @@ const {
   createTreasureDeck,
   drawTreasureCard,
   createLegendaryDeck,
+  createExpeditionDeck,
   createFeudDecks,
   drawFeudCard,
   createAssignmentDecks,
@@ -114,6 +115,9 @@ const {
   legendaryPlaceAt,
   legendaryPlaceRule,
   claimLegendaryPlaceDiscovery,
+  canTakeExpedition,
+  takeExpedition,
+  completeExpeditionAtArrival,
   factionIdForIsland,
   stateExists,
   refreshFactionExistence,
@@ -544,6 +548,7 @@ function publicRoom(room, viewerId = null) {
       sailing: { remaining: room.eventDeck?.drawPile?.length || 0, discard: room.eventDeck?.discard?.length || 0 },
       treasure: { remaining: room.treasureDeck?.drawPile?.length || 0, discard: room.treasureDeck?.discard?.length || 0 },
       legendary: { remaining: room.legendaryDeck?.drawPile?.length || 0, discard: room.legendaryDeck?.discard?.length || 0 },
+      expeditions: { remaining: room.expeditionDeck?.drawPile?.length || 0 },
     },
     factions: POLITICAL_FACTION_ORDER.map(factionId => {
       const f = FACTIONS[factionId];
@@ -660,7 +665,8 @@ function publicRoom(room, viewerId = null) {
       garrisons: BALANCE.garrisons, bastion: { price: BUILDINGS.bastion.price, defense: BUILDINGS.bastion.defense },
       maxEscorts: BALANCE.maxEscorts, contractBonusRatio: BALANCE.contractBonusRatio,
       loadingLimitPerIslandPerRound: BALANCE.loadingLimitPerIslandPerRound,
-      landCompany: BALANCE.landCompany, legendaryEffects: BALANCE.legendaryEffects },
+      landCompany: BALANCE.landCompany, legendaryEffects: BALANCE.legendaryEffects,
+      expeditionLimits: { ...BALANCE.expeditionLimits } },
     shipCatalog: Object.fromEntries(Object.entries(SHIPS).map(([id, ship]) => [id, { ...ship }])),
     goodsCatalog: Object.fromEntries(Object.entries(GOODS).map(([id, g]) => [id, {
       id: g.id, name: g.name, price: g.price,
@@ -720,6 +726,19 @@ function publicRoom(room, viewerId = null) {
         specialCardCount: (p.specialCards || []).length,
         namedPlaceCards: (p.namedPlaceCards || []).map(card => ({ id: card.id, name: card.name, placeId: card.placeId })),
         namedPlaceCardCount: (p.namedPlaceCards || []).length,
+        activeExpedition: p.id === viewerId && p.activeExpedition ? {
+          cardId: p.activeExpedition.cardId,
+          name: p.activeExpedition.name,
+          placeId: p.activeExpedition.placeId,
+          acceptedRound: Number(p.activeExpedition.acceptedRound) || null,
+          requiresLeaveAndReturn: Boolean(p.activeExpedition.startedAtTarget && !p.activeExpedition.departedAfterIssue),
+        } : null,
+        hasActiveExpedition: Boolean(p.activeExpedition),
+        expeditionHistory: p.id === viewerId ? (p.expeditionHistory || []).map(item => ({ ...item })) : [],
+        expeditionHistoryCount: (p.expeditionHistory || []).length,
+        expeditionTakenThisRound: p.id === viewerId ? Number(p.expeditionDrawRound) === Number(room.round) : false,
+        canTakeExpedition: p.id === viewerId && active?.id === p.id && !room.eventPhase?.active && !hasPendingDecision(room)
+          ? canTakeExpedition(room, p).ok : false,
         legendaryCards: p.id === viewerId ? (p.legendaryCards || []).map((c, handIndex) => ({ id: c.id, name: c.name, handIndex })) : [],
         legendaryCardCount: (p.legendaryCards || []).length,
         playableLegendaryCards: p.id === viewerId ? allLegendaryCardRefs(p) : [],
@@ -2337,6 +2356,7 @@ function advanceRound(room) {
     player.armyPointOpponentIds = [];
     player.attackLimitRound = room.round;
     player.attackCountsThisRound = {};
+    player.expeditionsDrawnThisRound = 0;
   }
   refreshFactionExistence(room);
   log(room, `Начинается раунд ${room.round}: ограничения погрузки, отметки посещённых якорей и пары нападений «нападающий — игрок-цель» сброшены.`);
@@ -2457,6 +2477,7 @@ function finishPendingEvent(room, pending) {
     }
   } else {
     room.pendingEvent = null;
+    drainExpeditionTreasureRewards(room);
   }
 }
 
@@ -2677,6 +2698,81 @@ function handleLegendaryPlaceStop(room, player) {
   }
   return { place, first: true, discovery };
 }
+
+function resolveExpeditionTreasureReward(room, player, reward) {
+  const label = reward?.expeditionName || 'экспедиция';
+  const treasureAssignmentInstanceId = reward?.treasureAssignmentInstanceId || null;
+  const treasure = drawTreasureCard(room);
+  if (!treasure) {
+    log(room, `${player.name}: экспедиция «${label}» завершена, но колода сокровищ пуста.`);
+    return { pending: false, empty: true };
+  }
+  if (treasure.multiplier) {
+    const result = resolveMoneyTreasure(room, player, treasure);
+    discardDeckCard(room.treasureDeck, treasure);
+    trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: treasureAssignmentInstanceId });
+    log(room, `${player.name}: экспедиция «${label}» даёт сокровище «${treasure.name}», получено ${result.amount} дукатов.`);
+    return { pending: false, treasure };
+  }
+
+  const holds = emptyCargoHolds(room, player);
+  if (!holds.length) {
+    discardDeckCard(room.treasureDeck, treasure);
+    trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: treasureAssignmentInstanceId });
+    log(room, `${player.name}: экспедиция «${label}» даёт «${treasure.name}». Все трюмы заняты; карта сокровища сброшена без эффекта.`);
+    return { pending: false, treasure };
+  }
+  if (holds.length === 1) {
+    const loaded = fillCargoDirect(room, player, treasure.cargoGoodId, holds[0].id);
+    discardDeckCard(room.treasureDeck, treasure);
+    trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: treasureAssignmentInstanceId });
+    log(room, `${player.name}: экспедиция «${label}» даёт «${treasure.name}». ${loaded.holdName} заполнен товаром «${loaded.good.name}» ×${loaded.quantity}.`);
+    return { pending: false, treasure };
+  }
+
+  room.pendingEvent = {
+    id: crypto.randomUUID(),
+    playerId: player.id,
+    kind: 'cargo',
+    cardName: `Экспедиция «${label}»: ${treasure.name}`,
+    options: holds.map(o => ({ ...o })),
+    goodId: treasure.cargoGoodId,
+    treasureCard: { ...treasure },
+    treasureAssignmentInstanceId,
+    origin: 'expedition',
+  };
+  log(room, `${player.name}: экспедиция «${label}» даёт «${treasure.name}». Нужно выбрать пустой трюм.`);
+  return { pending: true, treasure };
+}
+
+function drainExpeditionTreasureRewards(room) {
+  if (room.pendingEvent) return true;
+  room.pendingExpeditionRewards ||= [];
+  while (room.pendingExpeditionRewards.length) {
+    const queued = room.pendingExpeditionRewards.shift();
+    const player = playerById(room, queued.playerId);
+    if (!player) continue;
+    const result = resolveExpeditionTreasureReward(room, player, queued);
+    if (result.pending) return true;
+  }
+  return false;
+}
+
+function handleExpeditionArrival(room, player) {
+  const completion = completeExpeditionAtArrival(room, player);
+  if (!completion?.completed) return completion;
+  const name = completion.place?.name || completion.card?.name || 'экспедиция';
+  log(room, `${player.name} завершает экспедицию «${name}» без расхода действия. Карта экспедиции возвращена в колоду; место добавлено в личную историю.`);
+  room.pendingExpeditionRewards ||= [];
+  room.pendingExpeditionRewards.push({
+    playerId: player.id,
+    expeditionName: name,
+    treasureAssignmentInstanceId: player.activeAssignment?.instanceId || null,
+  });
+  if (!room.pendingEvent) drainExpeditionTreasureRewards(room);
+  return completion;
+}
+
 function handleArrival(room, player) {
   noteMoriAssignmentDeparture(room, player);
   const claims = claimFreeIslandsAt(room, player);
@@ -2685,6 +2781,7 @@ function handleArrival(room, player) {
     applyFreeClaimReward(room, player, island);
   }
   handleLegendaryPlaceStop(room, player);
+  handleExpeditionArrival(room, player);
 }
 
 function attachPlayer(socket, room, player) {
@@ -2734,6 +2831,10 @@ function newPlayer(socket, data, color) {
     col: MAP_META.startCell[1],
     specialCards: [],
     namedPlaceCards: [],
+    activeExpedition: null,
+    expeditionHistory: [],
+    expeditionDrawRound: null,
+    expeditionsDrawnThisRound: 0,
     cargo: null,
     upgrades: [],
     disabledUpgradeIds: [],
@@ -2876,6 +2977,8 @@ io.on('connection', socket => {
       eventDeck: createSailingEventDeck(),
       treasureDeck: createTreasureDeck(),
       legendaryDeck: createLegendaryDeck(),
+      expeditionDeck: createExpeditionDeck(),
+      pendingExpeditionRewards: [],
       feudDecks: createFeudDecks(),
       assignmentDecks: createAssignmentDecks(),
       legendaryPlacesExplored: {},
@@ -3076,18 +3179,42 @@ io.on('connection', socket => {
     room.eventDeck = createSailingEventDeck();
     room.treasureDeck = createTreasureDeck();
     room.legendaryDeck = createLegendaryDeck();
+    room.expeditionDeck = createExpeditionDeck();
+    room.pendingExpeditionRewards = [];
     room.feudDecks = createFeudDecks();
     room.assignmentDecks = createAssignmentDecks();
     room.legendaryPlacesExplored = {};
     room.factionState = {};
     room.players.forEach(p => {
       p.row = 0; p.col = 0; p.ducats = BALANCE.session.startingDucats; p.debt = 0; p.level = 1; p.specialCards = []; p.cargo = null; p.upgrades = []; p.disabledUpgradeIds = []; p.escorts = []; p.levelInactiveEscortIds = []; p.nextEscortId = 0;
-      p.glory = 0; p.fleetPoints = 0; p.fleetPointRound = room.round; p.fleetPointOpponentIds = []; p.armyPoints = 0; p.armyPointRound = room.round; p.armyPointOpponentIds = []; p.skipTurns = 0; p.personalTurnNo = 0; p.attackLimitRound = room.round; p.attackCountsThisRound = {}; p.brokenAlliesThisTurn = []; p.pendingLegendary = 0; p.pendingLandinEscort = false; p.legendaryCards = []; p.legendaryEffects = { seaCurses: [] }; p.savedEventCards = []; p.nextTurnEffects = {}; p.activeTurnEffects = {}; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignment = null; p.landCompany = null; p.bastionPriority = []; p.inactiveBastionIslandIds = []; p.character = null; p.characterReplacedRound = null; p.palaceUsed = false;
+      p.glory = 0; p.fleetPoints = 0; p.fleetPointRound = room.round; p.fleetPointOpponentIds = []; p.armyPoints = 0; p.armyPointRound = room.round; p.armyPointOpponentIds = []; p.skipTurns = 0; p.personalTurnNo = 0; p.attackLimitRound = room.round; p.attackCountsThisRound = {}; p.brokenAlliesThisTurn = []; p.pendingLegendary = 0; p.pendingLandinEscort = false; p.activeExpedition = null; p.expeditionHistory = []; p.expeditionDrawRound = null; p.expeditionsDrawnThisRound = 0; p.legendaryCards = []; p.legendaryEffects = { seaCurses: [] }; p.savedEventCards = []; p.nextTurnEffects = {}; p.activeTurnEffects = {}; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignment = null; p.landCompany = null; p.bastionPriority = []; p.inactiveBastionIslandIds = []; p.character = null; p.characterReplacedRound = null; p.palaceUsed = false;
     });
     refreshFactionExistence(room);
     log(room, `Партия началась. Порядок: ${room.order.map(id => room.players.find(p => p.id === id)?.name).join(' → ')}.`);
     beginTurn(room);
     ackSafe(ack, { ok: true });
+    emitRoom(room);
+  });
+
+
+  onSocketEvent(socket, 'takeExpedition', (_data, ack) => {
+    const room = getRoom(socket.data.roomCode);
+    const p = currentPlayer(room);
+    if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Экспедицию можно получить только в свой личный ход.' });
+    if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
+    if (room.eventPhase?.active) return ackSafe(ack, { ok: false, error: 'Сначала завершите обязательные карты шестого круга.' });
+    if (!['navigation','actions'].includes(room.phase)) return ackSafe(ack, { ok: false, error: 'Сейчас экспедицию получить нельзя.' });
+    const result = takeExpedition(room, p);
+    if (!result.ok) return ackSafe(ack, result);
+    const returnText = result.requiresLeaveAndReturn ? ' Корабль уже находится в месте назначения: сначала нужно покинуть его, затем вернуться.' : '';
+    log(room, `${p.name} получает экспедицию «${result.expedition.name}» из Картографической палаты. Действие не расходуется.${returnText}`);
+    ackSafe(ack, { ok: true, expedition: {
+      cardId: result.expedition.cardId,
+      name: result.expedition.name,
+      placeId: result.expedition.placeId,
+      acceptedRound: result.expedition.acceptedRound,
+      requiresLeaveAndReturn: Boolean(result.requiresLeaveAndReturn),
+    } });
     emitRoom(room);
   });
 

@@ -1,12 +1,7 @@
 {
-  "activeProfile": "stage-6-events-legends-6.3",
-  "note": "Read rules/ as master data. Stage 6.3 activates all ten legendary places and their ten public named cards: sea places are discovered by stopping on their map cells, legendary islands by first successful military capture; named cards and one-time rewards are never repeated. R05/R06 remain unresolved and are not invented.",
+  "activeProfile": "stage-6-events-legends-6.4",
+  "note": "Read rules/ as master data. Stage 6.4 activates the separate ten-card expedition deck through Cartographic Chambers: one active expedition per player, one draw per general round, completed-place filtering, leave-and-return completion, automatic treasure reward, card return to the deck, and personal completion history. Later legendary-card behavior and stage 7 consumers remain pending.",
   "pendingConsumers": [
-    {
-      "path": "legends.expeditions",
-      "consumerStage": 6,
-      "status": "data-ready"
-    },
     {
       "path": "legends.legendary.*.effect",
       "consumerStage": 6,

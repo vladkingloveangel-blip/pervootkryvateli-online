@@ -82,6 +82,7 @@ const {
   createTreasureDeck,
   drawTreasureCard,
   createLegendaryDeck,
+  createExpeditionDeck,
   drawLegendaryCard,
   discardDeckCard,
   emptyCargoHolds,
@@ -145,8 +146,12 @@ const {
   legendaryPlaceRule,
   legendaryPlaceForIsland,
   claimLegendaryPlaceDiscovery,
+  canTakeExpedition,
+  takeExpedition,
+  completeExpeditionAtArrival,
+  playerAtExpeditionPlace,
 } = require('../game-logic');
-const { BALANCE, MAP_META, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS, BUILDINGS, CHARACTERS, ANCHORS } = require('../game-data');
+const { BALANCE, MAP_META, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS, BUILDINGS, CHARACTERS, ANCHORS, LEGENDARY_PLACES } = require('../game-data');
 
 function has(cells, row, col) { return cells.some(c => c.row === row && c.col === col); }
 
@@ -2166,6 +2171,91 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(secondPlayer.ducats, 0);
   assert.deepEqual(secondPlayer.namedPlaceCards, []);
   assert.equal(room.legendaryPlacesExplored.atlantia, 'p1');
+}
+
+// Экспедиционная колода содержит 10 физических карт. Картографическая палата даёт
+// одну выдачу на игрока за общий раунд и не позволяет держать две незавершённые карты.
+{
+  const expeditionDeck = createExpeditionDeck(() => 0.5);
+  assert.equal(expeditionDeck.drawPile.length, 10);
+  const krakenIndex = expeditionDeck.drawPile.findIndex(card => card.id === 'expedition-kraken');
+  const [krakenCard] = expeditionDeck.drawPile.splice(krakenIndex, 1);
+  expeditionDeck.drawPile.unshift(krakenCard);
+
+  const islands = cloneIslands();
+  const home = islands.find(island => island.id === 'maikan');
+  home.ownerId = 'p1';
+  home.buildings = [{ type:'farm', level:1 }, { type:'cartography', level:1 }];
+  const p = {
+    id:'p1',
+    row:LEGENDARY_PLACES.kraken.row,
+    col:LEGENDARY_PLACES.kraken.col,
+    activeExpedition:null,
+    expeditionHistory:[],
+    expeditionDrawRound:null,
+    expeditionsDrawnThisRound:0,
+  };
+  const room = { round:2, islands, players:[p], expeditionDeck };
+
+  assert.equal(canTakeExpedition(room, p).ok, true);
+  const taken = takeExpedition(room, p, () => 0.5);
+  assert.equal(taken.ok, true);
+  assert.equal(taken.expedition.cardId, 'expedition-kraken');
+  assert.equal(taken.requiresLeaveAndReturn, true);
+  assert.equal(room.expeditionDeck.drawPile.length, 9);
+  assert.equal(canTakeExpedition(room, p).ok, false);
+
+  const samePlace = completeExpeditionAtArrival(room, p);
+  assert.equal(samePlace.completed, false);
+  assert.equal(samePlace.requiresLeaveAndReturn, true);
+
+  p.row = 0; p.col = 0;
+  const left = completeExpeditionAtArrival(room, p);
+  assert.equal(left.completed, false);
+  assert.equal(left.departedAfterIssue, true);
+
+  p.row = LEGENDARY_PLACES.kraken.row;
+  p.col = LEGENDARY_PLACES.kraken.col;
+  const completed = completeExpeditionAtArrival(room, p);
+  assert.equal(completed.completed, true);
+  assert.equal(p.activeExpedition, null);
+  assert.deepEqual(p.expeditionHistory.map(item=>item.placeId), ['kraken']);
+  assert.equal(room.expeditionDeck.drawPile.length, 10);
+  assert.equal(canTakeExpedition(room, p).ok, false); // та же выдача уже использована в раунде 2
+
+  room.round = 3;
+  const returnedIndex = room.expeditionDeck.drawPile.findIndex(card => card.id === 'expedition-kraken');
+  const [returnedKraken] = room.expeditionDeck.drawPile.splice(returnedIndex, 1);
+  room.expeditionDeck.drawPile.unshift(returnedKraken);
+  const next = takeExpedition(room, p, () => 0.5);
+  assert.equal(next.ok, true);
+  assert.notEqual(next.expedition.placeId, 'kraken'); // завершённое место фильтруется для этого игрока
+}
+
+// Для островной экспедиции достаточно прибыть на клетку острова: военный захват,
+// необходимый для первооткрытия из 6.3, не является условием выполнения экспедиции.
+{
+  const deck = createExpeditionDeck(() => 0.5);
+  const atlantiaIndex = deck.drawPile.findIndex(card => card.id === 'expedition-atlantia');
+  const [atlantiaCard] = deck.drawPile.splice(atlantiaIndex, 1);
+  deck.drawPile.unshift(atlantiaCard);
+  const islands = cloneIslands();
+  const home = islands.find(island => island.id === 'maikan');
+  home.ownerId = 'p2';
+  home.buildings = [{ type:'farm', level:1 }, { type:'cartography', level:1 }];
+  const atlantia = islands.find(island => island.id === 'atlantia');
+  const p = { id:'p2', row:0, col:0, activeExpedition:null, expeditionHistory:[], expeditionDrawRound:null, expeditionsDrawnThisRound:0 };
+  const room = { round:2, islands, players:[p], expeditionDeck:deck };
+  const taken = takeExpedition(room, p, () => 0.5);
+  assert.equal(taken.expedition.placeId, 'atlantia');
+  assert.equal(playerAtExpeditionPlace(room, p, 'atlantia'), false);
+  [p.row,p.col] = atlantia.cells[0];
+  assert.equal(playerAtExpeditionPlace(room, p, 'atlantia'), true);
+  const completed = completeExpeditionAtArrival(room, p);
+  assert.equal(completed.completed, true);
+  assert.equal(atlantia.ownerId, null);
+  assert.deepEqual(p.expeditionHistory.map(item=>item.placeId), ['atlantia']);
+  assert.equal(room.expeditionDeck.drawPile.length, 10);
 }
 
 

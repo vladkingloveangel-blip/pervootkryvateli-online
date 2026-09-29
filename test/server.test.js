@@ -46,7 +46,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(canonical.metadata.schemaVersion, 1);
   assert.equal(canonical.politics.factions.kadingir.fullConquestPrize.ducats, 50);
   assert.equal(canonical.islands.length, 28);
-  assert.equal(canonical.implementation.activeProfile, 'stage-6-events-legends-6.3');
+  assert.equal(canonical.implementation.activeProfile, 'stage-6-events-legends-6.4');
   assert.equal(canonical.implementation.pendingConsumers.some(item => item.consumerStage <= 5), false);
   const a = (await api('/api/auth/register', null, { username: 'playerone', password: 'password1' })).data;
   const b = (await api('/api/auth/register', null, { username: 'playertwo', password: 'password2' })).data;
@@ -107,12 +107,13 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.ruleset.rulesetVersion, canonical.metadata.rulesetVersion);
   assert.equal(watch.room.balanceCatalog.bastion.price, canonical.economy.buildings.bastion.price);
   assert.equal(watch.room.balanceCatalog.bastion.defense, canonical.economy.buildings.bastion.defense);
-  assert.equal(watch.room.runtimeProfile, 'stage-6-events-legends-6.3');
+  assert.equal(watch.room.runtimeProfile, 'stage-6-events-legends-6.4');
   assert.equal(watch.room.shipCatalog.brigantine.artillery, canonical.fleet.ships.brigantine.artillery);
   assert.deepEqual(watch.room.balanceCatalog.landCompany, canonical.economy.landCompany);
   assert.deepEqual(watch.room.balanceCatalog.garrisons, canonical.economy.garrisons);
   assert.equal(watch.room.balanceCatalog.loadingLimitPerIslandPerRound, canonical.economy.loadingLimitPerIslandPerRound);
   assert.equal(watch.room.balanceCatalog.contractBonusRatio, canonical.economy.contractBonusRatio);
+  assert.deepEqual(watch.room.balanceCatalog.expeditionLimits, canonical.legends.expeditionLimits);
   assert.equal(watch.room.balanceCatalog.combat.attacksPerOpponentPerRound, canonical.scoring.combat.attacksPerOpponentPerRound);
   assert.deepEqual(watch.room.balanceCatalog.fleetScoring, canonical.scoring.fleet);
   assert.equal(watch.room.anchorCells.find(a=>a.color==='blue').fleetPoints, canonical.scoring.fleet.anchor.blue);
@@ -139,6 +140,8 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.map.legendaryPlaces.length,7);
   assert.equal(watch.room.namedPlaceCards.length,10);
   assert.equal(watch.room.namedPlaceCards.every(card=>card.visibility==='public' && card.claimedBy===null),true);
+  assert.equal(watch.room.eventDecks.expeditions.remaining,10);
+  assert.equal(watch.room.players.every(player=>player.hasActiveExpedition===false && player.expeditionHistoryCount===0),true);
   assert.equal(Object.hasOwn(watch.room.balanceCatalog,'assignmentReplacementPrice'),false);
   assert.equal(watch.room.balanceCatalog.legendaryEffects['sea-curse'].amount, canonical.legends.legendary.find(c => c.id === 'sea-curse').effect.amount);
   assert.equal(watch.room.shipLevelCatalog[7], undefined);
