@@ -1020,7 +1020,7 @@ const BUILDING_BRANCH_NAMES = {
 };
 
 function islandConstraintReport(island) {
-  if (!island) return { legal: true, status: 'Без поселения', usedArea: 0, effectiveArea: 0, overArea: 0, branchLimit: 2, branchViolations: [] };
+  if (!island) return { legal: true, status: 'Без поселения', usedArea: 0, effectiveArea: 0, overArea: 0, branchLimit: BALANCE.branchLimits.settlement, branchViolations: [] };
   const status = islandStatus(island);
   const used = usedArea(island);
   const area = effectiveArea(island);
@@ -1579,7 +1579,7 @@ function canRemoveShipUpgrade(player, upgradeId) {
   const upgrade = SHIP_UPGRADES[upgradeId];
   if (!upgrade || !(player.upgrades || []).includes(upgradeId)) return { ok: false, error: 'Улучшение не установлено.' };
   if (upgrade.order === 1) {
-    const second = (player.upgrades || []).find(id => SHIP_UPGRADES[id]?.branch === upgrade.branch && SHIP_UPGRADES[id]?.order === 2);
+    const second = (player.upgrades || []).find(id => SHIP_UPGRADES[id]?.branch === upgrade.branch && SHIP_UPGRADES[id]?.order === BALANCE.maxBranchUpgrades);
     if (second) return { ok: false, error: 'Сначала нужно снять второе улучшение этой ветви.' };
   }
   return { ok: true, upgrade };
@@ -1640,7 +1640,7 @@ function removeEscortsForShipyard(room, player, ids) {
 function createLandinEscort(player) {
   player.escorts ||= [];
   if (player.escorts.some(e => e.type === 'landin')) return { ok: false, error: 'Особое сопровождение Ландина уже получено.' };
-  if (player.escorts.length >= BALANCE.maxEscorts) return { ok: false, error: 'Для сопровождения Ландина нужно заменить одно из трёх имеющихся судов.' };
+  if (player.escorts.length >= BALANCE.maxEscorts) return { ok: false, error: `Для сопровождения Ландина нужно заменить одно из ${BALANCE.maxEscorts} имеющихся судов.` };
   player.nextEscortId = (Number(player.nextEscortId) || 0) + 1;
   const escort = { id: `escort-${player.nextEscortId}`, type: 'landin', special: true, cargo: null };
   player.escorts.push(escort);
@@ -1757,7 +1757,7 @@ function canBuyEscort(room, player, type) {
   if (!def || def.retired) return { ok: false, error: 'Этот тип сопровождения не продаётся.' };
   if (!isCitadelCell(player.row, player.col)) return { ok: false, error: 'Сопровождение покупают только в Цитадели.' };
   player.escorts ||= [];
-  if (player.escorts.length >= BALANCE.maxEscorts) return { ok: false, error: 'Одновременно можно иметь не более трёх судов сопровождения.' };
+  if (player.escorts.length >= BALANCE.maxEscorts) return { ok: false, error: `Одновременно можно иметь не более ${BALANCE.maxEscorts} судов сопровождения.` };
   if (player.escorts.length >= escortUseLimit(player)) return { ok: false, error: 'Текущий уровень основного корабля не позволяет использовать ещё одно сопровождение.' };
   const ordinaryCount = player.escorts.filter(e => !e.special).length;
   const shipyardSlots = shipyardSlotsForPlayer(room, player.id);
@@ -2170,10 +2170,10 @@ function grantMilitaryReward(room, player, island, captureMode, options = {}) {
       player.escorts ||= [];
       if (player.escorts.length < BALANCE.maxEscorts) {
         const created = createLandinEscort(player);
-        if (created.ok) notes.push('особое сопровождение Ландина: +6 артиллерии и трюм 5');
+        if (created.ok) notes.push(`особое сопровождение Ландина: +${ESCORTS.landin.artillery} артиллерии и трюм ${ESCORTS.landin.cargo}`);
       } else {
         player.pendingLandinEscort = true;
-        notes.push('особое сопровождение Ландина заменит одно из трёх имеющихся судов по выбору владельца');
+        notes.push(`особое сопровождение Ландина заменит одно из ${BALANCE.maxEscorts} имеющихся судов по выбору владельца`);
       }
     }
   }

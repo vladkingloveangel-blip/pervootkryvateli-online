@@ -87,6 +87,9 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.ruleset.rulesetVersion, canonical.metadata.rulesetVersion);
   assert.equal(watch.room.balanceCatalog.bastion.price, canonical.economy.buildings.bastion.price);
   assert.equal(watch.room.balanceCatalog.bastion.defense, canonical.economy.buildings.bastion.defense);
+  assert.equal(watch.room.shipCatalog.brigantine.artillery, canonical.fleet.ships.brigantine.artillery);
+  assert.deepEqual(watch.room.balanceCatalog.landCompany, canonical.economy.landCompany);
+  assert.equal(watch.room.balanceCatalog.legendaryEffects['sea-curse'].amount, canonical.legends.legendary.find(c => c.id === 'sea-curse').effect.amount);
   assert.equal(watch.room.shipLevelCatalog[7], undefined);
   assert.equal(watch.room.shipUpgradeCatalog.leadLine, undefined);
   assert.equal(watch.room.shipUpgradeCatalog.foreMarsel, undefined);

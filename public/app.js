@@ -1,9 +1,19 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '' };
-  const SHIP_NAMES = { brigantine: 'Бригантина', frigate: 'Фрегат', caravel: 'Каравелла', carrack: 'Каракка' };
+  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '' };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+  const shipName = id => state.room?.shipCatalog?.[id]?.name || state.shipCatalog?.[id]?.name || $('shipSelect').querySelector(`option[value="${id}"]`)?.textContent || 'Корабль';
+  fetch('/api/rules').then(response => response.ok ? response.json() : null).then(rules => {
+    if (!rules?.fleet?.ships) return;
+    state.shipCatalog = rules.fleet.ships;
+    const terrain = { shoal: 'мели', reef: 'рифы', land1: '1 клетка суши', ice: 'льды' };
+    for (const option of $('shipSelect').options) {
+      const ship = state.shipCatalog[option.value];
+      if (!ship) continue;
+      option.textContent = `${ship.name} — арт. ${ship.artillery} · войско ${ship.army} · трюм ${ship.cargo} · ход ${ship.moveMod >= 0 ? '+' : ''}${ship.moveMod} · ${terrain[ship.passability] || ''}`;
+    }
+  }).catch(() => {});
   let deferredInstallPrompt = null;
   const pendingDataActions = new Set();
   function emitDataAction(button, event, payload) {
@@ -480,6 +490,7 @@
   socket.on('roomState', room => {
     if (state.spectating) return;
     state.room = room;
+    if (room?.shipCatalog) state.shipCatalog = room.shipCatalog;
     const incomingMine = room?.players?.find(p => p.id === state.myId);
     if (!incomingMine || incomingMine.phase !== 'navigation') state.mapMovePending = false;
     render();
@@ -487,6 +498,7 @@
   socket.on('adminRoomState', room => {
     if (!state.spectating) return;
     state.room = room;
+    if (room?.shipCatalog) state.shipCatalog = room.shipCatalog;
     setGameScreenActive(true);
     $('spectatorRoomCode').textContent = room.code;
     render();
@@ -793,7 +805,7 @@
     if (mine) {
       const cargo = cargoSummary(mine, r);
       $('hudPlayerName').textContent = mine.name;
-      $('hudShipLevel').textContent = `${SHIP_NAMES[mine.shipClass] || 'Корабль'} · ${ROMAN[mine.level] || mine.level}`;
+      $('hudShipLevel').textContent = `${shipName(mine.shipClass)} · ${ROMAN[mine.level] || mine.level}`;
       $('hudDucats').textContent = mine.ducats ?? 0;
       $('hudGlory').textContent = mine.glory ?? 0;
       $('hudCargo').textContent = `${cargo.quantity}/${cargo.capacity}`;
@@ -881,7 +893,7 @@
       const skip = mine.skipTurns ? ` · пропусков хода: ${mine.skipTurns}` : '';
       const suzerain = mine.suzerainId ? r.factions?.find(f => f.id === mine.suzerainId)?.name : null;
       const politics = suzerain ? ` · вассал: ${suzerain}` : (mine.enemyFactionIds?.length ? ` · вражда: ${mine.enemyFactionIds.length}` : '');
-      $('youStatus').innerHTML = `<strong>${escapeHtml(mine.name)}</strong><br><span class="muted">${SHIP_NAMES[mine.shipClass]} ${ROMAN[mine.level] || mine.level} · ${mine.ducats} дукатов${mine.debt ? ` · долг ${mine.debt}` : ''} · слава ${mine.glory || 0} · островов ${mine.islandCount} · клетка ${mine.col + 1}:${mine.row + 1}${escapeHtml(cargo)}${escapeHtml(cards)}${escapeHtml(eventHand)}${escapeHtml(legendary)}${escapeHtml(skip)}${escapeHtml(politics)}</span>`;
+      $('youStatus').innerHTML = `<strong>${escapeHtml(mine.name)}</strong><br><span class="muted">${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level} · ${mine.ducats} дукатов${mine.debt ? ` · долг ${mine.debt}` : ''} · слава ${mine.glory || 0} · островов ${mine.islandCount} · клетка ${mine.col + 1}:${mine.row + 1}${escapeHtml(cargo)}${escapeHtml(cards)}${escapeHtml(eventHand)}${escapeHtml(legendary)}${escapeHtml(skip)}${escapeHtml(politics)}</span>`;
     }
 
     renderPlayers();
@@ -919,7 +931,7 @@
       const suzerainName = p.suzerainId ? state.room.factions?.find(f => f.id === p.suzerainId)?.name : null;
       const politicalLabel = suzerainName ? ` · вассал ${suzerainName}` : (p.enemyFactionIds?.length ? ` · вражда ${p.enemyFactionIds.length}` : '');
       const readyLabel = !r.started ? (p.ready ? ' · ✓ готов' : ' · не готов') : '';
-      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${SHIP_NAMES[p.shipClass]} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · слава ${p.glory || 0} · островов ${p.islandCount} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${order ? `#${order}` : ''}</span></div>`;
+      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · слава ${p.glory || 0} · островов ${p.islandCount} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${order ? `#${order}` : ''}</span></div>`;
       if (!isSpectator && !r.started && p.isYou) {
         const readyBtn = document.createElement('button');
         readyBtn.className = p.ready ? 'small danger-soft' : 'small primary';
@@ -939,11 +951,11 @@
       }
       $('players').appendChild(el);
     });
-    const allReady = r.players.length >= 2 && r.players.every(p => p.ready && p.connected);
+    const allReady = r.players.length >= r.balanceCatalog.session.players.min && r.players.every(p => p.ready && p.connected);
     const waitingReady = r.players.filter(p => !p.ready || !p.connected).length;
     $('startBtn').classList.toggle('hidden', isSpectator || r.started || !isHost);
     $('startBtn').disabled = r.players.length < r.balanceCatalog.session.players.min || r.players.length > r.balanceCatalog.session.players.max || !allReady;
-    $('startBtn').textContent = r.players.length < r.balanceCatalog.session.players.min ? 'Нужен ещё 1 игрок' : (!allReady ? `Ждём готовности: ${waitingReady}` : 'Начать игру');
+    $('startBtn').textContent = r.players.length < r.balanceCatalog.session.players.min ? `Нужно ещё игроков: ${r.balanceCatalog.session.players.min - r.players.length}` : (!allReady ? `Ждём готовности: ${waitingReady}` : 'Начать игру');
 
     $('closeRoomBtn').classList.toggle('hidden', isSpectator || !isHost);
     $('leaveRoomBtn').classList.toggle('hidden', isSpectator || isHost || r.started);
@@ -1535,7 +1547,7 @@
     }
     if (!pending) {
       badge.textContent = 'норма';
-      content.innerHTML = '<div class="event-current">Флотилия соответствует текущим ограничениям.</div><div class="cargo-meta">Здесь появится выбор при потере уровня, места верфи или при получении особого сопровождения Ландина с уже заполненным пределом трёх судов.</div>';
+      content.innerHTML = `<div class="event-current">Флотилия соответствует текущим ограничениям.</div><div class="cargo-meta">Здесь появится выбор при потере уровня, места верфи или при получении особого сопровождения Ландина с уже заполненным пределом ${r.balanceCatalog.maxEscorts} судов.</div>`;
       state.fleetAdjustmentKey = null;
       state.fleetAdjustmentSelection = new Set();
       return;
@@ -1719,10 +1731,10 @@
     if (state.mistCardRef && !cards.some(c => c.source === state.mistCardRef.source && c.index === state.mistCardRef.index && c.kind === 'mist-path')) state.mistCardRef = null;
 
     const descriptions = {
-      'sea-veil': 'Защитить свою флотилию или один свой остров на три следующих личных хода.',
+      'sea-veil': `Защитить свою флотилию или один свой остров на ${r.balanceCatalog.legendaryEffects['sea-veil'].durationPersonalTurns} следующих личных хода.`,
       hellfire: 'На клетке чужого острова понизить каждую постройку выше I уровня на одну ступень.',
       'mist-path': 'Перенести флотилию на любую клетку, достижимую без запрещённых препятствий.',
-      'sea-curse': 'На одной клетке с чужим кораблём дать −3 к обычному движению на три следующих личных хода.',
+      'sea-curse': `На одной клетке с чужим кораблём дать −${r.balanceCatalog.legendaryEffects['sea-curse'].amount} к обычному движению на ${r.balanceCatalog.legendaryEffects['sea-curse'].durationPersonalTurns} следующих личных хода.`,
     };
 
     for (const ref of cards) {
@@ -2156,7 +2168,7 @@
       if (arsenal) {
         const companyBtn = document.createElement('button');
         companyBtn.type = 'button'; companyBtn.className = 'build-btn';
-        companyBtn.textContent = mine?.landCompany ? `Рота уже снаряжена · +${mine.landCompany.army}` : `Снарядить роту · Арсенал ${ROMAN[arsenal.level] || arsenal.level} · +${(arsenal.level || 1) + 2} войска`;
+        companyBtn.textContent = mine?.landCompany ? `Рота уже снаряжена · +${mine.landCompany.army}` : `Снарядить роту · Арсенал ${ROMAN[arsenal.level] || arsenal.level} · +${r.balanceCatalog.landCompany.armyByArsenalLevel[arsenal.level]} войска`;
         companyBtn.disabled = !canAct || Boolean(mine?.landCompany) || Boolean(mine?.cargo);
         companyBtn.addEventListener('click', () => socket.emit('formLandCompany', { islandId: island.id }, handleGameAck));
         actions.appendChild(companyBtn);

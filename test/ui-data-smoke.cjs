@@ -38,6 +38,7 @@ const root = path.join(__dirname, '..');
         return route.fulfill({contentType:'application/javascript',body:source});
       });
       await page.goto(base);await page.fill('#nameInput','Проверка');await page.click('#createBtn');
+      await page.waitForFunction(()=>document.querySelector('#shipSelect option[value="brigantine"]')?.textContent.includes('арт. 4'));
       await page.waitForFunction(()=>window.__testState?.room?.balanceCatalog);
       await page.evaluate(()=>{
         const state=window.__testState,room=structuredClone(state.room),mine=room.players.find(p=>p.id===state.myId);

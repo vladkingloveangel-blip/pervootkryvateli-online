@@ -604,7 +604,9 @@ function publicRoom(room, viewerId = null) {
     runtimeProfile: RUNTIME_PROFILE,
     balanceCatalog: { session: BALANCE.session, maxShipLevel: BALANCE.maxShipLevel,
       garrisons: BALANCE.garrisons, bastion: { price: BUILDINGS.bastion.price, defense: BUILDINGS.bastion.defense },
-      assignmentReplacementPrice: BALANCE.assignmentReplacementPrice, maxEscorts: BALANCE.maxEscorts, contractBonusRatio: BALANCE.contractBonusRatio },
+      assignmentReplacementPrice: BALANCE.assignmentReplacementPrice, maxEscorts: BALANCE.maxEscorts, contractBonusRatio: BALANCE.contractBonusRatio,
+      landCompany: BALANCE.landCompany, legendaryEffects: BALANCE.legendaryEffects },
+    shipCatalog: Object.fromEntries(Object.entries(SHIPS).map(([id, ship]) => [id, { ...ship }])),
     goodsCatalog: Object.fromEntries(Object.entries(GOODS).map(([id, g]) => [id, {
       id: g.id, name: g.name, price: g.price,
     }])),
@@ -630,7 +632,7 @@ function publicRoom(room, viewerId = null) {
         cargo: e.cargo ? { ...e.cargo, value: cargoSaleValue(p, e.id) } : null,
       }));
       const cargoEscortCapacity = escorts.filter(e => e.active).reduce((sum, e) => sum + (Number(ESCORTS[e.type]?.cargo) || 0), 0);
-      const level = Math.max(1, Math.min(7, Number(p.level) || 1));
+      const level = Math.max(1, Math.min(BALANCE.maxReadableShipLevel, Number(p.level) || 1));
       const nextLevel = level < BALANCE.maxShipLevel ? SHIP_LEVELS[level + 1] : null;
       return {
         id: p.id,
@@ -957,13 +959,13 @@ function activateNextFleetAdjustment(room) {
         const granted = replaceEscortWithLandin(player, null);
         if (granted.ok) {
           player.pendingLandinEscort = false;
-          log(room, `${player.name} получает особое сопровождение Ландина: +6 артиллерии и отдельный трюм 5.`);
+          log(room, `${player.name} получает особое сопровождение Ландина: +${ESCORTS.landin.artillery} артиллерии и отдельный трюм ${ESCORTS.landin.cargo}.`);
         }
         continue;
       }
       room.pendingFleetAdjustment = {
         id: crypto.randomUUID(), playerId: player.id, stage: 'landin-replace', required: 1,
-        reason: item.reason || 'Особое сопровождение Ландина должно заменить одно из трёх имеющихся судов сопровождения.',
+        reason: item.reason || `Особое сопровождение Ландина должно заменить одно из ${BALANCE.maxEscorts} имеющихся судов сопровождения.`,
         options: fleetAdjustmentOptions(room, player, 'landin-replace'),
       };
       log(room, `${player.name}: выберите одно судно сопровождения, которое заменит особое сопровождение Ландина.`);
@@ -1025,7 +1027,7 @@ function queueEscortCapacityDecisionsIfNeeded(room) {
   if (!room?.started) return false;
   let queued = false;
   for (const player of room.players || []) {
-    if (player.pendingLandinEscort) queued = queueLandinEscortReplacement(room, player, 'Награда Ландина заменяет одно из судов сопровождения и не увеличивает общий предел сверх трёх.') || queued;
+    if (player.pendingLandinEscort) queued = queueLandinEscortReplacement(room, player, `Награда Ландина заменяет одно из судов сопровождения и не увеличивает общий предел сверх ${BALANCE.maxEscorts}.`) || queued;
     if (ordinaryEscortExcess(room, player) > 0) queued = queueShipyardEscortRemoval(room, player, 'После потери места верфи выберите лишнее обычное сопровождение для удаления; его груз будет потерян.') || queued;
     if (fleetAdjustmentNeeds(player).needsChoice) queued = queueFleetAdjustment(room, player, 'Текущий уровень основного корабля допускает меньше активных элементов флотилии.') || queued;
   }
@@ -1423,13 +1425,13 @@ function resolvePendingLegendaryReaction(room, useVeil, cardRef = null) {
     consumeLegendaryCard(room, target, cardRef);
     if (pending.kind === 'sea-attack') {
       applySeaVeilToShip(target, { sourcePlayerId: target.id, ignoreCurrentTurn: false });
-      log(room, `${target.name} реакцией разыгрывает «Покров моря». Морская атака ${source.name} отменена; корабль защищён на три следующих личных хода ${target.name}.`);
+      log(room, `${target.name} реакцией разыгрывает «Покров моря». Морская атака ${source.name} отменена; корабль защищён на ${BALANCE.legendaryEffects['sea-veil'].durationPersonalTurns} следующих личных хода ${target.name}.`);
     } else {
       const island = room.islands.find(i => i.id === pending.islandId);
       if (!island) return { ok: false, error: 'Остров реакции не найден.' };
       applySeaVeilToIsland(island, target, { ignoreCurrentTurn: false });
       const what = pending.kind === 'hellfire' ? '«Пламя Ада»' : 'штурм';
-      log(room, `${target.name} реакцией разыгрывает «Покров моря». ${what} ${source.name} отменён; ${island.name} защищён на три следующих личных хода ${target.name}.`);
+      log(room, `${target.name} реакцией разыгрывает «Покров моря». ${what} ${source.name} отменён; ${island.name} защищён на ${BALANCE.legendaryEffects['sea-veil'].durationPersonalTurns} следующих личных хода ${target.name}.`);
     }
     room.pendingLegendaryReaction = null;
     return { ok: true, canceled: true };
@@ -2710,7 +2712,7 @@ io.on('connection', socket => {
 
     const row = Number(data?.row);
     const col = Number(data?.col);
-    if (!Number.isInteger(row) || !Number.isInteger(col) || row < 0 || row > 27 || col < 0 || col > 27) {
+    if (!Number.isInteger(row) || !Number.isInteger(col) || row < 0 || row >= MAP_META.rows || col < 0 || col >= MAP_META.cols) {
       return ackSafe(ack, { ok: false, error: 'Недопустимая клетка.' });
     }
 
@@ -3064,7 +3066,7 @@ io.on('connection', socket => {
         consumeLegendaryCard(room, p, ref);
         room.actionsLeft -= 1;
         applySeaVeilToShip(p, { sourcePlayerId: p.id, ignoreCurrentTurn: true });
-        log(room, `${p.name} разыгрывает «Покров моря» на свою флотилию. Защита действует до конца трёх следующих личных ходов. Осталось действий: ${room.actionsLeft}.`);
+        log(room, `${p.name} разыгрывает «Покров моря» на свою флотилию. Защита действует до конца ${BALANCE.legendaryEffects['sea-veil'].durationPersonalTurns} следующих личных ходов. Осталось действий: ${room.actionsLeft}.`);
         ackSafe(ack, { ok: true });
         emitRoom(room);
         return;
@@ -3074,7 +3076,7 @@ io.on('connection', socket => {
       consumeLegendaryCard(room, p, ref);
       room.actionsLeft -= 1;
       applySeaVeilToIsland(island, p, { ignoreCurrentTurn: true });
-      log(room, `${p.name} разыгрывает «Покров моря» на ${island.name}. Защита действует до конца трёх следующих личных ходов. Осталось действий: ${room.actionsLeft}.`);
+      log(room, `${p.name} разыгрывает «Покров моря» на ${island.name}. Защита действует до конца ${BALANCE.legendaryEffects['sea-veil'].durationPersonalTurns} следующих личных ходов. Осталось действий: ${room.actionsLeft}.`);
       ackSafe(ack, { ok: true });
       emitRoom(room);
       return;
@@ -3082,7 +3084,7 @@ io.on('connection', socket => {
 
     if (found.kind === 'mist-path') {
       const row = Number(data?.row), col = Number(data?.col);
-      if (!Number.isInteger(row) || !Number.isInteger(col) || row < 0 || row > 27 || col < 0 || col > 27) return ackSafe(ack, { ok: false, error: 'Выберите допустимую клетку для «Пути сквозь туман».' });
+      if (!Number.isInteger(row) || !Number.isInteger(col) || row < 0 || row >= MAP_META.rows || col < 0 || col >= MAP_META.cols) return ackSafe(ack, { ok: false, error: 'Выберите допустимую клетку для «Пути сквозь туман».' });
       const allowed = mistPathReachableCells(p).some(c => c.row === row && c.col === col);
       if (!allowed) return ackSafe(ack, { ok: false, error: 'К этой клетке ваш корабль не может проложить путь без запрещённых препятствий.' });
       consumeLegendaryCard(room, p, ref);
@@ -3109,7 +3111,7 @@ io.on('connection', socket => {
         log(room, `${p.name} разыгрывает «Морское проклятие» против ${target.name}, но действующий «Покров моря» отменяет карту. Осталось действий: ${room.actionsLeft}.`);
       } else {
         applySeaCurse(target, p.id);
-        log(room, `${p.name} накладывает «Морское проклятие» на ${target.name}: обычная дальность движения −3 в каждом из трёх следующих личных ходов цели. Осталось действий: ${room.actionsLeft}.`);
+        log(room, `${p.name} накладывает «Морское проклятие» на ${target.name}: обычная дальность движения −${BALANCE.legendaryEffects['sea-curse'].amount} в каждом из ${BALANCE.legendaryEffects['sea-curse'].durationPersonalTurns} следующих личных ходов цели. Осталось действий: ${room.actionsLeft}.`);
       }
       ackSafe(ack, { ok: true });
       emitRoom(room);
@@ -3277,7 +3279,7 @@ io.on('connection', socket => {
       player.pendingLandinEscort = false;
       const oldName = ESCORTS[result.replaced?.type]?.name || result.replaced?.type || 'судно сопровождения';
       const cargoText = result.cargoDiscarded ? ` Груз заменённого судна потерян: ${GOODS[result.cargoDiscarded.goodId]?.name || result.cargoDiscarded.goodId} ×${result.cargoDiscarded.quantity}.` : '';
-      log(room, `${player.name} заменяет ${oldName} на особое сопровождение Ландина (+6 артиллерии, трюм 5).${cargoText}`);
+      log(room, `${player.name} заменяет ${oldName} на особое сопровождение Ландина (+${ESCORTS.landin.artillery} артиллерии, трюм ${ESCORTS.landin.cargo}).${cargoText}`);
     } else {
       return ackSafe(ack, { ok: false, error: 'Неизвестный этап настройки флотилии.' });
     }
