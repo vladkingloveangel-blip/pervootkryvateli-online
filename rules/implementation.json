@@ -1,12 +1,7 @@
 {
-  "activeProfile": "stage-6-events-legends-6.4",
-  "note": "Read rules/ as master data. Stage 6.4 activates the separate ten-card expedition deck through Cartographic Chambers: one active expedition per player, one draw per general round, completed-place filtering, leave-and-return completion, automatic treasure reward, card return to the deck, and personal completion history. Later legendary-card behavior and stage 7 consumers remain pending.",
+  "activeProfile": "stage-6-events-legends-6.5",
+  "note": "Read rules/ as master data. Stage 6.5 activates the four legendary-card effects and their exact timing: normal play costs one action, Sea Veil may react for zero actions, hostile legendary-card reactions consume both cards without starting the three-turn protection, and their reaction protection expires at the end of the current hostile player's turn. R05/R06 remain unresolved; stage 7 consumers remain pending.",
   "pendingConsumers": [
-    {
-      "path": "legends.legendary.*.effect",
-      "consumerStage": 6,
-      "status": "data-ready"
-    },
     {
       "path": "scoring.titles",
       "consumerStage": 7,

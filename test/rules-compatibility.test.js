@@ -10,7 +10,7 @@ const copy = value => JSON.parse(JSON.stringify(value));
 
 test('legacy profile references remain valid while canonical master data stays separate', () => {
   assert.deepEqual(validateCompatibility(rules,legacy),[]);
-  assert.equal(runtime.RUNTIME_PROFILE,'stage-6-events-legends-6.4');
+  assert.equal(runtime.RUNTIME_PROFILE,'stage-6-events-legends-6.5');
   assert.equal(runtime.BALANCE.session.startingDucats,rules.session.startingDucats);
   assert.equal(runtime.BALANCE.session.players.min,4);
   assert.equal(runtime.BALANCE.session.players.max,6);

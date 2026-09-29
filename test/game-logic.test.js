@@ -10,6 +10,9 @@ const {
   isIslandProtected,
   applySeaVeilToShip,
   applySeaVeilToIsland,
+  applySeaVeilHostileReactionToShip,
+  applySeaVeilHostileReactionToIsland,
+  clearSeaVeilHostileReactionsAtTurnEnd,
   applySeaCurse,
   legendaryMovementPenalty,
   tickLegendaryEffectsForPlayer,
@@ -1449,6 +1452,32 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   }
   assert.equal(isShipProtected(p), false);
   assert.equal(isIslandProtected(island), false);
+}
+
+// Реактивный «Покров моря» против враждебной легендарной карты не создаёт
+// трёхходовый эффект: он защищает только до конца текущего хода источника.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const source = { id:'source', legendaryEffects:{ seaCurses:[] } };
+  const target = { id:'target', legendaryEffects:{ seaCurses:[] } };
+  room.players.push(source,target);
+  const island = room.islands.find(i => i.id === 'bogamia');
+  island.ownerId = target.id;
+
+  assert.equal(applySeaVeilHostileReactionToShip(target, source.id).ok,true);
+  assert.equal(isShipProtected(target),true);
+  assert.equal(target.legendaryEffects.shipVeil,undefined);
+  assert.equal(target.legendaryEffects.shipVeilReaction.expiry,'end-of-current-turn');
+
+  assert.equal(applySeaVeilHostileReactionToIsland(island,target,source.id).ok,true);
+  assert.equal(isIslandProtected(island),true);
+  assert.equal(island.legendaryVeil,undefined);
+  assert.equal(island.legendaryVeilReaction.expiry,'end-of-current-turn');
+
+  const expired = clearSeaVeilHostileReactionsAtTurnEnd(room,source.id);
+  assert.equal(expired.length,2);
+  assert.equal(isShipProtected(target),false);
+  assert.equal(isIslandProtected(island),false);
 }
 
 // «Морское проклятие» даёт −3 к движению три личных хода и может складываться.

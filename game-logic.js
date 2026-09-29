@@ -1540,11 +1540,53 @@ function ensureLegendaryEffects(player) {
 }
 
 function isShipProtected(player) {
-  return Math.max(0, Number(player?.legendaryEffects?.shipVeil?.remaining) || 0) > 0;
+  return Math.max(0, Number(player?.legendaryEffects?.shipVeil?.remaining) || 0) > 0
+    || Boolean(player?.legendaryEffects?.shipVeilReaction);
 }
 
 function isIslandProtected(island) {
-  return Math.max(0, Number(island?.legendaryVeil?.remaining) || 0) > 0;
+  return Math.max(0, Number(island?.legendaryVeil?.remaining) || 0) > 0
+    || Boolean(island?.legendaryVeilReaction);
+}
+
+function applySeaVeilHostileReactionToShip(player, sourcePlayerId) {
+  if (!player || !sourcePlayerId) return { ok: false, error: 'Цель реактивного «Покрова моря» не найдена.' };
+  const expiry = BALANCE.legendaryEffects['sea-veil'].hostileCardReactionExpiry;
+  if (expiry !== 'end-of-current-turn') return { ok: false, error: 'Неизвестная длительность реактивного «Покрова моря».' };
+  const effects = ensureLegendaryEffects(player);
+  effects.shipVeilReaction = { expiry, expiresOnPlayerId: String(sourcePlayerId) };
+  return { ok: true, expiry };
+}
+
+function applySeaVeilHostileReactionToIsland(island, sourcePlayer, sourceTurnPlayerId) {
+  if (!island || !sourcePlayer || !sourceTurnPlayerId) return { ok: false, error: 'Цель реактивного «Покрова моря» не найдена.' };
+  const expiry = BALANCE.legendaryEffects['sea-veil'].hostileCardReactionExpiry;
+  if (expiry !== 'end-of-current-turn') return { ok: false, error: 'Неизвестная длительность реактивного «Покрова моря».' };
+  island.legendaryVeilReaction = {
+    expiry,
+    sourcePlayerId: String(sourcePlayer.id || ''),
+    expiresOnPlayerId: String(sourceTurnPlayerId),
+  };
+  return { ok: true, expiry };
+}
+
+function clearSeaVeilHostileReactionsAtTurnEnd(room, endingPlayerId) {
+  const endingId = String(endingPlayerId || '');
+  if (!room || !endingId) return [];
+  const expired = [];
+  for (const player of room.players || []) {
+    const reaction = player?.legendaryEffects?.shipVeilReaction;
+    if (reaction?.expiresOnPlayerId !== endingId) continue;
+    delete player.legendaryEffects.shipVeilReaction;
+    expired.push({ kind: 'ship', playerId: player.id });
+  }
+  for (const island of room.islands || []) {
+    const reaction = island?.legendaryVeilReaction;
+    if (reaction?.expiresOnPlayerId !== endingId) continue;
+    island.legendaryVeilReaction = null;
+    expired.push({ kind: 'island', islandId: island.id, playerId: reaction.sourcePlayerId || null });
+  }
+  return expired;
 }
 
 function applySeaVeilToShip(player, options = {}) {
@@ -3406,6 +3448,9 @@ module.exports = {
   isIslandProtected,
   applySeaVeilToShip,
   applySeaVeilToIsland,
+  applySeaVeilHostileReactionToShip,
+  applySeaVeilHostileReactionToIsland,
+  clearSeaVeilHostileReactionsAtTurnEnd,
   applySeaCurse,
   legendaryMovementPenalty,
   tickLegendaryEffectsForPlayer,

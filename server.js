@@ -15,6 +15,9 @@ const {
   isIslandProtected,
   applySeaVeilToShip,
   applySeaVeilToIsland,
+  applySeaVeilHostileReactionToShip,
+  applySeaVeilHostileReactionToIsland,
+  clearSeaVeilHostileReactionsAtTurnEnd,
   applySeaCurse,
   legendaryMovementPenalty,
   tickLegendaryEffectsForPlayer,
@@ -1653,15 +1656,23 @@ function resolvePendingLegendaryReaction(room, useVeil, cardRef = null) {
     const found = peekLegendaryCard(target, cardRef);
     if (!found || found.kind !== 'sea-veil') return { ok: false, error: 'Выберите доступную карту «Покров моря».' };
     consumeLegendaryCard(room, target, cardRef);
-    if (pending.kind === 'sea-attack') {
+
+    if (pending.kind === 'sea-curse') {
+      applySeaVeilHostileReactionToShip(target, source.id);
+      log(room, `${target.name} реакцией разыгрывает «Покров моря» против «Морского проклятия» ${source.name}. Обе легендарные карты сброшены; трёхходовая защита не начинается, реактивная защита действует только до конца текущего хода ${source.name}.`);
+    } else if (pending.kind === 'hellfire') {
+      const island = room.islands.find(i => i.id === pending.islandId);
+      if (!island) return { ok: false, error: 'Остров реакции не найден.' };
+      applySeaVeilHostileReactionToIsland(island, target, source.id);
+      log(room, `${target.name} реакцией разыгрывает «Покров моря» против «Пламени Ада» ${source.name}. Обе легендарные карты сброшены; ${island.name} защищён только до конца текущего хода ${source.name}, без трёх следующих личных ходов.`);
+    } else if (pending.kind === 'sea-attack') {
       applySeaVeilToShip(target, { sourcePlayerId: target.id, ignoreCurrentTurn: false });
       log(room, `${target.name} реакцией разыгрывает «Покров моря». Морская атака ${source.name} отменена; корабль защищён на ${BALANCE.legendaryEffects['sea-veil'].durationPersonalTurns} следующих личных хода ${target.name}.`);
     } else {
       const island = room.islands.find(i => i.id === pending.islandId);
       if (!island) return { ok: false, error: 'Остров реакции не найден.' };
       applySeaVeilToIsland(island, target, { ignoreCurrentTurn: false });
-      const what = pending.kind === 'hellfire' ? '«Пламя Ада»' : 'штурм';
-      log(room, `${target.name} реакцией разыгрывает «Покров моря». ${what} ${source.name} отменён; ${island.name} защищён на ${BALANCE.legendaryEffects['sea-veil'].durationPersonalTurns} следующих личных хода ${target.name}.`);
+      log(room, `${target.name} реакцией разыгрывает «Покров моря». Штурм ${source.name} отменён; ${island.name} защищён на ${BALANCE.legendaryEffects['sea-veil'].durationPersonalTurns} следующих личных хода ${target.name}.`);
     }
     room.pendingLegendaryReaction = null;
     return { ok: true, canceled: true };
@@ -1669,12 +1680,17 @@ function resolvePendingLegendaryReaction(room, useVeil, cardRef = null) {
 
   room.pendingLegendaryReaction = null;
   if (pending.kind === 'sea-attack') {
-    const result = beginSeaBattleResolution(room, source, target, pending.inviteAllies, { shipCarpenterPlayerIds: pending.shipCarpenterPlayerIds || [] });
-    return result;
+    return beginSeaBattleResolution(room, source, target, pending.inviteAllies, { shipCarpenterPlayerIds: pending.shipCarpenterPlayerIds || [] });
   }
   if (pending.kind === 'assault') {
     const island = room.islands.find(i => i.id === pending.islandId);
     return beginAssaultResolution(room, source, island, pending.inviteAllies, { shipCarpenterPlayerIds: pending.shipCarpenterPlayerIds || [] });
+  }
+  if (pending.kind === 'sea-curse') {
+    const result = applySeaCurse(target, source.id);
+    if (!result.ok) return result;
+    log(room, `${source.name} накладывает «Морское проклятие» на ${target.name}: обычная дальность движения −${BALANCE.legendaryEffects['sea-curse'].amount} в каждом из ${BALANCE.legendaryEffects['sea-curse'].durationPersonalTurns} следующих личных ходов цели.`);
+    return { ok: true, result };
   }
   if (pending.kind === 'hellfire') {
     const island = room.islands.find(i => i.id === pending.islandId);
@@ -2605,6 +2621,7 @@ function endTurnInternal(room) {
   const ending = currentPlayer(room);
   if (ending) {
     ending.activeTurnEffects = {};
+    clearSeaVeilHostileReactionsAtTurnEnd(room, ending.id);
     const tick = tickLegendaryEffectsForPlayer(room, ending);
     for (const expired of tick.expired || []) log(room, `${ending.name}: заканчивается эффект «${expired}».`);
   }
@@ -3801,18 +3818,24 @@ io.on('connection', socket => {
       if (room.round === 1) return ackSafe(ack, { ok: false, error: 'В первом раунде нельзя разыгрывать враждебные легендарные карты против игроков.' });
       if (isCitadelPeaceCell(p.row, p.col)) return ackSafe(ack, { ok: false, error: 'В зоне мира Цитадели «Морское проклятие» запрещено.' });
       if (areAllies(room, p, target)) return ackSafe(ack, { ok: false, error: 'Союзники не применяют враждебные карты друг против друга.' });
+      if (isShipProtected(target)) return ackSafe(ack, { ok: false, error: `${target.name} защищён «Покровом моря» и сейчас не может быть целью «Морского проклятия».` });
       const attackLimit = registerPlayerAttack(room, p, target.id);
       if (!attackLimit.ok) return ackSafe(ack, attackLimit);
       markAttackHostilityAgainstPlayer(room, p, target, 'враждебное «Морское проклятие» против вассала');
       consumeLegendaryCard(room, p, ref);
       room.actionsLeft -= 1;
-      if (isShipProtected(target)) {
-        log(room, `${p.name} разыгрывает «Морское проклятие» против ${target.name}, но действующий «Покров моря» отменяет карту. Осталось действий: ${room.actionsLeft}.`);
-      } else {
-        applySeaCurse(target, p.id);
-        log(room, `${p.name} накладывает «Морское проклятие» на ${target.name}: обычная дальность движения −${BALANCE.legendaryEffects['sea-curse'].amount} в каждом из ${BALANCE.legendaryEffects['sea-curse'].durationPersonalTurns} следующих личных ходов цели. Осталось действий: ${room.actionsLeft}.`);
+      if (target.connected && playerHasLegendaryKind(target, 'sea-veil')) {
+        room.pendingLegendaryReaction = {
+          id: crypto.randomUUID(), kind: 'sea-curse', sourcePlayerId: p.id, targetPlayerId: target.id,
+        };
+        log(room, `${p.name} разыгрывает «Морское проклятие» против ${target.name} и тратит действие. ${target.name} может бесплатно ответить «Покровом моря».`);
+        ackSafe(ack, { ok: true, pending: true });
+        emitRoom(room);
+        return;
       }
-      ackSafe(ack, { ok: true });
+      const result = applySeaCurse(target, p.id);
+      log(room, `${p.name} накладывает «Морское проклятие» на ${target.name}: обычная дальность движения −${BALANCE.legendaryEffects['sea-curse'].amount} в каждом из ${BALANCE.legendaryEffects['sea-curse'].durationPersonalTurns} следующих личных ходов цели. Осталось действий: ${room.actionsLeft}.`);
+      ackSafe(ack, { ok: true, result });
       emitRoom(room);
       return;
     }

@@ -1,0 +1,187 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { spawn } = require('node:child_process');
+const { once } = require('node:events');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const net = require('node:net');
+const { io } = require('socket.io-client');
+const rules = require('../rules');
+
+test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards without three-turn protection', { timeout: 45000 }, async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pervo-stage6-legendary-'));
+  const file = path.join(dir, 'database.json');
+  const listener = net.createServer();
+  listener.listen(0, '127.0.0.1');
+  await once(listener, 'listening');
+  const port = listener.address().port;
+  await new Promise(resolve => listener.close(resolve));
+  const base = `http://127.0.0.1:${port}`;
+  let child;
+  let output = '';
+  const sockets = [];
+
+  async function start() {
+    output = '';
+    child = spawn(process.execPath, ['--require', './test/fixtures/postgres.cjs', 'server.js'], {
+      cwd: path.join(__dirname, '..'),
+      windowsHide: true,
+      env: {
+        ...process.env,
+        PORT: String(port),
+        HOST: '127.0.0.1',
+        DATABASE_URL: 'postgres://test',
+        AUTH_SECRET: 'stage-6-5-test-secret',
+        TEST_DB_FILE: file,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    child.stdout.on('data', data => { output += data; });
+    child.stderr.on('data', data => { output += data; });
+    for (let i = 0; i < 150; i++) {
+      if (child.exitCode !== null) throw Error(output);
+      try { if ((await fetch(base + '/health')).ok) return; } catch {}
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    throw Error('Server did not start: ' + output);
+  }
+
+  async function stop() {
+    if (!child || child.exitCode !== null) return;
+    const exit = once(child, 'exit');
+    child.kill('SIGKILL');
+    await exit;
+  }
+
+  async function connect() {
+    const socket = io(base, { transports: ['websocket'], reconnection: false });
+    sockets.push(socket);
+    await once(socket, 'connect');
+    return socket;
+  }
+
+  const emit = (socket, name, data = {}) => new Promise((resolve, reject) =>
+    socket.timeout(5000).emit(name, data, (err, value) => err ? reject(err) : resolve(value))
+  );
+
+  async function api(route, body) {
+    const response = await fetch(base + route, {
+      method: body ? 'POST' : 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    return response.json();
+  }
+
+  async function change(socket, event, data = {}, viewSocket = socket) {
+    const next = once(viewSocket, 'roomState');
+    const result = await emit(socket, event, data);
+    assert.equal(result.ok, true, `${event}: ${result.error || ''}`);
+    return { result, state: (await next)[0] };
+  }
+
+  const readDb = () => JSON.parse(fs.readFileSync(file, 'utf8'));
+  const writeDb = value => fs.writeFileSync(file, JSON.stringify(value));
+
+  t.after(async () => {
+    sockets.forEach(socket => socket.disconnect());
+    await stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  await start();
+  const accounts = [];
+  for (let i = 0; i < 4; i++) accounts.push(await api('/api/auth/register', { username: `legend65p${i + 1}`, password: 'password1' }));
+  const initial = await Promise.all(Array.from({ length: 4 }, () => connect()));
+  const created = await emit(initial[0], 'createRoom', { accountToken: accounts[0].token, name: 'One' });
+  const ids = [created.playerId];
+  for (let i = 1; i < 4; i++) ids.push((await emit(initial[i], 'joinRoom', { code: created.code, accountToken: accounts[i].token, name: `Player ${i + 1}` })).playerId);
+  await emit(initial[0], 'setLeader', { playerId: ids[0] });
+  for (let i = 0; i < 4; i++) await emit(initial[i], 'setReady', { ready: true });
+  assert.equal((await emit(initial[0], 'startGame')).ok, true);
+  await stop();
+  initial.forEach(socket => socket.disconnect());
+
+  const db = readDb();
+  const room = db.game_rooms[0].state;
+  const sourceId = room.order[0];
+  const targetId = room.order[1];
+  const source = room.players.find(player => player.id === sourceId);
+  const target = room.players.find(player => player.id === targetId);
+  const sourceAccount = accounts[ids.indexOf(sourceId)];
+  const targetAccount = accounts[ids.indexOf(targetId)];
+
+  room.round = 2;
+  room.circle = 1;
+  room.turnIndex = 0;
+  room.completedTurns = room.order.length * 6;
+  room.phase = 'actions';
+  room.actionsLeft = rules.session.actionsPerTurn;
+  room.roll = null;
+  room.movePoints = null;
+  room.eventPhase = null;
+  room.pendingEvent = null;
+  room.pendingFeud = null;
+  room.pendingAssignmentChoice = null;
+  room.pendingIslandCorrection = null;
+  room.pendingFleetAdjustment = null;
+  room.pendingLegendaryReaction = null;
+  room.pendingBattle = null;
+  room.pendingAlliance = null;
+  room.alliances = [];
+  room.legendaryDeck = { drawPile: [], discard: [] };
+
+  source.row = 24; source.col = 6;
+  target.row = 24; target.col = 6;
+  source.attackLimitRound = 2;
+  source.attackCountsThisRound = {};
+  source.legendaryCards = [{ ...structuredClone(rules.legends.legendary.find(card => card.id === 'sea-curse')), copy: 1 }];
+  source.legendaryEffects = { seaCurses: [] };
+  target.legendaryCards = [{ ...structuredClone(rules.legends.legendary.find(card => card.id === 'sea-veil')), copy: 1 }];
+  target.legendaryEffects = { seaCurses: [] };
+  source.enemyFactionIds = [];
+  target.enemyFactionIds = [];
+  writeDb(db);
+
+  await start();
+  const sourceSocket = await connect();
+  const targetSocket = await connect();
+  assert.equal((await emit(sourceSocket, 'resumeRoom', { code: created.code, accountToken: sourceAccount.token })).ok, true);
+  assert.equal((await emit(targetSocket, 'resumeRoom', { code: created.code, accountToken: targetAccount.token })).ok, true);
+
+  let changed = await change(sourceSocket, 'playLegendary', { source: 'legendary', index: 0, targetPlayerId: targetId }, targetSocket);
+  assert.equal(changed.result.pending, true);
+  let state = changed.state;
+  assert.equal(state.pendingLegendaryReaction.kind, 'sea-curse');
+  assert.equal(state.pendingLegendaryReaction.targetPlayerId, targetId);
+  assert.equal(state.eventDecks.legendary.discard, 1);
+  assert.equal(state.players.find(player => player.id === sourceId).legendaryCardCount, 0);
+
+  changed = await change(targetSocket, 'respondLegendaryReaction', {
+    reactionId: state.pendingLegendaryReaction.id,
+    useVeil: true,
+    source: 'legendary',
+    index: 0,
+  }, sourceSocket);
+  state = changed.state;
+  const targetView = state.players.find(player => player.id === targetId);
+  assert.equal(state.pendingLegendaryReaction, null);
+  assert.equal(state.eventDecks.legendary.discard, 2);
+  assert.equal(targetView.legendaryCardCount, 0);
+  assert.equal(targetView.legendaryStatus.shipVeilTurns, 0);
+  assert.deepEqual(targetView.legendaryStatus.seaCurseTurns, []);
+  assert.equal(targetView.legendaryStatus.seaCursePenalty, 0);
+  assert.equal(state.log.some(entry => entry.text.includes('Обе легендарные карты сброшены') && entry.text.includes('трёхходовая защита не начинается')), true);
+
+  const persisted = readDb().game_rooms[0].state;
+  const persistedTarget = persisted.players.find(player => player.id === targetId);
+  assert.equal(persistedTarget.legendaryEffects.shipVeil, undefined);
+  assert.equal(persistedTarget.legendaryEffects.shipVeilReaction.expiry, 'end-of-current-turn');
+  assert.equal(persistedTarget.legendaryEffects.shipVeilReaction.expiresOnPlayerId, sourceId);
+
+  await change(sourceSocket, 'endTurn', {}, targetSocket);
+  const afterTurn = readDb().game_rooms[0].state;
+  const afterTarget = afterTurn.players.find(player => player.id === targetId);
+  assert.equal(afterTarget.legendaryEffects.shipVeilReaction, undefined);
+});
