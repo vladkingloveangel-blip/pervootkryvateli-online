@@ -3,6 +3,9 @@ const {
   cloneIslands,
   reachableCells,
   mistPathReachableCells,
+  navigationPassabilities,
+  navigationAllowsHazards,
+  hazardsAt,
   isShipProtected,
   isIslandProtected,
   applySeaVeilToShip,
@@ -208,6 +211,73 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(has(reachableCells(caravel, 2), 5, 6), true);
   assert.equal(has(reachableCells(frigate, 2), 5, 6), false);
   assert.equal(has(reachableCells(frigate, 1), 5, 5), true);
+}
+
+// Этап 3.3: навигационные улучшения расширяют проходимость основного корабля.
+{
+  const reefPilot = { row: 6, col: 6, shipClass: 'brigantine', level: 2, upgrades: ['reefPilot'] };
+  assert.equal(has(reachableCells(reefPilot, 1), 6, 7), true);
+
+  const leadLine = { row: 5, col: 18, shipClass: 'frigate', level: 2, upgrades: ['leadLine'] };
+  assert.equal(has(reachableCells(leadLine, 1), 4, 18), true);
+
+  const iceStem = { row: 22, col: 1, shipClass: 'frigate', level: 2, upgrades: ['iceStem'] };
+  assert.equal(has(reachableCells(iceStem, 1), 23, 1), true);
+
+  const portage = { row: 5, col: 4, shipClass: 'frigate', level: 2, upgrades: ['portageSleds'] };
+  assert.equal(has(reachableCells(portage, 2), 5, 6), true);
+}
+
+// Если навигационное улучшение временно отключено потерей уровня, его проходимость не действует.
+{
+  const p = {
+    row: 6, col: 6, shipClass: 'brigantine', level: 1,
+    upgrades: ['falcons', 'reefPilot'], disabledUpgradeIds: ['reefPilot'],
+  };
+  assert.equal(has(reachableCells(p, 1), 6, 7), false);
+  assert.equal(navigationPassabilities(p).has('reef'), false);
+}
+
+// Если на клетке одновременно несколько препятствий, нужны возможности для каждого.
+{
+  const combined = { shipClass: 'brigantine', level: 2, upgrades: ['reefPilot'] };
+  assert.equal(navigationAllowsHazards(combined, ['shoal', 'reef']), true);
+  assert.equal(navigationAllowsHazards({ shipClass: 'brigantine', level: 1, upgrades: [] }, ['shoal', 'reef']), false);
+  assert.equal(navigationAllowsHazards({ shipClass: 'frigate', level: 1, upgrades: [] }, ['shoal', 'reef']), false);
+}
+
+// Маршрут состоит только из ортогональных шагов; можно остановиться раньше полной дальности.
+{
+  const p = { row: 6, col: 6, shipClass: 'frigate', level: 1, upgrades: [] };
+  const one = reachableCells(p, 1);
+  for (const cell of one) {
+    if (cell.dist === 0) continue;
+    assert.equal(Math.abs(cell.row - p.row) + Math.abs(cell.col - p.col), 1);
+  }
+  const three = reachableCells(p, 3);
+  assert.equal(three.some(cell => cell.dist === 1), true);
+  assert.equal(three.every(cell => cell.dist <= 3), true);
+}
+
+// Любой корабль может закончить движение на сухопутной береговой клетке,
+// но пройти её насквозь может только каравелла или судно с салазками.
+{
+  const ordinary = { row: 5, col: 4, shipClass: 'frigate', level: 1, upgrades: [] };
+  assert.equal(has(reachableCells(ordinary, 1), 5, 5), true);
+  assert.equal(has(reachableCells(ordinary, 2), 5, 6), false);
+  const sleds = { ...ordinary, level: 2, upgrades: ['portageSleds'] };
+  assert.equal(has(reachableCells(sleds, 2), 5, 6), true);
+}
+
+// Карта препятствий возвращает все типы клетки, а не один случайно перезаписанный тип.
+{
+  for (let row = 0; row < 28; row++) {
+    for (let col = 0; col < 28; col++) {
+      const found = hazardsAt(row, col);
+      assert.equal(new Set(found).size, found.length);
+      assert.equal(found.every(type => ['reef', 'shoal', 'ice'].includes(type)), true);
+    }
+  }
 }
 
 // Свободный остров захватывается без действия.
