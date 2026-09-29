@@ -37,6 +37,8 @@ const {
   loadCargo,
   sellCargo,
   canLoadCargo,
+  availableGoodsOnIsland,
+  canUpgradeBuilding,
   cargoSaleValue,
   isCitadelCell,
   isCitadelPeaceCell,
@@ -85,10 +87,11 @@ const {
   removeIslandBuildingForCorrection,
   stoneworksSupportCapacity,
   bastionSupportSummary,
+  bastionSupportChoiceNeeds,
+  setInactiveBastions,
   supportedBastionIslandIds,
   canBuildBastion,
   buildBastion,
-  prioritizeBastionSupport,
   canBuyCityGuard,
   buyCityGuard,
   canBuyPermanentGarrison,
@@ -1316,8 +1319,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 }
 
 
-// Каменотёсный двор поддерживает бастионы: уровень I даёт одно место,
-// бастион стоит 10 дукатов, занимает площадь и даёт +8 только при поддержке.
+// Крепость III превращается в бастион на той же клетке и требует свободное место
+// поддержки каменотёсного двора. Бастион даёт канонические +10 защиты.
 {
   const room = { islands: cloneIslands(), players: [] };
   const supportIsland = room.islands.find(i => i.id === 'raisk');
@@ -1325,19 +1328,27 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   supportIsland.ownerId = 'p1';
   supportIsland.buildings = [{ type: 'stoneworks', level: 1 }];
   target.ownerId = 'p1';
-  target.buildings = [{ type: 'farm', level: 1 }];
-  const p = { id: 'p1', row: target.cells[0][0], col: target.cells[0][1], shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 20, bastionPriority: [] };
+  target.buildings = [{ type: 'manor', level: 3 }, { type: 'fortress', level: 3, createdAt: 123 }];
+  const p = { id: 'p1', row: target.cells[0][0], col: target.cells[0][1], shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 20, inactiveBastionIslandIds: [] };
   room.players.push(p);
   assert.equal(stoneworksSupportCapacity(room, p.id), 1);
-  assert.equal(canBuildBastion(room, p, target).ok, true);
-  const built = buildBastion(room, p, target.id);
+  assert.equal(canBuildBastion(room, p, target, 1).ok, true);
+  const beforeArea = islandConstraintReport(target).usedArea;
+  const built = buildBastion(room, p, target.id, 1);
   assert.equal(built.ok, true);
   assert.equal(p.ducats, 10);
-  assert.equal(bastionSupportSummary(room, p.id).supported.includes(target.id), true);
-  assert.equal(islandDefenseArmy(room, target).bastions, 10);
+  assert.equal(target.buildings.length, 2);
+  assert.equal(target.buildings[1].type, 'bastion');
+  assert.equal(target.buildings[1].createdAt, 123);
+  assert.equal(islandConstraintReport(target).usedArea, beforeArea);
+  assert.deepEqual(supportedBastionIslandIds(room, p.id), [target.id]);
+  assert.equal(islandDefenseArmy(room, target).fortifications, 0);
+  assert.equal(islandDefenseArmy(room, target).bastions, BUILDINGS.bastion.defense);
+  assert.equal(canBuildBastion(room, p, target, 1).ok, false);
 }
 
-// При нехватке поддержки игрок может выбрать, какой бастион остаётся действующим.
+// После потери поддержки движок не выбирает бастион сам: владелец обязан указать
+// временно неактивный. При восстановлении достаточной поддержки бастион включается снова.
 {
   const room = { islands: cloneIslands(), players: [] };
   const a = room.islands.find(i => i.id === 'bogamia');
@@ -1346,16 +1357,92 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   for (const island of [a, b, support]) island.ownerId = 'p1';
   a.buildings = [{ type: 'farm', level: 1 }, { type: 'bastion', level: 1 }];
   b.buildings = [{ type: 'farm', level: 1 }, { type: 'bastion', level: 1 }];
-  support.buildings = [{ type: 'stoneworks', level: 1 }];
-  const p = { id: 'p1', row: a.cells[0][0], col: a.cells[0][1], shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, bastionPriority: [a.id, b.id] };
+  support.buildings = [{ type: 'stoneworks', level: 2 }];
+  const p = { id: 'p1', row: a.cells[0][0], col: a.cells[0][1], shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, inactiveBastionIslandIds: [] };
   room.players.push(p);
+  assert.deepEqual(new Set(supportedBastionIslandIds(room, p.id)), new Set([a.id, b.id]));
+  support.buildings[0].level = 1;
+  const needs = bastionSupportChoiceNeeds(room, p);
+  assert.equal(needs.requiredInactive, 1);
+  assert.equal(needs.needsChoice, true);
+  assert.deepEqual(supportedBastionIslandIds(room, p.id), []);
+  assert.equal(setInactiveBastions(room, p, [b.id]).ok, true);
   assert.deepEqual(supportedBastionIslandIds(room, p.id), [a.id]);
   assert.equal(islandDefenseArmy(room, a).bastions, 10);
   assert.equal(islandDefenseArmy(room, b).bastions, 0);
-  assert.equal(prioritizeBastionSupport(room, p, b.id).ok, true);
-  assert.deepEqual(supportedBastionIslandIds(room, p.id), [b.id]);
-  assert.equal(islandDefenseArmy(room, a).bastions, 0);
-  assert.equal(islandDefenseArmy(room, b).bastions, 10);
+  support.buildings[0].level = 2;
+  assert.deepEqual(new Set(supportedBastionIslandIds(room, p.id)), new Set([a.id, b.id]));
+  assert.deepEqual(p.inactiveBastionIslandIds, []);
+}
+
+// Понижение бастиона возвращает крепость III, а не оставляет бастион неизменным.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'bogamia');
+  island.ownerId = 'p1';
+  island.buildings = [{ type: 'manor', level: 3 }, { type: 'bastion', level: 1 }];
+  const p = { id: 'p1' };
+  room.players.push(p);
+  const result = applyRaidDowngrade(room, p, island.id, 1);
+  assert.equal(result.ok, true);
+  assert.equal(result.afterName, 'Крепость III');
+  assert.deepEqual([island.buildings[1].type, island.buildings[1].level], ['fortress', 3]);
+}
+
+// После превращения базовой добывающей постройки её исходный товар больше не производится.
+// Верфь, каменотёсный двор и арсенал используют те же данные уровней, что и остальные ветви.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1';
+  island.resources = ['Лес', 'Камень', 'Рудная жила'];
+  const [row, col] = island.cells[0];
+  const p = { id: 'p1', row, col, ducats: 1000 };
+  room.players.push(p);
+  for (const [baseType, advancedType, goodId] of [
+    ['lumbermill', 'shipyard', 'wood'],
+    ['quarry', 'stoneworks', 'stone'],
+    ['mine', 'arsenal', 'ore'],
+  ]) {
+    island.buildings = [{ type: 'manor', level: 3 }, { type: baseType, level: 3 }];
+    assert.equal(availableGoodsOnIsland(island).includes(goodId), true);
+    const result = upgradeBuilding(room, p, island.id, 1);
+    assert.equal(result.ok, true);
+    assert.equal(result.building.type, advancedType);
+    assert.equal(availableGoodsOnIsland(island).includes(goodId), false);
+    if (advancedType === 'shipyard') assert.equal(shipyardSlotsForPlayer(room, p.id), BUILDINGS.shipyard.levels[1].escortSlots);
+  }
+}
+
+// Четыре редких промысла доступны только на I уровне, требуют свой ресурс и ферму/
+// поместье, стоят по данным rules/ и не получают выдуманные уровни II–III при открытом R07.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1';
+  const [row, col] = island.cells[0];
+  const p = { id: 'p1', row, col, ducats: 1000 };
+  room.players.push(p);
+  const rare = [
+    ['exotic', 'Экзотические звери'],
+    ['slaves', 'Невольники'],
+    ['gold', 'Самородное золото'],
+    ['diamonds', 'Алмазы'],
+  ];
+  for (const [type, resource] of rare) {
+    island.resources = [resource];
+    island.buildings = [{ type: 'farm', level: 1 }];
+    const before = p.ducats;
+    const built = build(room, p, island.id, type);
+    assert.equal(built.ok, true);
+    assert.equal(before - p.ducats, BUILDINGS[type].price);
+    const index = island.buildings.findIndex(b => b.type === type);
+    assert.equal(canUpgradeBuilding(room, p, island, index).ok, false);
+    assert.equal(build(room, p, island.id, type).ok, false);
+    island.buildings = [{ type: 'farm', level: 1 }];
+    island.resources = [];
+    assert.equal(build(room, p, island.id, type).ok, false);
+  }
 }
 
 // Арсенал снаряжает одну роту, которая занимает основной трюм и добавляет войско

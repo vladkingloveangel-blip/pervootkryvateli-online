@@ -1607,6 +1607,7 @@
       escorts: 'временно неактивные суда сопровождения',
       'shipyard-remove': 'суда сопровождения для удаления',
       'landin-replace': 'судно сопровождения для замены Ландином',
+      bastions: 'временно неактивные бастионы',
     };
     if (!pending.viewerCanRespond) {
       content.innerHTML = `<div class="event-current"><strong>${escapeHtml(playerName(pending.playerId))}</strong> выбирает ${escapeHtml(stageLabels[pending.stage] || 'состав флотилии')}.</div>`;
@@ -1621,7 +1622,10 @@
     const selected = state.fleetAdjustmentSelection || new Set();
     let instruction = `Выберите ровно <strong>${pending.required}</strong> элементов.`;
     let note = '';
-    if (pending.stage === 'upgrades' || pending.stage === 'escorts') {
+    if (pending.stage === 'bastions') {
+      instruction = `Выберите ровно <strong>${pending.required}</strong> бастионов, которые временно не будут давать защиту.`;
+      note = 'Бастионы остаются зданиями на своих клетках и снова дают +10 войска после восстановления достаточного числа мест поддержки.';
+    } else if (pending.stage === 'upgrades' || pending.stage === 'escorts') {
       instruction = `Выберите ровно <strong>${pending.required}</strong> ${pending.stage === 'upgrades' ? 'улучшений' : 'судов сопровождения'}, которые временно не будут действовать.`;
       note = pending.stage === 'escorts' ? 'Неактивное сопровождение продолжает следовать за флотилией; уже погруженный груз сохраняется, но судно не даёт артиллерию и его трюм нельзя загружать или продавать до восстановления уровня.' : 'Улучшения остаются установленными и снова включатся, когда мест станет достаточно.';
     } else if (pending.stage === 'shipyard-remove') {
@@ -1631,7 +1635,8 @@
       instruction = 'Выберите <strong>одно</strong> имеющееся судно, которое заменит особое сопровождение Ландина.';
       note = `Сопровождение Ландина: +${r.escortCatalog.landin.artillery} артиллерии, трюм ${r.escortCatalog.landin.cargo}. Груз заменённого судна пропадёт.`;
     }
-    content.innerHTML = `<div class="event-current"><strong>Обязательное решение по флотилии</strong><br>${escapeHtml(pending.reason || '')}</div><div class="event-effect">${instruction}</div>${note ? `<div class="cargo-meta">${escapeHtml(note)}</div>` : ''}`;
+    const decisionTitle = pending.stage === 'bastions' ? 'Обязательный выбор поддержки бастионов' : 'Обязательное решение по флотилии';
+    content.innerHTML = `<div class="event-current"><strong>${decisionTitle}</strong><br>${escapeHtml(pending.reason || '')}</div><div class="event-effect">${instruction}</div>${note ? `<div class="cargo-meta">${escapeHtml(note)}</div>` : ''}`;
 
     const redrawButtons = () => {
       actions.innerHTML = '';
@@ -1643,7 +1648,7 @@
         let suffix = '';
         if (pending.stage === 'upgrades') {
           if (option.missingRequirement) suffix = ' · без бонуса: нет первого улучшения ветви';
-        } else {
+        } else if (pending.stage !== 'bastions') {
           if (option.special && option.type !== 'landin') suffix += ' · особое';
           if (option.artillery) suffix += ` · арт. +${option.artillery}`;
           if (option.cargoCapacity) suffix += ` · трюм ${option.cargoCapacity}`;
@@ -2209,8 +2214,9 @@
     }
 
     const bastion = island.buildings.find(b => b.type === 'bastion');
+    const fortressThrees = island.buildings.filter(b => b.type === 'fortress' && Number(b.level) === 3);
     const arsenal = island.buildings.filter(b => b.type === 'arsenal').sort((a, b) => b.level - a.level)[0];
-    if (arsenal || bastion || (mine?.bastionSupportCapacity || 0) > (mine?.bastionCount || 0)) {
+    if (arsenal || bastion || fortressThrees.length) {
       const militaryLabel = document.createElement('div');
       militaryLabel.className = 'action-group-label';
       militaryLabel.textContent = 'Военная инфраструктура';
@@ -2224,19 +2230,14 @@
         actions.appendChild(companyBtn);
       }
       if (!bastion) {
-        const bastionBtn = document.createElement('button');
-        bastionBtn.type = 'button'; bastionBtn.className = 'build-btn';
-        bastionBtn.textContent = `Бастион · ${state.room.balanceCatalog.bastion.price} дук. · +${state.room.balanceCatalog.bastion.defense} защиты`;
-        bastionBtn.disabled = !canAct || mine.ducats < state.room.balanceCatalog.bastion.price || (mine.bastionCount || 0) >= (mine.bastionSupportCapacity || 0);
-        bastionBtn.addEventListener('click', () => emitDataAction(bastionBtn, 'buildBastion', { islandId: island.id }));
-        actions.appendChild(bastionBtn);
-      } else if (!bastion.supported && (mine?.bastionSupportCapacity || 0) > 0) {
-        const supportBtn = document.createElement('button');
-        supportBtn.type = 'button'; supportBtn.className = 'build-btn primary';
-        supportBtn.textContent = 'Перенести поддержку на этот бастион · бесплатно';
-        supportBtn.disabled = !(myTurn && ['navigation', 'actions'].includes(mine?.phase) && !isDecisionPending());
-        supportBtn.addEventListener('click', () => socket.emit('prioritizeBastionSupport', { islandId: island.id }, handleGameAck));
-        actions.appendChild(supportBtn);
+        for (const fortress of fortressThrees) {
+          const bastionBtn = document.createElement('button');
+          bastionBtn.type = 'button'; bastionBtn.className = 'build-btn';
+          bastionBtn.textContent = `Крепость III → Бастион · ${state.room.balanceCatalog.bastion.price} дук. · +${state.room.balanceCatalog.bastion.defense} защиты`;
+          bastionBtn.disabled = !canAct || mine.ducats < state.room.balanceCatalog.bastion.price || (mine.bastionCount || 0) >= (mine.bastionSupportCapacity || 0);
+          bastionBtn.addEventListener('click', () => emitDataAction(bastionBtn, 'buildBastion', { islandId: island.id, buildingIndex: fortress.index }));
+          actions.appendChild(bastionBtn);
+        }
       }
     }
 

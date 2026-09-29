@@ -116,6 +116,8 @@ test('every economic table row, building chain, price, income and defense matche
   for (const row of fixture.tables.rare) {
     const building=Object.values(rules.economy.buildings).find(b=>b.name===row[0]);
     assert.equal(building.price,n(row[2])); assert.equal(building.futureLevelsPurchasable,false);
+    assert.deepEqual(Object.keys(building.levels),['1']);
+    assert.deepEqual(building.futureLevels,{2:null,3:null});
   }
   for (const row of fixture.tables.publicBuildings) {
     const b=Object.values(rules.economy.buildings).find(b=>b.name===row[0]);
@@ -159,7 +161,7 @@ test('complete known sea, assignment, feud and event decks match appendix rows',
 });
 
 test('unknown physical copies and author decisions remain explicit, never guessed', () => {
-  for (const id of ['R05','R06','R21','R29','remaining-prize-buildings']) assert.ok(rules.metadata.unresolved.includes(id));
+  for (const id of ['R05','R06','R07','R21','R29','remaining-prize-buildings']) assert.ok(rules.metadata.unresolved.includes(id));
   assert.equal(rules.legends.legendaryDeck.copiesByKind,null);
   assert.equal(rules.legends.legendaryDeck.reshuffle,null);
   assert.equal(rules.legends.treasureDeck.copiesByKind,null);
