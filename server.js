@@ -2056,12 +2056,10 @@ function resolveFeudCard(room, player, factionId, rawCard) {
     return immediate;
   }
   if (card.type === 'discard-random-held') {
-    if (card.unresolved === 'R29' || card.targetZone == null) {
-      log(room, `${player.name}: карта вражды ${factionName} требует случайного сброса удерживаемой карты, но состав закрытой руки остаётся нерешённым вопросом Р29; автоматический сброс не выполняется.`);
-      return immediate;
-    }
     const result = discardRandomHeldCard(room, player);
-    log(room, result.discarded ? `${player.name}: карта вражды ${factionName} — случайно сброшена удерживаемая карта «${result.discarded.name}».` : `${player.name}: карта вражды ${factionName} — удерживаемых карт нет.`);
+    log(room, result.discarded
+      ? `${player.name}: карта вражды ${factionName} — случайно сброшена удерживаемая карта «${result.discarded.name}».`
+      : `${player.name}: карта вражды ${factionName} — нет карты, которую этот эффект может сбросить; активное поручение защищено.`);
     return immediate;
   }
   if (card.type === 'reclaim-island') {

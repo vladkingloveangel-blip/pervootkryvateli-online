@@ -770,8 +770,7 @@
         "effect": {
           "type": "discard-random-held",
           "count": 1,
-          "targetZone": null,
-          "unresolved": "R29"
+          "targetZone": "closed-hand-except-active-assignment"
         },
         "source": "Д.4:5",
         "iconKey": "card.feud",
@@ -873,8 +872,7 @@
         "effect": {
           "type": "discard-random-held",
           "count": 1,
-          "targetZone": null,
-          "unresolved": "R29"
+          "targetZone": "closed-hand-except-active-assignment"
         },
         "source": "Д.5:4",
         "iconKey": "card.feud",
@@ -1043,8 +1041,7 @@
         "effect": {
           "type": "discard-random-held",
           "count": 1,
-          "targetZone": null,
-          "unresolved": "R29"
+          "targetZone": "closed-hand-except-active-assignment"
         },
         "source": "Д.6:7",
         "iconKey": "card.feud",

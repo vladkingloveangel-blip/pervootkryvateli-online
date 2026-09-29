@@ -60,7 +60,7 @@ function validateRules(rules, map) {
       'ship-level-loss': [['levels']],
       'treasury-percent': [['percent']], 'treasury-flat': [['amount']],
       'remove-upgrade': [['count'], ['branch']], 'remove-cargo': [['holds']],
-      'discard-random-held': [['count','targetZone','unresolved']], 'none': [[]],
+      'discard-random-held': [['count','targetZone']], 'none': [[]],
       'remove-building': [['count','buildingTypes']],
       'downgrade-building': [['count','steps'], ['buildingTypes']],
       'departure-movement': [['amount']], 'replace-event': [['limit']],
@@ -92,7 +92,7 @@ function validateRules(rules, map) {
     if (e.distance !== undefined) check(e.distance === 'manhattan', path, 'invalid distance');
     if (e.type === 'movement-penalty') check((e.timing === 'current-personal-turn') !== Number.isInteger(e.durationPersonalTurns), path, 'expected exactly one duration');
     if (e.type === 'reclaim-island') check(rules.islands.some(i => i.factionId === e.factionId), path, 'faction has no original island');
-    if (e.type === 'discard-random-held') check(e.targetZone === null && e.unresolved === 'R29', path, 'unresolved target must stay neutral');
+    if (e.type === 'discard-random-held') check(e.targetZone === 'closed-hand-except-active-assignment', path, 'random discard must target the closed hand while protecting the active assignment');
     if (e.type === 'inspect-hidden-cards') check(e.assignmentVisibility === null && e.unresolved === 'R29', path, 'unresolved visibility must stay neutral');
     if (e.type === 'protect') check(e.hostileCardReactionExpiry === 'end-of-current-turn', path, 'invalid reaction expiry');
   }

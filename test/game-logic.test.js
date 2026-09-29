@@ -1506,6 +1506,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
     id: 'p1', shipClass: 'frigate', level: 2, upgrades: ['falcons', 'musketeers'],
     cargo: { goodId: 'wood', quantity: 3 }, escorts: [],
     specialCards: ['Путь сквозь туман'], legendaryCards: [], savedEventCards: [],
+    activeAssignment: { id: 'assignment-test', instanceId: 'assignment-test-1', text: 'Закрытое поручение' },
   };
   assert.equal(politicalBuildingOptions(room, p, { aboveLevelOne: true }).length, 1);
   assert.equal(politicalBuildingOptions(room, p, { fortsOnly: true }).length, 1);
@@ -1513,6 +1514,9 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(politicalCargoOptions(room, p).length, 1);
   assert.equal(discardRandomHeldCard(room, p, () => 0).discarded.name, 'Путь сквозь туман');
   assert.deepEqual(p.specialCards, []);
+  assert.equal(p.activeAssignment.id, 'assignment-test');
+  assert.equal(discardRandomHeldCard(room, p, () => 0).discarded, null);
+  assert.equal(p.activeAssignment.id, 'assignment-test');
   const removed = removePlayerBuilding(room, p, 'bogamia', 1);
   assert.equal(removed.ok, true);
   assert.equal(island.buildings.length, 1);

@@ -213,8 +213,8 @@ test('stage 5.9 finalizes combat and politics with no stage-5 pending consumers'
   assert.equal(data.FEUD_CARDS.mori.filter(card=>card.type==='movement-penalty' && card.amount===2).reduce((sum,card)=>sum+card.quantity,0),2);
   for (const factionId of ['mayo','suniksiya','pirates']) {
     const card=data.FEUD_CARDS[factionId].find(c=>c.type==='discard-random-held');
-    assert.equal(card.unresolved,'R29');
-    assert.equal(card.targetZone,null);
+    assert.equal(card.targetZone,'closed-hand-except-active-assignment');
+    assert.equal(card.unresolved,undefined);
   }
   assert.equal(data.BALANCE.attackHistoryWindow,undefined);
   assert.equal(data.BALANCE.attackRebellionThreshold,undefined);

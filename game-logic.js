@@ -1059,6 +1059,8 @@ function politicalCargoOptions(room, player) {
 }
 
 function discardRandomHeldCard(room, player, rng = Math.random) {
+  // Активное поручение входит в закрытую руку, но по авторскому решению
+  // случайный сброс карты вражды не может выбрать или уничтожить поручение.
   const refs = [];
   (player?.specialCards || []).forEach((name, index) => refs.push({ source: 'special', index, name }));
   (player?.legendaryCards || []).forEach((card, index) => refs.push({ source: 'legendary', index, name: card.name, card }));
