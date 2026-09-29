@@ -479,6 +479,20 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
   const canonicalDecks = createAssignmentDecks(rng);
   room.assignmentDecks ||= {};
 
+  // Retire obsolete prize-building/capture-mode state from restored rooms.
+  if (Object.hasOwn(room, 'pendingStatePrize')) {
+    delete room.pendingStatePrize;
+    changed = true;
+  }
+  if (room.pendingBattle && Object.hasOwn(room.pendingBattle, 'captureMode')) {
+    delete room.pendingBattle.captureMode;
+    changed = true;
+  }
+  if (room.pendingLegendaryReaction && Object.hasOwn(room.pendingLegendaryReaction, 'captureMode')) {
+    delete room.pendingLegendaryReaction.captureMode;
+    changed = true;
+  }
+
   for (const factionId of Object.keys(ASSIGNMENT_CARDS)) {
     if (!room.assignmentDecks[factionId]) {
       const reservedIds = new Set(room.players
@@ -2039,58 +2053,6 @@ function landCompanyAssaultArmy(player) {
 }
 
 
-function canPlacePrizeBuilding(room, player, island, spec) {
-  if (!room || !player || !island || !spec) return { ok: false, error: 'Наградная постройка не найдена.' };
-  const def = BUILDINGS[spec.type];
-  if (!def) return { ok: false, error: 'Неизвестный тип наградной постройки.' };
-  if (island.ownerId !== player.id) return { ok: false, error: 'Призовую постройку можно разместить только на своём острове.' };
-  const building = { type: spec.type, level: Math.max(1, Number(spec.level) || 1) };
-  if (def.unique && buildingCount(island, building.type) >= 1) return { ok: false, error: 'Такая уникальная постройка уже есть на острове.' };
-
-  const candidate = cloneIslandWithBuildings(island, [...island.buildings, building]);
-  if (usedArea(candidate) > effectiveArea(candidate)) return { ok: false, error: 'На острове не хватает свободной площади.' };
-  if (!def.unique && branchCount(candidate, def.branch) > branchLimitFor(candidate)) {
-    return { ok: false, error: `Для статуса «${islandStatus(candidate)}» превышен предел построек этой ветви.` };
-  }
-  return { ok: true, building, candidate };
-}
-
-function prizeBuildingPlacementOptions(room, player, spec) {
-  const out = [];
-  for (const island of room?.islands || []) {
-    if (island.ownerId !== player?.id) continue;
-    const allowed = canPlacePrizeBuilding(room, player, island, spec);
-    if (!allowed.ok) continue;
-    out.push({
-      islandId: island.id,
-      islandName: island.name,
-      status: islandStatus(island),
-      usedArea: usedArea(island),
-      effectiveArea: effectiveArea(island),
-      afterUsedArea: usedArea(allowed.candidate),
-      afterEffectiveArea: effectiveArea(allowed.candidate),
-      branchLimit: branchLimitFor(allowed.candidate),
-    });
-  }
-  return out;
-}
-
-function placePrizeBuilding(room, player, islandId, spec, meta = {}) {
-  const island = room?.islands?.find(i => i.id === islandId);
-  if (!island) return { ok: false, error: 'Остров для наградной постройки не найден.' };
-  const allowed = canPlacePrizeBuilding(room, player, island, spec);
-  if (!allowed.ok) return allowed;
-  const building = {
-    ...allowed.building,
-    reward: true,
-    statePrize: true,
-    statePrizeFactionId: meta.factionId || null,
-    createdAt: Date.now(),
-  };
-  island.buildings.push(building);
-  return { ok: true, island, building, name: buildingDisplayName(building) };
-}
-
 function cloneIslandWithBuildings(island, buildings) {
   return { ...island, buildings: buildings.map(b => ({ ...b })) };
 }
@@ -3085,14 +3047,7 @@ function seaBattle(room, attacker, defender, options = {}) {
   return jointSeaBattle(room, attacker, defender, [], [], options);
 }
 
-function addRewardBuilding(island, spec) {
-  if (!BUILDINGS[spec.type]) return null;
-  const building = { type: spec.type, level: spec.level || 1, reward: true, createdAt: Date.now() };
-  island.buildings.push(building);
-  return buildingDisplayName(building);
-}
-
-function grantMilitaryReward(room, player, island, captureMode, options = {}) {
+function grantMilitaryReward(room, player, island, options = {}) {
   const notes = [];
   if (island.rewardClaimed) return notes;
   island.rewardClaimed = true;
@@ -3112,18 +3067,11 @@ function grantMilitaryReward(room, player, island, captureMode, options = {}) {
     }
     if (drawn) notes.push(`легендарная карта ×${drawn}`);
   }
-  if (captureMode === 'preserve') {
-    for (const spec of reward.preserveBuildings || []) {
-      const name = addRewardBuilding(island, spec);
-      if (name) notes.push(name);
-    }
-  }
   return notes;
 }
 
-function jointAssaultIsland(room, attacker, island, captureMode = 'preserve', attackerAllyIds = [], defenderAllyIds = [], options = {}) {
+function jointAssaultIsland(room, attacker, island, attackerAllyIds = [], defenderAllyIds = [], options = {}) {
   if (!room || !attacker || !island) return { ok: false, error: 'Цель штурма не найдена.' };
-  if (!['preserve', 'raze'].includes(captureMode)) return { ok: false, error: 'Неизвестный результат захвата.' };
   if (!playerOnIsland(attacker, island)) return { ok: false, error: 'Для штурма основной корабль должен находиться на клетке этого острова.' };
   if (isCitadelPeaceCell(attacker.row, attacker.col)) return { ok: false, error: 'В зоне мира Цитадели штурм запрещён.' };
   if (island.ownerId === attacker.id) return { ok: false, error: 'Нельзя штурмовать собственный остров.' };
@@ -3187,7 +3135,6 @@ function jointAssaultIsland(room, attacker, island, captureMode = 'preserve', at
     attackerParticipantIds: attackers.map(p => p.id),
     defenderParticipantIds: defenders.map(p => p.id),
     outcome: 'tie',
-    captureMode,
     rewardNotes: [],
     glory: 0,
     armyPointAwards: [],
@@ -3213,7 +3160,7 @@ function jointAssaultIsland(room, attacker, island, captureMode = 'preserve', at
       && !result.statePrize.amountUnresolved
       && result.statePrize.excludesIslandDucats
     );
-    result.rewardNotes = grantMilitaryReward(room, attacker, island, captureMode, { skipDucats: replaceIslandCash });
+    result.rewardNotes = grantMilitaryReward(room, attacker, island, { skipDucats: replaceIslandCash });
     if (result.statePrize?.triggered) {
       if (result.statePrize.amountUnresolved) {
         result.rewardNotes.push(`итоговый приз ${result.statePrize.factionName}: сумма ожидает решения автора`);
@@ -3245,8 +3192,8 @@ function jointAssaultIsland(room, attacker, island, captureMode = 'preserve', at
   return result;
 }
 
-function assaultIsland(room, attacker, island, captureMode = 'preserve', options = {}) {
-  return jointAssaultIsland(room, attacker, island, captureMode, [], [], options);
+function assaultIsland(room, attacker, island, options = {}) {
+  return jointAssaultIsland(room, attacker, island, [], [], options);
 }
 
 function publicIsland(island, room = null) {
@@ -3307,9 +3254,6 @@ module.exports = {
   upgradeBuilding,
   canUpgradeBuilding,
   buildingDisplayName,
-  canPlacePrizeBuilding,
-  prizeBuildingPlacementOptions,
-  placePrizeBuilding,
   stoneworksSupportCapacity,
   bastionSupportSummary,
   bastionSupportChoiceNeeds,

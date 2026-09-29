@@ -182,15 +182,9 @@
       "ore"
     ],
     "reward": {
-      "trigger": "first-acquisition",
-      "buildings": [
-        {
-          "type": "fort",
-          "level": 1
-        }
-      ]
+      "trigger": "first-acquisition"
     },
-    "rewardText": "Форт I при первом получении.",
+    "rewardText": "—.",
     "source": "А.1.11",
     "iconKey": "island.kisalinia"
   },

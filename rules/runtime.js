@@ -32,11 +32,7 @@ SHIP_UPGRADES[legacy.removedUpgrade.id] = { ...legacy.removedUpgrade, retired: t
 const SHIP_LEVELS = { ...rules.fleet.levels, [legacy.shipLevel7.level]: { ...legacy.shipLevel7, retired: true } };
 const MILITARY_REWARDS = {};
 for (const island of rules.islands.filter(i => i.kind !== 'free')) {
-  MILITARY_REWARDS[island.id] = {
-    ...copy(island.reward),
-    // Ready-made buildings exist only where the current island card explicitly lists them.
-    preserveBuildings: copy(island.reward?.buildings || []),
-  };
+  MILITARY_REWARDS[island.id] = copy(island.reward);
 }
 const FACTIONS = Object.fromEntries(Object.entries(rules.politics.factions)
   .filter(([, faction]) => !faction.availability

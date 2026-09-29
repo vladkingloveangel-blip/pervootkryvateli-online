@@ -110,10 +110,7 @@ function validateRules(rules, map) {
     check(Boolean(i.reward?.trigger), i.id, 'missing reward trigger');
     for (const field of ['ducats','legendary']) if (field in i.reward) integer(i.reward[field], `${i.id}.reward.${field}`);
     if (i.reward.legendaryCardId) ref(i.reward.legendaryCardId, new Set(legends.legendary.map(c => c.id)), i.id);
-    for (const b of i.reward.buildings || []) {
-      ref(b.type, buildings, i.id);
-      check(Boolean(economy.buildings[b.type]?.levels[b.level]), i.id, 'unknown reward level');
-    }
+    check(!Object.hasOwn(i.reward, 'buildings'), i.id, 'prize-building rewards are retired by author decision');
   }
   check(Object.keys(fleet.ships).length === 4, 'ships', 'expected four classes');
   for (const id of ['brigantine','frigate','caravel','carrack']) check(Boolean(fleet.ships[id]), 'ships', `missing ${id}`);

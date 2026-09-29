@@ -747,7 +747,7 @@
   }
 
   function playerName(id) { return state.room?.players.find(p => p.id === id)?.name || 'Игрок'; }
-  function isDecisionPending() { return Boolean(state.room?.pendingAlliance || state.room?.pendingBattle || state.room?.pendingEvent || state.room?.pendingFeud || state.room?.pendingAssignmentChoice || state.room?.pendingStatePrize || state.room?.pendingIslandCorrection || state.room?.pendingFleetAdjustment || state.room?.pendingLegendaryReaction); }
+  function isDecisionPending() { return Boolean(state.room?.pendingAlliance || state.room?.pendingBattle || state.room?.pendingEvent || state.room?.pendingFeud || state.room?.pendingAssignmentChoice || state.room?.pendingIslandCorrection || state.room?.pendingFleetAdjustment || state.room?.pendingLegendaryReaction); }
   function areAlliesClient(aId, bId) {
     return (state.room?.alliances || []).some(pair => (pair[0] === aId && pair[1] === bId) || (pair[0] === bId && pair[1] === aId));
   }
@@ -856,7 +856,6 @@
     };
 
     const pendingEventForMe = Boolean(r.pendingEvent?.viewerCanRespond || r.pendingFeud?.viewerCanRespond);
-    const pendingStatePrize = Boolean(r.pendingStatePrize);
     const pendingIslandCorrection = Boolean(r.pendingIslandCorrection);
     const pendingFleetAdjustment = Boolean(r.pendingFleetAdjustment);
     const pendingAssignment = Boolean(r.pendingAssignmentChoice?.viewerCanRespond);
@@ -871,7 +870,6 @@
 
     set('.controls', true, 20);
     set('.event-panel', Boolean(r.eventPhase?.active || pendingEventForMe), pendingEventForMe ? 1 : 12);
-    set('.state-prize-panel', pendingStatePrize, r.pendingStatePrize?.viewerCanRespond ? 0 : 4);
     set('.island-correction-panel', pendingIslandCorrection, r.pendingIslandCorrection?.viewerCanRespond ? 0 : 4);
     set('.fleet-adjustment-panel', pendingFleetAdjustment, r.pendingFleetAdjustment?.viewerCanRespond ? 0 : 4);
     set('.assignment-panel', pendingAssignment || activeAssignment, pendingAssignment ? 2 : 30);
@@ -916,7 +914,6 @@
     renderMapContext();
     renderEvents();
     renderPolitics();
-    renderStatePrize();
     renderIslandCorrection();
     renderFleetAdjustment();
     renderAssignments();
@@ -1131,7 +1128,6 @@
       else if (r.pendingEvent?.viewerCanRespond) label = 'Решение по событию';
       else if (r.pendingFeud?.viewerCanRespond) label = 'Решение по вражде';
       else if (r.pendingAssignmentChoice?.viewerCanRespond) label = 'Решение по поручению';
-      else if (r.pendingStatePrize?.viewerCanRespond) label = 'Размещение приза';
       else if (r.pendingIslandCorrection?.viewerCanRespond) label = 'Исправление острова';
       else if (r.pendingFleetAdjustment?.viewerCanRespond) label = 'Настройка флотилии';
       else if (r.pendingLegendaryReaction) label = 'Решение по легендарной карте';
@@ -1243,8 +1239,6 @@
 
     if (!r.started) $('moveResult').textContent = 'Выберите корабль. Организатор назначает ведущего и порядок мест; затем все нажимают «Готов».';
     else if (r.eventPhase?.active) $('moveResult').textContent = r.pendingIslandCorrection?.viewerCanRespond ? `Остров ${r.pendingIslandCorrection.islandName} нужно исправить перед продолжением.` : r.pendingIslandCorrection ? `${playerName(r.pendingIslandCorrection.playerId)} исправляет остров ${r.pendingIslandCorrection.islandName}.` : r.pendingAssignmentChoice?.viewerCanRespond ? 'Нужно решить, оставить или заменить поручение сюзерена.' : r.pendingFeud?.viewerCanRespond ? 'Нужно разрешить вашу карту вражды.' : r.pendingEvent?.viewerCanRespond ? 'Нужно принять решение по вашей карте события.' : `Карты получает ${playerName(r.eventPhase.currentPlayerId)}.`;
-    else if (r.pendingStatePrize?.viewerCanRespond) $('moveResult').textContent = 'Разместите призовую постройку за полное подчинение государства.';
-    else if (r.pendingStatePrize) $('moveResult').textContent = `Ожидается размещение итогового приза игроком ${playerName(r.pendingStatePrize.playerId)}.`;
     else if (r.pendingIslandCorrection?.viewerCanRespond) $('moveResult').textContent = `Остров ${r.pendingIslandCorrection.islandName} нужно немедленно привести к допустимым ограничениям.`;
     else if (r.pendingIslandCorrection) $('moveResult').textContent = `Ожидается исправление острова ${r.pendingIslandCorrection.islandName} игроком ${playerName(r.pendingIslandCorrection.playerId)}.`;
     else if (!myTurn) $('moveResult').textContent = aText();
@@ -1536,50 +1530,6 @@
   }
 
 
-
-  function renderStatePrize() {
-    const r = state.room;
-    const mine = me();
-    const badge = $('statePrizeBadge');
-    const content = $('statePrizeContent');
-    const actions = $('statePrizeActions');
-    if (!badge || !content || !actions) return;
-    actions.innerHTML = '';
-    const pending = r?.pendingStatePrize;
-
-    if (!r?.started) {
-      badge.textContent = '—';
-      content.textContent = 'Итоговый приз возникает после военного захвата последнего острова, которым ещё владеет само государство.';
-      return;
-    }
-    if (!pending) {
-      const claimed = (r.factions || []).filter(f => f.fullConquestClaimed);
-      badge.textContent = claimed.length ? `получено ${claimed.length}` : 'ожидание';
-      content.innerHTML = claimed.length
-        ? `<div class="event-current">Зафиксированные получатели: ${claimed.map(f => `${escapeHtml(f.name)} — ${escapeHtml(playerName(f.fullConquestPlayerId))}${f.fullConquestPrize?.amountUnresolved ? ' (сумма требует решения автора)' : ` (${f.fullConquestPrize?.ducats || 0} дукатов)`}`).join('<br>')}</div>`
-        : '<div class="event-current">Приз выдаётся один раз после военного захвата последнего острова, которым ещё владело само государство. Владеть его прежними островами не требуется.</div>';
-      return;
-    }
-
-    const current = pending.currentBuilding;
-    badge.textContent = pending.viewerCanRespond ? `разместить ${pending.remaining}` : 'ожидание';
-    if (!pending.viewerCanRespond) {
-      content.innerHTML = `<div class="event-current"><strong>${escapeHtml(playerName(pending.playerId))}</strong> размещает итоговый приз ${escapeHtml(pending.factionName)}.</div>`;
-      return;
-    }
-
-    const lostText = pending.lost?.length ? `<div class="event-effect">Уже не удалось разместить: ${pending.lost.map(escapeHtml).join(', ')}.</div>` : '';
-    content.innerHTML = `<div class="event-current"><strong>${escapeHtml(pending.factionName)}</strong><br>Разместите ${escapeHtml(current?.name || 'наградную постройку')} на любом своём острове. Осталось зданий: ${pending.remaining}.</div><div class="cargo-meta">Приз не требует фермы, форта или нахождения корабля на острове, но должен помещаться по площади и пределу ветви.</div>${lostText}`;
-
-    for (const option of pending.options || []) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'build-btn primary';
-      b.textContent = `${option.islandName} · площадь ${option.afterUsedArea}/${option.afterEffectiveArea} · ${option.status}`;
-      b.addEventListener('click', () => socket.emit('placeStatePrizeBuilding', { prizeId: pending.id, islandId: option.islandId }, handleGameAck));
-      actions.appendChild(b);
-    }
-  }
 
   function renderIslandCorrection() {
     const r = state.room;

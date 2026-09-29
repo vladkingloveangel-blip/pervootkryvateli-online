@@ -22,8 +22,6 @@ const {
   build,
   upgradeBuilding,
   buildingDisplayName,
-  prizeBuildingPlacementOptions,
-  placePrizeBuilding,
   islandConstraintReport,
   islandCorrectionOptions,
   removeIslandBuildingForCorrection,
@@ -503,20 +501,6 @@ function publicRoom(room, viewerId = null) {
       })) : [],
       viewerCanRespond: room.pendingAssignmentChoice.playerId === viewerId,
     } : null,
-    pendingStatePrize: room.pendingStatePrize ? {
-      id: room.pendingStatePrize.id,
-      playerId: room.pendingStatePrize.playerId,
-      factionId: room.pendingStatePrize.factionId,
-      factionName: FACTIONS[room.pendingStatePrize.factionId]?.name || room.pendingStatePrize.factionId,
-      remaining: room.pendingStatePrize.remainingBuildings?.length || 0,
-      currentBuilding: room.pendingStatePrize.remainingBuildings?.[0] ? {
-        ...room.pendingStatePrize.remainingBuildings[0],
-        name: buildingDisplayName(room.pendingStatePrize.remainingBuildings[0]),
-      } : null,
-      viewerCanRespond: room.pendingStatePrize.playerId === viewerId,
-      options: room.pendingStatePrize.playerId === viewerId ? (room.pendingStatePrize.options || []).map(o => ({ ...o })) : [],
-      lost: room.pendingStatePrize.playerId === viewerId ? [...(room.pendingStatePrize.lost || [])] : [],
-    } : null,
     pendingIslandCorrection: room.pendingIslandCorrection ? {
       id: room.pendingIslandCorrection.id,
       kind: room.pendingIslandCorrection.kind || 'constraints',
@@ -593,7 +577,6 @@ function publicRoom(room, viewerId = null) {
       attackerId: room.pendingBattle.attackerId,
       targetPlayerId: room.pendingBattle.targetPlayerId || null,
       islandId: room.pendingBattle.islandId || null,
-      captureMode: room.pendingBattle.captureMode || null,
       invites: room.pendingBattle.invites.map(inv => ({
         playerId: inv.playerId,
         side: inv.side,
@@ -1046,7 +1029,7 @@ function markAttackHostilityAgainstIsland(room, attacker, island, reason = 'на
 }
 
 function hasPendingDecision(room) {
-  return Boolean(room?.pendingAlliance || room?.pendingBattle || room?.pendingEvent || room?.pendingFeud || room?.pendingAssignmentChoice || room?.pendingStatePrize || room?.pendingIslandCorrection || room?.pendingFleetAdjustment || room?.pendingLegendaryReaction);
+  return Boolean(room?.pendingAlliance || room?.pendingBattle || room?.pendingEvent || room?.pendingFeud || room?.pendingAssignmentChoice || room?.pendingIslandCorrection || room?.pendingFleetAdjustment || room?.pendingLegendaryReaction);
 }
 
 function pendingDecisionError(room) {
@@ -1055,7 +1038,6 @@ function pendingDecisionError(room) {
   if (room?.pendingEvent) return 'Сначала разрешите карту события.';
   if (room?.pendingFeud) return 'Сначала разрешите карту вражды.';
   if (room?.pendingAssignmentChoice) return 'Сначала выберите поручение через Посольство.';
-  if (room?.pendingStatePrize) return 'Сначала разместите призовые здания за полное подчинение государства.';
   if (room?.pendingIslandCorrection) return room.pendingIslandCorrection.kind === 'capture-retention' ? 'Сначала выберите постройки, которые будут уничтожены после захвата острова.' : 'Сначала удалите лишние постройки с острова после потери статуса.';
   if (room?.pendingFleetAdjustment) return 'Сначала завершите обязательный выбор по флотилии или поддержке бастионов.';
   if (room?.pendingLegendaryReaction) return 'Сначала разрешите реакцию «Покров моря».';
@@ -1099,7 +1081,7 @@ function fleetAdjustmentOptions(room, player, stage) {
 function fleetDecisionActivationBlocked(room) {
   return Boolean(
     room?.pendingAlliance || room?.pendingBattle || room?.pendingEvent || room?.pendingFeud ||
-    room?.pendingAssignmentChoice || room?.pendingStatePrize || room?.pendingIslandCorrection ||
+    room?.pendingAssignmentChoice || room?.pendingIslandCorrection ||
     room?.pendingLegendaryReaction
   );
 }
@@ -1418,7 +1400,7 @@ function logSeaBattleResult(room, attacker, defender, result) {
 
 
 function otherPendingDecisionExists(room) {
-  return Boolean(room?.pendingAlliance || room?.pendingBattle || room?.pendingEvent || room?.pendingFeud || room?.pendingAssignmentChoice || room?.pendingStatePrize || room?.pendingFleetAdjustment || room?.pendingLegendaryReaction);
+  return Boolean(room?.pendingAlliance || room?.pendingBattle || room?.pendingEvent || room?.pendingFeud || room?.pendingAssignmentChoice || room?.pendingFleetAdjustment || room?.pendingLegendaryReaction);
 }
 
 function normalizeOwnedGarrisonsWithLog(room) {
@@ -1510,31 +1492,6 @@ function continueAfterIslandCorrection(room) {
   if (room.eventPhase?.active) processEventPhase(room);
 }
 
-function advanceStatePrizePlacement(room) {
-  const pending = room?.pendingStatePrize;
-  if (!pending) return false;
-  const player = playerById(room, pending.playerId);
-  if (!player) { room.pendingStatePrize = null; return false; }
-
-  while ((pending.remainingBuildings || []).length) {
-    const spec = pending.remainingBuildings[0];
-    const options = prizeBuildingPlacementOptions(room, player, spec);
-    if (options.length) {
-      pending.options = options;
-      return true;
-    }
-    const name = buildingDisplayName(spec);
-    pending.lost ||= [];
-    pending.lost.push(name);
-    pending.remainingBuildings.shift();
-    log(room, `${player.name}: ${name} из итогового приза ${FACTIONS[pending.factionId]?.name || pending.factionId} невозможно разместить — эта часть приза пропадает.`);
-  }
-
-  log(room, `${player.name} завершает размещение итогового приза ${FACTIONS[pending.factionId]?.name || pending.factionId}.`);
-  room.pendingStatePrize = null;
-  return false;
-}
-
 function queueStatePrizeFromAssault(room, attacker, result) {
   const prize = result?.statePrize;
   if (!prize?.triggered) return false;
@@ -1601,7 +1558,7 @@ function beginSeaBattleResolution(room, attacker, target, inviteAllies, combatOp
   }
   room.pendingBattle = {
     id: crypto.randomUUID(), kind: 'sea', attackerId: attacker.id, targetPlayerId: target.id,
-    invites, captureMode: null, shipCarpenterPlayerIds: [...(combatOptions.shipCarpenterPlayerIds || [])],
+    invites, shipCarpenterPlayerIds: [...(combatOptions.shipCarpenterPlayerIds || [])],
   };
   const invitedAttackers = allianceNames(room, eligible.attackerInvites);
   const invitedDefenders = allianceNames(room, eligible.defenderInvites);
@@ -1609,7 +1566,7 @@ function beginSeaBattleResolution(room, attacker, target, inviteAllies, combatOp
   return { ok: true, pending: true };
 }
 
-function beginAssaultResolution(room, attacker, island, captureMode, inviteAllies, combatOptions = {}) {
+function beginAssaultResolution(room, attacker, island, inviteAllies, combatOptions = {}) {
   const owner = island.ownerId ? playerById(room, island.ownerId) : null;
   const eligible = eligibleAssaultInvites(room, attacker, island, Boolean(inviteAllies));
   const invites = [
@@ -1617,7 +1574,7 @@ function beginAssaultResolution(room, attacker, island, captureMode, inviteAllie
     ...eligible.defenderInvites.map(playerId => ({ playerId, side: 'defender', response: null })),
   ];
   if (!invites.length) {
-    const result = jointAssaultIsland(room, attacker, island, captureMode, [], [], { ...combatOptions, skipAttackRegistrationIds: island.ownerId ? [attacker.id] : [] });
+    const result = jointAssaultIsland(room, attacker, island, [], [], { ...combatOptions, skipAttackRegistrationIds: island.ownerId ? [attacker.id] : [] });
     if (!result.ok) return result;
     chargeBattleCharacterCosts(room, result);
     logAssaultResult(room, attacker, island, result);
@@ -1633,7 +1590,7 @@ function beginAssaultResolution(room, attacker, island, captureMode, inviteAllie
   }
   room.pendingBattle = {
     id: crypto.randomUUID(), kind: 'assault', attackerId: attacker.id, islandId: island.id,
-    captureMode, invites, targetPlayerId: owner?.id || null,
+    invites, targetPlayerId: owner?.id || null,
     shipCarpenterPlayerIds: [...(combatOptions.shipCarpenterPlayerIds || [])],
   };
   const invitedAttackers = allianceNames(room, eligible.attackerInvites);
@@ -1674,7 +1631,7 @@ function resolvePendingLegendaryReaction(room, useVeil, cardRef = null) {
   }
   if (pending.kind === 'assault') {
     const island = room.islands.find(i => i.id === pending.islandId);
-    return beginAssaultResolution(room, source, island, pending.captureMode, pending.inviteAllies, { shipCarpenterPlayerIds: pending.shipCarpenterPlayerIds || [] });
+    return beginAssaultResolution(room, source, island, pending.inviteAllies, { shipCarpenterPlayerIds: pending.shipCarpenterPlayerIds || [] });
   }
   if (pending.kind === 'hellfire') {
     const island = room.islands.find(i => i.id === pending.islandId);
@@ -1706,7 +1663,7 @@ function resolvePendingBattle(room) {
   } else {
     const island = room.islands.find(i => i.id === pending.islandId);
     const attackerIds = island.ownerId ? [attacker.id, ...acceptedIds(pending, 'attacker')] : [];
-    result = jointAssaultIsland(room, attacker, island, pending.captureMode, acceptedIds(pending, 'attacker'), acceptedIds(pending, 'defender'), {
+    result = jointAssaultIsland(room, attacker, island, acceptedIds(pending, 'attacker'), acceptedIds(pending, 'defender'), {
       skipAttackRegistrationIds: attackerIds,
       shipCarpenterPlayerIds: pending.shipCarpenterPlayerIds || [],
     });
@@ -2859,7 +2816,6 @@ io.on('connection', socket => {
       pendingEvent: null,
       pendingFeud: null,
       pendingAssignmentChoice: null,
-      pendingStatePrize: null,
       pendingIslandCorrection: null,
       pendingFleetAdjustment: null,
       fleetAdjustmentQueue: [],
@@ -3060,7 +3016,6 @@ io.on('connection', socket => {
     room.pendingEvent = null;
     room.pendingFeud = null;
     room.pendingAssignmentChoice = null;
-    room.pendingStatePrize = null;
     room.pendingIslandCorrection = null;
     room.pendingFleetAdjustment = null;
     room.fleetAdjustmentQueue = [];
@@ -3896,24 +3851,6 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  onSocketEvent(socket, 'placeStatePrizeBuilding', (data, ack) => {
-    const room = getRoom(socket.data.roomCode);
-    const pending = room?.pendingStatePrize;
-    if (!room || !pending || pending.id !== String(data?.prizeId || '')) return ackSafe(ack, { ok: false, error: 'Этот итоговый приз уже не ожидает размещения.' });
-    if (pending.playerId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Этот приз принадлежит другому игроку.' });
-    const player = playerById(room, pending.playerId);
-    const spec = pending.remainingBuildings?.[0];
-    if (!player || !spec) { room.pendingStatePrize = null; return ackSafe(ack, { ok: false, error: 'Наградная постройка не найдена.' }); }
-
-    const result = placePrizeBuilding(room, player, String(data?.islandId || ''), spec, { factionId: pending.factionId });
-    if (!result.ok) return ackSafe(ack, result);
-    pending.remainingBuildings.shift();
-    log(room, `${player.name} размещает ${result.name} из итогового приза на острове ${result.island.name}.`);
-    advanceStatePrizePlacement(room);
-    ackSafe(ack, { ok: true, islandId: result.island.id, buildingName: result.name });
-    emitRoom(room);
-  });
-
   onSocketEvent(socket, 'enterVassalage', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
@@ -4025,7 +3962,6 @@ io.on('connection', socket => {
     if (room.actionsLeft <= 0) return ackSafe(ack, { ok: false, error: 'Действий больше нет.' });
     const island = room.islands.find(i => i.id === String(data?.islandId || ''));
     if (!island) return ackSafe(ack, { ok: false, error: 'Остров не найден.' });
-    const captureMode = String(data?.captureMode || 'preserve');
     const owner = island.ownerId ? playerById(room, island.ownerId) : null;
     if (!playerOnIsland(p, island)) return ackSafe(ack, { ok: false, error: 'Для штурма основной корабль должен находиться на клетке этого острова.' });
     if (island.ownerId === p.id) return ackSafe(ack, { ok: false, error: 'Нельзя штурмовать собственный остров.' });
@@ -4049,7 +3985,7 @@ io.on('connection', socket => {
     if (owner?.connected && playerHasLegendaryKind(owner, 'sea-veil')) {
       room.pendingLegendaryReaction = {
         id: crypto.randomUUID(), kind: 'assault', sourcePlayerId: p.id, targetPlayerId: owner.id,
-        islandId: island.id, captureMode, inviteAllies: Boolean(data?.inviteAllies),
+        islandId: island.id, inviteAllies: Boolean(data?.inviteAllies),
         shipCarpenterPlayerIds: carpenter.playerIds,
       };
       log(room, `${p.name} объявляет штурм ${island.name} и тратит действие. ${owner.name} может ответить «Покровом моря».`);
@@ -4058,7 +3994,7 @@ io.on('connection', socket => {
       return;
     }
 
-    const result = beginAssaultResolution(room, p, island, captureMode, Boolean(data?.inviteAllies), { shipCarpenterPlayerIds: carpenter.playerIds });
+    const result = beginAssaultResolution(room, p, island, Boolean(data?.inviteAllies), { shipCarpenterPlayerIds: carpenter.playerIds });
     if (!result.ok) { room.actionsLeft += 1; return ackSafe(ack, result); }
     ackSafe(ack, result);
     emitRoom(room);

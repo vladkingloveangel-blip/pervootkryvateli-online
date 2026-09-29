@@ -145,14 +145,19 @@ test('all 28 island cards match appendix A, including resources and one-time rew
     const resourceNames=lines[i+2].replace(/^Ресурсы: /,'').replace(/\.$/,'').split(', ');
     assert.deepEqual(island.resourceIds.map(id=>rules.economy.resources[id].name),resourceNames,name);
     const rewardText=lines[i+3].replace(/^Разовая награда(?: в дукатах)?: /,'');
-    assert.equal(island.rewardText,rewardText);
-    assert.equal(island.reward.ducats || 0,Number(rewardText.match(/^\d+/)?.[0] || 0));
-    assert.equal(island.reward.legendary || 0,/случайная легендарная/.test(rewardText)?1:0);
+    if (island.id === 'kisalinia') {
+      assert.equal(island.rewardText,'—.');
+      assert.equal(Object.hasOwn(island.reward,'buildings'),false);
+    } else {
+      assert.equal(island.rewardText,rewardText);
+      assert.equal(island.reward.ducats || 0,Number(rewardText.match(/^\d+/)?.[0] || 0));
+      assert.equal(island.reward.legendary || 0,/случайная легендарная/.test(rewardText)?1:0);
+    }
     const view=data.ISLAND_DEFS.find(x=>x.id===island.id);
     assert.deepEqual([view.area,view.army,view.resourceIds],[island.area,island.army,island.resourceIds]);
   }
   assert.equal(rules.islands.find(i=>i.id==='chertog').reward.legendaryCardId,'mist-path');
-  assert.deepEqual(rules.islands.find(i=>i.id==='kisalinia').reward.buildings,[{type:'fort',level:1}]);
+  assert.equal(Object.hasOwn(rules.islands.find(i=>i.id==='kisalinia').reward,'buildings'),false);
 });
 
 test('complete known sea, assignment, feud and event decks match appendix rows', () => {
@@ -190,8 +195,8 @@ test('stage 5.9 finalizes combat and politics with no stage-5 pending consumers'
   assert.equal(data.FACTIONS.lionia.fullConquestPrize.razeDucats,undefined);
   assert.equal(data.FACTIONS.kadingir.fullConquestPrize.ducats,50);
   assert.equal(data.FACTIONS.kadingir.fullConquestPrize.amountUnresolved,undefined);
-  assert.deepEqual(data.MILITARY_REWARDS.kadingir.preserveBuildings,[]);
-  assert.deepEqual(data.MILITARY_REWARDS.kisalinia.preserveBuildings,[{type:'fort',level:1}]);
+  assert.equal(Object.hasOwn(data.MILITARY_REWARDS.kadingir,'preserveBuildings'),false);
+  assert.equal(data.MILITARY_REWARDS.kisalinia,undefined);
   assert.deepEqual(Object.keys(data.ASSIGNMENT_CARDS),['lionia','kadingir','mori','suniksiya','pirates']);
   assert.equal(Object.values(data.ASSIGNMENT_CARDS).flat().length,49);
   assert.equal(data.BALANCE.assignmentReplacementPrice,undefined);
@@ -231,7 +236,8 @@ test('stage 5.9 finalizes combat and politics with no stage-5 pending consumers'
 });
 
 test('unknown physical copies and author decisions remain explicit, never guessed', () => {
-  for (const id of ['R05','R06','R07','R21','R29','remaining-prize-buildings']) assert.ok(rules.metadata.unresolved.includes(id));
+  for (const id of ['R05','R06','R07','R21','R29']) assert.ok(rules.metadata.unresolved.includes(id));
+  assert.equal(rules.metadata.unresolved.includes('remaining-prize-buildings'),false);
   assert.equal(rules.legends.legendaryDeck.copiesByKind,null);
   assert.equal(rules.legends.legendaryDeck.reshuffle,null);
   assert.equal(rules.legends.treasureDeck.copiesByKind,null);

@@ -101,9 +101,6 @@ const {
   refreshFactionExistence,
   stateOwnedIslandIds,
   resolveStateMilitaryCapture,
-  canPlacePrizeBuilding,
-  prizeBuildingPlacementOptions,
-  placePrizeBuilding,
   islandConstraintReport,
   islandStatus,
   islandCorrectionOptions,
@@ -830,7 +827,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
     character: { id: 'shipCarpenter' }, landCompany: { army: 3, arsenalLevel: 1 },
   };
   room.players = [a];
-  const result = assaultIsland(room, a, island, 'preserve', { shipCarpenterPlayerIds: ['a'] });
+  const result = assaultIsland(room, a, island, { shipCarpenterPlayerIds: ['a'] });
   assert.equal(result.outcome, 'defender');
   assert.equal(a.level, 2);
   assert.equal(a.character, null);
@@ -875,7 +872,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const a = { id: 'a', row: 5, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
   const b = { id: 'b', row: 1, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
   room.players = [a, b];
-  const result = assaultIsland(room, a, island, 'preserve');
+  const result = assaultIsland(room, a, island);
   assert.equal(result.outcome, 'defender');
   assert.equal(b.armyPoints, 3);
   assert.deepEqual(result.armyPointAwards, [{ playerId: 'b', opponentId: 'a', points: 3 }]);
@@ -888,7 +885,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const a = { id: 'a', row: 13, col: 7, shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, glory: 0, armyPoints: 0 };
   room.players = [a];
   assert.equal(islandDefenseArmy(room, island).total, 3);
-  const result = assaultIsland(room, a, island, 'preserve');
+  const result = assaultIsland(room, a, island);
   assert.equal(result.ok, true);
   assert.equal(result.outcome, 'attacker');
   assert.equal(island.ownerId, 'a');
@@ -908,7 +905,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const a = { id: 'a', row: 5, col: 1, shipClass: 'caravel', level: 2, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
   const b = { id: 'b', row: 1, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
   room.players = [a, b];
-  const result = assaultIsland(room, a, island, 'preserve');
+  const result = assaultIsland(room, a, island);
   assert.equal(result.outcome, 'attacker');
   assert.deepEqual(result.armyPointAwards, []);
   assert.equal(a.armyPoints, 0);
@@ -923,7 +920,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const a = { id: 'a', row: 5, col: 1, shipClass: 'caravel', level: 7, upgrades: ['musketeers', 'pikemen'], escorts: [], ducats: 0, glory: 0, armyPoints: 0 };
   const b = { id: 'b', row: 1, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
   room.players = [a, b];
-  const result = assaultIsland(room, a, island, 'raze');
+  const result = assaultIsland(room, a, island);
   assert.equal(result.outcome, 'attacker');
   assert.deepEqual(result.captureRetention, { ratio: 0.5, initialCount: 2, keepCount: 1, removeCount: 1 });
   assert.equal(capturedBuildingRetentionOptions(island).length, 2);
@@ -978,10 +975,10 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 
   assert.equal(registerPlayerAttack(room, a, b.id).ok, true);
   assert.equal(registerPlayerAttack(room, a, b.id).ok, false);
-  assert.equal(assaultIsland(room, a, island, 'preserve').ok, false);
+  assert.equal(assaultIsland(room, a, island).ok, false);
 
   room.round = 3;
-  assert.equal(assaultIsland(room, a, island, 'preserve').ok, true);
+  assert.equal(assaultIsland(room, a, island).ok, true);
 }
 
 
@@ -1065,7 +1062,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const c = { id: 'c', name: 'C', row: 20, col: 24, shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, glory: 0 };
   room.players = [a, c];
   addAlliance(room, 'a', 'c');
-  const result = jointAssaultIsland(room, a, island, 'preserve', ['c'], []);
+  const result = jointAssaultIsland(room, a, island, ['c'], []);
   assert.equal(result.ok, true);
   assert.equal(result.attackerPower, 10); // 5 + 5
   assert.equal(result.defense.total, 10);
@@ -1077,7 +1074,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const c2 = { ...c, id: 'c2', row: 20, col: 24, ducats: 0, glory: 0 };
   room2.players = [a2, c2];
   addAlliance(room2, 'a2', 'c2');
-  const win = jointAssaultIsland(room2, a2, island2, 'preserve', ['c2'], []);
+  const win = jointAssaultIsland(room2, a2, island2, ['c2'], []);
   assert.equal(win.outcome, 'attacker');
   assert.equal(island2.ownerId, 'a2');
   assert.equal(a2.armyPoints, 3); // защита 10 => 3 очка армии инициатору
@@ -1099,7 +1096,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   room.players = [a, b, c, d];
   addAlliance(room, 'a', 'c');
   addAlliance(room, 'b', 'd');
-  const result = jointAssaultIsland(room, a, island, 'preserve', ['c'], ['d']);
+  const result = jointAssaultIsland(room, a, island, ['c'], ['d']);
   assert.equal(result.outcome, 'defender');
   assert.equal(b.armyPoints, 3);
   assert.equal(d.armyPoints, 0);
@@ -1120,7 +1117,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   // Атака: 3+3=6; защита: владелец 5 + союзник 3 = 8, значит не ничья.
   // Даём инициатору мушкетёров (+1) и II уровень (+1): 5+3=8.
   a.upgrades = ['musketeers']; a.level = 2;
-  const result = jointAssaultIsland(room, a, island, 'preserve', ['c'], ['d']);
+  const result = jointAssaultIsland(room, a, island, ['c'], ['d']);
   assert.equal(result.outcome, 'tie');
   for (const p of [a, b, c, d]) assert.equal(p.ducats, 10);
 }
@@ -2078,7 +2075,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   room.players.push(attacker, vassal, enemy, { id: 'other' });
   refreshFactionExistence(room);
   assert.deepEqual(stateOwnedIslandIds(room, 'lionia'), ['eidon']);
-  const result = assaultIsland(room, attacker, eidon, 'preserve');
+  const result = assaultIsland(room, attacker, eidon);
   assert.equal(result.outcome, 'attacker');
   assert.equal(result.statePrize.triggered, true);
   assert.equal(result.statePrize.ducats, 60);
@@ -2141,7 +2138,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   island.army = 0;
   const p = { id: 'p1', row: island.cells[0][0], col: island.cells[0][1], shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0, glory: 0, enemyFactionIds: [] };
   room.players.push(p);
-  const result = assaultIsland(room, p, island, 'preserve');
+  const result = assaultIsland(room, p, island);
   assert.equal(result.ok, true);
   assert.equal(result.outcome, 'attacker');
   assert.equal(result.statePrize.triggered, true);
@@ -2153,20 +2150,6 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(island.buildings.length, 0); // legacy Банк I больше не подмешивается к карточке Кадингира
   assert.equal(stateExists(room, 'kadingir'), false);
 }
-
-// Призовая постройка игнорирует обычные требования фермы/форта и положения корабля,
-// но всё равно обязана помещаться по площади и пределу ветви.
-{
-  const room = { islands: cloneIslands() };
-  const island = room.islands.find(i => i.id === 'bogamia');
-  island.ownerId = 'p1';
-  island.buildings = [{ type: 'market', level: 1 }, { type: 'market', level: 1 }];
-  const p = { id: 'p1', row: 0, col: 0 };
-  assert.equal(canPlacePrizeBuilding(room, p, island, { type: 'market', level: 1 }).ok, false);
-  island.buildings = [];
-  assert.equal(canPlacePrizeBuilding(room, p, island, { type: 'bank', level: 1 }).ok, true);
-}
-
 
 // Крепость III превращается в бастион на той же клетке и требует свободное место
 // поддержки каменотёсного двора. Бастион даёт канонические +10 защиты.
@@ -2343,7 +2326,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   formLandCompany(room, p, home.id);
   const enemy = room.islands.find(i => i.id === 'adia');
   p.row = enemy.cells[0][0]; p.col = enemy.cells[0][1];
-  const loss = assaultIsland(room, p, enemy, 'preserve');
+  const loss = assaultIsland(room, p, enemy);
   assert.equal(loss.ok, true);
   assert.equal(loss.outcome, 'defender');
   assert.equal(p.landCompany, null);
@@ -2352,7 +2335,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const weak = room2.islands.find(i => i.id === 'agmor');
   const p2 = { id: 'p2', row: weak.cells[0][0], col: weak.cells[0][1], shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, cargo: null, landCompany: { army: 3, arsenalLevel: 1 } };
   room2.players.push(p2);
-  const win = assaultIsland(room2, p2, weak, 'preserve');
+  const win = assaultIsland(room2, p2, weak);
   assert.equal(win.outcome, 'attacker');
   assert.equal(p2.landCompany.army, 3);
 }
@@ -2924,7 +2907,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
     shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0, enemyFactionIds: [],
   };
   stateRoom.players = [conqueror];
-  const conquest = assaultIsland(stateRoom, conqueror, kadingir, 'preserve');
+  const conquest = assaultIsland(stateRoom, conqueror, kadingir);
   assert.equal(conquest.outcome, 'attacker');
   assert.equal(conquest.statePrize.triggered, true);
   assert.equal(conquest.statePrize.ducats, 50);
