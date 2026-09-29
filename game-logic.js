@@ -615,19 +615,57 @@ function assignmentEventMatches(player, event) {
   return false;
 }
 
+function assignmentRewardShare(factionId) {
+  return Math.max(0, Math.min(1, Number(FACTIONS[factionId]?.rewardShare) || 0));
+}
+
 function completeAssignment(room, player, event) {
   ensureAssignmentPlayer(player);
   if (!assignmentEventMatches(player, event)) return { ok: false, matched: false };
   const assignment = player.activeAssignment;
   const card = assignment.card;
-  const faction = FACTIONS[assignment.factionId] || {};
   const gross = Math.max(0, Math.floor(Number(card.reward) || 0));
-  const withheld = faction.rewardShare ? Math.floor(gross * Number(faction.rewardShare)) : 0;
+  const rewardShare = assignmentRewardShare(assignment.factionId);
+  const withheld = Math.floor(gross * rewardShare);
   const paid = Math.max(0, gross - withheld);
   const credit = creditDucats(player, paid);
   discardAssignmentCard(room, assignment.factionId, card);
   player.activeAssignment = null;
-  return { ok: true, matched: true, assignment, gross, withheld, paid, credit };
+  return { ok: true, matched: true, assignment, gross, rewardShare, withheld, paid, credit };
+}
+
+function settleVassalTax(player, factionId) {
+  const faction = FACTIONS[factionId];
+  const due = Math.max(0, Math.floor(Number(faction?.tax) || 0));
+  if (!player || !faction || due <= 0) {
+    return { ok: true, applies: false, factionId: factionId || null, due: 0, paid: 0, underpaid: false, actionLimit: null };
+  }
+
+  const before = Math.max(0, Math.floor(Number(player.ducats) || 0));
+  const paid = Math.min(before, due);
+  player.ducats = before - paid;
+  const underpaid = paid < due;
+  let actionLimit = null;
+
+  if (underpaid) {
+    const normalLimit = Math.max(0, Math.floor(Number(BALANCE.session.actionsPerTurn) || 0));
+    const penaltyLimit = Math.max(0, Math.floor(Number(BALANCE.session.taxUnderpaymentActionLimit) || 0));
+    const existing = Number(player.nextActionLimit);
+    const baseLimit = Number.isFinite(existing) && existing >= 0 ? existing : normalLimit;
+    actionLimit = Math.min(baseLimit, penaltyLimit);
+    player.nextActionLimit = actionLimit;
+  }
+
+  return {
+    ok: true,
+    applies: true,
+    factionId,
+    factionName: faction.name,
+    due,
+    paid,
+    underpaid,
+    actionLimit,
+  };
 }
 
 function legendaryPlaceAt(row, col) {
@@ -3176,6 +3214,7 @@ module.exports = {
   assignmentEventMatches,
   assignmentRequiredAction,
   completeAssignment,
+  settleVassalTax,
   legendaryPlaceAt,
   factionIdForIsland,
   stateExists,

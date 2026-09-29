@@ -166,8 +166,8 @@ test('complete known sea, assignment, feud and event decks match appendix rows',
   assert.deepEqual(rules.politics.assignments.mori.slice(0,8).map(c=>c.islandId),['renaika','chertog','kisalinia','yukon','erkalon','asigoriy','atlantia','adia']);
 });
 
-test('stage 5.8.2 keeps canonical politics data active while assignment execution advances separately from Mori service', () => {
-  assert.equal(rules.implementation.activeProfile,'stage-5-combat-politics-5.8.2');
+test('stage 5.8.3 activates canonical assignment rewards and vassal taxes while Mori route service remains separate', () => {
+  assert.equal(rules.implementation.activeProfile,'stage-5-combat-politics-5.8.3');
   assert.equal(rules.implementation.pendingConsumers.every(item => item.consumerStage >= 5),true);
   assert.equal(rules.scoring.combat.attacksPerOpponentPerRound,1);
   assert.equal(data.BALANCE.combat.attacksPerOpponentPerRound,rules.scoring.combat.attacksPerOpponentPerRound);
@@ -193,6 +193,9 @@ test('stage 5.8.2 keeps canonical politics data active while assignment executio
   assert.deepEqual(Object.keys(data.ASSIGNMENT_CARDS),['lionia','kadingir','mori','suniksiya','pirates']);
   assert.equal(Object.values(data.ASSIGNMENT_CARDS).flat().length,49);
   assert.equal(data.BALANCE.assignmentReplacementPrice,undefined);
+  assert.deepEqual([data.FACTIONS.lionia.tax,data.FACTIONS.kadingir.tax,data.FACTIONS.mori.tax,data.FACTIONS.suniksiya.tax,data.FACTIONS.pirates.tax],[2,2,0,0,0]);
+  assert.deepEqual([data.FACTIONS.lionia.rewardShare,data.FACTIONS.kadingir.rewardShare,data.FACTIONS.mori.rewardShare,data.FACTIONS.suniksiya.rewardShare,data.FACTIONS.pirates.rewardShare],[0,0,0,0.5,0.5]);
+  assert.equal(data.BALANCE.session.taxUnderpaymentActionLimit,2);
   assert.deepEqual(Object.keys(data.FEUD_CARDS),rules.politics.order);
   for (const factionId of rules.politics.order) {
     assert.equal(data.FEUD_CARDS[factionId].reduce((sum,card)=>sum+card.quantity,0),10,factionId);

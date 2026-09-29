@@ -140,6 +140,7 @@ const {
   assignmentEventMatches,
   assignmentRequiredAction,
   completeAssignment,
+  settleVassalTax,
   legendaryPlaceAt,
 } = require('../game-logic');
 const { BALANCE, MAP_META, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS, BUILDINGS, CHARACTERS, ANCHORS } = require('../game-data');
@@ -1603,6 +1604,76 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(p.ducats, 4);
 }
 
+// Вольная Суниксия удерживает половину нечётной награды с округлением удержанной доли вниз.
+{
+  const card = ASSIGNMENT_CARDS.suniksiya.find(c => c.id === 'suniksiya-delivery-any');
+  const room = { assignmentDecks: createAssignmentDecks(() => 0.5) };
+  const p = { id: 'p1', ducats: 1, debt: 2, activeAssignment: { instanceId: 'odd-1', factionId: 'suniksiya', card: { ...card } } };
+  const result = completeAssignment(room, p, { type: 'delivery', goodId: 'wood', assignmentInstanceId: 'odd-1', fullHold: true });
+  assert.equal(result.ok, true);
+  assert.equal(result.gross, 5);
+  assert.equal(result.rewardShare, 0.5);
+  assert.equal(result.withheld, 2);
+  assert.equal(result.paid, 3);
+  assert.equal(result.credit.debtPaid, 2);
+  assert.equal(result.credit.net, 1);
+  assert.equal(p.debt, 0);
+  assert.equal(p.ducats, 2);
+}
+
+// Сёгунат Мори не удерживает долю награды: расчёт выплаты остаётся полным независимо от типа поручения.
+{
+  const card = { id: 'mori-reward-test', text: 'Тест выплаты Мори', reward: 7, type: 'ship-level', factionId: 'mori' };
+  const room = { assignmentDecks: { mori: { drawPile: [], discard: [], removed: [] } } };
+  const p = { id: 'p1', ducats: 0, debt: 0, activeAssignment: { instanceId: 'mori-pay-1', factionId: 'mori', card: { ...card } } };
+  const result = completeAssignment(room, p, { type: 'ship-level' });
+  assert.equal(result.ok, true);
+  assert.equal(result.rewardShare, 0);
+  assert.equal(result.withheld, 0);
+  assert.equal(result.paid, 7);
+  assert.equal(p.ducats, 7);
+}
+
+// Налог Лионии и Кадингира составляет ровно 2 дуката; недоплата не создаёт долг, а ограничивает ход двумя действиями.
+{
+  const paid = { ducats: 5, debt: 4, nextActionLimit: null };
+  const full = settleVassalTax(paid, 'lionia');
+  assert.equal(full.applies, true);
+  assert.equal(full.due, 2);
+  assert.equal(full.paid, 2);
+  assert.equal(full.underpaid, false);
+  assert.equal(full.actionLimit, null);
+  assert.equal(paid.ducats, 3);
+  assert.equal(paid.debt, 4);
+
+  const short = { ducats: 1, debt: 6, nextActionLimit: null };
+  const partial = settleVassalTax(short, 'kadingir');
+  assert.equal(partial.due, 2);
+  assert.equal(partial.paid, 1);
+  assert.equal(partial.underpaid, true);
+  assert.equal(partial.actionLimit, 2);
+  assert.equal(short.ducats, 0);
+  assert.equal(short.debt, 6);
+  assert.equal(short.nextActionLimit, 2);
+
+  const repeated = settleVassalTax(short, 'kadingir');
+  assert.equal(repeated.paid, 0);
+  assert.equal(repeated.actionLimit, 2);
+  assert.equal(short.nextActionLimit, 2);
+  assert.equal(short.debt, 6);
+}
+
+// У Суниксии, пиратов и Мори налог не взимается и лимит действий налогом не меняется.
+{
+  for (const factionId of ['suniksiya', 'pirates', 'mori']) {
+    const p = { ducats: 1, debt: 0, nextActionLimit: null };
+    const result = settleVassalTax(p, factionId);
+    assert.equal(result.applies, false, factionId);
+    assert.equal(result.due, 0, factionId);
+    assert.equal(p.ducats, 1, factionId);
+    assert.equal(p.nextActionLimit, null, factionId);
+  }
+}
 // Доставка засчитывается только полным трюмом, полученным после выдачи именно текущего поручения.
 {
   const card = ASSIGNMENT_CARDS.suniksiya.find(c => c.id === 'suniksiya-delivery-ore');

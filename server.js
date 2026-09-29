@@ -109,6 +109,7 @@ const {
   assignmentEventMatches,
   assignmentRequiredAction,
   completeAssignment,
+  settleVassalTax,
   legendaryPlaceAt,
   factionIdForIsland,
   stateExists,
@@ -1925,22 +1926,20 @@ function eventPoliticalSnapshot(room) {
   return snapshot;
 }
 
-function applyVassalTaxes(room, snapshot) {
-  for (const playerId of room.order || []) {
-    const player = playerById(room, playerId);
-    const suzerainId = snapshot?.[playerId]?.suzerainId;
-    const tax = Math.max(0, Number(FACTIONS[suzerainId]?.tax) || 0);
-    if (!player || !tax) continue;
-    const before = Math.max(0, Math.floor(Number(player.ducats) || 0));
-    const paid = Math.min(before, tax);
-    player.ducats = before - paid;
-    if (paid < tax) {
-      player.nextActionLimit = Math.min(Number(player.nextActionLimit) || BALANCE.session.actionsPerTurn, BALANCE.session.taxUnderpaymentActionLimit);
-      log(room, `${player.name}: налог ${FACTIONS[suzerainId].name} — уплачено ${paid} из ${tax}. Долг не возникает; в этом личном ходу максимум ${BALANCE.session.taxUnderpaymentActionLimit} действия.`);
-    } else {
-      log(room, `${player.name} платит налог ${FACTIONS[suzerainId].name}: ${tax} дуката.`);
-    }
+function applyVassalTaxForTurn(room, snapshot, playerId) {
+  const player = playerById(room, playerId);
+  const suzerainId = snapshot?.[playerId]?.suzerainId || null;
+  if (!player || !suzerainId) return null;
+
+  const result = settleVassalTax(player, suzerainId);
+  if (!result?.applies) return result;
+
+  if (result.underpaid) {
+    log(room, `${player.name}: налог ${result.factionName} — уплачено ${result.paid} из ${result.due}. Долг не возникает; в этом личном ходу максимум ${result.actionLimit} действия.`);
+  } else {
+    log(room, `${player.name} платит налог ${result.factionName}: ${result.due} дуката.`);
   }
+  return result;
 }
 
 function buildFeudQueue(room, snapshot) {
@@ -2287,7 +2286,7 @@ function startEventPhase(room) {
     replacementQueue: [], replacementIndex: 0,
   };
   log(room, `Раунд ${room.round}, шестой круг: ${player.name} получает карты перед своим личным ходом.`);
-  applyVassalTaxes(room, snapshot);
+  room.eventPhase.taxResult = applyVassalTaxForTurn(room, snapshot, player.id);
   processEventPhase(room);
 }
 
@@ -2520,7 +2519,11 @@ function continueTurnAfterCards(room) {
   room.phase = 'navigation';
   room.roll = null;
   room.movePoints = null;
-  const actionLimit = Math.max(0, Math.min(BALANCE.session.actionsPerTurn, Number(p.nextActionLimit) || BALANCE.session.actionsPerTurn));
+  const configuredActionLimit = Number(p.nextActionLimit);
+  const actionLimit = Math.max(0, Math.min(
+    BALANCE.session.actionsPerTurn,
+    Number.isFinite(configuredActionLimit) && configuredActionLimit >= 0 ? configuredActionLimit : BALANCE.session.actionsPerTurn
+  ));
   room.actionsLeft = actionLimit;
   p.nextActionLimit = null;
   if (actionLimit < BALANCE.session.actionsPerTurn) log(room, `${p.name}: из-за недоплаченного налога в этом личном ходу доступно максимум ${actionLimit} действия.`);
