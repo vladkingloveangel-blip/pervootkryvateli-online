@@ -18,7 +18,7 @@ for (const [type, cells] of Object.entries(HAZARDS)) {
   for (const [row, col] of cells) HAZARD_BY_CELL.set(cellKey(row, col), type);
 }
 const ANCHORS = Object.fromEntries(Object.entries(map.ANCHORS)
-  .map(([id, anchor]) => [id, { ...anchor, glory: runtime.ANCHOR_GLORY[id] }]));
+  .map(([id, anchor]) => [id, { ...anchor, fleetPoints: runtime.BALANCE.fleetScoring.anchor[id] }]));
 const ANCHOR_BY_CELL = new Map();
 for (const [color, def] of Object.entries(ANCHORS)) {
   for (const [row, col] of def.cells) ANCHOR_BY_CELL.set(cellKey(row, col), color);

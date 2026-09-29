@@ -146,6 +146,8 @@
         <div id="hudResources" class="hud-resources">
           <button class="hud-chip" id="hudDucatsBtn" type="button" aria-label="Дукаты"><span>🪙</span><strong id="hudDucats">0</strong></button>
           <button class="hud-chip" id="hudGloryBtn" type="button" aria-label="Слава"><span>★</span><strong id="hudGlory">0</strong></button>
+          <button class="hud-chip" id="hudArmyPointsBtn" type="button" aria-label="Очки армии"><span>⚔</span><strong id="hudArmyPoints">0</strong></button>
+          <button class="hud-chip" id="hudFleetPointsBtn" type="button" aria-label="Очки флота"><span>⚓</span><strong id="hudFleetPoints">0</strong></button>
           <button class="hud-chip" id="hudCargoBtn" type="button" aria-label="Трюм"><span>▣</span><strong id="hudCargo">0/0</strong></button>
           <button class="hud-chip hud-debt hidden" id="hudDebtBtn" type="button" aria-label="Долг"><span>!</span><strong id="hudDebt">0</strong></button>
         </div>
@@ -252,15 +254,6 @@
             <div id="politicsActions" class="politics-actions"></div>
           </section>
 
-          <section class="panel state-prize-panel" data-ui-tab="actions">
-            <div class="section-head">
-              <h2>Итоговый приз государства</h2>
-              <span id="statePrizeBadge" class="mini-badge">—</span>
-            </div>
-            <div id="statePrizeContent" class="muted">Итоговый приз появится при первом полном подчинении государства.</div>
-            <div id="statePrizeActions" class="politics-actions"></div>
-          </section>
-
           <section class="panel island-correction-panel" data-ui-tab="actions">
             <div class="section-head">
               <h2>Исправление острова</h2>
@@ -284,7 +277,7 @@
               <h2>Поручение сюзерена</h2>
               <span id="assignmentBadge" class="mini-badge">—</span>
             </div>
-            <div id="assignmentContent" class="muted">Поручение появится в общей Фазе событий после вступления в подданство.</div>
+            <div id="assignmentContent" class="muted">Поручение выдаётся вассалу в его личном ходу шестого круга; Посольство даёт выбор из допустимых карт.</div>
             <div id="assignmentActions" class="event-actions"></div>
           </section>
 
@@ -321,7 +314,8 @@
               <h2>Морские якоря</h2>
               <span id="anchorBadge" class="mini-badge">—</span>
             </div>
-            <div id="anchorContent" class="muted">Остановитесь на клетке якоря после навигации.</div>
+            <div id="anchorContent" class="muted">Остановитесь на клетке якоря и при желании объявите морской бой в фазе действий.</div>
+            <div id="anchorActions" class="combat-actions"></div>
           </section>
 
           <section class="panel island-panel" data-ui-tab="actions">

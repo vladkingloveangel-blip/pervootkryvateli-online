@@ -747,9 +747,14 @@
   }
 
   function playerName(id) { return state.room?.players.find(p => p.id === id)?.name || 'Игрок'; }
-  function isDecisionPending() { return Boolean(state.room?.pendingAlliance || state.room?.pendingBattle || state.room?.pendingEvent || state.room?.pendingFeud || state.room?.pendingAssignmentChoice || state.room?.pendingStatePrize || state.room?.pendingIslandCorrection || state.room?.pendingFleetAdjustment || state.room?.pendingLegendaryReaction); }
+  function isDecisionPending() { return Boolean(state.room?.pendingAlliance || state.room?.pendingBattle || state.room?.pendingEvent || state.room?.pendingFeud || state.room?.pendingAssignmentChoice || state.room?.pendingIslandCorrection || state.room?.pendingFleetAdjustment || state.room?.pendingLegendaryReaction); }
   function areAlliesClient(aId, bId) {
     return (state.room?.alliances || []).some(pair => (pair[0] === aId && pair[1] === bId) || (pair[0] === bId && pair[1] === aId));
+  }
+  function seaAttackPositionClient(attacker, target) {
+    if (!attacker || !target) return false;
+    return Math.abs(Number(attacker.row) - Number(target.row)) <= 1
+      && Math.abs(Number(attacker.col) - Number(target.col)) <= 1;
   }
   function playerOnIslandClient(player, island) {
     return Boolean(player && island?.cells?.some(([r, c]) => r === player.row && c === player.col));
@@ -815,6 +820,8 @@
       $('hudShipLevel').textContent = `${shipName(mine.shipClass)} · ${ROMAN[mine.level] || mine.level}`;
       $('hudDucats').textContent = mine.ducats ?? 0;
       $('hudGlory').textContent = mine.glory ?? 0;
+      $('hudArmyPoints').textContent = mine.armyPoints ?? 0;
+      $('hudFleetPoints').textContent = mine.fleetPoints ?? 0;
       $('hudCargo').textContent = `${cargo.quantity}/${cargo.capacity}`;
       $('hudDebtBtn').classList.toggle('hidden', !(mine.debt > 0));
       $('hudDebt').textContent = mine.debt || 0;
@@ -849,7 +856,6 @@
     };
 
     const pendingEventForMe = Boolean(r.pendingEvent?.viewerCanRespond || r.pendingFeud?.viewerCanRespond);
-    const pendingStatePrize = Boolean(r.pendingStatePrize);
     const pendingIslandCorrection = Boolean(r.pendingIslandCorrection);
     const pendingFleetAdjustment = Boolean(r.pendingFleetAdjustment);
     const pendingAssignment = Boolean(r.pendingAssignmentChoice?.viewerCanRespond);
@@ -858,13 +864,12 @@
     const anchorRelevant = Boolean(currentAnchorCell());
     const pendingCombat = Boolean(r.pendingBattle || r.pendingLegendaryReaction);
     const myTurnActions = Boolean(r.started && mine && r.activePlayerId === state.myId && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0);
-    const seaTargets = mine ? r.players.some(p => p.id !== state.myId && p.row === mine.row && p.col === mine.col && !areAlliesClient(state.myId, p.id)) : false;
+    const seaTargets = mine ? r.players.some(p => p.id !== state.myId && seaAttackPositionClient(mine, p) && !areAlliesClient(state.myId, p.id)) : false;
     const islandTargets = mine ? currentIslands().some(i => i.ownerId !== state.myId && !(i.kind === 'free' && !i.ownerId) && (!i.ownerId || !areAlliesClient(state.myId, i.ownerId))) : false;
     const combatRelevant = pendingCombat || (myTurnActions && !mine?.inPeaceZone && (seaTargets || islandTargets));
 
     set('.controls', true, 20);
     set('.event-panel', Boolean(r.eventPhase?.active || pendingEventForMe), pendingEventForMe ? 1 : 12);
-    set('.state-prize-panel', pendingStatePrize, r.pendingStatePrize?.viewerCanRespond ? 0 : 4);
     set('.island-correction-panel', pendingIslandCorrection, r.pendingIslandCorrection?.viewerCanRespond ? 0 : 4);
     set('.fleet-adjustment-panel', pendingFleetAdjustment, r.pendingFleetAdjustment?.viewerCanRespond ? 0 : 4);
     set('.assignment-panel', pendingAssignment || activeAssignment, pendingAssignment ? 2 : 30);
@@ -900,7 +905,7 @@
       const skip = mine.skipTurns ? ` · пропусков хода: ${mine.skipTurns}` : '';
       const suzerain = mine.suzerainId ? r.factions?.find(f => f.id === mine.suzerainId)?.name : null;
       const politics = suzerain ? ` · вассал: ${suzerain}` : (mine.enemyFactionIds?.length ? ` · вражда: ${mine.enemyFactionIds.length}` : '');
-      $('youStatus').innerHTML = `<strong>${escapeHtml(mine.name)}</strong><br><span class="muted">${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level} · ${mine.ducats} дукатов${mine.debt ? ` · долг ${mine.debt}` : ''} · слава ${mine.glory || 0} · островов ${mine.islandCount} · клетка ${mine.col + 1}:${mine.row + 1}${escapeHtml(cargo)}${escapeHtml(cards)}${escapeHtml(eventHand)}${escapeHtml(legendary)}${escapeHtml(skip)}${escapeHtml(politics)}</span>`;
+      $('youStatus').innerHTML = `<strong>${escapeHtml(mine.name)}</strong><br><span class="muted">${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level} · ${mine.ducats} дукатов${mine.debt ? ` · долг ${mine.debt}` : ''} · очки армии ${mine.armyPoints || 0} · очки флота ${mine.fleetPoints || 0} · слава ${mine.glory || 0} · островов ${mine.islandCount} · клетка ${mine.col + 1}:${mine.row + 1}${escapeHtml(cargo)}${escapeHtml(cards)}${escapeHtml(eventHand)}${escapeHtml(legendary)}${escapeHtml(skip)}${escapeHtml(politics)}</span>`;
     }
 
     renderPlayers();
@@ -909,7 +914,6 @@
     renderMapContext();
     renderEvents();
     renderPolitics();
-    renderStatePrize();
     renderIslandCorrection();
     renderFleetAdjustment();
     renderAssignments();
@@ -944,7 +948,7 @@
       const suzerainName = p.suzerainId ? state.room.factions?.find(f => f.id === p.suzerainId)?.name : null;
       const politicalLabel = suzerainName ? ` · вассал ${suzerainName}` : (p.enemyFactionIds?.length ? ` · вражда ${p.enemyFactionIds.length}` : '');
       const readyLabel = !r.started ? (p.ready ? ' · ✓ готов' : ' · не готов') : '';
-      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${p.id === r.leaderId ? ' · ведущий' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · слава ${p.glory || 0} · островов ${p.islandCount} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
+      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${p.id === r.leaderId ? ' · ведущий' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · армия ${p.armyPoints || 0} · флот ${p.fleetPoints || 0} · слава ${p.glory || 0} · островов ${p.islandCount} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
       if (!isSpectator && isHost && !r.started) {
         const actions = el.querySelector('.player-side-actions');
         if (p.id !== r.leaderId) {
@@ -1124,7 +1128,6 @@
       else if (r.pendingEvent?.viewerCanRespond) label = 'Решение по событию';
       else if (r.pendingFeud?.viewerCanRespond) label = 'Решение по вражде';
       else if (r.pendingAssignmentChoice?.viewerCanRespond) label = 'Решение по поручению';
-      else if (r.pendingStatePrize?.viewerCanRespond) label = 'Размещение приза';
       else if (r.pendingIslandCorrection?.viewerCanRespond) label = 'Исправление острова';
       else if (r.pendingFleetAdjustment?.viewerCanRespond) label = 'Настройка флотилии';
       else if (r.pendingLegendaryReaction) label = 'Решение по легендарной карте';
@@ -1139,7 +1142,7 @@
     const hereIsland = hereIslands.find(i => i.id === state.selectedIslandId) || hereIslands[0] || null;
     const hereAnchor = currentAnchorCell();
     const hereLegendary = currentLegendaryPlace();
-    const seaTargets = r.players.filter(p => p.id !== state.myId && p.row === mine.row && p.col === mine.col && !areAlliesClient(state.myId, p.id));
+    const seaTargets = r.players.filter(p => p.id !== state.myId && seaAttackPositionClient(mine, p) && !areAlliesClient(state.myId, p.id));
     const islandTargets = hereIslands.filter(i => i.ownerId !== state.myId && !(i.kind === 'free' && !i.ownerId) && (!i.ownerId || !areAlliesClient(state.myId, i.ownerId)));
 
     if (mine.atCitadel) {
@@ -1176,14 +1179,24 @@
     }
 
     if (hereAnchor) {
-      const encounter = mine.lastAnchorEncounter;
+      const visitKey = `${mine.row},${mine.col}`;
+      const visitedHere = (mine.visitedAnchors || []).includes(visitKey);
+      const encounter = Number(mine.lastAnchorEncounter?.round) === Number(r.round)
+        && Number(mine.lastAnchorEncounter?.row) === Number(mine.row)
+        && Number(mine.lastAnchorEncounter?.col) === Number(mine.col)
+        ? mine.lastAnchorEncounter
+        : null;
       title.textContent = hereAnchor.name;
       if (encounter) {
         const outcome = encounter.outcome === 'win' ? 'Победа' : encounter.outcome === 'loss' ? 'Поражение' : encounter.outcome === 'tie' ? 'Ничья' : 'Тихое море';
-        text.textContent = `${outcome} · результат столкновения уже разыгран автоматически`;
+        text.textContent = `${outcome} · карта этой клетки уже разыграна в текущем раунде`;
         addAction('Посмотреть результат', 'actions');
+      } else if (visitedHere) {
+        text.textContent = 'Эта клетка якоря уже дала вам карту в текущем раунде.';
+        addAction('Открыть морские якоря', 'actions');
       } else {
-        text.textContent = 'Столкновение на якоре разыгрывается автоматически при остановке.';
+        text.textContent = 'Бой на якоре добровольный и объявляется в фазе действий.';
+        addAction('Открыть морские якоря', 'actions', 'danger-soft');
       }
       overlay.classList.remove('hidden');
       return;
@@ -1226,8 +1239,6 @@
 
     if (!r.started) $('moveResult').textContent = 'Выберите корабль. Организатор назначает ведущего и порядок мест; затем все нажимают «Готов».';
     else if (r.eventPhase?.active) $('moveResult').textContent = r.pendingIslandCorrection?.viewerCanRespond ? `Остров ${r.pendingIslandCorrection.islandName} нужно исправить перед продолжением.` : r.pendingIslandCorrection ? `${playerName(r.pendingIslandCorrection.playerId)} исправляет остров ${r.pendingIslandCorrection.islandName}.` : r.pendingAssignmentChoice?.viewerCanRespond ? 'Нужно решить, оставить или заменить поручение сюзерена.' : r.pendingFeud?.viewerCanRespond ? 'Нужно разрешить вашу карту вражды.' : r.pendingEvent?.viewerCanRespond ? 'Нужно принять решение по вашей карте события.' : `Карты получает ${playerName(r.eventPhase.currentPlayerId)}.`;
-    else if (r.pendingStatePrize?.viewerCanRespond) $('moveResult').textContent = 'Разместите призовую постройку за полное подчинение государства.';
-    else if (r.pendingStatePrize) $('moveResult').textContent = `Ожидается размещение итогового приза игроком ${playerName(r.pendingStatePrize.playerId)}.`;
     else if (r.pendingIslandCorrection?.viewerCanRespond) $('moveResult').textContent = `Остров ${r.pendingIslandCorrection.islandName} нужно немедленно привести к допустимым ограничениям.`;
     else if (r.pendingIslandCorrection) $('moveResult').textContent = `Ожидается исправление острова ${r.pendingIslandCorrection.islandName} игроком ${playerName(r.pendingIslandCorrection.playerId)}.`;
     else if (!myTurn) $('moveResult').textContent = aText();
@@ -1353,7 +1364,22 @@
       label.textContent = `Вражда: ${pendingFeud.factionName} — «${pendingFeud.cardName}»`;
       actions.appendChild(label);
       const emitChoice = payload => socket.emit('respondFeud', { feudId: pendingFeud.id, ...payload }, handleGameAck);
-      if (pendingFeud.kind === 'reclaim-island') {
+      if (pendingFeud.kind === 'downgrade-building') {
+        if ((pendingFeud.remaining || 1) > 1) {
+          const note = document.createElement('div'); note.className = 'cargo-meta'; note.textContent = `Осталось понизить: ${pendingFeud.remaining}`; actions.appendChild(note);
+        }
+        for (const option of pendingFeud.options || []) {
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn danger-soft';
+          b.textContent = `Понизить (I удаляется): ${option.islandName} · ${option.name}`;
+          b.addEventListener('click', () => emitChoice({ islandId: option.islandId, buildingIndex: option.buildingIndex })); actions.appendChild(b);
+        }
+      } else if (pendingFeud.kind === 'remove-building') {
+        for (const option of pendingFeud.options || []) {
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn danger-soft';
+          b.textContent = `Удалить: ${option.islandName} · ${option.name}`;
+          b.addEventListener('click', () => emitChoice({ islandId: option.islandId, buildingIndex: option.buildingIndex })); actions.appendChild(b);
+        }
+      } else if (pendingFeud.kind === 'reclaim-island') {
         for (const option of pendingFeud.options || []) {
           const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn danger-soft';
           b.textContent = `Вернуть государству: ${option.name}`;
@@ -1478,8 +1504,10 @@
       const relation = mine.suzerainId === f.id ? ' · ваш сюзерен' : enemies.has(f.id) ? ' · ВРАЖДА' : '';
       const gift = f.giftIslandName ? ` · передаваемый остров: ${escapeHtml(f.giftIslandName)}` : '';
       const prize = f.fullConquestPrize;
-      const prizeText = prize ? ` · итоговый приз: сохранить — ${(prize.preserveBuildings || []).map(b => escapeHtml(b.name)).join(' + ') || '—'}; разорить — ${prize.razeDucats} дукатов` : '';
-      const claimed = f.fullConquestClaimed ? ` · приз уже получен: ${escapeHtml(playerName(f.fullConquestPlayerId))}` : '';
+      const prizeText = prize
+        ? ` · итоговый приз: ${prize.amountUnresolved ? 'сумма требует решения автора' : `${prize.ducats} дукатов`}`
+        : '';
+      const claimed = f.fullConquestClaimed ? ` · получатель приза: ${escapeHtml(playerName(f.fullConquestPlayerId))}` : '';
       return `<div class="politics-row"><strong>${escapeHtml(f.name)}</strong><br><span class="cargo-meta">${state} · вассал: ${escapeHtml(vassal)}${gift}${escapeHtml(relation)}${prizeText}${claimed}</span></div>`;
     }).join('');
     content.innerHTML = html;
@@ -1502,50 +1530,6 @@
   }
 
 
-
-  function renderStatePrize() {
-    const r = state.room;
-    const mine = me();
-    const badge = $('statePrizeBadge');
-    const content = $('statePrizeContent');
-    const actions = $('statePrizeActions');
-    if (!badge || !content || !actions) return;
-    actions.innerHTML = '';
-    const pending = r?.pendingStatePrize;
-
-    if (!r?.started) {
-      badge.textContent = '—';
-      content.textContent = 'Итоговый приз появится при первом полном подчинении государства.';
-      return;
-    }
-    if (!pending) {
-      const claimed = (r.factions || []).filter(f => f.fullConquestClaimed);
-      badge.textContent = claimed.length ? `получено ${claimed.length}` : 'ожидание';
-      content.innerHTML = claimed.length
-        ? `<div class="event-current">Уже выданы: ${claimed.map(f => `${escapeHtml(f.name)} — ${escapeHtml(playerName(f.fullConquestPlayerId))}`).join('<br>')}</div>`
-        : '<div class="event-current">Приз выдаётся один раз за партию, когда один игрок впервые получает контроль над всеми исходными островами государства военным захватом последнего острова.</div>';
-      return;
-    }
-
-    const current = pending.currentBuilding;
-    badge.textContent = pending.viewerCanRespond ? `разместить ${pending.remaining}` : 'ожидание';
-    if (!pending.viewerCanRespond) {
-      content.innerHTML = `<div class="event-current"><strong>${escapeHtml(playerName(pending.playerId))}</strong> размещает итоговый приз ${escapeHtml(pending.factionName)}.</div>`;
-      return;
-    }
-
-    const lostText = pending.lost?.length ? `<div class="event-effect">Уже не удалось разместить: ${pending.lost.map(escapeHtml).join(', ')}.</div>` : '';
-    content.innerHTML = `<div class="event-current"><strong>${escapeHtml(pending.factionName)}</strong><br>Разместите ${escapeHtml(current?.name || 'наградную постройку')} на любом своём острове. Осталось зданий: ${pending.remaining}.</div><div class="cargo-meta">Приз не требует фермы, форта или нахождения корабля на острове, но должен помещаться по площади и пределу ветви.</div>${lostText}`;
-
-    for (const option of pending.options || []) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'build-btn primary';
-      b.textContent = `${option.islandName} · площадь ${option.afterUsedArea}/${option.afterEffectiveArea} · ${option.status}`;
-      b.addEventListener('click', () => socket.emit('placeStatePrizeBuilding', { prizeId: pending.id, islandId: option.islandId }, handleGameAck));
-      actions.appendChild(b);
-    }
-  }
 
   function renderIslandCorrection() {
     const r = state.room;
@@ -1572,13 +1556,22 @@
     const area = report.overArea > 0 ? `Площадь: <strong>${report.usedArea}/${report.effectiveArea}</strong> — нужно освободить минимум ${report.overArea}.` : `Площадь: ${report.usedArea}/${report.effectiveArea}.`;
     badge.textContent = pending.viewerCanRespond ? 'обязательно' : 'ожидание';
 
-    if (!pending.viewerCanRespond) {
-      content.innerHTML = `<div class="event-current"><strong>${escapeHtml(pending.islandName)}</strong><br>${escapeHtml(playerName(pending.playerId))} должен удалить лишние постройки.</div><div class="event-effect">Статус: ${escapeHtml(report.status || '—')} · ${area}${branches ? `<br>Превышение ветвей: ${branches}.` : ''}</div>`;
-      return;
+    if ((pending.kind || 'constraints') === 'capture-retention') {
+      const remaining = Math.max(0, Number(pending.remainingRemovals) || 0);
+      if (!pending.viewerCanRespond) {
+        content.innerHTML = `<div class="event-current"><strong>${escapeHtml(pending.islandName)}</strong><br>${escapeHtml(playerName(pending.playerId))} выбирает постройки, которые будут уничтожены после захвата.</div><div class="event-effect">Сохранится ${pending.keepCount} из ${pending.initialBuildingCount} существовавших построек · осталось выбрать: ${remaining}.</div>`;
+        return;
+      }
+      const removed = pending.removed?.length ? `<div class="cargo-meta">Уже выбрано для уничтожения: ${pending.removed.map(escapeHtml).join(', ')}.</div>` : '';
+      content.innerHTML = `<div class="event-current"><strong>${escapeHtml(pending.islandName)}</strong><br>${escapeHtml(pending.reason || '')}</div><div class="event-effect">Сохранится ${pending.keepCount} из ${pending.initialBuildingCount} существовавших построек · осталось выбрать: ${remaining}.</div><div class="cargo-meta">Награды, появившиеся уже после штурма, в этот выбор не входят.</div>${removed}`;
+    } else {
+      if (!pending.viewerCanRespond) {
+        content.innerHTML = `<div class="event-current"><strong>${escapeHtml(pending.islandName)}</strong><br>${escapeHtml(playerName(pending.playerId))} должен удалить лишние постройки.</div><div class="event-effect">Статус: ${escapeHtml(report.status || '—')} · ${area}${branches ? `<br>Превышение ветвей: ${branches}.` : ''}</div>`;
+        return;
+      }
+      const removed = pending.removed?.length ? `<div class="cargo-meta">Уже удалено: ${pending.removed.map(escapeHtml).join(', ')}.</div>` : '';
+      content.innerHTML = `<div class="event-current"><strong>${escapeHtml(pending.islandName)}</strong> · статус «${escapeHtml(report.status || '—')}»<br>${escapeHtml(pending.reason || '')}</div><div class="event-effect">${area}${branches ? `<br>Превышение ветвей: ${branches}.` : ''}</div><div class="cargo-meta">Удаляйте выбранные постройки без компенсации, пока одновременно не будут соблюдены площадь и предел каждой обычной ветви.</div>${removed}`;
     }
-
-    const removed = pending.removed?.length ? `<div class="cargo-meta">Уже удалено: ${pending.removed.map(escapeHtml).join(', ')}.</div>` : '';
-    content.innerHTML = `<div class="event-current"><strong>${escapeHtml(pending.islandName)}</strong> · статус «${escapeHtml(report.status || '—')}»<br>${escapeHtml(pending.reason || '')}</div><div class="event-effect">${area}${branches ? `<br>Превышение ветвей: ${branches}.` : ''}</div><div class="cargo-meta">Удаляйте выбранные постройки без компенсации, пока одновременно не будут соблюдены площадь и предел каждой обычной ветви.</div>${removed}`;
 
     for (const option of pending.options || []) {
       const b = document.createElement('button');
@@ -1697,57 +1690,63 @@
     if (!mine) { badge.textContent = '—'; content.textContent = 'Данные поручения недоступны.'; return; }
 
     const assignment = mine.activeAssignment;
+    const pending = r.pendingAssignmentChoice;
     const suzerain = mine.suzerainId ? r.factions?.find(f => f.id === mine.suzerainId) : null;
-    badge.textContent = assignment ? 'активно' : (suzerain ? 'ожидание' : 'нет');
-    const deck = suzerain ? r.assignmentDecks?.[suzerain.id] : null;
+    const assignmentFaction = assignment ? (r.factions?.find(f => f.id === assignment.factionId) || suzerain) : suzerain;
+    const priority = mine.assignmentPriority || null;
+    badge.textContent = pending?.viewerCanRespond ? 'выбор' : (priority ? 'обязательно' : assignment ? 'активно' : (suzerain ? 'ожидание' : 'нет'));
+    const deckFactionId = assignment?.factionId || suzerain?.id || pending?.factionId || null;
+    const deck = deckFactionId ? r.assignmentDecks?.[deckFactionId] : null;
     let html = '';
-    if (!suzerain) {
-      html = '<div class="event-current">Вы не состоите в подданстве. Поручения выдаются только вассалам Лионии, Кадингира, Суниксии и пиратов.</div>';
+    if (!suzerain && !assignment) {
+      html = '<div class="event-current">Вы не состоите в подданстве. Поручения получают вассалы Лионии, Кадингира, Мори, Вольной Суниксии и пиратов.</div>';
     } else if (assignment) {
-      const share = Number(suzerain.rewardShare) || 0;
+      const share = Number(assignmentFaction?.rewardShare) || 0;
       const withheld = share ? Math.floor(assignment.reward * share) : 0;
       const net = assignment.reward - withheld;
-      html = `<div class="event-current"><strong>${escapeHtml(suzerain.name)}</strong><br>«${escapeHtml(assignment.text)}»</div><div class="event-effect">Награда: ${assignment.reward} дукатов${withheld ? ` · сюзерен удержит ${withheld}, вам ${net}` : ''}.</div>`;
-      if (assignment.type === 'delivery') html += `<div class="cargo-meta">Для доставки засчитывается только полный трюм, полученный после выдачи этого поручения. Подходящая продажа в Цитадели автоматически получает контрактную премию +${r.balanceCatalog.contractBonusRatio * 100}%.</div>`;
-      if (mine.replacedAssignmentConditions?.length) html += `<div class="cargo-meta">Уже платно заменённых условий: ${mine.replacedAssignmentConditions.length}.</div>`;
+      html = `<div class="event-current"><strong>${escapeHtml(assignmentFaction?.name || assignment.factionId || 'Сюзерен')}</strong><br>«${escapeHtml(assignment.text)}»</div><div class="event-effect">Награда: ${assignment.reward} дукатов${withheld ? ` · сюзерен удержит ${withheld}, вам ${net}` : ' · выплачивается полностью'}.</div>`;
+      if (priority) {
+        const priorityLabels = { building: 'строительство или улучшение', 'ship-level': 'повышение уровня корабля', 'ship-upgrade': 'улучшение корабля', anchor: 'бой на морском якоре', delivery: 'доставка груза', assault: 'штурм острова', treasure: 'разрешение сокровища' };
+        html += `<div class="assignment-priority"><strong>Поручение имеет приоритет.</strong><br>Сейчас доступно обязательное действие: ${escapeHtml(priorityLabels[priority.kind] || priority.kind || 'выполнение условия')}.</div>`;
+      }
+      const progress = assignment.progress;
+      if (progress?.kind === 'mori-service') {
+        const completed = Number(progress.completedStopCount) || 0;
+        const total = Math.max(1, Number(progress.totalStops) || (assignment.type === 'visit-route' ? 2 : 1));
+        if (progress.departureRequired && !progress.departureSatisfied) {
+          html += '<div class="assignment-progress"><strong>Служба Мори:</strong> карта выдана у первого пункта. Сначала покиньте все его береговые клетки; после этого вернитесь и завершите навигацию у нужного берега.</div>';
+        } else if (total > 1) {
+          const marked = (progress.completedStops || []).map(stop => stop.label).filter(Boolean);
+          html += `<div class="assignment-progress"><strong>Маршрут Мори:</strong> ${completed}/${total} пунктов${marked.length ? ` · отмечено: ${escapeHtml(marked.join(' → '))}` : ''}. Пункты выполняются только по порядку завершением навигации.</div>`;
+        } else {
+          html += `<div class="assignment-progress"><strong>Служба Мори:</strong> ${completed}/${total}. Завершите навигацию на береговой клетке указанного острова.</div>`;
+        }
+      }
+      if (assignment.type === 'delivery') html += `<div class="cargo-meta">Засчитывается только полный трюм, полученный после выдачи этого поручения. Продажа в Цитадели получает обычную контрактную премию +${r.balanceCatalog.contractBonusRatio * 100}% отдельно от награды поручения.</div>`;
     } else {
-      html = `<div class="event-current"><strong>${escapeHtml(suzerain.name)}</strong><br>Активного поручения нет. Новое выдаётся в ближайшей общей Фазе событий по правилам.</div>`;
+      html = `<div class="event-current"><strong>${escapeHtml(suzerain.name)}</strong><br>Активного поручения нет. Если в начале вашего следующего личного хода шестого круга вы всё ещё вассал без поручения, карта будет выдана тогда.</div>`;
     }
-    if (deck) html += `<div class="event-decks">Колода поручений: ${deck.remaining} · сброс: ${deck.discard}</div>`;
+    if (deck) html += `<div class="event-decks">Колода поручений: ${deck.remaining} · сброс: ${deck.discard}${deck.removed ? ` · убрано как невыполнимые: ${deck.removed}` : ''}</div>`;
     content.innerHTML = html;
 
-    const pending = r.pendingAssignmentChoice;
-    if (pending?.viewerCanRespond) {
-      if (pending.kind === 'embassy') {
-        const label = document.createElement('div');
-        label.className = 'action-group-label';
-        label.textContent = 'Посольство: выберите одно из двух допустимых поручений';
-        actions.appendChild(label);
-        for (const option of pending.options || []) {
-          const b = document.createElement('button');
-          b.type = 'button'; b.className = 'build-btn primary';
-          b.textContent = `«${option.text}» · ${option.reward} дук.`;
-          b.addEventListener('click', () => socket.emit('respondAssignmentChoice', { choiceId: pending.id, assignmentId: option.id }, handleGameAck));
-          actions.appendChild(b);
-        }
-        return;
-      }
+    if (pending?.viewerCanRespond && pending.kind === 'embassy') {
+      const faction = r.factions?.find(f => f.id === pending.factionId);
+      const optionShare = Number(faction?.rewardShare) || 0;
       const label = document.createElement('div');
       label.className = 'action-group-label';
-      label.textContent = `Оставить поручение «${pending.assignment?.text || 'текущее'}» или заменить за ${r.balanceCatalog.assignmentReplacementPrice} дуката?`;
+      label.textContent = 'Посольство: выберите одно из допустимых поручений';
       actions.appendChild(label);
-      const keep = document.createElement('button');
-      keep.type = 'button'; keep.className = 'build-btn'; keep.textContent = 'Оставить поручение';
-      keep.addEventListener('click', () => socket.emit('respondAssignmentChoice', { choiceId: pending.id, replace: false }, handleGameAck));
-      actions.appendChild(keep);
-      const repl = document.createElement('button');
-      repl.type = 'button'; repl.className = 'build-btn primary'; repl.textContent = `Заменить за ${r.balanceCatalog.assignmentReplacementPrice} дуката`; repl.disabled = !pending.canReplace;
-      repl.title = pending.replaceError || '';
-      repl.addEventListener('click', () => socket.emit('respondAssignmentChoice', { choiceId: pending.id, replace: true }, handleGameAck));
-      actions.appendChild(repl);
+      for (const option of pending.options || []) {
+        const optionWithheld = optionShare ? Math.floor((Number(option.reward) || 0) * optionShare) : 0;
+        const optionNet = (Number(option.reward) || 0) - optionWithheld;
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'build-btn primary';
+        b.textContent = `«${option.text}» · награда ${option.reward} дук.${optionWithheld ? ` · вам ${optionNet}` : ''}`;
+        b.addEventListener('click', () => socket.emit('respondAssignmentChoice', { choiceId: pending.id, assignmentId: option.id }, handleGameAck));
+        actions.appendChild(b);
+      }
     }
   }
-
   function renderLegendary() {
     const r = state.room;
     const mine = me();
@@ -1948,7 +1947,7 @@
       const deferred = {
         scout: 'Разведчик сохранён на корабле, но просмотр закрытых карт не включён до решения Р29 о зонах видимости.',
         treasureHunter: 'Искатель сокровищ сохранён на корабле; его выбор из двух сокровищ будет подключён вместе с синхронизацией колоды сокровищ.',
-        shipCarpenter: 'Корабельный плотник сохранён на корабле; предотвращение боевой потери уровня будет подключено в блоке боя.',
+        shipCarpenter: 'Корабельный плотник может предотвратить одну потерю уровня в бою. При объявлении своей атаки заранее отметьте его применение; дополнительное действие списывается только если уровень действительно сохранён.',
       };
       effectNote.textContent = deferred[character.id] || `«${character.name}» готов к одноразовому применению.`;
       actions.appendChild(effectNote);
@@ -2176,7 +2175,9 @@
   function renderAnchors() {
     const mine = me();
     const content = $('anchorContent');
+    const actions = $('anchorActions');
     const badge = $('anchorBadge');
+    actions.innerHTML = '';
     if (!mine) {
       badge.textContent = '—';
       content.textContent = 'Данные якорей недоступны.';
@@ -2186,7 +2187,12 @@
     const cells = state.room.anchorCells || [];
     const here = cells.find(a => a.row === mine.row && a.col === mine.col) || null;
     const visitedHere = here && (mine.visitedAnchors || []).includes(`${mine.row},${mine.col}`);
-    const encounter = here ? mine.lastAnchorEncounter : null;
+    const encounter = here
+      && Number(mine.lastAnchorEncounter?.round) === Number(state.room.round)
+      && Number(mine.lastAnchorEncounter?.row) === Number(mine.row)
+      && Number(mine.lastAnchorEncounter?.col) === Number(mine.col)
+      ? mine.lastAnchorEncounter
+      : null;
     const decks = state.room.anchorDecks || {};
     const deckLine = ['blue','yellow','red'].map(color => {
       const label = color === 'blue' ? 'Синяя' : color === 'yellow' ? 'Жёлтая' : 'Красная';
@@ -2194,12 +2200,12 @@
       return `${label}: ${d.remaining} в колоде / ${d.discard} в сбросе`;
     }).join(' · ');
 
-    badge.textContent = here ? (visitedHere ? 'посещён' : 'якорь') : 'море';
+    badge.textContent = here ? (visitedHere ? 'разыгран' : 'якорь') : 'море';
     let html = `<div class="anchor-decks">${escapeHtml(deckLine)}</div>`;
     if (here) {
-      html += `<div class="anchor-note"><strong>${escapeHtml(here.name)}</strong> · победа даёт ${here.glory} славы. ${visitedHere ? 'Эта клетка уже разыграна вами в текущем раунде.' : 'Если навигация только что завершилась здесь, карта разыгрывается автоматически.'}</div>`;
+      html += `<div class="anchor-note"><strong>${escapeHtml(here.name)}</strong> · победа даёт ${here.fleetPoints || 0} очк. флота. ${visitedHere ? 'Эта клетка уже дала вам карту в текущем раунде.' : 'Бой добровольный: объявите его в свою фазу действий. Союзник не участвует.'}</div>`;
     } else {
-      html += '<div class="anchor-note">Карту получают только при остановке на клетке якоря после навигации. Простое прохождение через клетку не срабатывает.</div>';
+      html += '<div class="anchor-note">Карту не открывают при прохождении или самой остановке. На клетке якоря можно добровольно объявить бой в свою фазу действий.</div>';
     }
 
     if (encounter) {
@@ -2209,18 +2215,31 @@
       if (encounter.outcome === 'win') {
         const gross = encounter.reward?.gross ?? encounter.rewardValue ?? 0;
         const paid = encounter.reward?.debtPaid || 0;
-        effect = `Награда ${gross} дукатов${paid ? `; ${paid} ушло в долг` : ''}. Слава +${encounter.glory || 0}.`;
+        effect = `Награда ${gross} дукатов${paid ? `; ${paid} ушло в долг` : ''}. Очки флота +${encounter.fleetPoints || 0}.`;
       } else if (encounter.outcome === 'loss') {
         const p = encounter.penalty || {};
         effect = `Штраф ${p.required || 0}: уплачено ${p.paid || 0}${p.addedDebt ? `, долг +${p.addedDebt}` : ''}.`;
       } else if (encounter.outcome === 'tie') {
-        effect = 'Награды нет; следующий личный ход будет пропущен.';
+        effect = 'Награды и иных последствий нет.';
       } else {
         effect = 'Действие не расходуется.';
       }
       html += `<div class="anchor-result"><strong>Последнее столкновение:</strong><br>${escapeHtml(encounter.anchorName)} · «${escapeHtml(encounter.cardName)}» · артиллерия ${enemy}<br>Флотилия ${encounter.fleetPower} · ${outcome}. ${escapeHtml(effect)}</div>`;
     }
     content.innerHTML = html;
+
+    if (here && !visitedHere) {
+      const myTurn = state.room.activePlayerId === state.myId;
+      const canFight = myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending();
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'danger-soft';
+      button.textContent = 'Вступить в бой · 1 действие';
+      button.title = 'Если открыта карта «На море тихо», действие не расходуется.';
+      button.disabled = !canFight;
+      button.addEventListener('click', () => socket.emit('fightAnchor', {}, handleGameAck));
+      actions.appendChild(button);
+    }
   }
 
   function renderIsland() {
@@ -2459,7 +2478,7 @@
 
     const myTurn = r.activePlayerId === state.myId;
     const canPropose = myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 && !r.pendingBattle;
-    const sameCellPlayers = r.players.filter(p => p.id !== state.myId && p.row === mine.row && p.col === mine.col && !areAlliesClient(state.myId, p.id));
+    const sameCellPlayers = allies.length ? [] : r.players.filter(p => p.id !== state.myId && p.row === mine.row && p.col === mine.col && !areAlliesClient(state.myId, p.id) && !(p.allyIds || []).length);
     if (sameCellPlayers.length) {
       const label = document.createElement('div');
       label.className = 'action-group-label';
@@ -2538,16 +2557,19 @@
     const myTurn = r.activePlayerId === state.myId;
     const canAct = myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending();
     const firstRound = r.round === 1;
+    const carpenterUseCost = Math.max(0, Number(r.characterCatalog?.shipCarpenter?.useActionCost) || 0);
+    const canArmCarpenter = (mine.actionsLeft ?? 0) >= 1 + carpenterUseCost;
     badge.textContent = mine.inPeaceZone ? 'зона мира' : `арт. ${mine.fleetArtillery} · штурм ${mine.assaultArmy ?? mine.stats?.army ?? 0}`;
 
-    const seaTargets = r.players.filter(p => p.id !== state.myId && p.row === mine.row && p.col === mine.col && !areAlliesClient(state.myId, p.id));
+    const usedAttackTargets = new Set(mine.attackedPlayerIdsThisRound || []);
+    const seaTargets = r.players.filter(p => p.id !== state.myId && seaAttackPositionClient(mine, p) && !areAlliesClient(state.myId, p.id));
     const islandTargets = currentIslands().filter(i => i.ownerId !== state.myId && !(i.kind === 'free' && !i.ownerId) && (!i.ownerId || !areAlliesClient(state.myId, i.ownerId)));
 
     const notes = [];
     if (mine.inPeaceZone) notes.push('Зона мира Цитадели: морские бои и штурмы запрещены.');
     if (firstRound) notes.push('В первом раунде нельзя атаковать других игроков и их острова; нейтральные и государственные острова остаются целями.');
     if (!seaTargets.length && !islandTargets.length) notes.push('На текущей клетке нет допустимых целей.');
-    content.innerHTML = notes.length ? notes.map(n => `<div class="combat-note">${escapeHtml(n)}</div>`).join('') : '<div class="combat-note">Можно атаковать одному или пригласить союзников. Союзники защиты также получают право присоединиться, если находятся в нужной позиции.</div>';
+    content.innerHTML = notes.length ? notes.map(n => `<div class="combat-note">${escapeHtml(n)}</div>`).join('') : '<div class="combat-note">Можно атаковать одному или пригласить своего союзника. Союзник защиты также получает право присоединиться, если находится в нужной позиции.</div>';
 
     if (seaTargets.length) {
       const label = document.createElement('div');
@@ -2557,8 +2579,19 @@
       for (const target of seaTargets) {
         const card = document.createElement('div');
         card.className = 'combat-target';
-        const attackAllies = r.players.filter(p => p.id !== state.myId && p.id !== target.id && areAlliesClient(state.myId, p.id) && !areAlliesClient(target.id, p.id) && p.row === target.row && p.col === target.col);
-        const defenseAllies = r.players.filter(p => p.id !== state.myId && p.id !== target.id && areAlliesClient(target.id, p.id) && !areAlliesClient(state.myId, p.id) && p.row === target.row && p.col === target.col);
+        let carpenterToggle = null;
+        if (mine.character?.id === 'shipCarpenter') {
+          const carpenterLabel = document.createElement('label');
+          carpenterLabel.className = 'cargo-meta';
+          carpenterToggle = document.createElement('input');
+          carpenterToggle.type = 'checkbox';
+          carpenterToggle.disabled = !canArmCarpenter;
+          carpenterLabel.appendChild(carpenterToggle);
+          carpenterLabel.append(` Корабельный плотник: предотвратить потерю уровня при поражении · ещё ${carpenterUseCost} действие`);
+          card.appendChild(carpenterLabel);
+        }
+        const attackAllies = r.players.filter(p => p.id !== state.myId && p.id !== target.id && areAlliesClient(state.myId, p.id) && !areAlliesClient(target.id, p.id) && seaAttackPositionClient(p, target) && !(p.attackedPlayerIdsThisRound || []).includes(target.id));
+        const defenseAllies = r.players.filter(p => p.id !== state.myId && p.id !== target.id && areAlliesClient(target.id, p.id) && !areAlliesClient(state.myId, p.id) && seaAttackPositionClient(p, target));
         card.innerHTML = `<div><strong>${escapeHtml(target.name)}</strong><div class="cargo-meta">Флотилия цели: артиллерия ${target.fleetArtillery}. Ваши союзники в позиции: ${attackAllies.length}; союзники защиты в позиции: ${defenseAllies.length}.${target.legendaryStatus?.shipVeilTurns ? ` Покров моря: ${target.legendaryStatus.shipVeilTurns} хода.` : ''}</div></div>`;
         const row = document.createElement('div');
         row.className = 'combat-button-row';
@@ -2566,13 +2599,14 @@
         solo.type = 'button';
         solo.className = 'danger-soft';
         solo.textContent = `Атаковать · ${mine.fleetArtillery}:${target.fleetArtillery}`;
-        solo.disabled = !canAct || firstRound || mine.inPeaceZone || (mine.brokenAlliesThisTurn || []).includes(target.id) || Boolean(target.legendaryStatus?.shipVeilTurns);
-        solo.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: false }, handleGameAck));
+        solo.disabled = !canAct || firstRound || mine.inPeaceZone || target.inPeaceZone || usedAttackTargets.has(target.id) || (mine.brokenAlliesThisTurn || []).includes(target.id) || Boolean(target.legendaryStatus?.shipVeilTurns);
+        if (usedAttackTargets.has(target.id)) solo.title = 'Лимит нападения на этого игрока в текущем раунде уже использован.';
+        solo.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
         const together = document.createElement('button');
         together.type = 'button';
-        together.textContent = `Позвать союзников (${attackAllies.length})`;
+        together.textContent = `Позвать союзника (${attackAllies.length})`;
         together.disabled = solo.disabled || attackAllies.length === 0;
-        together.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: true }, handleGameAck));
+        together.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
         row.appendChild(solo); row.appendChild(together);
         card.appendChild(row);
         actions.appendChild(card);
@@ -2591,24 +2625,36 @@
         const defenseAllies = island.ownerId ? r.players.filter(p => p.id !== state.myId && p.id !== island.ownerId && areAlliesClient(island.ownerId, p.id) && !areAlliesClient(state.myId, p.id) && playerOnIslandClient(p, island)) : [];
         const card = document.createElement('div');
         card.className = 'combat-target';
-        card.innerHTML = `<div><strong>${escapeHtml(island.name)}</strong><div class="cargo-meta">${escapeHtml(owner)} · ваша сила ${mine.assaultArmy ?? mine.stats?.army ?? 0} · базовая защита ${island.defenseArmy ?? island.army} · союзники атаки в позиции ${attackAllies.length} · защиты ${defenseAllies.length}${island.legendaryVeil?.remaining ? ` · Покров моря ${island.legendaryVeil.remaining} хода` : ''}</div></div>`;
-        for (const mode of ['preserve', 'raze']) {
-          const row = document.createElement('div');
-          row.className = 'combat-button-row';
-          const solo = document.createElement('button');
-          solo.type = 'button';
-          solo.className = mode === 'raze' ? 'danger-soft' : '';
-          solo.textContent = mode === 'raze' ? 'Разорить · одному' : 'Сохранить · одному';
-          solo.disabled = !canAct || mine.inPeaceZone || (firstRound && pvpIsland) || (island.ownerId && (mine.brokenAlliesThisTurn || []).includes(island.ownerId)) || Boolean(island.legendaryVeil?.remaining);
-          solo.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, captureMode: mode, inviteAllies: false }, handleGameAck));
-          const together = document.createElement('button');
-          together.type = 'button';
-          together.textContent = mode === 'raze' ? `Разорить · союз (${attackAllies.length})` : `Сохранить · союз (${attackAllies.length})`;
-          together.disabled = solo.disabled || attackAllies.length === 0;
-          together.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, captureMode: mode, inviteAllies: true }, handleGameAck));
-          row.appendChild(solo); row.appendChild(together);
-          card.appendChild(row);
+        const islandInfo = document.createElement('div');
+        islandInfo.innerHTML = `<strong>${escapeHtml(island.name)}</strong><div class="cargo-meta">${escapeHtml(owner)} · ваша сила ${mine.assaultArmy ?? mine.stats?.army ?? 0} · базовая защита ${island.defenseArmy ?? island.army} · союзники атаки в позиции ${attackAllies.length} · защиты ${defenseAllies.length}${island.legendaryVeil?.remaining ? ` · Покров моря ${island.legendaryVeil.remaining} хода` : ''}</div>`;
+        card.appendChild(islandInfo);
+        let carpenterToggle = null;
+        if (mine.character?.id === 'shipCarpenter') {
+          const carpenterLabel = document.createElement('label');
+          carpenterLabel.className = 'cargo-meta';
+          carpenterToggle = document.createElement('input');
+          carpenterToggle.type = 'checkbox';
+          carpenterToggle.disabled = !canArmCarpenter;
+          carpenterLabel.appendChild(carpenterToggle);
+          carpenterLabel.append(` Корабельный плотник: предотвратить потерю уровня при проигранном штурме · ещё ${carpenterUseCost} действие`);
+          card.appendChild(carpenterLabel);
         }
+        const row = document.createElement('div');
+        row.className = 'combat-button-row';
+        const solo = document.createElement('button');
+        solo.type = 'button';
+        solo.className = 'danger-soft';
+        solo.textContent = 'Штурмовать · одному';
+        solo.disabled = !canAct || mine.inPeaceZone || (firstRound && pvpIsland) || (island.ownerId && usedAttackTargets.has(island.ownerId)) || (island.ownerId && (mine.brokenAlliesThisTurn || []).includes(island.ownerId)) || Boolean(island.legendaryVeil?.remaining);
+        if (island.ownerId && usedAttackTargets.has(island.ownerId)) solo.title = 'Лимит нападения на владельца этого острова в текущем раунде уже использован.';
+        solo.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
+        const together = document.createElement('button');
+        together.type = 'button';
+        together.textContent = `Штурмовать · союз (${attackAllies.length})`;
+        together.disabled = solo.disabled || attackAllies.length === 0;
+        together.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
+        row.appendChild(solo); row.appendChild(together);
+        card.appendChild(row);
         actions.appendChild(card);
       }
     }
@@ -2717,7 +2763,7 @@
         action.onclick = () => { closeMapInfo(); openMobileTab('ship'); };
       }
     } else if (kind === 'anchor') {
-      meta.innerHTML = `<span>Морское сражение</span><span>Награда за победу: <strong>+${data.glory || 0} славы</strong></span>`;
+      meta.innerHTML = `<span>Морской якорь</span><span>Бой добровольный в фазе действий</span><span>Победа: <strong>+${data.fleetPoints || 0} очк. флота</strong></span>`;
     } else if (kind === 'legendary') {
       const reward = data.reward === 'legendary' ? 'случайная легендарная карта' : data.reward === 'treasure' ? 'случайная карта сокровища' : 'награда пока не определена';
       const here = me() && Number(me().row) === Number(data.row) && Number(me().col) === Number(data.col);

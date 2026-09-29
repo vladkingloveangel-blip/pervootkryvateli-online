@@ -145,14 +145,19 @@ test('all 28 island cards match appendix A, including resources and one-time rew
     const resourceNames=lines[i+2].replace(/^Ресурсы: /,'').replace(/\.$/,'').split(', ');
     assert.deepEqual(island.resourceIds.map(id=>rules.economy.resources[id].name),resourceNames,name);
     const rewardText=lines[i+3].replace(/^Разовая награда(?: в дукатах)?: /,'');
-    assert.equal(island.rewardText,rewardText);
-    assert.equal(island.reward.ducats || 0,Number(rewardText.match(/^\d+/)?.[0] || 0));
-    assert.equal(island.reward.legendary || 0,/случайная легендарная/.test(rewardText)?1:0);
+    if (island.id === 'kisalinia') {
+      assert.equal(island.rewardText,'—.');
+      assert.equal(Object.hasOwn(island.reward,'buildings'),false);
+    } else {
+      assert.equal(island.rewardText,rewardText);
+      assert.equal(island.reward.ducats || 0,Number(rewardText.match(/^\d+/)?.[0] || 0));
+      assert.equal(island.reward.legendary || 0,/случайная легендарная/.test(rewardText)?1:0);
+    }
     const view=data.ISLAND_DEFS.find(x=>x.id===island.id);
     assert.deepEqual([view.area,view.army,view.resourceIds],[island.area,island.army,island.resourceIds]);
   }
   assert.equal(rules.islands.find(i=>i.id==='chertog').reward.legendaryCardId,'mist-path');
-  assert.deepEqual(rules.islands.find(i=>i.id==='kisalinia').reward.buildings,[{type:'fort',level:1}]);
+  assert.equal(Object.hasOwn(rules.islands.find(i=>i.id==='kisalinia').reward,'buildings'),false);
 });
 
 test('complete known sea, assignment, feud and event decks match appendix rows', () => {
@@ -166,9 +171,58 @@ test('complete known sea, assignment, feud and event decks match appendix rows',
   assert.deepEqual(rules.politics.assignments.mori.slice(0,8).map(c=>c.islandId),['renaika','chertog','kisalinia','yukon','erkalon','asigoriy','atlantia','adia']);
 });
 
-test('stage 4 finalization marks completed consumers active without crossing into later stages', () => {
-  assert.equal(rules.implementation.activeProfile,'stage-4-islands-economy-4.7');
-  assert.equal(rules.implementation.pendingConsumers.every(item => item.consumerStage >= 5),true);
+test('stage 5.9 finalizes combat and politics with no stage-5 pending consumers', () => {
+  assert.equal(rules.implementation.activeProfile,'stage-5-combat-politics-complete');
+  assert.equal(rules.implementation.pendingConsumers.some(item => item.consumerStage <= 5),false);
+  assert.deepEqual(rules.implementation.pendingConsumers.map(item => item.consumerStage),[6,6,6,6,7,7]);
+  assert.equal(rules.scoring.combat.attacksPerOpponentPerRound,1);
+  assert.equal(data.BALANCE.combat.attacksPerOpponentPerRound,rules.scoring.combat.attacksPerOpponentPerRound);
+  assert.deepEqual(data.BALANCE.fleetScoring,rules.scoring.fleet);
+  assert.deepEqual(data.BALANCE.armyScoring,rules.scoring.army);
+  assert.equal(data.BALANCE.combat.capturedBuildingsKeptRatio,0.5);
+  assert.deepEqual(data.BALANCE.armyScoring.capture.map(x=>x.points),[0,1,2,3,4,5]);
+  assert.equal(data.BALANCE.armyScoring.defenseVictory,3);
+  assert.equal(data.BALANCE.fleetScoring.playerVictory,2);
+  assert.equal(data.BALANCE.fleetScoring.defenseVictory,2);
+  assert.deepEqual(data.BALANCE.fleetScoring.anchor,{blue:1,yellow:2,red:3});
+  assert.deepEqual([data.ANCHORS.blue.fleetPoints,data.ANCHORS.yellow.fleetPoints,data.ANCHORS.red.fleetPoints],[1,2,3]);
+  assert.equal(data.ANCHORS.blue.glory,undefined);
+  assert.deepEqual(Object.keys(data.FACTIONS),['lionia','kadingir','mayo','suniksiya','pirates','mori']);
+  assert.equal(data.FACTIONS.mori.giftIslandId,'miyosi');
+  assert.equal(data.FACTIONS.mori.fullConquestPrize.ducats,40);
+  assert.equal(data.FACTIONS.lionia.fullConquestPrize.ducats,60);
+  assert.equal(data.FACTIONS.lionia.fullConquestPrize.preserveBuildings,undefined);
+  assert.equal(data.FACTIONS.lionia.fullConquestPrize.razeDucats,undefined);
+  assert.equal(data.FACTIONS.kadingir.fullConquestPrize.ducats,50);
+  assert.equal(data.FACTIONS.kadingir.fullConquestPrize.amountUnresolved,undefined);
+  assert.equal(Object.hasOwn(data.MILITARY_REWARDS.kadingir,'preserveBuildings'),false);
+  assert.equal(data.MILITARY_REWARDS.kisalinia,undefined);
+  assert.deepEqual(Object.keys(data.ASSIGNMENT_CARDS),['lionia','kadingir','mori','suniksiya','pirates']);
+  assert.equal(Object.values(data.ASSIGNMENT_CARDS).flat().length,49);
+  assert.equal(data.BALANCE.assignmentReplacementPrice,undefined);
+  assert.deepEqual([data.FACTIONS.lionia.tax,data.FACTIONS.kadingir.tax,data.FACTIONS.mori.tax,data.FACTIONS.suniksiya.tax,data.FACTIONS.pirates.tax],[2,2,0,0,0]);
+  assert.deepEqual([data.FACTIONS.lionia.rewardShare,data.FACTIONS.kadingir.rewardShare,data.FACTIONS.mori.rewardShare,data.FACTIONS.suniksiya.rewardShare,data.FACTIONS.pirates.rewardShare],[0,0,0,0.5,0.5]);
+  assert.equal(data.BALANCE.session.taxUnderpaymentActionLimit,2);
+  assert.deepEqual(data.ASSIGNMENT_CARDS.mori.map(card=>card.type),['visit-island','visit-island','visit-island','visit-island','visit-island','visit-island','visit-island','visit-island','visit-route','visit-route']);
+  assert.deepEqual(data.ASSIGNMENT_CARDS.mori[8].route,[{islandId:'renaika'},{islandId:'mori'}]);
+  assert.deepEqual(data.ASSIGNMENT_CARDS.mori[9].route,[{islandId:'kisalinia'},{mapObjectId:'citadel'}]);
+  assert.deepEqual(Object.keys(data.FEUD_CARDS),rules.politics.order);
+  for (const factionId of rules.politics.order) {
+    assert.equal(data.FEUD_CARDS[factionId].reduce((sum,card)=>sum+card.quantity,0),10,factionId);
+    assert.deepEqual(
+      data.FEUD_CARDS[factionId].map(card=>card.id),
+      rules.events.feud[factionId].map(card=>card.id),
+      factionId
+    );
+  }
+  assert.equal(data.FEUD_CARDS.mori.filter(card=>card.type==='movement-penalty' && card.amount===2).reduce((sum,card)=>sum+card.quantity,0),2);
+  for (const factionId of ['mayo','suniksiya','pirates']) {
+    const card=data.FEUD_CARDS[factionId].find(c=>c.type==='discard-random-held');
+    assert.equal(card.targetZone,'closed-hand-except-active-assignment');
+    assert.equal(card.unresolved,undefined);
+  }
+  assert.equal(data.BALANCE.attackHistoryWindow,undefined);
+  assert.equal(data.BALANCE.attackRebellionThreshold,undefined);
   for (const resolved of [
     'fleet.upgrades.*.passability',
     'economy.buildings.*.area',
@@ -182,7 +236,8 @@ test('stage 4 finalization marks completed consumers active without crossing int
 });
 
 test('unknown physical copies and author decisions remain explicit, never guessed', () => {
-  for (const id of ['R05','R06','R07','R21','R29','remaining-prize-buildings']) assert.ok(rules.metadata.unresolved.includes(id));
+  for (const id of ['R05','R06','R07','R21','R29']) assert.ok(rules.metadata.unresolved.includes(id));
+  assert.equal(rules.metadata.unresolved.includes('remaining-prize-buildings'),false);
   assert.equal(rules.legends.legendaryDeck.copiesByKind,null);
   assert.equal(rules.legends.legendaryDeck.reshuffle,null);
   assert.equal(rules.legends.treasureDeck.copiesByKind,null);
@@ -254,6 +309,6 @@ test('retired fleet content stays compatibility-only while stage 3 navigation up
   assert.equal(logic.buyShipUpgrade(buyer,'leadLine').ok,true);
   assert.equal(data.MILITARY_REWARDS.landin.specialLandinEscort,undefined);
   assert.equal(logic.buyEscort({islands:[]},buyer,'landin').ok,false);
-  assert.equal(data.FACTIONS.mori,undefined);
+  assert.equal(data.FACTIONS.mori.giftIslandId,'miyosi');
   assert.equal(rules.politics.factions.mori.giftIslandId,'miyosi');
 });

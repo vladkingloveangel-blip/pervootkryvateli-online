@@ -60,7 +60,7 @@ function validateRules(rules, map) {
       'ship-level-loss': [['levels']],
       'treasury-percent': [['percent']], 'treasury-flat': [['amount']],
       'remove-upgrade': [['count'], ['branch']], 'remove-cargo': [['holds']],
-      'discard-random-held': [['count','targetZone','unresolved']], 'none': [[]],
+      'discard-random-held': [['count','targetZone']], 'none': [[]],
       'remove-building': [['count','buildingTypes']],
       'downgrade-building': [['count','steps'], ['buildingTypes']],
       'departure-movement': [['amount']], 'replace-event': [['limit']],
@@ -92,7 +92,7 @@ function validateRules(rules, map) {
     if (e.distance !== undefined) check(e.distance === 'manhattan', path, 'invalid distance');
     if (e.type === 'movement-penalty') check((e.timing === 'current-personal-turn') !== Number.isInteger(e.durationPersonalTurns), path, 'expected exactly one duration');
     if (e.type === 'reclaim-island') check(rules.islands.some(i => i.factionId === e.factionId), path, 'faction has no original island');
-    if (e.type === 'discard-random-held') check(e.targetZone === null && e.unresolved === 'R29', path, 'unresolved target must stay neutral');
+    if (e.type === 'discard-random-held') check(e.targetZone === 'closed-hand-except-active-assignment', path, 'random discard must target the closed hand while protecting the active assignment');
     if (e.type === 'inspect-hidden-cards') check(e.assignmentVisibility === null && e.unresolved === 'R29', path, 'unresolved visibility must stay neutral');
     if (e.type === 'protect') check(e.hostileCardReactionExpiry === 'end-of-current-turn', path, 'invalid reaction expiry');
   }
@@ -110,10 +110,7 @@ function validateRules(rules, map) {
     check(Boolean(i.reward?.trigger), i.id, 'missing reward trigger');
     for (const field of ['ducats','legendary']) if (field in i.reward) integer(i.reward[field], `${i.id}.reward.${field}`);
     if (i.reward.legendaryCardId) ref(i.reward.legendaryCardId, new Set(legends.legendary.map(c => c.id)), i.id);
-    for (const b of i.reward.buildings || []) {
-      ref(b.type, buildings, i.id);
-      check(Boolean(economy.buildings[b.type]?.levels[b.level]), i.id, 'unknown reward level');
-    }
+    check(!Object.hasOwn(i.reward, 'buildings'), i.id, 'prize-building rewards are retired by author decision');
   }
   check(Object.keys(fleet.ships).length === 4, 'ships', 'expected four classes');
   for (const id of ['brigantine','frigate','caravel','carrack']) check(Boolean(fleet.ships[id]), 'ships', `missing ${id}`);

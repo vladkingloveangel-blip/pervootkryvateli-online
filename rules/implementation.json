@@ -1,19 +1,36 @@
 {
-  "activeProfile": "stage-4-islands-economy-4.7",
-  "note": "Read rules/ as master data. Stage 3 fleet/navigation and stage 4 islands/economy consumers are active; later-stage consumers remain explicit below.",
+  "activeProfile": "stage-5-combat-politics-complete",
+  "note": "Read rules/ as master data. Stage 5 combat/politics is finalized through block 5.9; only stage 6-7 consumers remain pending.",
   "pendingConsumers": [
-    { "path": "politics.factions.mori", "consumerStage": 5, "status": "data-ready" },
-    { "path": "politics.factions.*.fullConquestPrize.trigger", "consumerStage": 5, "status": "data-ready" },
-    { "path": "politics.assignments.mori", "consumerStage": 5, "status": "data-ready" },
-    { "path": "politics.paidAssignmentReplacement", "consumerStage": 5, "status": "data-ready" },
-    { "path": "events.feud", "consumerStage": 5, "status": "data-ready" },
-    { "path": "scoring.army", "consumerStage": 5, "status": "data-ready" },
-    { "path": "scoring.fleet", "consumerStage": 5, "status": "data-ready" },
-    { "path": "events.sailing.*.timing", "consumerStage": 6, "status": "data-ready" },
-    { "path": "legends.namedCards", "consumerStage": 6, "status": "data-ready" },
-    { "path": "legends.expeditions", "consumerStage": 6, "status": "data-ready" },
-    { "path": "legends.legendary.*.effect", "consumerStage": 6, "status": "data-ready" },
-    { "path": "scoring.titles", "consumerStage": 7, "status": "data-ready" },
-    { "path": "economy.ranks.*.prestige", "consumerStage": 7, "status": "data-ready" }
+    {
+      "path": "events.sailing.*.timing",
+      "consumerStage": 6,
+      "status": "data-ready"
+    },
+    {
+      "path": "legends.namedCards",
+      "consumerStage": 6,
+      "status": "data-ready"
+    },
+    {
+      "path": "legends.expeditions",
+      "consumerStage": 6,
+      "status": "data-ready"
+    },
+    {
+      "path": "legends.legendary.*.effect",
+      "consumerStage": 6,
+      "status": "data-ready"
+    },
+    {
+      "path": "scoring.titles",
+      "consumerStage": 7,
+      "status": "data-ready"
+    },
+    {
+      "path": "economy.ranks.*.prestige",
+      "consumerStage": 7,
+      "status": "data-ready"
+    }
   ]
 }

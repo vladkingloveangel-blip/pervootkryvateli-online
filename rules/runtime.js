@@ -32,37 +32,40 @@ SHIP_UPGRADES[legacy.removedUpgrade.id] = { ...legacy.removedUpgrade, retired: t
 const SHIP_LEVELS = { ...rules.fleet.levels, [legacy.shipLevel7.level]: { ...legacy.shipLevel7, retired: true } };
 const MILITARY_REWARDS = {};
 for (const island of rules.islands.filter(i => i.kind !== 'free')) {
-  MILITARY_REWARDS[island.id] = { ...island.reward,
-    // Remaining prize buildings await author clarification. Never grant a Landin ship.
-    ...(legacy.militaryRewardBuildings[island.id] ? { preserveBuildings: legacy.militaryRewardBuildings[island.id] } : {}) };
+  MILITARY_REWARDS[island.id] = copy(island.reward);
 }
 const FACTIONS = Object.fromEntries(Object.entries(rules.politics.factions)
-  .filter(([, faction]) => !faction.availability)
-  .map(([id, faction]) => [id, { ...faction, fullConquestPrize: {
-    preserveBuildings: copy(legacy.factionPrizeBuildings[id]),
-    razeDucats: faction.fullConquestPrize.ducats,
-  } }]));
-const FEUD_CARDS = Object.fromEntries(Object.entries(legacy.feud).map(([id, cards]) => [id,
-  cards.map(card => {
-    const master = rules.events.feud[id].find(c => c.id === card.masterCardId);
-    const { percent, amount, count, fallbackDucats } = master.effect;
-    return { ...card, quantity: master.quantity, percent, amount, count, fallbackDucats };
-  }),
+  .filter(([, faction]) => !faction.availability
+    || (faction.availability.status === 'data-ready' && faction.availability.consumerStage <= 5))
+  .map(([id, faction]) => [id, {
+    ...copy(faction),
+    // Author decision: Kadingir's final conquest prize follows §9.6 — 50 ducats.
+    fullConquestPrize: copy(faction.fullConquestPrize),
+  }]));
+const FEUD_CARDS = Object.fromEntries(Object.entries(rules.events.feud).map(([factionId, cards]) => [
+  factionId,
+  cards.map(card => ({
+    id: card.id,
+    masterCardId: card.id,
+    factionId,
+    name: card.name,
+    quantity: card.quantity,
+    source: card.source,
+    ...copy(card.effect),
+  })),
 ]));
 module.exports = {
-  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-4-islands-economy-4.7',
+  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-5-combat-politics-complete',
   BALANCE: {
     session: rules.session,
     maxShipLevel: rules.fleet.maxLevel, maxReadableShipLevel: legacy.shipLevel7.level,
     escortPrices: rules.fleet.escortPrices, maxBranchUpgrades: rules.fleet.maxBranchUpgrades,
     maxEscorts: rules.fleet.escortPrices.length,
     garrisons: rules.economy.garrisons, branchLimits: BRANCH_LIMITS, ranks: rules.economy.ranks,
-    landCompany: rules.economy.landCompany, combat: rules.scoring.combat,
+    landCompany: rules.economy.landCompany, combat: rules.scoring.combat, fleetScoring: rules.scoring.fleet, armyScoring: rules.scoring.army,
     contractBonusRatio: rules.economy.contractBonusRatio,
     loadingLimitPerIslandPerRound: rules.economy.loadingLimitPerIslandPerRound,
-    assignmentReplacementPrice: legacy.assignmentReplacementPrice,
     gloryCapture: legacy.gloryCapture, treasuryLossRatio: legacy.treasuryLossRatio,
-    attackHistoryWindow: legacy.attackHistoryWindow, attackRebellionThreshold: legacy.attackRebellionThreshold,
     reclaimIslandFallback: rules.events.feud.lionia.find(c => c.effect.type === 'reclaim-island').effect.fallbackDucats,
     legendaryEffects: Object.fromEntries(rules.legends.legendary.map(c => [c.id, c.effect])),
   },
@@ -70,7 +73,10 @@ module.exports = {
   ESCORTS: { ...rules.fleet.escorts, [legacy.removedEscort.id]: { ...legacy.removedEscort, retired: true } },
   GOODS: rules.economy.goods, BUILDINGS, BUILDING_UPGRADES, CHARACTERS, MILITARY_REWARDS, FACTIONS,
   POLITICAL_FACTION_ORDER: rules.politics.order.filter(id => id in FACTIONS),
-  ASSIGNMENT_CARDS: Object.fromEntries(Object.entries(rules.politics.assignments).filter(([id]) => id in FACTIONS)),
+  // Five suzerains issue assignments. Mayo has no vassalage and therefore no assignment deck.
+  ASSIGNMENT_CARDS: Object.fromEntries(POLITICAL_FACTION_ORDER
+    .filter(id => FACTIONS[id]?.canHaveVassal)
+    .map(id => [id, copy(rules.politics.assignments[id] || [])])),
   ANCHOR_CARDS: rules.sea,
   SAILING_EVENT_CARDS: rules.events.sailing.map(card => card.type === 'turn-effect'
     ? { ...card, type: 'next-turn', timing: 'next-personal-turn' } : card),

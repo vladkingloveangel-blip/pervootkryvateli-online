@@ -51,9 +51,21 @@ const {
   contractBonusForRevenue,
   isCitadelCell,
   isCitadelPeaceCell,
+  seaAttackPositionAllowed,
+  attackCountThisRound,
+  attackTargetsThisRound,
+  canAttackPlayerThisRound,
+  registerPlayerAttack,
   fleetArtillery,
   islandDefenseArmy,
   loseShipLevel,
+  battleLevelLoss,
+  awardFleetVictoryPoints,
+  armyCapturePoints,
+  awardArmyVictoryPoints,
+  capturedBuildingRetentionOptions,
+  removeCapturedBuildingForRetention,
+  finalizeCapturedBuildingRetention,
   seaBattle,
   assaultIsland,
   areAllies,
@@ -79,6 +91,7 @@ const {
   buildFree,
   raidBuildingOptions,
   applyRaidDowngrade,
+  applyFeudBuildingDowngrade,
   boardingUpgradeOptions,
   applyBoardingLoss,
   stormCellOptions,
@@ -86,11 +99,8 @@ const {
   factionIdForIsland,
   stateExists,
   refreshFactionExistence,
-  fullSubjugationController,
-  claimFullSubjugationPrize,
-  canPlacePrizeBuilding,
-  prizeBuildingPlacementOptions,
-  placePrizeBuilding,
+  stateOwnedIslandIds,
+  resolveStateMilitaryCapture,
   islandConstraintReport,
   islandStatus,
   islandCorrectionOptions,
@@ -121,13 +131,16 @@ const {
   politicalCargoOptions,
   discardRandomHeldCard,
   createAssignmentDecks,
+  normalizeAssignmentCompatibility,
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,
-  canReplaceAssignment,
-  replaceAssignment,
   assignmentEventMatches,
+  assignmentRequiredAction,
+  noteMoriAssignmentDeparture,
+  advanceMoriAssignmentNavigation,
   completeAssignment,
+  settleVassalTax,
   legendaryPlaceAt,
 } = require('../game-logic');
 const { BALANCE, MAP_META, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS, BUILDINGS, CHARACTERS, ANCHORS } = require('../game-data');
@@ -706,10 +719,10 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 }
 
 
-// Зона мира включает клетки Цитадели и соседние морские клетки.
+// Зона мира включает только клетки с территорией Цитадели; соседнее море не защищено.
 {
   assert.equal(isCitadelPeaceCell(13, 13), true);
-  assert.equal(isCitadelPeaceCell(12, 13), true);
+  assert.equal(isCitadelPeaceCell(12, 13), false);
   assert.equal(isCitadelPeaceCell(5, 1), false);
 }
 
@@ -728,6 +741,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(b.level, 1);
   assert.equal(a.ducats, 12);
   assert.equal(b.ducats, 0);
+  assert.equal(a.fleetPoints, 2);
+  assert.deepEqual(result.fleetPointAwards, [{ playerId: 'a', opponentId: 'b', points: 2 }]);
 }
 
 // При поражении корабля I уровня он не получает уровень 0, а возвращается на старт.
@@ -740,64 +755,178 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(result.outcome, 'defender');
   assert.equal(a.level, 1);
   assert.deepEqual([a.row, a.col], [0, 0]);
+  assert.equal(b.fleetPoints, 2);
 }
 
-// Ничья морского боя заставляет обоих пропустить следующий личный ход.
+// Каноническая ничья морского боя не меняет уровни, дукаты, груз и не даёт пропуска хода.
 {
   const room = { round: 2, islands: cloneIslands(), players: [] };
-  const a = { id: 'a', row: 10, col: 10, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 5, personalTurnNo: 1, attackedThisTurn: [], attackHistory: {} };
-  const b = { id: 'b', row: 10, col: 10, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 5, personalTurnNo: 1, attackedThisTurn: [], attackHistory: {} };
+  const a = { id: 'a', row: 10, col: 10, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 5, cargo: { goodId: 'wood', quantity: 2 } };
+  const b = { id: 'b', row: 10, col: 10, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 5, cargo: { goodId: 'stone', quantity: 2 } };
   room.players = [a, b];
   const result = seaBattle(room, a, b);
   assert.equal(result.outcome, 'tie');
-  assert.equal(a.skipTurns, 1);
-  assert.equal(b.skipTurns, 1);
+  assert.equal(a.skipTurns || 0, 0);
+  assert.equal(b.skipTurns || 0, 0);
+  assert.equal(a.level, 1);
+  assert.equal(b.level, 1);
+  assert.equal(a.ducats, 5);
+  assert.equal(b.ducats, 5);
+  assert.deepEqual(a.cargo, { goodId: 'wood', quantity: 2 });
+  assert.deepEqual(b.cargo, { goodId: 'stone', quantity: 2 });
+  assert.equal(a.fleetPoints || 0, 0);
+  assert.equal(b.fleetPoints || 0, 0);
 }
 
-// В первом раунде морской PvP запрещён, и одну цель нельзя атаковать дважды за один личный ход.
+// В первом раунде PvP запрещён. Со второго раунда морская атака разрешена
+// с клетки цели или одной из восьми соседних, но только один раз на этого игрока за общий раунд.
 {
   const room = { round: 1, islands: cloneIslands(), players: [] };
-  const a = { id: 'a', row: 10, col: 10, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 5, personalTurnNo: 1, attackedThisTurn: [], attackHistory: {} };
-  const b = { id: 'b', row: 10, col: 10, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 5, personalTurnNo: 1, attackedThisTurn: [], attackHistory: {} };
+  const a = { id: 'a', row: 9, col: 9, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 5 };
+  const b = { id: 'b', row: 10, col: 10, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 5 };
   room.players = [a, b];
+  assert.equal(seaAttackPositionAllowed(a, b), true);
   assert.equal(seaBattle(room, a, b).ok, false);
+
   room.round = 2;
   assert.equal(seaBattle(room, a, b).ok, true);
-  a.row = b.row = 10; a.col = b.col = 10;
+  assert.equal(attackCountThisRound(room, a, b.id), 1);
+  assert.deepEqual(attackTargetsThisRound(room, a), ['b']);
+  a.row = 9; a.col = 9; b.row = 10; b.col = 10;
   assert.equal(seaBattle(room, a, b).ok, false);
+
+  room.round = 3;
+  assert.equal(attackCountThisRound(room, a, b.id), 0);
+  assert.deepEqual(attackTargetsThisRound(room, a), []);
+  assert.equal(canAttackPlayerThisRound(room, a, b.id).ok, true);
 }
 
-// Штурм независимого Агмора: каравелла I (войско 5) побеждает гарнизон 3,
-// получает остров, 5 дукатов и 2 славы за первое военное покорение.
+// Корабельный плотник предотвращает одну боевую потерю уровня и после применения
+// возвращается в колоду персонажей. Без явного применения уровень теряется обычно.
+{
+  const room = { round: 2, islands: cloneIslands(), players: [] };
+  const a = { id: 'a', row: 10, col: 10, shipClass: 'brigantine', level: 2, upgrades: [], escorts: [], ducats: 5, character: { id: 'shipCarpenter' } };
+  const b = { id: 'b', row: 10, col: 10, shipClass: 'frigate', level: 2, upgrades: [], escorts: [], ducats: 5 };
+  room.players = [a, b];
+  const result = seaBattle(room, a, b, { shipCarpenterPlayerIds: ['a'] });
+  assert.equal(result.outcome, 'defender');
+  assert.equal(a.level, 2);
+  assert.equal(a.character, null);
+  assert.equal(result.levelLoss.prevented, true);
+  assert.equal(result.levelLoss.preventedByCharacter, 'shipCarpenter');
+}
+
+// Плотник работает и при проигранном штурме, но предотвращает только потерю уровня:
+// рота ландскнехтов всё равно погибает по правилу неудачного штурма.
+{
+  const room = { round: 2, islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'adia');
+  const a = {
+    id: 'a', row: island.cells[0][0], col: island.cells[0][1],
+    shipClass: 'brigantine', level: 2, upgrades: [], escorts: [], ducats: 0,
+    character: { id: 'shipCarpenter' }, landCompany: { army: 3, arsenalLevel: 1 },
+  };
+  room.players = [a];
+  const result = assaultIsland(room, a, island, { shipCarpenterPlayerIds: ['a'] });
+  assert.equal(result.outcome, 'defender');
+  assert.equal(a.level, 2);
+  assert.equal(a.character, null);
+  assert.equal(a.landCompany, null);
+  assert.equal(result.levelLoss.prevented, true);
+}
+
+// Ограничение очков флота хранится отдельно от дукатов/старого счётчика славы:
+// против одного и того же соперника в одном раунде повторного начисления нет.
+{
+  const room = { round: 4 };
+  const p = { id: 'p', fleetPoints: 0, glory: 7 };
+  assert.deepEqual(awardFleetVictoryPoints(room, [p], 'q', 2), [{ playerId: 'p', opponentId: 'q', points: 2 }]);
+  assert.deepEqual(awardFleetVictoryPoints(room, [p], 'q', 2), []);
+  assert.equal(p.fleetPoints, 2);
+  assert.equal(p.glory, 7);
+  room.round = 5;
+  assert.deepEqual(awardFleetVictoryPoints(room, [p], 'q', 2), [{ playerId: 'p', opponentId: 'q', points: 2 }]);
+  assert.equal(p.fleetPoints, 4);
+}
+
+// Очки армии не смешиваются со славой и ограничиваются одним результатом против соперника за раунд.
+{
+  assert.deepEqual([0,1,4,5,8,9,12,13,16,17].map(armyCapturePoints), [0,1,1,2,2,3,3,4,4,5]);
+  const room = { round: 4 };
+  const p = { id: 'p', armyPoints: 0, glory: 9 };
+  assert.deepEqual(awardArmyVictoryPoints(room, [p], 'q', 3), [{ playerId: 'p', opponentId: 'q', points: 3 }]);
+  assert.deepEqual(awardArmyVictoryPoints(room, [p], 'q', 3), []);
+  assert.deepEqual(awardArmyVictoryPoints(room, [p], null, 2), [{ playerId: 'p', opponentId: null, points: 2 }]);
+  room.round = 5;
+  assert.deepEqual(awardArmyVictoryPoints(room, [p], 'q', 3), [{ playerId: 'p', opponentId: 'q', points: 3 }]);
+  assert.equal(p.armyPoints, 8);
+  assert.equal(p.glory, 9);
+}
+
+// Успешная защита острова игрока даёт владельцу 3 очка армии.
+{
+  const room = { round: 2, islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'bogamia');
+  island.ownerId = 'b';
+  island.buildings = [{ type: 'fort', level: 1 }];
+  const a = { id: 'a', row: 5, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
+  const b = { id: 'b', row: 1, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
+  room.players = [a, b];
+  const result = assaultIsland(room, a, island);
+  assert.equal(result.outcome, 'defender');
+  assert.equal(b.armyPoints, 3);
+  assert.deepEqual(result.armyPointAwards, [{ playerId: 'b', opponentId: 'a', points: 3 }]);
+}
+
+// Штурм независимого Агмора: защита 3 даёт 1 очко армии по канонической шкале.
 {
   const room = { round: 1, islands: cloneIslands(), players: [] };
   const island = room.islands.find(i => i.id === 'agmor');
-  const a = { id: 'a', row: 13, col: 7, shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, glory: 0 };
+  const a = { id: 'a', row: 13, col: 7, shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, glory: 0, armyPoints: 0 };
   room.players = [a];
   assert.equal(islandDefenseArmy(room, island).total, 3);
-  const result = assaultIsland(room, a, island, 'preserve');
+  const result = assaultIsland(room, a, island);
   assert.equal(result.ok, true);
   assert.equal(result.outcome, 'attacker');
   assert.equal(island.ownerId, 'a');
   assert.equal(a.ducats, 5);
-  assert.equal(a.glory, 2);
-  assert.equal(island.firstMilitaryConquered, true);
+  assert.equal(a.glory, 0);
+  assert.equal(a.armyPoints, 1);
+  assert.deepEqual(result.armyPointAwards, [{ playerId: 'a', opponentId: null, points: 1 }]);
 }
 
-// Разорение при успешном штурме удаляет инфраструктуру.
+// Повторный военный захват уже покорённого ранее острова не приносит новые очки армии.
+{
+  const room = { round: 2, islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'bogamia');
+  island.ownerId = 'b';
+  island.firstMilitaryConquered = true;
+  island.buildings = [{ type: 'fort', level: 1 }];
+  const a = { id: 'a', row: 5, col: 1, shipClass: 'caravel', level: 2, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
+  const b = { id: 'b', row: 1, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
+  room.players = [a, b];
+  const result = assaultIsland(room, a, island);
+  assert.equal(result.outcome, 'attacker');
+  assert.deepEqual(result.armyPointAwards, []);
+  assert.equal(a.armyPoints, 0);
+}
+
+// После захвата сохраняется половина существовавшей инфраструктуры; новый владелец выбирает потери.
 {
   const room = { round: 2, islands: cloneIslands(), players: [] };
   const island = room.islands.find(i => i.id === 'bogamia');
   island.ownerId = 'b';
   island.buildings = [{ type: 'farm', level: 1 }, { type: 'fort', level: 1 }];
-  const a = { id: 'a', row: 5, col: 1, shipClass: 'caravel', level: 7, upgrades: ['musketeers', 'pikemen'], escorts: [], ducats: 0, glory: 0 };
-  const b = { id: 'b', row: 1, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0 };
+  const a = { id: 'a', row: 5, col: 1, shipClass: 'caravel', level: 7, upgrades: ['musketeers', 'pikemen'], escorts: [], ducats: 0, glory: 0, armyPoints: 0 };
+  const b = { id: 'b', row: 1, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
   room.players = [a, b];
-  assert.equal(islandDefenseArmy(room, island).total, 4);
-  const result = assaultIsland(room, a, island, 'raze');
+  const result = assaultIsland(room, a, island);
   assert.equal(result.outcome, 'attacker');
-  assert.equal(island.buildings.length, 0);
-  assert.equal(island.ownerId, 'a');
+  assert.deepEqual(result.captureRetention, { ratio: 0.5, initialCount: 2, keepCount: 1, removeCount: 1 });
+  assert.equal(capturedBuildingRetentionOptions(island).length, 2);
+  assert.equal(removeCapturedBuildingForRetention(room, a, island.id, 1).ok, true);
+  finalizeCapturedBuildingRetention(island);
+  assert.deepEqual(island.buildings.map(b => [b.type, b.level]), [['farm', 1]]);
 }
 
 // Если корабль владельца находится на острове, его войско добавляется к защите.
@@ -814,40 +943,58 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(defense.total, 9);
 }
 
-// Третья атака на один корабль в пределах десяти личных ходов вызывает бунт владений:
-// все постройки выше I уровня атакующего понижаются на одну ступень.
+// Прежней механики «третьей атаки за десять личных ходов» больше нет:
+ // атака разрешается заново в новом общем раунде и не понижает постройки атакующего.
 {
   const room = { round: 2, islands: cloneIslands(), players: [] };
   const island = room.islands.find(i => i.id === 'kisalinia');
   island.ownerId = 'a';
   island.buildings = [{ type: 'farm', level: 3 }, { type: 'shipyard', level: 2 }, { type: 'fort', level: 1 }];
-  const a = { id: 'a', row: 10, col: 10, shipClass: 'frigate', level: 7, upgrades: [], escorts: [], ducats: 20, personalTurnNo: 1, attackedThisTurn: [], attackHistory: {} };
-  const b = { id: 'b', row: 10, col: 10, shipClass: 'brigantine', level: 7, upgrades: [], escorts: [], ducats: 20 };
+  const a = { id: 'a', row: 10, col: 10, shipClass: 'frigate', level: 6, upgrades: [], escorts: [], ducats: 20 };
+  const b = { id: 'b', row: 10, col: 10, shipClass: 'frigate', level: 6, upgrades: [], escorts: [], ducats: 20 };
   room.players = [a, b];
-  let result = seaBattle(room, a, b);
-  assert.equal(result.rebellion, false);
-  for (const turnNo of [5, 9]) {
-    a.personalTurnNo = turnNo;
-    a.attackedThisTurn = [];
+  for (const round of [2, 3, 4]) {
+    room.round = round;
     a.row = b.row = 10; a.col = b.col = 10;
-    result = seaBattle(room, a, b);
+    const result = seaBattle(room, a, b);
+    assert.equal(result.ok, true);
+    assert.equal(result.rebellion, undefined);
   }
-  assert.equal(result.rebellion, true);
-  assert.equal(island.buildings[0].level, 2);
-  assert.equal(island.buildings[1].level, 1);
-  assert.equal(island.buildings[2].level, 1);
+  assert.deepEqual(island.buildings.map(b => [b.type, b.level]), [['farm',3],['shipyard',2],['fort',1]]);
+}
+
+// Морская атака, штурм острова игрока и враждебный эффект используют один общий
+// лимит пары «нападающий — игрок-цель». Нейтральные цели в него не входят.
+{
+  const room = { round: 2, islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'bogamia');
+  island.ownerId = 'b';
+  const a = { id: 'a', row: 5, col: 1, shipClass: 'caravel', level: 2, upgrades: [], escorts: [], ducats: 0 };
+  const b = { id: 'b', row: 1, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0 };
+  room.players = [a, b];
+
+  assert.equal(registerPlayerAttack(room, a, b.id).ok, true);
+  assert.equal(registerPlayerAttack(room, a, b.id).ok, false);
+  assert.equal(assaultIsland(room, a, island).ok, false);
+
+  room.round = 3;
+  assert.equal(assaultIsland(room, a, island).ok, true);
 }
 
 
-// Союз хранится попарно и не зависит от порядка ID.
+// Союз хранится попарно, не зависит от порядка ID и не образует цепочки из трёх игроков.
 {
   const room = { alliances: [] };
   assert.equal(addAlliance(room, 'a', 'b'), true);
   assert.equal(areAllies(room, 'a', 'b'), true);
   assert.equal(areAllies(room, 'b', 'a'), true);
   assert.equal(addAlliance(room, 'b', 'a'), false);
+  assert.equal(addAlliance(room, 'a', 'c'), false);
+  assert.equal(addAlliance(room, 'c', 'b'), false);
+  assert.deepEqual(room.alliances, [['a', 'b']]);
   assert.equal(removeAlliance(room, 'b', 'a'), true);
   assert.equal(areAllies(room, 'a', 'b'), false);
+  assert.equal(addAlliance(room, 'c', 'b'), true);
 }
 
 // Совместный морской бой складывает артиллерию союзников. При поражении каждый
@@ -855,7 +1002,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 {
   const room = { round: 2, islands: cloneIslands(), players: [], alliances: [] };
   const a = { id: 'a', name: 'A', row: 10, col: 10, shipClass: 'frigate', level: 2, upgrades: [], escorts: [], ducats: 5, personalTurnNo: 1, attackedThisTurn: [], attackHistory: {}, brokenAlliesThisTurn: [] };
-  const c = { id: 'c', name: 'C', row: 10, col: 10, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 0 };
+  const c = { id: 'c', name: 'C', row: 9, col: 10, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 0 };
   const b = { id: 'b', name: 'B', row: 10, col: 10, shipClass: 'brigantine', level: 3, upgrades: [], escorts: [], ducats: 3 };
   room.players = [a, b, c];
   addAlliance(room, 'a', 'c');
@@ -868,6 +1015,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(result.loot, 3);
   assert.equal(a.ducats + c.ducats, 8); // было 5, добыча +3 поделена 2+1
   assert.equal(Object.values(result.lootShares).reduce((x, y) => x + y, 0), 3);
+  assert.equal(a.fleetPoints, 2);
+  assert.equal(c.fleetPoints, 2);
 }
 
 // Если побеждает совместная защита, уровни теряют все участвовавшие нападающие,
@@ -875,9 +1024,9 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 {
   const room = { round: 2, islands: cloneIslands(), players: [], alliances: [] };
   const a = { id: 'a', name: 'A', row: 11, col: 11, shipClass: 'brigantine', level: 2, upgrades: [], escorts: [], ducats: 3, personalTurnNo: 1, attackedThisTurn: [], attackHistory: {}, brokenAlliesThisTurn: [] };
-  const c = { id: 'c', name: 'C', row: 11, col: 11, shipClass: 'brigantine', level: 2, upgrades: [], escorts: [], ducats: 0 };
+  const c = { id: 'c', name: 'C', row: 10, col: 11, shipClass: 'brigantine', level: 2, upgrades: [], escorts: [], ducats: 0 };
   const b = { id: 'b', name: 'B', row: 11, col: 11, shipClass: 'frigate', level: 3, upgrades: [], escorts: [], ducats: 0 };
-  const d = { id: 'd', name: 'D', row: 11, col: 11, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 0 };
+  const d = { id: 'd', name: 'D', row: 10, col: 10, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 0 };
   room.players = [a, b, c, d];
   addAlliance(room, 'a', 'c');
   addAlliance(room, 'b', 'd');
@@ -887,6 +1036,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(c.level, 1);
   assert.equal(a.ducats, 0);
   assert.equal(b.ducats + d.ducats, 3);
+  assert.equal(b.fleetPoints, 2);
+  assert.equal(d.fleetPoints, 2);
 }
 
 // Союзники не могут атаковать друг друга, а игрок, разорвавший союз, не может
@@ -911,7 +1062,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const c = { id: 'c', name: 'C', row: 20, col: 24, shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, glory: 0 };
   room.players = [a, c];
   addAlliance(room, 'a', 'c');
-  const result = jointAssaultIsland(room, a, island, 'preserve', ['c'], []);
+  const result = jointAssaultIsland(room, a, island, ['c'], []);
   assert.equal(result.ok, true);
   assert.equal(result.attackerPower, 10); // 5 + 5
   assert.equal(result.defense.total, 10);
@@ -923,14 +1074,35 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const c2 = { ...c, id: 'c2', row: 20, col: 24, ducats: 0, glory: 0 };
   room2.players = [a2, c2];
   addAlliance(room2, 'a2', 'c2');
-  const win = jointAssaultIsland(room2, a2, island2, 'preserve', ['c2'], []);
+  const win = jointAssaultIsland(room2, a2, island2, ['c2'], []);
   assert.equal(win.outcome, 'attacker');
   assert.equal(island2.ownerId, 'a2');
-  assert.equal(a2.glory, 4); // защита 10 => 4 славы инициатору
+  assert.equal(a2.armyPoints, 3); // защита 10 => 3 очка армии инициатору
+  assert.equal(a2.glory, 0);
+  assert.equal(c2.armyPoints || 0, 0); // при совместном захвате очки армии получает только инициатор
   assert.equal(c2.glory, 0);
 }
 
-// При ничьей совместного штурма 30% казны теряет каждый реально участвовавший игрок обеих сторон.
+// При успешной совместной защите острова 3 очка армии получает владелец острова, а не союзник защиты.
+{
+  const room = { round: 2, islands: cloneIslands(), players: [], alliances: [] };
+  const island = room.islands.find(i => i.id === 'bogamia');
+  island.ownerId = 'b';
+  island.buildings = [{ type: 'fort', level: 1 }];
+  const a = { id: 'a', name: 'A', row: 5, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
+  const c = { id: 'c', name: 'C', row: 5, col: 2, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
+  const b = { id: 'b', name: 'B', row: 5, col: 2, shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
+  const d = { id: 'd', name: 'D', row: 6, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
+  room.players = [a, b, c, d];
+  addAlliance(room, 'a', 'c');
+  addAlliance(room, 'b', 'd');
+  const result = jointAssaultIsland(room, a, island, ['c'], ['d']);
+  assert.equal(result.outcome, 'defender');
+  assert.equal(b.armyPoints, 3);
+  assert.equal(d.armyPoints, 0);
+}
+
+// При ничьей совместного штурма контроль не меняется и участвовавшие игроки ничего не теряют.
 {
   const room = { round: 2, islands: cloneIslands(), players: [], alliances: [] };
   const island = room.islands.find(i => i.id === 'bogamia');
@@ -945,9 +1117,9 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   // Атака: 3+3=6; защита: владелец 5 + союзник 3 = 8, значит не ничья.
   // Даём инициатору мушкетёров (+1) и II уровень (+1): 5+3=8.
   a.upgrades = ['musketeers']; a.level = 2;
-  const result = jointAssaultIsland(room, a, island, 'preserve', ['c'], ['d']);
+  const result = jointAssaultIsland(room, a, island, ['c'], ['d']);
   assert.equal(result.outcome, 'tie');
-  for (const p of [a, b, c, d]) assert.equal(p.ducats, 7);
+  for (const p of [a, b, c, d]) assert.equal(p.ducats, 10);
 }
 
 
@@ -970,21 +1142,48 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(decks.blue.drawPile.filter(c => c.id === 'smugglers').length, 2);
 }
 
-// Победа на синем якоре: награда + слава, карта уходит в сброс, визит отмечается.
+// Победа на синем якоре: награда +1 очко флота, карта уходит в сброс, клетка отмечается на раунд.
 {
-  const p = { id: 'p1', row: 5, col: 11, shipClass: 'frigate', level: 7, upgrades: ['falcons', 'culverins'], escorts: [], ducats: 1, debt: 0, glory: 0, visitedAnchors: [] };
+  const p = { id: 'p1', row: 5, col: 11, shipClass: 'frigate', level: 7, upgrades: ['falcons', 'culverins'], escorts: [], ducats: 1, debt: 0, glory: 0, fleetPoints: 0, visitedAnchors: [] };
   const room = { round: 2, players: [p], islands: cloneIslands(), anchorDecks: { blue: { drawPile: [{ id: 'test', name: 'Тестовый конвой', artillery: 4, reward: 8, quiet: false }], discard: [] } } };
   const result = resolveAnchorEncounter(room, p);
   assert.equal(result.triggered, true);
   assert.equal(result.outcome, 'win');
   assert.equal(result.actionCost, 1);
   assert.equal(p.ducats, 9);
-  assert.equal(p.glory, 1);
+  assert.equal(p.glory, 0);
+  assert.equal(p.fleetPoints, 1);
+  assert.equal(result.fleetPoints, 1);
   assert.equal(room.anchorDecks.blue.discard.length, 1);
   assert.equal(p.visitedAnchors.includes('5,11'), true);
   const second = resolveAnchorEncounter(room, p);
   assert.equal(second.triggered, false);
   assert.equal(second.reason, 'already-visited');
+}
+
+// Жёлтый и красный якоря дают 2 и 3 очка флота соответственно.
+{
+  const yellow = { id: 'y', row: 10, col: 16, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0, fleetPoints: 0, visitedAnchors: [] };
+  const red = { id: 'r', row: 26, col: 21, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0, fleetPoints: 0, visitedAnchors: [] };
+  const roomY = { round: 2, players: [yellow], islands: cloneIslands(), anchorDecks: { yellow: { drawPile: [{ id: 'y-win', name: 'Жёлтый тест', artillery: 0, reward: 0, quiet: false }], discard: [] } } };
+  const roomR = { round: 2, players: [red], islands: cloneIslands(), anchorDecks: { red: { drawPile: [{ id: 'r-win', name: 'Красный тест', artillery: 0, reward: 0, quiet: false }], discard: [] } } };
+  assert.equal(resolveAnchorEncounter(roomY, yellow).fleetPoints, 2);
+  assert.equal(yellow.fleetPoints, 2);
+  assert.equal(resolveAnchorEncounter(roomR, red).fleetPoints, 3);
+  assert.equal(red.fleetPoints, 3);
+}
+
+// Ограничение действует на конкретную клетку: другой синий якорь того же раунда можно разыграть.
+{
+  const p = { id: 'p1', row: 5, col: 11, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0, fleetPoints: 0, visitedAnchors: [] };
+  const room = { round: 2, players: [p], islands: cloneIslands(), anchorDecks: { blue: { drawPile: [
+    { id: 'b1', name: 'Первый', artillery: 0, reward: 0, quiet: false },
+    { id: 'b2', name: 'Второй', artillery: 0, reward: 0, quiet: false },
+  ], discard: [] } } };
+  assert.equal(resolveAnchorEncounter(room, p).outcome, 'win');
+  p.row = 9; p.col = 1;
+  assert.equal(resolveAnchorEncounter(room, p).outcome, 'win');
+  assert.equal(p.fleetPoints, 2);
 }
 
 // Поражение на якоре берёт 30% казны, но минимум 2; нехватка создаёт долг.
@@ -1015,18 +1214,19 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(p.debt, 0);
 }
 
-// Ничья на якоре не даёт награды и заставляет пропустить следующий личный ход.
+// Ничья на якоре не даёт награды и не накладывает дополнительных последствий.
 {
   const p = { id: 'p1', row: 5, col: 25, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 10, debt: 0, glory: 0, visitedAnchors: [], skipTurns: 0 };
   const room = { round: 2, players: [p], islands: cloneIslands(), anchorDecks: { yellow: { drawPile: [{ id: 'tie', name: 'Ровный противник', artillery: 5, reward: 20, quiet: false }], discard: [] } } };
   const result = resolveAnchorEncounter(room, p);
   assert.equal(result.outcome, 'tie');
-  assert.equal(p.skipTurns, 1);
+  assert.equal(p.skipTurns, 0);
   assert.equal(p.ducats, 10);
   assert.equal(p.glory, 0);
+  assert.equal(p.fleetPoints || 0, 0);
 }
 
-// «На море тихо» не тратит действие и не меняет казну/славу.
+// «На море тихо» не тратит действие и не меняет казну или очки флота.
 {
   const p = { id: 'p1', row: 9, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 10, debt: 0, glory: 0, visitedAnchors: [] };
   const room = { round: 2, players: [p], islands: cloneIslands(), anchorDecks: { blue: { drawPile: [{ id: 'calm', name: 'На море тихо', artillery: null, reward: 0, quiet: true }], discard: [] } } };
@@ -1035,6 +1235,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(result.actionCost, 0);
   assert.equal(p.ducats, 10);
   assert.equal(p.glory, 0);
+  assert.equal(p.fleetPoints || 0, 0);
 }
 
 
@@ -1273,17 +1474,18 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(room.islands.find(i => i.id === 'frandia').ownerId, null);
 }
 
-// Государство исчезает, когда все его исходные острова принадлежат не-вассалам; старая вражда снимается.
+// Владение прежними островами игроками само по себе не прекращает государство:
+ // прекращение — отдельное необратимое состояние после квалифицирующего военного захвата.
 {
   const room = { islands: cloneIslands(), players: [], factionState: {} };
   const p = { id: 'p1', suzerainId: null, vassalGiftIslandId: null, enemyFactionIds: ['lionia'] };
   room.players.push(p);
   for (const id of ['landin', 'frandia', 'eidon']) room.islands.find(i => i.id === id).ownerId = 'p1';
-  assert.equal(stateExists(room, 'lionia'), false);
+  assert.equal(stateOwnedIslandIds(room, 'lionia').length, 0);
+  assert.equal(stateExists(room, 'lionia'), true);
   refreshFactionExistence(room);
-  assert.equal(room.factionState.lionia.exists, false);
-  assert.deepEqual(p.enemyFactionIds, []);
-  assert.equal(addEnmity(room, p, 'lionia').ok, false);
+  assert.equal(room.factionState.lionia.exists, true);
+  assert.deepEqual(p.enemyFactionIds, ['lionia']);
 }
 
 // Политические карты могут выбирать постройки, улучшения, трюмы и закрытые удерживаемые карты.
@@ -1301,6 +1503,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
     id: 'p1', shipClass: 'frigate', level: 2, upgrades: ['falcons', 'musketeers'],
     cargo: { goodId: 'wood', quantity: 3 }, escorts: [],
     specialCards: ['Путь сквозь туман'], legendaryCards: [], savedEventCards: [],
+    activeAssignment: { id: 'assignment-test', instanceId: 'assignment-test-1', text: 'Закрытое поручение' },
   };
   assert.equal(politicalBuildingOptions(room, p, { aboveLevelOne: true }).length, 1);
   assert.equal(politicalBuildingOptions(room, p, { fortsOnly: true }).length, 1);
@@ -1308,24 +1511,74 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(politicalCargoOptions(room, p).length, 1);
   assert.equal(discardRandomHeldCard(room, p, () => 0).discarded.name, 'Путь сквозь туман');
   assert.deepEqual(p.specialCards, []);
+  assert.equal(p.activeAssignment.id, 'assignment-test');
+  assert.equal(discardRandomHeldCard(room, p, () => 0).discarded, null);
+  assert.equal(p.activeAssignment.id, 'assignment-test');
   const removed = removePlayerBuilding(room, p, 'bogamia', 1);
   assert.equal(removed.ok, true);
   assert.equal(island.buildings.length, 1);
 }
 
 
-// Все четыре колоды поручений содержат ровно 39 карт: 10 + 10 + 9 + 10.
+// Каноническое понижение по карте вражды удаляет исходную форму I,
+// а продвинутую форму I возвращает в исходную форму III.
 {
+  const room = { islands: cloneIslands() };
+  const island = room.islands.find(i => i.id === 'bogamia');
+  island.ownerId = 'p1';
+  island.buildings = [{ type: 'farm', level: 1 }, { type: 'bank', level: 1 }];
+  const p = { id: 'p1' };
+  const removed = applyFeudBuildingDowngrade(room, p, island.id, 0);
+  assert.equal(removed.ok, true);
+  assert.equal(removed.removed, true);
+  assert.deepEqual(island.buildings, [{ type: 'bank', level: 1 }]);
+  const lowered = applyFeudBuildingDowngrade(room, p, island.id, 0);
+  assert.equal(lowered.ok, true);
+  assert.equal(lowered.removed, false);
+  assert.equal(island.buildings[0].type, 'market');
+  assert.equal(island.buildings[0].level, 3);
+}
+
+// Карта вражды может уничтожить груз из любого собственного грузового трюма,
+// включая временно неактивное сопровождение: уже погруженный груз на нём сохраняется физически.
+{
+  const room = { islands: cloneIslands() };
+  const p = {
+    id: 'p1',
+    cargo: null,
+    shipClass: 'brigantine',
+    level: 1,
+    upgrades: [],
+    escorts: [{ id: 'cargo-old', type: 'cargo', cargo: { goodId: 'wood', quantity: 5 } }],
+    levelInactiveEscortIds: ['cargo-old'],
+  };
+  const options = politicalCargoOptions(room, p);
+  assert.deepEqual(options.map(o => o.id), ['cargo-old']);
+}
+
+// Приложение Д активирует шесть отдельных колод ровно по десять карт,
+// включая две карты штрафа движения Сёгуната Мори.
+{
+  const decks = createFeudDecks(() => 0.5);
+  assert.deepEqual(Object.keys(decks), ['lionia', 'kadingir', 'mori', 'mayo', 'suniksiya', 'pirates']);
+  for (const deck of Object.values(decks)) assert.equal(deck.drawPile.length, 10);
+  assert.equal(decks.mori.drawPile.filter(card => card.type === 'movement-penalty' && card.amount === 2).length, 2);
+}
+
+// Пять колод поручений содержат ровно 49 карт: Лиония 10, Кадингир 10, Мори 10, Суниксия 10, пираты 9.
+{
+  assert.deepEqual(Object.keys(ASSIGNMENT_CARDS), ['lionia', 'kadingir', 'mori', 'suniksiya', 'pirates']);
   assert.equal(ASSIGNMENT_CARDS.lionia.length, 10);
   assert.equal(ASSIGNMENT_CARDS.kadingir.length, 10);
-  assert.equal(ASSIGNMENT_CARDS.pirates.length, 9);
+  assert.equal(ASSIGNMENT_CARDS.mori.length, 10);
   assert.equal(ASSIGNMENT_CARDS.suniksiya.length, 10);
-  assert.equal(Object.values(ASSIGNMENT_CARDS).flat().length, 39);
+  assert.equal(ASSIGNMENT_CARDS.pirates.length, 9);
+  assert.equal(Object.values(ASSIGNMENT_CARDS).flat().length, 49);
   const decks = createAssignmentDecks(() => 0.5);
-  assert.equal(decks.lionia.drawPile.length, 10);
-  assert.equal(decks.kadingir.drawPile.length, 10);
-  assert.equal(decks.pirates.drawPile.length, 9);
-  assert.equal(decks.suniksiya.drawPile.length, 10);
+  assert.deepEqual(Object.fromEntries(Object.entries(decks).map(([id, deck]) => [id, deck.drawPile.length])), {
+    lionia: 10, kadingir: 10, mori: 10, suniksiya: 10, pirates: 9,
+  });
+  for (const deck of Object.values(decks)) assert.deepEqual(deck.removed, []);
 }
 
 // Поручение засчитывает нужное событие и выплачивает полную награду Лионии.
@@ -1355,29 +1608,323 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(p.ducats, 4);
 }
 
-// Доставка засчитывается только грузом, полученным после выдачи именно текущего поручения.
+// Вольная Суниксия удерживает половину нечётной награды с округлением удержанной доли вниз.
+{
+  const card = ASSIGNMENT_CARDS.suniksiya.find(c => c.id === 'suniksiya-delivery-any');
+  const room = { assignmentDecks: createAssignmentDecks(() => 0.5) };
+  const p = { id: 'p1', ducats: 1, debt: 2, activeAssignment: { instanceId: 'odd-1', factionId: 'suniksiya', card: { ...card } } };
+  const result = completeAssignment(room, p, { type: 'delivery', goodId: 'wood', assignmentInstanceId: 'odd-1', fullHold: true });
+  assert.equal(result.ok, true);
+  assert.equal(result.gross, 5);
+  assert.equal(result.rewardShare, 0.5);
+  assert.equal(result.withheld, 2);
+  assert.equal(result.paid, 3);
+  assert.equal(result.credit.debtPaid, 2);
+  assert.equal(result.credit.net, 1);
+  assert.equal(p.debt, 0);
+  assert.equal(p.ducats, 2);
+}
+
+// Сёгунат Мори не удерживает долю награды: расчёт выплаты остаётся полным независимо от типа поручения.
+{
+  const card = { id: 'mori-reward-test', text: 'Тест выплаты Мори', reward: 7, type: 'ship-level', factionId: 'mori' };
+  const room = { assignmentDecks: { mori: { drawPile: [], discard: [], removed: [] } } };
+  const p = { id: 'p1', ducats: 0, debt: 0, activeAssignment: { instanceId: 'mori-pay-1', factionId: 'mori', card: { ...card } } };
+  const result = completeAssignment(room, p, { type: 'ship-level' });
+  assert.equal(result.ok, true);
+  assert.equal(result.rewardShare, 0);
+  assert.equal(result.withheld, 0);
+  assert.equal(result.paid, 7);
+  assert.equal(p.ducats, 7);
+}
+
+// Налог Лионии и Кадингира составляет ровно 2 дуката; недоплата не создаёт долг, а ограничивает ход двумя действиями.
+{
+  const paid = { ducats: 5, debt: 4, nextActionLimit: null };
+  const full = settleVassalTax(paid, 'lionia');
+  assert.equal(full.applies, true);
+  assert.equal(full.due, 2);
+  assert.equal(full.paid, 2);
+  assert.equal(full.underpaid, false);
+  assert.equal(full.actionLimit, null);
+  assert.equal(paid.ducats, 3);
+  assert.equal(paid.debt, 4);
+
+  const short = { ducats: 1, debt: 6, nextActionLimit: null };
+  const partial = settleVassalTax(short, 'kadingir');
+  assert.equal(partial.due, 2);
+  assert.equal(partial.paid, 1);
+  assert.equal(partial.underpaid, true);
+  assert.equal(partial.actionLimit, 2);
+  assert.equal(short.ducats, 0);
+  assert.equal(short.debt, 6);
+  assert.equal(short.nextActionLimit, 2);
+
+  const repeated = settleVassalTax(short, 'kadingir');
+  assert.equal(repeated.paid, 0);
+  assert.equal(repeated.actionLimit, 2);
+  assert.equal(short.nextActionLimit, 2);
+  assert.equal(short.debt, 6);
+}
+
+// У Суниксии, пиратов и Мори налог не взимается и лимит действий налогом не меняется.
+{
+  for (const factionId of ['suniksiya', 'pirates', 'mori']) {
+    const p = { ducats: 1, debt: 0, nextActionLimit: null };
+    const result = settleVassalTax(p, factionId);
+    assert.equal(result.applies, false, factionId);
+    assert.equal(result.due, 0, factionId);
+    assert.equal(p.ducats, 1, factionId);
+    assert.equal(p.nextActionLimit, null, factionId);
+  }
+}
+// Доставка засчитывается только полным трюмом, полученным после выдачи именно текущего поручения.
 {
   const card = ASSIGNMENT_CARDS.suniksiya.find(c => c.id === 'suniksiya-delivery-ore');
   const p = { activeAssignment: { instanceId: 'delivery-1', factionId: 'suniksiya', card: { ...card } } };
-  assert.equal(assignmentEventMatches(p, { type: 'delivery', goodId: 'ore', assignmentInstanceId: null }), false);
-  assert.equal(assignmentEventMatches(p, { type: 'delivery', goodId: 'wood', assignmentInstanceId: 'delivery-1' }), false);
-  assert.equal(assignmentEventMatches(p, { type: 'delivery', goodId: 'ore', assignmentInstanceId: 'delivery-1' }), true);
+  assert.equal(assignmentEventMatches(p, { type: 'delivery', goodId: 'ore', assignmentInstanceId: null, fullHold: true }), false);
+  assert.equal(assignmentEventMatches(p, { type: 'delivery', goodId: 'wood', assignmentInstanceId: 'delivery-1', fullHold: true }), false);
+  assert.equal(assignmentEventMatches(p, { type: 'delivery', goodId: 'ore', assignmentInstanceId: 'delivery-1', fullHold: false }), false);
+  assert.equal(assignmentEventMatches(p, { type: 'delivery', goodId: 'ore', assignmentInstanceId: 'delivery-1', fullHold: true }), true);
 }
 
-// Платная замена стоит 2 дуката и навсегда отмечает условие, чтобы его нельзя было заменить повторно.
+// Продажа сохраняет размер трюма и метку текущего поручения для проверки доставки.
 {
-  const oldCard = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-yellow-a');
-  const newCard = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-ship-level');
-  const room = { round: 2, islands: cloneIslands(), assignmentDecks: { lionia: { drawPile: [{ ...newCard }], discard: [] } } };
-  const p = { id: 'p1', suzerainId: 'lionia', level: 1, upgrades: [], ducats: 5, activeAssignment: { instanceId: 'old', factionId: 'lionia', card: { ...oldCard } }, replacedAssignmentConditions: [] };
-  assert.equal(canReplaceAssignment(p).ok, true);
-  const result = replaceAssignment(room, p, () => 0.4);
-  assert.equal(result.ok, true);
-  assert.equal(p.ducats, 3);
-  assert.equal(p.replacedAssignmentConditions.includes('anchor:yellow'), true);
-  assert.equal(p.activeAssignment.card.id, 'lionia-ship-level');
-  p.activeAssignment = { instanceId: 'again', factionId: 'lionia', card: { ...oldCard } };
-  assert.equal(canReplaceAssignment(p).ok, false);
+  const room = { islands: cloneIslands() };
+  const p = {
+    id: 'p1', row: 13, col: 13, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0,
+    cargo: { goodId: 'ore', quantity: 2, assignmentInstanceId: 'delivery-sale' },
+  };
+  const sold = sellCargo(room, p);
+  assert.equal(sold.ok, true);
+  assert.equal(sold.quantity, 2);
+  assert.equal(sold.capacity, 2);
+  assert.equal(sold.assignmentInstanceId, 'delivery-sale');
+}
+// Сокровище не засчитывается задним числом: получение и разрешение относятся к текущему поручению.
+{
+  const card = ASSIGNMENT_CARDS.suniksiya.find(c => c.id === 'suniksiya-treasure');
+  const p = { activeAssignment: { instanceId: 'treasure-1', factionId: 'suniksiya', card: { ...card } } };
+  assert.equal(assignmentEventMatches(p, { type: 'treasure-resolved', assignmentInstanceId: null }), false);
+  assert.equal(assignmentEventMatches(p, { type: 'treasure-resolved', assignmentInstanceId: 'old-assignment' }), false);
+  assert.equal(assignmentEventMatches(p, { type: 'treasure-resolved', assignmentInstanceId: 'treasure-1' }), true);
+}
+
+// Переход к верфи и дальнейшее улучшение верфи считаются действием по тому же поручению.
+{
+  const card = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-shipyard-forest');
+  const p = { activeAssignment: { instanceId: 'yard-1', factionId: 'lionia', card: { ...card } } };
+  const base = { type: 'building-action', islandId: 'test', islandResources: ['Лес'], branch: 'wood' };
+  assert.equal(assignmentEventMatches(p, { ...base, buildingType: 'sawmill', previousBuildingType: null }), false);
+  assert.equal(assignmentEventMatches(p, { ...base, buildingType: 'shipyard', previousBuildingType: 'lumbermill' }), true);
+  assert.equal(assignmentEventMatches(p, { ...base, buildingType: 'shipyard', previousBuildingType: 'shipyard' }), true);
+}
+
+// Переход крепости III в бастион остаётся улучшением защитной ветви поручения.
+{
+  const card = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-frandia-fort');
+  const p = { activeAssignment: { instanceId: 'fort-1', factionId: 'lionia', card: { ...card } } };
+  assert.equal(assignmentEventMatches(p, {
+    type: 'building-action', islandId: 'frandia', islandResources: [], buildingType: 'bastion', previousBuildingType: 'fortress', branch: 'fort',
+  }), true);
+}
+
+// Приоритет появляется только когда поручение реально можно выполнить на текущей клетке и есть действие.
+{
+  const card = ASSIGNMENT_CARDS.kadingir.find(c => c.id === 'kadingir-market');
+  const islands = cloneIslands();
+  const island = islands.find(i => i.id === 'kadingir');
+  island.ownerId = 'p1';
+  island.buildings = [{ type: 'farm', level: 1 }];
+  const [row, col] = island.cells[0];
+  const p = {
+    id: 'p1', row, col, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 100,
+    savedEventCards: [], activeAssignment: { instanceId: 'priority-build', factionId: 'kadingir', card: { ...card } },
+  };
+  const room = { round: 2, islands, players: [p], alliances: [] };
+  const required = assignmentRequiredAction(room, p, 2);
+  assert.equal(required.kind, 'building');
+  assert.equal(required.buildOptions.some(option => option.islandId === 'kadingir' && option.buildingType === 'market'), true);
+  assert.equal(assignmentRequiredAction(room, p, 0), null);
+  p.row = 13; p.col = 13;
+  assert.equal(assignmentRequiredAction(room, p, 2), null);
+}
+
+// Захват, якорь и доставка создают обязательное следующее действие только при доступной цели.
+{
+  const islands = cloneIslands();
+  const asigoriy = islands.find(i => i.id === 'asigoriy');
+  const captureCard = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-asigoriy');
+  const p = {
+    id: 'p1', row: asigoriy.cells[0][0], col: asigoriy.cells[0][1],
+    shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 20, cargo: null,
+    savedEventCards: [], visitedAnchors: [], activeAssignment: { instanceId: 'capture-1', factionId: 'lionia', card: { ...captureCard } },
+  };
+  const room = { round: 2, islands, players: [p], alliances: [] };
+  assert.deepEqual(assignmentRequiredAction(room, p, 1).islandIds, ['asigoriy']);
+
+  const anchorCard = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-yellow-a');
+  const [ar, ac] = ANCHORS.yellow.cells[0];
+  p.row = ar; p.col = ac;
+  p.activeAssignment = { instanceId: 'anchor-1', factionId: 'lionia', card: { ...anchorCard } };
+  assert.equal(assignmentRequiredAction(room, p, 1).kind, 'anchor');
+  p.visitedAnchors = [ar + ',' + ac];
+  assert.equal(assignmentRequiredAction(room, p, 1), null);
+
+  const deliveryCard = ASSIGNMENT_CARDS.suniksiya.find(c => c.id === 'suniksiya-delivery-ore');
+  p.row = 13; p.col = 13; p.visitedAnchors = [];
+  p.activeAssignment = { instanceId: 'delivery-current', factionId: 'suniksiya', card: { ...deliveryCard } };
+  p.cargo = { goodId: 'ore', quantity: 2, assignmentInstanceId: 'delivery-current' };
+  const delivery = assignmentRequiredAction(room, p, 1);
+  assert.equal(delivery.kind, 'delivery');
+  assert.deepEqual(delivery.holdIds, ['main']);
+  p.cargo.assignmentInstanceId = 'old';
+  assert.equal(assignmentRequiredAction(room, p, 1), null);
+}
+
+// Отложенное сокровище имеет приоритет только если было получено уже при текущем поручении.
+{
+  const card = ASSIGNMENT_CARDS.suniksiya.find(c => c.id === 'suniksiya-treasure');
+  const p = {
+    id: 'p1', row: 13, col: 13, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], cargo: null,
+    savedEventCards: [{ id: 'treasure-new', kind: 'treasure-cargo', assignmentInstanceId: 'treasure-current' }],
+    activeAssignment: { instanceId: 'treasure-current', factionId: 'suniksiya', card: { ...card } },
+  };
+  const room = { round: 2, islands: cloneIslands(), players: [p], alliances: [] };
+  assert.deepEqual(assignmentRequiredAction(room, p, 1).savedCardIds, ['treasure-new']);
+  p.savedEventCards[0].assignmentInstanceId = 'old';
+  assert.equal(assignmentRequiredAction(room, p, 1), null);
+}
+
+// Одиночное поручение Мори выполняется завершением навигации у нужного берега;
+// владение островом, атака и разовая награда для этого не нужны.
+{
+  const card = ASSIGNMENT_CARDS.mori.find(c => c.id === 'mori-1');
+  const islands = cloneIslands();
+  const target = islands.find(i => i.id === card.islandId);
+  target.ownerId = 'other-player';
+  const p = { id: 'p1', row: MAP_META.startCell[0], col: MAP_META.startCell[1], ducats: 0, debt: 0, activeAssignment: null };
+  const room = { round: 3, islands, players: [p], assignmentDecks: { mori: { drawPile: [{ ...card }], discard: [], removed: [] } } };
+  const issued = issueAssignment(room, p, 'mori', () => 0.5);
+  assert.equal(issued.ok, true);
+  assert.equal(issued.assignment.progress.departureRequired, false);
+  const from = { row: p.row, col: p.col };
+  [p.row, p.col] = target.cells[0];
+  const visit = advanceMoriAssignmentNavigation(room, p, from);
+  assert.equal(visit.completed, true);
+  assert.equal(visit.completionEvent.type, 'mori-visit-island');
+  const completed = completeAssignment(room, p, visit.completionEvent);
+  assert.equal(completed.ok, true);
+  assert.equal(completed.gross, 8);
+  assert.equal(completed.withheld, 0);
+  assert.equal(p.ducats, 8);
+  assert.equal(target.ownerId, 'other-player');
+}
+
+// Если карта выдана уже на береговой клетке цели, стояние на месте не засчитывается:
+// сначала нужно покинуть все клетки этого берега, затем завершить последующую навигацию после возврата.
+{
+  const card = ASSIGNMENT_CARDS.mori.find(c => c.id === 'mori-2');
+  const islands = cloneIslands();
+  const target = islands.find(i => i.id === card.islandId);
+  const p = { id: 'p1', row: target.cells[0][0], col: target.cells[0][1], ducats: 0, debt: 0, activeAssignment: null };
+  const room = { round: 3, islands, players: [p], assignmentDecks: { mori: { drawPile: [{ ...card }], discard: [], removed: [] } } };
+  const issued = issueAssignment(room, p, 'mori', () => 0.5);
+  assert.equal(issued.assignment.progress.departureRequired, true);
+  assert.equal(issued.assignment.progress.departureSatisfied, false);
+
+  const standing = advanceMoriAssignmentNavigation(room, p, { row: p.row, col: p.col });
+  assert.equal(standing.progressed, false);
+  assert.equal(standing.completionEvent, null);
+
+  const [awayRow, awayCol] = MAP_META.startCell;
+  p.row = awayRow; p.col = awayCol;
+  const left = noteMoriAssignmentDeparture(room, p);
+  assert.equal(left.changed, true);
+  assert.equal(p.activeAssignment.progress.departureSatisfied, true);
+
+  const from = { row: p.row, col: p.col };
+  [p.row, p.col] = target.cells[0];
+  const returned = advanceMoriAssignmentNavigation(room, p, from);
+  assert.equal(returned.completed, true);
+  assert.equal(returned.completionEvent.assignmentInstanceId, p.activeAssignment.instanceId);
+}
+
+// Двухточечный маршрут Мори идёт строго по порядку; второй пункт до первого ничего не даёт.
+// Отметка первого пункта хранится внутри activeAssignment и переживает сериализацию сохранения.
+{
+  const card = ASSIGNMENT_CARDS.mori.find(c => c.id === 'mori-9');
+  const islands = cloneIslands();
+  const firstIsland = islands.find(i => i.id === card.route[0].islandId);
+  const secondIsland = islands.find(i => i.id === card.route[1].islandId);
+  let p = { id: 'p1', row: MAP_META.startCell[0], col: MAP_META.startCell[1], ducats: 0, debt: 0, activeAssignment: null };
+  const room = { round: 4, islands, players: [p], assignmentDecks: { mori: { drawPile: [{ ...card }], discard: [], removed: [] } } };
+  assert.equal(issueAssignment(room, p, 'mori', () => 0.5).ok, true);
+
+  let from = { row: p.row, col: p.col };
+  [p.row, p.col] = secondIsland.cells[0];
+  const wrongOrder = advanceMoriAssignmentNavigation(room, p, from);
+  assert.equal(wrongOrder.progressed, false);
+  assert.equal(p.activeAssignment.progress.nextStopIndex, 0);
+
+  from = { row: p.row, col: p.col };
+  [p.row, p.col] = firstIsland.cells[0];
+  const first = advanceMoriAssignmentNavigation(room, p, from);
+  assert.equal(first.progressed, true);
+  assert.equal(first.completed, false);
+  assert.equal(first.stop.islandId, 'renaika');
+  assert.equal(p.activeAssignment.progress.nextStopIndex, 1);
+  assert.equal(p.activeAssignment.progress.completedStopCount, 1);
+
+  p = JSON.parse(JSON.stringify(p));
+  room.players = [p];
+  assert.equal(p.activeAssignment.progress.completedStops[0].islandId, 'renaika');
+  assert.equal(p.activeAssignment.progress.nextStopIndex, 1);
+
+  from = { row: p.row, col: p.col };
+  [p.row, p.col] = secondIsland.cells[0];
+  const second = advanceMoriAssignmentNavigation(room, p, from);
+  assert.equal(second.completed, true);
+  assert.equal(second.completionEvent.completedStopCount, 2);
+  const completed = completeAssignment(room, p, second.completionEvent);
+  assert.equal(completed.ok, true);
+  assert.equal(completed.gross, 16);
+  assert.equal(p.ducats, 16);
+}
+
+// Второй канонический маршрут Мори умеет завершаться в Цитадели без отдельного действия.
+{
+  const card = ASSIGNMENT_CARDS.mori.find(c => c.id === 'mori-10');
+  const islands = cloneIslands();
+  const firstIsland = islands.find(i => i.id === card.route[0].islandId);
+  let citadel = null;
+  for (let row = 0; row < MAP_META.rows && !citadel; row++) {
+    for (let col = 0; col < MAP_META.cols; col++) {
+      if (isCitadelCell(row, col)) { citadel = [row, col]; break; }
+    }
+  }
+  assert.ok(citadel);
+  const p = { id: 'p1', row: MAP_META.startCell[0], col: MAP_META.startCell[1], ducats: 0, debt: 0, activeAssignment: null };
+  const room = { round: 4, islands, players: [p], assignmentDecks: { mori: { drawPile: [{ ...card }], discard: [], removed: [] } } };
+  assert.equal(issueAssignment(room, p, 'mori', () => 0.5).ok, true);
+
+  let from = { row: p.row, col: p.col };
+  [p.row, p.col] = firstIsland.cells[0];
+  const first = advanceMoriAssignmentNavigation(room, p, from);
+  assert.equal(first.progressed, true);
+  assert.equal(first.completed, false);
+
+  from = { row: p.row, col: p.col };
+  [p.row, p.col] = citadel;
+  const finish = advanceMoriAssignmentNavigation(room, p, from);
+  assert.equal(finish.completed, true);
+  assert.equal(finish.stop.mapObjectId, 'citadel');
+  assert.equal(finish.completionEvent.type, 'mori-visit-route');
+  assert.equal(assignmentRequiredAction(room, p, 3), null);
+}
+// Платная замена поручения удалена из активного runtime.
+{
+  assert.equal(BALANCE.assignmentReplacementPrice, undefined);
 }
 
 // При выдаче карта захвата уже принадлежащего игроку острова пропускается.
@@ -1391,8 +1938,102 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const result = issueAssignment(room, p, 'lionia', () => 0.3);
   assert.equal(result.ok, true);
   assert.equal(result.assignment.card.id, 'lionia-ship-level');
+  assert.equal(room.assignmentDecks.lionia.drawPile.some(card => card.id === 'lionia-asigoriy'), true);
+  assert.equal(room.assignmentDecks.lionia.removed.length, 0);
 }
 
+// Необратимо невозможная карта удаляется из колоды и не возвращается в обычный цикл.
+{
+  const valid = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-ship-level');
+  const broken = { id: 'broken-capture', type: 'capture-island', islandId: 'missing-island', text: 'broken', reward: 0, factionId: 'lionia' };
+  const room = { round: 2, islands: cloneIslands(), assignmentDecks: { lionia: { drawPile: [broken, { ...valid }], discard: [] } } };
+  const p = { id: 'p1', level: 1, upgrades: [], activeAssignment: null };
+  const result = issueAssignment(room, p, 'lionia', () => 0.5);
+  assert.equal(result.ok, true);
+  assert.equal(result.assignment.card.id, valid.id);
+  assert.deepEqual(room.assignmentDecks.lionia.removed.map(card => card.id), ['broken-capture']);
+}
+
+// При одной выдаче Посольство просматривает доступные карты один раз:
+// временно недопустимая карта возвращается после выдачи, а сброс при необходимости перемешивается в колоду.
+{
+  const ownCapture = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-asigoriy');
+  const first = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-ship-level');
+  const second = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-yellow-a');
+  const islands = cloneIslands();
+  islands.find(i => i.id === 'asigoriy').ownerId = 'p1';
+  const room = {
+    round: 2,
+    islands,
+    assignmentDecks: { lionia: { drawPile: [{ ...ownCapture }, { ...first }], discard: [{ ...second }], removed: [] } },
+  };
+  const p = { id: 'p1', level: 1, upgrades: [], activeAssignment: null };
+  const offered = offerAssignmentCards(room, p, 'lionia', 2, () => 0.5);
+  assert.deepEqual(offered.cards.map(card => card.id), [first.id, second.id]);
+  assert.equal(room.assignmentDecks.lionia.drawPile.filter(card => card.id === ownCapture.id).length, 1);
+  assert.equal(room.assignmentDecks.lionia.removed.length, 0);
+}
+
+// Поручение на уже достигший максимум здания временно пропускается для этого игрока.
+{
+  const maxed = ASSIGNMENT_CARDS.kadingir.find(c => c.id === 'kadingir-market');
+  const next = ASSIGNMENT_CARDS.kadingir.find(c => c.id === 'kadingir-ship-level');
+  const islands = cloneIslands();
+  const island = islands.find(i => i.id === 'kadingir');
+  island.ownerId = 'p1';
+  island.buildings = [{ type: 'bank', level: 3 }, { type: 'bank', level: 3 }];
+  const room = { round: 2, islands, assignmentDecks: { kadingir: { drawPile: [{ ...maxed }, { ...next }], discard: [], removed: [] } } };
+  const p = { id: 'p1', level: 1, upgrades: [], activeAssignment: null };
+  const result = issueAssignment(room, p, 'kadingir', () => 0.5);
+  assert.equal(result.ok, true);
+  assert.equal(result.assignment.card.id, next.id);
+  assert.equal(room.assignmentDecks.kadingir.drawPile.some(card => card.id === maxed.id), true);
+}
+
+// Одновременно у игрока может быть только одно активное поручение.
+{
+  const room = { round: 2, islands: cloneIslands(), assignmentDecks: createAssignmentDecks(() => 0.5) };
+  const p = { id: 'p1', level: 1, upgrades: [], activeAssignment: null };
+  assert.equal(issueAssignment(room, p, 'lionia', () => 0.5).ok, true);
+  const second = issueAssignment(room, p, 'lionia', () => 0.5);
+  assert.equal(second.ok, false);
+  assert.equal(second.error, 'У игрока уже есть активное поручение.');
+}
+
+// Совместимость 5.8 переводит старое состояние поручений без потери остального состояния комнаты.
+{
+  const moriCard = ASSIGNMENT_CARDS.mori.find(c => c.id === 'mori-1');
+  const islands = cloneIslands();
+  const target = islands.find(i => i.id === moriCard.islandId);
+  const p = {
+    id: 'p1', row: target.cells[0][0], col: target.cells[0][1], ducats: 4, debt: 0,
+    replacedAssignmentConditions: ['old-paid-condition'],
+    activeAssignment: { factionId: 'mori', card: { ...moriCard }, issuedRound: 3 },
+  };
+  const room = {
+    round: 6, islands, players: [p],
+    assignmentDecks: { lionia: { drawPile: [], discard: [] } },
+    pendingAssignmentChoice: { id: 'old-paid-choice', playerId: 'p1', factionId: 'mori' },
+    eventPhase: { active: true, stage: 'assignment-replace', assignmentQueue: [{ playerId: 'p1', factionId: 'mori' }], replacementQueue: ['p1'], replacementIndex: 0 },
+  };
+  const result = normalizeAssignmentCompatibility(room, () => 0.5);
+  assert.equal(result.changed, true);
+  assert.equal(result.resumeEventPhase, true);
+  assert.deepEqual(Object.keys(room.assignmentDecks), ['lionia','kadingir','mori','suniksiya','pirates']);
+  assert.equal(room.assignmentDecks.mori.drawPile.length, 9); // активная карта не дублируется в восстановленной колоде
+  assert.deepEqual(room.assignmentDecks.lionia.removed, []);
+  assert.equal(Object.hasOwn(p, 'replacedAssignmentConditions'), false);
+  assert.match(p.activeAssignment.instanceId, /^legacy:p1:mori:mori-1:/);
+  assert.equal(p.activeAssignment.progress.kind, 'mori-service');
+  assert.equal(p.activeAssignment.progress.departureRequired, true);
+  assert.equal(p.activeAssignment.progress.departureSatisfied, false);
+  assert.equal(room.pendingAssignmentChoice, null);
+  assert.equal(room.eventPhase.stage, 'assignment');
+  assert.equal(room.eventPhase.assignmentIndex, room.eventPhase.assignmentQueue.length);
+  assert.equal(Object.hasOwn(room.eventPhase, 'replacementQueue'), false);
+  assert.equal(Object.hasOwn(room.eventPhase, 'replacementIndex'), false);
+  assert.equal(normalizeAssignmentCompatibility(room, () => 0.5).changed, false);
+}
 // Координаты морских легендарных мест доступны серверу для поручений посещения.
 {
   assert.equal(legendaryPlaceAt(24, 6)?.id, 'kraken');
@@ -1401,84 +2042,114 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 }
 
 
-// Итоговые призы полного подчинения заданы для всех пяти политических государств.
+// Все шесть государств присутствуют в политическом runtime. Итоговые призы — только денежные;
+// авторское решение фиксирует итоговый приз Кадингира в 50 дукатов.
 {
-  assert.deepEqual(FACTIONS.lionia.fullConquestPrize.preserveBuildings.map(x => x.type), ['market', 'market']);
-  assert.equal(FACTIONS.lionia.fullConquestPrize.razeDucats, 60);
-  assert.deepEqual(FACTIONS.kadingir.fullConquestPrize.preserveBuildings.map(x => x.type), ['bank', 'market']);
-  assert.equal(FACTIONS.kadingir.fullConquestPrize.razeDucats, 50);
-  assert.equal(FACTIONS.mayo.fullConquestPrize.razeDucats, 10);
-  assert.equal(FACTIONS.suniksiya.fullConquestPrize.razeDucats, 30);
-  assert.equal(FACTIONS.pirates.fullConquestPrize.razeDucats, 20);
+  assert.deepEqual(
+    ['lionia','kadingir','mori','mayo','suniksiya','pirates'].filter(id => Boolean(FACTIONS[id])),
+    ['lionia','kadingir','mori','mayo','suniksiya','pirates']
+  );
+  assert.deepEqual(
+    [FACTIONS.lionia.fullConquestPrize.ducats, FACTIONS.kadingir.fullConquestPrize.ducats, FACTIONS.mori.fullConquestPrize.ducats, FACTIONS.mayo.fullConquestPrize.ducats, FACTIONS.suniksiya.fullConquestPrize.ducats, FACTIONS.pirates.fullConquestPrize.ducats],
+    [60,50,40,10,30,20]
+  );
+  assert.equal(FACTIONS.kadingir.fullConquestPrize.amountUnresolved, undefined);
+  assert.equal(FACTIONS.lionia.fullConquestPrize.preserveBuildings, undefined);
+  assert.equal(FACTIONS.lionia.fullConquestPrize.razeDucats, undefined);
 }
 
-// Полное подчинение требует, чтобы все исходные острова фракции принадлежали одному игроку,
-// и один и тот же итоговый приз нельзя получить второй раз.
+// Последний остров, которым ещё владеет само государство, прекращает Лионию и даёт приз инициатору,
+// даже если прежние острова Лионии принадлежат другим игрокам. Вассал освобождается, вражда исчезает.
 {
-  const room = { islands: cloneIslands(), players: [{ id: 'p1' }], factionState: {}, round: 3 };
-  const p = room.players[0];
-  for (const id of ['landin', 'frandia']) room.islands.find(i => i.id === id).ownerId = p.id;
-  assert.equal(fullSubjugationController(room, 'lionia'), null);
-  room.islands.find(i => i.id === 'eidon').ownerId = p.id;
-  assert.equal(fullSubjugationController(room, 'lionia'), p.id);
-  const first = claimFullSubjugationPrize(room, p, 'lionia', 'preserve');
-  assert.equal(first.triggered, true);
-  assert.equal(first.buildings.length, 2);
-  assert.equal(room.factionState.lionia.fullConquestClaimed, true);
-  assert.equal(claimFullSubjugationPrize(room, p, 'lionia', 'preserve'), null);
-}
-
-// Кадингир: при сохранении Банк I карточки острова совпадает с Банком I итогового приза,
-// поэтому второй такой банк не создаётся; остаётся разместить только Рынок I.
-{
-  const room = { islands: cloneIslands(), players: [], factionState: {}, round: 2, legendaryDeck: createLegendaryDeck() };
-  const island = room.islands.find(i => i.id === 'kadingir');
-  island.army = 0;
-  const p = { id: 'p1', row: island.cells[0][0], col: island.cells[0][1], shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0, glory: 0, enemyFactionIds: [] };
-  room.players.push(p);
-  const result = assaultIsland(room, p, island, 'preserve');
-  assert.equal(result.ok, true);
+  const room = { islands: cloneIslands(), players: [], factionState: {}, round: 3, legendaryDeck: createLegendaryDeck() };
+  const landin = room.islands.find(i => i.id === 'landin');
+  const frandia = room.islands.find(i => i.id === 'frandia');
+  const eidon = room.islands.find(i => i.id === 'eidon');
+  landin.ownerId = 'other';
+  frandia.ownerId = 'vassal';
+  eidon.army = 0;
+  eidon.buildings = [{ type: 'farm', level: 1 }, { type: 'market', level: 1 }];
+  const attacker = { id: 'attacker', row: eidon.cells[0][0], col: eidon.cells[0][1], shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0, enemyFactionIds: ['lionia'] };
+  const vassal = { id: 'vassal', suzerainId: 'lionia', vassalGiftIslandId: 'frandia', enemyFactionIds: [], activeAssignment: null };
+  const enemy = { id: 'enemy', suzerainId: null, vassalGiftIslandId: null, enemyFactionIds: ['lionia'] };
+  room.players.push(attacker, vassal, enemy, { id: 'other' });
+  refreshFactionExistence(room);
+  assert.deepEqual(stateOwnedIslandIds(room, 'lionia'), ['eidon']);
+  const result = assaultIsland(room, attacker, eidon);
   assert.equal(result.outcome, 'attacker');
-  assert.equal(p.ducats, 30);
-  assert.equal(island.buildings.filter(b => b.type === 'bank').length, 1);
   assert.equal(result.statePrize.triggered, true);
-  assert.deepEqual(result.statePrize.deduplicatedBuildings.map(b => b.type), ['bank']);
-  assert.deepEqual(result.statePrize.buildings.map(b => b.type), ['market']);
-  const options = prizeBuildingPlacementOptions(room, p, result.statePrize.buildings[0]);
-  assert.equal(options.some(o => o.islandId === 'kadingir'), false);
-  const placed = placePrizeBuilding(room, p, 'kadingir', result.statePrize.buildings[0], { factionId: 'kadingir' });
-  assert.equal(placed.ok, false);
-  assert.equal(island.buildings.filter(b => b.type === 'market').length, 0);
+  assert.equal(result.statePrize.ducats, 60);
+  assert.equal(attacker.ducats, 60); // 30 острова не складываются с итоговыми 60
+  assert.equal(result.captureRetention, null);
+  assert.equal(eidon.buildings.length, 2); // государственные постройки не делятся пополам как постройки игрока
+  assert.equal(room.factionState.lionia.ceased, true);
+  assert.equal(stateExists(room, 'lionia'), false);
+  refreshFactionExistence(room);
+  assert.equal(vassal.suzerainId, null);
+  assert.equal(frandia.ownerId, 'vassal'); // распад государства не отбирает подаренный остров
+  assert.deepEqual(attacker.enemyFactionIds, []);
+  assert.deepEqual(enemy.enemyFactionIds, []);
+  assert.equal(addEnmity(room, enemy, 'lionia').ok, false);
 }
 
-// Кадингир: при разорении последнего острова итоговые 50 дукатов являются общей денежной
-// добычей финального захвата, а не складываются с 30 дукатами карточки острова.
+// Мирная передача единственного острова вассалу не прекращает государство и не даёт итоговый приз.
+{
+  const room = { islands: cloneIslands(), players: [], factionState: {}, round: 2 };
+  const island = room.islands.find(i => i.id === 'kadingir');
+  const p = { id: 'p1', row: island.cells[0][0], col: island.cells[0][1], suzerainId: null, vassalGiftIslandId: null, enemyFactionIds: [], ducats: 0 };
+  room.players.push(p);
+  assert.equal(enterVassalage(room, p, 'kadingir').ok, true);
+  assert.equal(island.ownerId, p.id);
+  assert.equal(stateOwnedIslandIds(room, 'kadingir').length, 0);
+  assert.equal(stateExists(room, 'kadingir'), true);
+  assert.equal(room.factionState.kadingir?.fullConquestClaimed || false, false);
+}
+
+// Действующий вассал блокирует второго даже после утраты подаренного острова.
+{
+  const room = { islands: cloneIslands(), players: [], factionState: {} };
+  const landin = room.islands.find(i => i.id === 'landin');
+  const first = { id: 'a', row: landin.cells[0][0], col: landin.cells[0][1], suzerainId: null, vassalGiftIslandId: null, enemyFactionIds: [] };
+  const second = { id: 'b', row: landin.cells[0][0], col: landin.cells[0][1], suzerainId: null, vassalGiftIslandId: null, enemyFactionIds: [] };
+  room.players.push(first, second);
+  assert.equal(enterVassalage(room, first, 'lionia').ok, true);
+  room.islands.find(i => i.id === 'frandia').ownerId = 'third';
+  assert.equal(canEnterVassalage(room, second, 'lionia').ok, false);
+}
+
+// Сёгунат Мори участвует в подданстве и имеет свою десятикарточную колоду поручений в 5.8.1.
+{
+  const room = { islands: cloneIslands(), players: [], factionState: {} };
+  const mori = room.islands.find(i => i.id === 'mori');
+  const p = { id: 'p1', row: mori.cells[0][0], col: mori.cells[0][1], suzerainId: null, vassalGiftIslandId: null, enemyFactionIds: [] };
+  room.players.push(p);
+  const joined = enterVassalage(room, p, 'mori');
+  assert.equal(joined.ok, true);
+  assert.equal(joined.gift.id, 'miyosi');
+  assert.equal(p.suzerainId, 'mori');
+  assert.equal(ASSIGNMENT_CARDS.mori.length, 10);
+}
+
+// Авторское решение по Кадингиру: итоговый приз равен 50 дукатам.
+// Он заменяет денежную награду карточки последнего государственного острова и не складывается с её 30 дукатами.
 {
   const room = { islands: cloneIslands(), players: [], factionState: {}, round: 2, legendaryDeck: createLegendaryDeck() };
   const island = room.islands.find(i => i.id === 'kadingir');
   island.army = 0;
   const p = { id: 'p1', row: island.cells[0][0], col: island.cells[0][1], shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0, glory: 0, enemyFactionIds: [] };
   room.players.push(p);
-  const result = assaultIsland(room, p, island, 'raze');
+  const result = assaultIsland(room, p, island);
   assert.equal(result.ok, true);
   assert.equal(result.outcome, 'attacker');
+  assert.equal(result.statePrize.triggered, true);
+  assert.equal(result.statePrize.amountUnresolved, false);
   assert.equal(result.statePrize.ducats, 50);
+  assert.equal(result.statePrize.playerId, p.id);
   assert.equal(p.ducats, 50);
+  assert.equal(result.rewardNotes.some(note => note.includes('итоговый приз Царство Кадингир: +50 дукатов')), true);
+  assert.equal(island.buildings.length, 0); // legacy Банк I больше не подмешивается к карточке Кадингира
+  assert.equal(stateExists(room, 'kadingir'), false);
 }
-
-// Призовая постройка игнорирует обычные требования фермы/форта и положения корабля,
-// но всё равно обязана помещаться по площади и пределу ветви.
-{
-  const room = { islands: cloneIslands() };
-  const island = room.islands.find(i => i.id === 'bogamia');
-  island.ownerId = 'p1';
-  island.buildings = [{ type: 'market', level: 1 }, { type: 'market', level: 1 }];
-  const p = { id: 'p1', row: 0, col: 0 };
-  assert.equal(canPlacePrizeBuilding(room, p, island, { type: 'market', level: 1 }).ok, false);
-  island.buildings = [];
-  assert.equal(canPlacePrizeBuilding(room, p, island, { type: 'bank', level: 1 }).ok, true);
-}
-
 
 // Крепость III превращается в бастион на той же клетке и требует свободное место
 // поддержки каменотёсного двора. Бастион даёт канонические +10 защиты.
@@ -1655,7 +2326,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   formLandCompany(room, p, home.id);
   const enemy = room.islands.find(i => i.id === 'adia');
   p.row = enemy.cells[0][0]; p.col = enemy.cells[0][1];
-  const loss = assaultIsland(room, p, enemy, 'preserve');
+  const loss = assaultIsland(room, p, enemy);
   assert.equal(loss.ok, true);
   assert.equal(loss.outcome, 'defender');
   assert.equal(p.landCompany, null);
@@ -1664,7 +2335,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const weak = room2.islands.find(i => i.id === 'agmor');
   const p2 = { id: 'p2', row: weak.cells[0][0], col: weak.cells[0][1], shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, cargo: null, landCompany: { army: 3, arsenalLevel: 1 } };
   room2.players.push(p2);
-  const win = assaultIsland(room2, p2, weak, 'preserve');
+  const win = assaultIsland(room2, p2, weak);
   assert.equal(win.outcome, 'attacker');
   assert.equal(p2.landCompany.army, 3);
 }
@@ -2206,6 +2877,52 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(has(reachableCells(frigate, 2), 5, 6), false);
   const withSleds = { ...frigate, level: 2, upgrades: ['portageSleds'] };
   assert.equal(has(reachableCells(withSleds, 2), 5, 6), true);
+}
+
+
+// Финальный smoke 5.9: активные потребители этапа 5 работают совместно в одном runtime.
+// Союзный морской бой расходует единый предел каждого атакующего, начисляет очки флота;
+// исчезновение государства выдаёт итоговый приз; налоговая санкция использует тот же политический профиль.
+{
+  const battleRoom = { round: 2, islands: cloneIslands(), players: [], alliances: [] };
+  const a = { id: 'stage5-a', name: 'A', row: 10, col: 10, shipClass: 'frigate', level: 2, upgrades: [], escorts: [], ducats: 5, brokenAlliesThisTurn: [] };
+  const ally = { id: 'stage5-ally', name: 'Ally', row: 9, col: 10, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 0, brokenAlliesThisTurn: [] };
+  const target = { id: 'stage5-target', name: 'Target', row: 10, col: 10, shipClass: 'brigantine', level: 3, upgrades: [], escorts: [], ducats: 3, brokenAlliesThisTurn: [] };
+  battleRoom.players = [a, ally, target];
+  assert.equal(addAlliance(battleRoom, a.id, ally.id), true);
+  const sea = jointSeaBattle(battleRoom, a, target, [ally.id], []);
+  assert.equal(sea.ok, true);
+  assert.equal(sea.outcome, 'attacker');
+  assert.equal(a.fleetPoints, 2);
+  assert.equal(ally.fleetPoints, 2);
+  assert.equal(canAttackPlayerThisRound(battleRoom, a, target.id).ok, false);
+  assert.equal(canAttackPlayerThisRound(battleRoom, ally, target.id).ok, false);
+  assert.equal(jointSeaBattle(battleRoom, a, target, [ally.id], []).ok, false);
+
+  const stateRoom = { islands: cloneIslands(), players: [], factionState: {}, round: 2, legendaryDeck: createLegendaryDeck() };
+  const kadingir = stateRoom.islands.find(i => i.id === 'kadingir');
+  kadingir.army = 0;
+  const conqueror = {
+    id: 'stage5-conqueror', row: kadingir.cells[0][0], col: kadingir.cells[0][1],
+    shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0, enemyFactionIds: [],
+  };
+  stateRoom.players = [conqueror];
+  const conquest = assaultIsland(stateRoom, conqueror, kadingir);
+  assert.equal(conquest.outcome, 'attacker');
+  assert.equal(conquest.statePrize.triggered, true);
+  assert.equal(conquest.statePrize.ducats, 50);
+  assert.equal(conqueror.ducats, 50);
+  assert.equal(stateExists(stateRoom, 'kadingir'), false);
+
+  const taxed = { ducats: 1, debt: 0, nextActionLimit: null };
+  const tax = settleVassalTax(taxed, 'lionia');
+  assert.equal(tax.underpaid, true);
+  assert.equal(tax.paid, 1);
+  assert.equal(taxed.nextActionLimit, 2);
+
+  const assignmentDecks = createAssignmentDecks(() => 0.5);
+  assert.equal(Object.values(assignmentDecks).reduce((sum, deck) => sum + deck.drawPile.length, 0), 49);
+  assert.deepEqual(Object.keys(createFeudDecks(() => 0.5)), ['lionia','kadingir','mori','mayo','suniksiya','pirates']);
 }
 
 console.log('game-logic tests: OK');
