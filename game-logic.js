@@ -1965,8 +1965,9 @@ function loseShipLevel(room, player) {
     const cargoDiscarded = adjustment.upgradeChoiceNeeded ? 0 : trimMainCargoToCapacity(player);
     return { before, after: player.level, returnedToStart: false, cargoDiscarded, adjustment };
   }
-  player.row = 0;
-  player.col = 0;
+  const [startRow, startCol] = MAP_META.startCell;
+  player.row = startRow;
+  player.col = startCol;
   return { before: 1, after: 1, returnedToStart: true, cargoDiscarded: 0, adjustment: fleetAdjustmentNeeds(player) };
 }
 

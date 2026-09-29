@@ -114,7 +114,7 @@ const {
   completeAssignment,
   legendaryPlaceAt,
 } = require('../game-logic');
-const { BALANCE, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS } = require('../game-data');
+const { BALANCE, MAP_META, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS } = require('../game-data');
 
 function has(cells, row, col) { return cells.some(c => c.row === row && c.col === col); }
 
@@ -1687,6 +1687,86 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   };
   assert.equal(fleetArtillery(room, old), shipStats(old).artillery + ESCORTS.landin.artillery);
   assert.equal(old.escorts[0].cargo.quantity, 5);
+}
+
+// Этап 3.5: все переходы VI→V→IV→III→II→I теряют ровно один уровень,
+// а обязательная потеря на I возвращает на общую стартовую клетку.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  for (let level = 6; level >= 2; level--) {
+    const p = {
+      id: `loss-${level}`, row: 9, col: 9, shipClass: 'brigantine', level,
+      ducats: 0, upgrades: [], disabledUpgradeIds: [], escorts: [], levelInactiveEscortIds: [], cargo: null,
+    };
+    const before = shipStats(p);
+    const result = loseShipLevel(room, p);
+    assert.equal(result.before, level);
+    assert.equal(result.after, level - 1);
+    assert.equal(result.returnedToStart, false);
+    assert.equal(p.level, level - 1);
+    assert.equal(shipStats(p).artillery, before.artillery - 1);
+  }
+
+  const first = {
+    id: 'loss-I', row: 9, col: 9, shipClass: 'brigantine', level: 1,
+    ducats: 0, upgrades: [], disabledUpgradeIds: [], escorts: [], levelInactiveEscortIds: [], cargo: null,
+  };
+  const returned = loseShipLevel(room, first);
+  assert.equal(returned.returnedToStart, true);
+  assert.equal(first.level, 1);
+  assert.deepEqual([first.row, first.col], MAP_META.startCell);
+}
+
+// Если при потере уровня выбора улучшений не требуется, основной трюм сразу
+// сокращается до новой вместимости. Сбрасывается только излишек.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const p = {
+    id: 'cargo-loss', row: 7, col: 7, shipClass: 'carrack', level: 2,
+    ducats: 0, upgrades: [], disabledUpgradeIds: [], escorts: [], levelInactiveEscortIds: [],
+    cargo: { goodId: 'wood', quantity: 6 },
+  };
+  const loss = loseShipLevel(room, p);
+  assert.equal(loss.after, 1);
+  assert.equal(loss.cargoDiscarded, 1);
+  assert.equal(shipCargoCapacity(p), 5);
+  assert.equal(p.cargo.quantity, 5);
+}
+
+// Полная матрица врождённой проходимости и соответствующих навигационных улучшений.
+// Неподходящий класс без нужной возможности препятствие не проходит.
+{
+  const cases = [
+    { passability: 'reef', nativeClass: 'frigate', upgrade: 'reefPilot', from: [6,6], to: [6,7], distance: 1 },
+    { passability: 'shoal', nativeClass: 'brigantine', upgrade: 'leadLine', from: [5,18], to: [4,18], distance: 1 },
+    { passability: 'ice', nativeClass: 'carrack', upgrade: 'iceStem', from: [22,1], to: [23,1], distance: 1 },
+    { passability: 'land1', nativeClass: 'caravel', upgrade: 'portageSleds', from: [5,4], to: [5,6], distance: 2 },
+  ];
+  const classes = ['brigantine','frigate','caravel','carrack'];
+  for (const item of cases) {
+    for (const shipClass of classes) {
+      const plain = { row: item.from[0], col: item.from[1], shipClass, level: 2, upgrades: [] };
+      assert.equal(
+        has(reachableCells(plain, item.distance), item.to[0], item.to[1]),
+        shipClass === item.nativeClass,
+        `${shipClass} / ${item.passability}`
+      );
+      if (shipClass !== item.nativeClass) {
+        const improved = { ...plain, upgrades: [item.upgrade] };
+        assert.equal(has(reachableCells(improved, item.distance), item.to[0], item.to[1]), true, `${shipClass} + ${item.upgrade}`);
+      }
+    }
+  }
+}
+
+// Берег остаётся допустимой конечной клеткой для обычного корабля, но без
+// land1 сквозное прохождение через сухопутную клетку запрещено.
+{
+  const frigate = { row: 5, col: 4, shipClass: 'frigate', level: 1, upgrades: [] };
+  assert.equal(has(reachableCells(frigate, 1), 5, 5), true);
+  assert.equal(has(reachableCells(frigate, 2), 5, 6), false);
+  const withSleds = { ...frigate, level: 2, upgrades: ['portageSleds'] };
+  assert.equal(has(reachableCells(withSleds, 2), 5, 6), true);
 }
 
 console.log('game-logic tests: OK');

@@ -9,6 +9,9 @@ const MAP_META = {
   rows: 28,
   cols: 28,
   coordinateBase: 0,
+  // Existing online implementation uses one common start cell for all players.
+  // The master rules require a common start but do not assign numeric coordinates.
+  startCell: [0, 0],
   visualLayers: {
     base: '/assets/map-base-4096.webp',
     legacyReference: '/assets/map.png',

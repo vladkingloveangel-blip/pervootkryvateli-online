@@ -82,6 +82,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(started.players.find(p=>p.id===joinedSecond.playerId).shipClass,'carrack');
   assert.deepEqual(started.order,[joinedSecond.playerId,joinedFourth.playerId,created.playerId,joinedThird.playerId]);
   assert.equal(started.players.every(p=>p.ducats===canonical.session.startingDucats),true);
+  assert.equal(started.players.every(p=>p.row===0 && p.col===0),true);
   const lockedClass = started.players.find(p=>p.id===created.playerId).shipClass;
   const attemptedClass = lockedClass === 'brigantine' ? 'frigate' : 'brigantine';
   assert.equal((await emit(first, 'changeShip', { shipClass: attemptedClass })).ok, false);
@@ -104,7 +105,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.ruleset.rulesetVersion, canonical.metadata.rulesetVersion);
   assert.equal(watch.room.balanceCatalog.bastion.price, canonical.economy.buildings.bastion.price);
   assert.equal(watch.room.balanceCatalog.bastion.defense, canonical.economy.buildings.bastion.defense);
-  assert.equal(watch.room.runtimeProfile, 'stage-3-fleet-escorts');
+  assert.equal(watch.room.runtimeProfile, 'stage-3-fleet-navigation-final');
   assert.equal(watch.room.shipCatalog.brigantine.artillery, canonical.fleet.ships.brigantine.artillery);
   assert.deepEqual(watch.room.balanceCatalog.landCompany, canonical.economy.landCompany);
   assert.equal(watch.room.balanceCatalog.legendaryEffects['sea-curse'].amount, canonical.legends.legendary.find(c => c.id === 'sea-curse').effect.amount);
