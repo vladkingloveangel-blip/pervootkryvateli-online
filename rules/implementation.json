@@ -1,6 +1,6 @@
 {
   "activeProfile": "stage-6-events-legends-6.5",
-  "note": "Read rules/ as master data. Stage 6.5 activates the four legendary-card effects and their exact timing: normal play costs one action, Sea Veil may react for zero actions, hostile legendary-card reactions consume both cards without starting the three-turn protection, and their reaction protection expires at the end of the current hostile player's turn. R05/R06 remain unresolved; stage 7 consumers remain pending.",
+  "note": "Read rules/ as master data. Stage 6.3-6.5 were reverified against master §§10.2-10.5. Expeditions now require one action at the player's own island with a Cartographic Chamber and reshuffle returned/skipped cards; Hellfire removes base-form level I buildings; an existing Sea Veil cancels a played hostile legendary card after its card/action are spent. R05 remains unresolved, so active runtime no longer invents legacy 2×4 legendary copies or discard recycling and records owed random legendary rewards as pending. R06 remains unresolved for Vortex, Icebergs and Rose.",
   "pendingConsumers": [
     {
       "path": "scoring.titles",

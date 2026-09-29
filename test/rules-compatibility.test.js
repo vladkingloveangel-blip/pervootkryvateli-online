@@ -55,7 +55,10 @@ test('legacy profile references remain valid while canonical master data stays s
     ...rules.legends.treasures.filter(c => c.effect.type === 'income-multiple').map(c => c.id),legacy.treasure.id,
   ]);
   assert.deepEqual(rules.legends.treasures.find(c => c.id === 'full-diamonds-hold').effect,{type:'fill-hold',goodId:'diamonds'});
-  assert.equal(rules.legends.legendaryDeck.copiesByKind,null); // R05 is not resolved by the temporary 2×4 runtime deck.
+  assert.equal(rules.legends.legendaryDeck.copiesByKind,null);
+  assert.equal(rules.legends.legendaryDeck.reshuffle,null);
+  assert.deepEqual(runtime.BALANCE.legendaryDeck,rules.legends.legendaryDeck);
+  assert.equal(runtime.LEGENDARY_CARDS.every(card => card.quantity === null),true); // active runtime no longer projects legacy 2×4 into R05.
 });
 
 test('compatibility validator rejects broken saved-state references and projections', () => {

@@ -550,7 +550,12 @@ function publicRoom(room, viewerId = null) {
     eventDecks: {
       sailing: { remaining: room.eventDeck?.drawPile?.length || 0, discard: room.eventDeck?.discard?.length || 0 },
       treasure: { remaining: room.treasureDeck?.drawPile?.length || 0, discard: room.treasureDeck?.discard?.length || 0 },
-      legendary: { remaining: room.legendaryDeck?.drawPile?.length || 0, discard: room.legendaryDeck?.discard?.length || 0 },
+      legendary: {
+        remaining: room.legendaryDeck?.drawPile?.length || 0,
+        discard: room.legendaryDeck?.discard?.length || 0,
+        total: Number(room.legendaryDeck?.total) || Number(BALANCE.legendaryDeck?.total) || 0,
+        unresolved: room.legendaryDeck?.unresolved || BALANCE.legendaryDeck?.unresolved || null,
+      },
       expeditions: { remaining: room.expeditionDeck?.drawPile?.length || 0 },
     },
     factions: POLITICAL_FACTION_ORDER.map(factionId => {
@@ -729,12 +734,14 @@ function publicRoom(room, viewerId = null) {
         specialCardCount: (p.specialCards || []).length,
         namedPlaceCards: (p.namedPlaceCards || []).map(card => ({ id: card.id, name: card.name, placeId: card.placeId })),
         namedPlaceCardCount: (p.namedPlaceCards || []).length,
-        activeExpedition: p.id === viewerId && p.activeExpedition ? {
+        activeExpedition: p.activeExpedition ? {
           cardId: p.activeExpedition.cardId,
           name: p.activeExpedition.name,
           placeId: p.activeExpedition.placeId,
           acceptedRound: Number(p.activeExpedition.acceptedRound) || null,
-          requiresLeaveAndReturn: Boolean(p.activeExpedition.startedAtTarget && !p.activeExpedition.departedAfterIssue),
+          requiresLeaveAndReturn: p.id === viewerId
+            ? Boolean(p.activeExpedition.startedAtTarget && !p.activeExpedition.departedAfterIssue)
+            : undefined,
         } : null,
         hasActiveExpedition: Boolean(p.activeExpedition),
         expeditionHistory: p.id === viewerId ? (p.expeditionHistory || []).map(item => ({ ...item })) : [],
@@ -942,7 +949,7 @@ const ASSIGNMENT_PRIORITY_EVENTS = new Set([
   'build', 'upgradeBuilding', 'buildBastion', 'formLandCompany',
   'buyCityGuard', 'buyPermanentGarrison', 'buyShipLevel', 'buyShipUpgrade',
   'removeShipUpgrade', 'buyEscort', 'loadCargo', 'sellCargo',
-  'useSavedCargo', 'useShipMaster', 'useBlueprint', 'playLegendary',
+  'useSavedCargo', 'useShipMaster', 'useBlueprint', 'playLegendary', 'takeExpedition',
   'requestAlliance', 'enterVassalage', 'rebelVassalage',
   'attackShip', 'assaultIsland', 'endTurn',
 ]);
@@ -1696,7 +1703,9 @@ function resolvePendingLegendaryReaction(room, useVeil, cardRef = null) {
     const island = room.islands.find(i => i.id === pending.islandId);
     const result = applyHellfire(room, source, island);
     if (!result.ok) return result;
-    const detail = result.changed ? result.changes.map(x => `${x.beforeName} → ${x.afterName}`).join(', ') : 'построек выше I уровня нет';
+    const detail = result.changed
+      ? result.changes.map(x => x.removed ? `${x.beforeName} → удалено` : `${x.beforeName} → ${x.afterName}`).join(', ')
+      : 'построек нет';
     log(room, `${source.name}: «Пламя Ада» поражает ${island.name}: ${detail}.`);
     return { ok: true, result };
   }
@@ -1856,7 +1865,12 @@ function resolveSailingEventCard(room, player, card) {
       player.legendaryCards ||= [];
       player.legendaryCards.push(legendary);
       log(room, `${player.name}: «${card.name}». Получена одна случайная легендарная карта в закрытую руку.`);
-    } else log(room, `${player.name}: «${card.name}», но легендарная колода пуста.`);
+    } else if (room.legendaryDeck?.unresolved) {
+      player.pendingLegendary = (Number(player.pendingLegendary) || 0) + 1;
+      log(room, `${player.name}: «${card.name}». Положенная случайная легендарная карта отмечена как ожидающая авторского решения ${room.legendaryDeck.unresolved}.`);
+    } else {
+      log(room, `${player.name}: «${card.name}», но легендарная колода пуста.`);
+    }
     return resultBase;
   }
 
@@ -2683,6 +2697,9 @@ function handleLegendaryPlaceStop(room, player) {
       player.legendaryCards ||= [];
       player.legendaryCards.push(card);
       log(room, `${player.name}: награда «${place.name}» — случайная легендарная карта.`);
+    } else if (room.legendaryDeck?.unresolved) {
+      player.pendingLegendary = (Number(player.pendingLegendary) || 0) + 1;
+      log(room, `${player.name}: награда «${place.name}» — одна случайная легендарная карта отмечена как ожидающая решения ${room.legendaryDeck.unresolved}.`);
     }
   } else if (place?.reward?.type === 'treasure') {
     const treasure = drawTreasureCard(room);
@@ -3220,12 +3237,13 @@ io.on('connection', socket => {
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Экспедицию можно получить только в свой личный ход.' });
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
     if (room.eventPhase?.active) return ackSafe(ack, { ok: false, error: 'Сначала завершите обязательные карты шестого круга.' });
-    if (!['navigation','actions'].includes(room.phase)) return ackSafe(ack, { ok: false, error: 'Сейчас экспедицию получить нельзя.' });
+    if (room.phase !== 'actions' || room.actionsLeft <= 0) return ackSafe(ack, { ok: false, error: 'Получение экспедиции требует одного доступного действия.' });
     const result = takeExpedition(room, p);
     if (!result.ok) return ackSafe(ack, result);
-    const returnText = result.requiresLeaveAndReturn ? ' Корабль уже находится в месте назначения: сначала нужно покинуть его, затем вернуться.' : '';
-    log(room, `${p.name} получает экспедицию «${result.expedition.name}» из Картографической палаты. Действие не расходуется.${returnText}`);
-    ackSafe(ack, { ok: true, expedition: {
+    room.actionsLeft -= result.actionCost;
+    const returnText = result.requiresLeaveAndReturn ? ' Корабль уже находится в месте назначения: сначала нужно покинуть все клетки этого места, затем вернуться.' : '';
+    log(room, `${p.name} получает экспедицию «${result.expedition.name}» на своём острове с Картографической палатой и тратит одно действие. Осталось действий: ${room.actionsLeft}.${returnText}`);
+    ackSafe(ack, { ok: true, actionCost: result.actionCost, actionsLeft: room.actionsLeft, expedition: {
       cardId: result.expedition.cardId,
       name: result.expedition.name,
       placeId: result.expedition.placeId,
@@ -3818,12 +3836,17 @@ io.on('connection', socket => {
       if (room.round === 1) return ackSafe(ack, { ok: false, error: 'В первом раунде нельзя разыгрывать враждебные легендарные карты против игроков.' });
       if (isCitadelPeaceCell(p.row, p.col)) return ackSafe(ack, { ok: false, error: 'В зоне мира Цитадели «Морское проклятие» запрещено.' });
       if (areAllies(room, p, target)) return ackSafe(ack, { ok: false, error: 'Союзники не применяют враждебные карты друг против друга.' });
-      if (isShipProtected(target)) return ackSafe(ack, { ok: false, error: `${target.name} защищён «Покровом моря» и сейчас не может быть целью «Морского проклятия».` });
       const attackLimit = registerPlayerAttack(room, p, target.id);
       if (!attackLimit.ok) return ackSafe(ack, attackLimit);
       markAttackHostilityAgainstPlayer(room, p, target, 'враждебное «Морское проклятие» против вассала');
       consumeLegendaryCard(room, p, ref);
       room.actionsLeft -= 1;
+      if (isShipProtected(target)) {
+        log(room, `${p.name} разыгрывает «Морское проклятие» против ${target.name}, но действующий «Покров моря» отменяет эффект. Карта и действие потрачены; защита цели сохраняется. Осталось действий: ${room.actionsLeft}.`);
+        ackSafe(ack, { ok: true, canceled: true, protected: true });
+        emitRoom(room);
+        return;
+      }
       if (target.connected && playerHasLegendaryKind(target, 'sea-veil')) {
         room.pendingLegendaryReaction = {
           id: crypto.randomUUID(), kind: 'sea-curse', sourcePlayerId: p.id, targetPlayerId: target.id,
@@ -3848,7 +3871,6 @@ io.on('connection', socket => {
       if (owner && room.round === 1) return ackSafe(ack, { ok: false, error: 'В первом раунде нельзя разыгрывать враждебные легендарные карты против игроков.' });
       if (owner && areAllies(room, p, owner)) return ackSafe(ack, { ok: false, error: 'Нельзя применять «Пламя Ада» к острову союзника.' });
       if (isCitadelPeaceCell(p.row, p.col)) return ackSafe(ack, { ok: false, error: 'В зоне мира Цитадели «Пламя Ада» запрещено.' });
-      if (isIslandProtected(island)) return ackSafe(ack, { ok: false, error: `${island.name} уже защищён «Покровом моря».` });
       if (owner) {
         const attackLimit = registerPlayerAttack(room, p, owner.id);
         if (!attackLimit.ok) return ackSafe(ack, attackLimit);
@@ -3858,6 +3880,12 @@ io.on('connection', socket => {
       markAttackHostilityAgainstIsland(room, p, island, 'враждебное «Пламя Ада» против государства или его вассала');
       consumeLegendaryCard(room, p, ref);
       room.actionsLeft -= 1;
+      if (isIslandProtected(island)) {
+        log(room, `${p.name} разыгрывает «Пламя Ада» против ${island.name}, но действующий «Покров моря» отменяет эффект. Карта и действие потрачены; защита острова сохраняется. Осталось действий: ${room.actionsLeft}.`);
+        ackSafe(ack, { ok: true, canceled: true, protected: true });
+        emitRoom(room);
+        return;
+      }
       if (owner?.connected && playerHasLegendaryKind(owner, 'sea-veil')) {
         room.pendingLegendaryReaction = {
           id: crypto.randomUUID(), kind: 'hellfire', sourcePlayerId: p.id, targetPlayerId: owner.id, islandId: island.id,
@@ -3869,7 +3897,9 @@ io.on('connection', socket => {
       }
       const result = applyHellfire(room, p, island);
       if (!result.ok) return ackSafe(ack, result);
-      const detail = result.changed ? result.changes.map(x => `${x.beforeName} → ${x.afterName}`).join(', ') : 'построек выше I уровня нет';
+      const detail = result.changed
+        ? result.changes.map(x => x.removed ? `${x.beforeName} → удалено` : `${x.beforeName} → ${x.afterName}`).join(', ')
+        : 'построек нет';
       log(room, `${p.name}: «Пламя Ада» поражает ${island.name}: ${detail}. Осталось действий: ${room.actionsLeft}.`);
       ackSafe(ack, { ok: true, result });
       emitRoom(room);

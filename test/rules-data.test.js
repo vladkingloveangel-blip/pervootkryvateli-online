@@ -189,6 +189,7 @@ test('stage 6.5 activates legendary-card effects while stage 7 consumers remain 
   assert.equal(data.EXPEDITION_CARDS.length,10);
   assert.deepEqual(data.BALANCE.expeditionLimits,rules.legends.expeditionLimits);
   assert.deepEqual(data.BALANCE.legendaryEffects,Object.fromEntries(rules.legends.legendary.map(card=>[card.id,card.effect])));
+  assert.deepEqual(data.BALANCE.legendaryDeck,rules.legends.legendaryDeck);
   assert.deepEqual(data.BALANCE.legendaryEffects['sea-veil'],{type:'protect',durationPersonalTurns:3,hostileCardReactionExpiry:'end-of-current-turn',reactionActionCost:0});
   assert.deepEqual(data.BALANCE.legendaryEffects['sea-curse'],{type:'movement-penalty',amount:3,durationPersonalTurns:3});
   assert.deepEqual(data.BALANCE.legendaryEffects.hellfire,{type:'downgrade-all-buildings',steps:1});

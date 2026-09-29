@@ -184,4 +184,66 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   const afterTurn = readDb().game_rooms[0].state;
   const afterTarget = afterTurn.players.find(player => player.id === targetId);
   assert.equal(afterTarget.legendaryEffects.shipVeilReaction, undefined);
+
+  // Уже действующий Покров не запрещает объявить враждебную карту: нападающий
+  // тратит карту и действие, после чего защита отменяет только её эффект.
+  await stop();
+  sourceSocket.disconnect();
+  targetSocket.disconnect();
+  const protectedDb = readDb();
+  const protectedRoom = protectedDb.game_rooms[0].state;
+  const protectedSource = protectedRoom.players.find(player => player.id === sourceId);
+  const protectedTarget = protectedRoom.players.find(player => player.id === targetId);
+  protectedRoom.round = 2;
+  protectedRoom.circle = 2;
+  protectedRoom.turnIndex = protectedRoom.order.indexOf(sourceId);
+  protectedRoom.phase = 'actions';
+  protectedRoom.actionsLeft = rules.session.actionsPerTurn;
+  protectedRoom.roll = null;
+  protectedRoom.movePoints = null;
+  protectedRoom.eventPhase = null;
+  protectedRoom.pendingEvent = null;
+  protectedRoom.pendingFeud = null;
+  protectedRoom.pendingAssignmentChoice = null;
+  protectedRoom.pendingIslandCorrection = null;
+  protectedRoom.pendingFleetAdjustment = null;
+  protectedRoom.pendingLegendaryReaction = null;
+  protectedRoom.pendingBattle = null;
+  protectedRoom.pendingAlliance = null;
+  protectedRoom.alliances = [];
+  protectedRoom.legendaryDeck = { drawPile: [], discard: [], total: 8, unresolved: 'R05' };
+  protectedSource.row = 24; protectedSource.col = 6;
+  protectedTarget.row = 24; protectedTarget.col = 6;
+  protectedSource.attackLimitRound = 2;
+  protectedSource.attackCountsThisRound = {};
+  protectedSource.brokenAlliesThisTurn = [];
+  protectedSource.legendaryCards = [{ ...structuredClone(rules.legends.legendary.find(card => card.id === 'sea-curse')), copy: 1 }];
+  protectedTarget.legendaryCards = [];
+  protectedTarget.legendaryEffects = {
+    seaCurses: [],
+    shipVeil: { remaining: 3, sourcePlayerId: targetId, ignoreTurnNo: null },
+  };
+  writeDb(protectedDb);
+
+  await start();
+  const protectedSourceSocket = await connect();
+  const protectedTargetSocket = await connect();
+  assert.equal((await emit(protectedSourceSocket, 'resumeRoom', { code: created.code, accountToken: sourceAccount.token })).ok, true);
+  assert.equal((await emit(protectedTargetSocket, 'resumeRoom', { code: created.code, accountToken: targetAccount.token })).ok, true);
+
+  changed = await change(protectedSourceSocket, 'playLegendary', {
+    source: 'legendary', index: 0, targetPlayerId: targetId,
+  }, protectedTargetSocket);
+  assert.equal(changed.result.canceled, true);
+  assert.equal(changed.result.protected, true);
+  state = changed.state;
+  const protectedSourceView = state.players.find(player => player.id === sourceId);
+  const protectedTargetView = state.players.find(player => player.id === targetId);
+  assert.equal(protectedSourceView.actionsLeft, rules.session.actionsPerTurn - 1);
+  assert.equal(protectedSourceView.legendaryCardCount, 0);
+  assert.equal(state.eventDecks.legendary.discard, 1);
+  assert.equal(state.pendingLegendaryReaction, null);
+  assert.equal(protectedTargetView.legendaryStatus.shipVeilTurns, 3);
+  assert.equal(protectedTargetView.legendaryStatus.seaCursePenalty, 0);
+  assert.equal(state.log.some(entry => entry.text.includes('действующий «Покров моря» отменяет эффект') && entry.text.includes('Карта и действие потрачены')), true);
 });

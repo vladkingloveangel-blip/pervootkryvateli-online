@@ -156,8 +156,13 @@ function createTreasureDeck(rng = Math.random) {
   return { drawPile: shuffleCards(expandCardDefinitions(TREASURE_CARDS), rng), discard: [] };
 }
 
-function createLegendaryDeck(rng = Math.random) {
-  return { drawPile: shuffleCards(expandCardDefinitions(LEGENDARY_CARDS), rng), discard: [] };
+function createLegendaryDeck() {
+  return {
+    drawPile: [],
+    discard: [],
+    total: Math.max(0, Number(BALANCE.legendaryDeck?.total) || 0),
+    unresolved: BALANCE.legendaryDeck?.unresolved || null,
+  };
 }
 
 function createExpeditionDeck(rng = Math.random) {
@@ -191,9 +196,16 @@ function drawTreasureCard(room, rng = Math.random) {
   return drawCyclingDeckCard(room.treasureDeck, rng);
 }
 
-function drawLegendaryCard(room, rng = Math.random) {
-  room.legendaryDeck ||= createLegendaryDeck(rng);
-  return drawCyclingDeckCard(room.legendaryDeck, rng);
+function drawLegendaryCard(room) {
+  room.legendaryDeck ||= createLegendaryDeck();
+  // R05 does not define either the initial copy distribution or discard recycling.
+  // Existing saved draw piles remain readable, but active runtime never invents cards
+  // or reshuffles the legendary discard into a new draw pile.
+  room.legendaryDeck.drawPile ||= [];
+  room.legendaryDeck.discard ||= [];
+  if (room.legendaryDeck.total == null) room.legendaryDeck.total = Math.max(0, Number(BALANCE.legendaryDeck?.total) || 0);
+  if (!Object.hasOwn(room.legendaryDeck, 'unresolved')) room.legendaryDeck.unresolved = BALANCE.legendaryDeck?.unresolved || null;
+  return room.legendaryDeck.drawPile.shift() || null;
 }
 
 function discardDeckCard(deck, card) {
@@ -952,8 +964,13 @@ function expeditionCardEligibleForPlayer(player, card) {
 
 function canTakeExpedition(room, player) {
   if (!room || !player) return { ok: false, error: 'Игрок экспедиции не найден.' };
-  if (BUILDINGS.cartography?.effect?.type !== 'expedition-access' || !hasOwnedBuilding(room, player.id, 'cartography')) {
-    return { ok: false, error: 'Для получения экспедиции нужна собственная Картографическая палата.' };
+  const cartographyIsland = (room.islands || []).find(island =>
+    island.ownerId === player.id
+    && playerOnIsland(player, island)
+    && (island.buildings || []).some(building => building.type === 'cartography')
+  );
+  if (BUILDINGS.cartography?.effect?.type !== 'expedition-access' || !cartographyIsland) {
+    return { ok: false, error: 'Экспедицию берут на клетке своего острова с Картографической палатой.' };
   }
   if (player.activeExpedition) return { ok: false, error: 'Сначала завершите текущую экспедицию.' };
   const perRound = Math.max(1, Number(BALANCE.expeditionLimits?.drawsPerRound) || 1);
@@ -965,7 +982,7 @@ function canTakeExpedition(room, player) {
   if (!(room.expeditionDeck.drawPile || []).some(card => expeditionCardEligibleForPlayer(player, card))) {
     return { ok: false, error: 'В колоде нет доступной экспедиции на ещё не завершённое вами место.' };
   }
-  return { ok: true };
+  return { ok: true, islandId: cartographyIsland.id };
 }
 
 function takeExpedition(room, player, rng = Math.random) {
@@ -979,7 +996,7 @@ function takeExpedition(room, player, rng = Math.random) {
     if (expeditionCardEligibleForPlayer(player, candidate)) { card = candidate; break; }
     skipped.push(candidate);
   }
-  deck.drawPile.push(...skipped);
+  if (skipped.length) deck.drawPile = shuffleCards([...deck.drawPile, ...skipped], rng);
   if (!card) return { ok: false, error: 'В колоде нет доступной экспедиции.' };
 
   const startedAtTarget = playerAtExpeditionPlace(room, player, card.placeId);
@@ -994,10 +1011,10 @@ function takeExpedition(room, player, rng = Math.random) {
   };
   player.expeditionDrawRound = Number(room.round) || 1;
   player.expeditionsDrawnThisRound = 1;
-  return { ok: true, expedition: player.activeExpedition, requiresLeaveAndReturn: startedAtTarget };
+  return { ok: true, expedition: player.activeExpedition, requiresLeaveAndReturn: startedAtTarget, actionCost: 1, islandId: allowed.islandId };
 }
 
-function completeExpeditionAtArrival(room, player) {
+function completeExpeditionAtArrival(room, player, rng = Math.random) {
   const active = player?.activeExpedition;
   if (!room || !player || !active) return { ok: true, active: false, completed: false };
   const atTarget = playerAtExpeditionPlace(room, player, active.placeId);
@@ -1021,9 +1038,9 @@ function completeExpeditionAtArrival(room, player) {
       completedRound: Number(room.round) || 1,
     });
   }
-  room.expeditionDeck ||= createExpeditionDeck();
+  room.expeditionDeck ||= createExpeditionDeck(rng);
   room.expeditionDeck.drawPile ||= [];
-  room.expeditionDeck.drawPile.push({ ...card });
+  room.expeditionDeck.drawPile = shuffleCards([...room.expeditionDeck.drawPile, { ...card }], rng);
   player.activeExpedition = null;
   return { ok: true, active: false, completed: true, card: { ...card }, place, reward: card.reward ? { ...card.reward } : null };
 }
@@ -1667,15 +1684,21 @@ function applyHellfire(room, attacker, island) {
   if (isIslandProtected(island)) return { ok: false, error: 'Остров защищён «Покровом моря».' };
   let changed = 0;
   const changes = [];
-  island.buildings = (island.buildings || []).map(building => {
-    if (buildingStage(building) <= 1) return building;
+  const nextBuildings = [];
+  for (const building of island.buildings || []) {
     const beforeName = buildingDisplayName(building);
+    if (buildingStage(building) <= 1) {
+      changed += 1;
+      changes.push({ beforeName, afterName: null, removed: true });
+      continue;
+    }
     const after = downgradeBuildingOneStep(building);
     const afterName = buildingDisplayName(after);
     changed += 1;
-    changes.push({ beforeName, afterName });
-    return after;
-  });
+    changes.push({ beforeName, afterName, removed: false });
+    nextBuildings.push(after);
+  }
+  island.buildings = nextBuildings;
   return { ok: true, changed, changes, island };
 }
 
@@ -3265,6 +3288,11 @@ function grantMilitaryReward(room, player, island, options = {}) {
       if (card) { player.legendaryCards.push(card); drawn += 1; }
     }
     if (drawn) notes.push(`легендарная карта ×${drawn}`);
+    if (drawn < reward.legendary && room.legendaryDeck?.unresolved) {
+      const pending = Math.max(0, Number(reward.legendary) - drawn);
+      player.pendingLegendary = (Number(player.pendingLegendary) || 0) + pending;
+      notes.push(`случайная легендарная карта ×${pending} ожидает решения ${room.legendaryDeck.unresolved}`);
+    }
   }
   return notes;
 }

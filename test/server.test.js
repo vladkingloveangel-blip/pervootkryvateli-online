@@ -141,6 +141,9 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.namedPlaceCards.length,10);
   assert.equal(watch.room.namedPlaceCards.every(card=>card.visibility==='public' && card.claimedBy===null),true);
   assert.equal(watch.room.eventDecks.expeditions.remaining,10);
+  assert.equal(watch.room.eventDecks.legendary.remaining,0);
+  assert.equal(watch.room.eventDecks.legendary.total,8);
+  assert.equal(watch.room.eventDecks.legendary.unresolved,'R05');
   assert.equal(watch.room.players.every(player=>player.hasActiveExpedition===false && player.expeditionHistoryCount===0),true);
   assert.equal(Object.hasOwn(watch.room.balanceCatalog,'assignmentReplacementPrice'),false);
   assert.equal(watch.room.balanceCatalog.legendaryEffects['sea-curse'].amount, canonical.legends.legendary.find(c => c.id === 'sea-curse').effect.amount);
