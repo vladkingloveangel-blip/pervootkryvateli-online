@@ -1,12 +1,7 @@
 {
-  "activeProfile": "stage-6-events-legends-6.1",
-  "note": "Read rules/ as master data. Stage 6.1 activates the sixth-circle card sequence and Observatory: the stage-5 tax snapshot is settled first, then sailing event -> feud -> assignment/Embassy -> ordinary turn. Later stage 6-7 consumers remain pending.",
+  "activeProfile": "stage-6-events-legends-6.2",
+  "note": "Read rules/ as master data. Stage 6.2 activates the canonical 26-card sailing-event deck and its current-sixth-circle effects on top of the stage-6.1 sequence/Observatory. Named place cards, expeditions and legendary-card finalization remain pending.",
   "pendingConsumers": [
-    {
-      "path": "events.sailing.*.timing",
-      "consumerStage": 6,
-      "status": "data-ready"
-    },
     {
       "path": "legends.namedCards",
       "consumerStage": 6,

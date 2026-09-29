@@ -171,10 +171,16 @@ test('complete known sea, assignment, feud and event decks match appendix rows',
   assert.deepEqual(rules.politics.assignments.mori.slice(0,8).map(c=>c.islandId),['renaika','chertog','kisalinia','yukon','erkalon','asigoriy','atlantia','adia']);
 });
 
-test('stage 6.1 keeps stage 5 finalized while later stage 6-7 consumers remain pending', () => {
-  assert.equal(rules.implementation.activeProfile,'stage-6-events-legends-6.1');
+test('stage 6.2 activates the canonical sailing-event deck while later stage 6-7 consumers remain pending', () => {
+  assert.equal(rules.implementation.activeProfile,'stage-6-events-legends-6.2');
+  assert.equal(data.RUNTIME_PROFILE,'stage-6-events-legends-6.2');
   assert.equal(rules.implementation.pendingConsumers.some(item => item.consumerStage <= 5),false);
-  assert.deepEqual(rules.implementation.pendingConsumers.map(item => item.consumerStage),[6,6,6,6,7,7]);
+  assert.deepEqual(rules.implementation.pendingConsumers.map(item => item.consumerStage),[6,6,6,7,7]);
+  assert.equal(rules.implementation.pendingConsumers.some(item => item.path === 'events.sailing.*.timing'),false);
+  assert.deepEqual(data.SAILING_EVENT_CARDS,rules.events.sailing);
+  assert.equal(data.SAILING_EVENT_CARDS.reduce((sum,card)=>sum+card.quantity,0),26);
+  assert.equal(data.SAILING_EVENT_CARDS.filter(card=>card.type==='turn-effect').every(card=>card.timing==='current-personal-turn'),true);
+  assert.equal(data.SAILING_EVENT_CARDS.some(card=>card.type==='next-turn' || card.timing==='next-personal-turn'),false);
   assert.equal(rules.scoring.combat.attacksPerOpponentPerRound,1);
   assert.equal(data.BALANCE.combat.attacksPerOpponentPerRound,rules.scoring.combat.attacksPerOpponentPerRound);
   assert.deepEqual(data.BALANCE.fleetScoring,rules.scoring.fleet);

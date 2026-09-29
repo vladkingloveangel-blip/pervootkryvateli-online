@@ -10,7 +10,7 @@ const copy = value => JSON.parse(JSON.stringify(value));
 
 test('legacy profile references remain valid while canonical master data stays separate', () => {
   assert.deepEqual(validateCompatibility(rules,legacy),[]);
-  assert.equal(runtime.RUNTIME_PROFILE,'stage-5-combat-politics-complete');
+  assert.equal(runtime.RUNTIME_PROFILE,'stage-6-events-legends-6.2');
   assert.equal(runtime.BALANCE.session.startingDucats,rules.session.startingDucats);
   assert.equal(runtime.BALANCE.session.players.min,4);
   assert.equal(runtime.BALANCE.session.players.max,6);
@@ -23,6 +23,8 @@ test('legacy profile references remain valid while canonical master data stays s
   assert.equal(Object.values(runtime.ASSIGNMENT_CARDS).flat().length,49);
   assert.equal(runtime.BALANCE.assignmentReplacementPrice,undefined);
   assert.deepEqual(Object.keys(runtime.FEUD_CARDS),rules.politics.order);
+  assert.deepEqual(runtime.SAILING_EVENT_CARDS,rules.events.sailing);
+  assert.equal(runtime.SAILING_EVENT_CARDS.some(card=>card.type==='next-turn' || card.timing==='next-personal-turn'),false);
   for (const [id, masterCards] of Object.entries(rules.events.feud)) {
     const cards = runtime.FEUD_CARDS[id];
     assert.equal(cards.reduce((sum,card)=>sum+card.quantity,0),10,id);

@@ -150,8 +150,8 @@ test('stage 6.1: Observatory resolves one sailing card before feud, Embassy assi
 
   room.eventDeck = {
     drawPile: [
-      { id: 'stage6-first', name: 'Первое событие', type: 'next-turn', effect: 'moveBonus', value: 1, copy: 1 },
-      { id: 'stage6-second', name: 'Второе событие', type: 'next-turn', effect: 'moveBonus', value: 2, copy: 1 },
+      { id: 'stage6-first', name: 'Первое событие', type: 'turn-effect', effect: 'moveBonus', value: 1, timing: 'current-personal-turn', copy: 1 },
+      { id: 'stage6-second', name: 'Второе событие', type: 'turn-effect', effect: 'moveBonus', value: 2, timing: 'current-personal-turn', copy: 1 },
     ],
     discard: [],
   };
@@ -244,8 +244,8 @@ test('stage 6.1: Observatory resolves one sailing card before feud, Embassy assi
   keepTarget.skipTurns = 0;
   keepRoom.eventDeck = {
     drawPile: [
-      { id: 'stage6-keep-first', name: 'Оставленное событие', type: 'next-turn', effect: 'moveBonus', value: 1, copy: 1 },
-      { id: 'stage6-keep-second', name: 'Не взятое событие', type: 'next-turn', effect: 'moveBonus', value: 2, copy: 1 },
+      { id: 'stage6-keep-first', name: 'Оставленное событие', type: 'turn-effect', effect: 'moveBonus', value: 1, timing: 'current-personal-turn', copy: 1 },
+      { id: 'stage6-keep-second', name: 'Не взятое событие', type: 'turn-effect', effect: 'moveBonus', value: 2, timing: 'current-personal-turn', copy: 1 },
     ],
     discard: [],
   };

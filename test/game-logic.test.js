@@ -1328,7 +1328,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(p.ducats, 0);
 }
 
-// «Набег» даёт только постройки выше I уровня и понижает выбранную ровно на одну ступень.
+// «Набег» позволяет выбрать любую свою постройку и понижает её ровно на одну строительную ступень.
+// Исходная форма I при таком понижении удаляется.
 {
   const room = { islands: cloneIslands() };
   const island = room.islands.find(i => i.id === 'bogamia');
@@ -1336,10 +1337,29 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   island.buildings = [{ type: 'farm', level: 3 }, { type: 'market', level: 1 }];
   const p = { id: 'p1' };
   const opts = raidBuildingOptions(room, p);
-  assert.equal(opts.length, 1);
-  const result = applyRaidDowngrade(room, p, opts[0].islandId, opts[0].buildingIndex);
-  assert.equal(result.ok, true);
+  assert.equal(opts.length, 2);
+  const farmResult = applyRaidDowngrade(room, p, island.id, 0);
+  assert.equal(farmResult.ok, true);
+  assert.equal(farmResult.removed, false);
   assert.equal(island.buildings[0].level, 2);
+  const marketResult = applyRaidDowngrade(room, p, island.id, 1);
+  assert.equal(marketResult.ok, true);
+  assert.equal(marketResult.removed, true);
+  assert.equal(marketResult.afterName, null);
+  assert.deepEqual(island.buildings, [{ type: 'farm', level: 2 }]);
+}
+
+// Продвинутая форма I при «Набеге» возвращается в исходную форму III.
+{
+  const room = { islands: cloneIslands() };
+  const island = room.islands.find(i => i.id === 'bogamia');
+  island.ownerId = 'p1';
+  island.buildings = [{ type: 'bank', level: 1 }];
+  const p = { id: 'p1' };
+  const result = applyRaidDowngrade(room, p, island.id, 0);
+  assert.equal(result.ok, true);
+  assert.equal(result.removed, false);
+  assert.deepEqual([island.buildings[0].type, island.buildings[0].level], ['market', 3]);
 }
 
 // «Абордаж» может принудительно снять первое улучшение ветви; второе остаётся в слоте, но перестаёт действовать.
@@ -1362,6 +1382,32 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.ok(options.length > 0);
   const island = room.islands.find(i => i.id === 'landin');
   assert.equal(options.every(o => island.cells.some(([r,c]) => r === o.row && c === o.col)), true);
+}
+
+// Колода событий плавания содержит ровно 26 физических карт и использует канонический
+// тип turn-effect с эффектом текущего личного хода. Старое сохранение карты next-turn
+// при чтении нормализуется по id к актуальной мастер-карте.
+{
+  const deck = createSailingEventDeck(() => 0.5);
+  assert.equal(deck.drawPile.length, 26);
+  const timed = deck.drawPile.filter(card => card.type === 'turn-effect');
+  assert.equal(timed.length, 9);
+  assert.equal(timed.every(card => card.timing === 'current-personal-turn'), true);
+  assert.equal(deck.drawPile.some(card => card.type === 'next-turn' || card.timing === 'next-personal-turn'), false);
+
+  const room = {
+    eventDeck: {
+      drawPile: [{ id: 'tailwind-1', name: 'legacy', type: 'next-turn', effect: 'moveBonus', value: 99, timing: 'next-personal-turn' }],
+      discard: [],
+    },
+  };
+  const restored = drawSailingEventCard(room, () => 0.5);
+  assert.equal(restored.id, 'tailwind-1');
+  assert.equal(restored.masterCardId, 'tailwind-1');
+  assert.equal(restored.type, 'turn-effect');
+  assert.equal(restored.effect, 'moveBonus');
+  assert.equal(restored.value, 1);
+  assert.equal(restored.timing, 'current-personal-turn');
 }
 
 // «Путь сквозь туман» использует те же запреты препятствий, но без лимита d6.
@@ -1748,6 +1794,31 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(assignmentRequiredAction(room, p, 0), null);
   p.row = 13; p.col = 13;
   assert.equal(assignmentRequiredAction(room, p, 2), null);
+}
+
+// «Судовой мастер» может сделать улучшение обязательным по поручению только там,
+// где такое улучшение вообще допустимо устанавливать — в Цитадели.
+{
+  const card = ASSIGNMENT_CARDS.kadingir.find(c => c.type === 'stat-upgrade' && c.branch === 'cargo');
+  const p = {
+    id: 'p1', row: 0, col: 0, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0,
+    savedEventCards: [{ id: 'master-1', kind: 'ship-master' }],
+    activeAssignment: { instanceId: 'priority-master', factionId: 'kadingir', card: { ...card } },
+  };
+  const room = { round: 2, islands: cloneIslands(), players: [p], alliances: [] };
+  assert.equal(assignmentRequiredAction(room, p, 1), null);
+  let citadel = null;
+  for (let row = 0; row < MAP_META.rows && !citadel; row++) {
+    for (let col = 0; col < MAP_META.cols; col++) {
+      if (isCitadelCell(row, col)) { citadel = [row, col]; break; }
+    }
+  }
+  assert.ok(citadel);
+  [p.row, p.col] = citadel;
+  const required = assignmentRequiredAction(room, p, 1);
+  assert.equal(required.kind, 'ship-upgrade');
+  assert.deepEqual(required.shipMasterIds, ['master-1']);
+  assert.ok(required.freeUpgradeIds.length > 0);
 }
 
 // Захват, якорь и доставка создают обязательное следующее действие только при доступной цели.

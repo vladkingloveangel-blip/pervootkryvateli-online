@@ -1728,7 +1728,9 @@ function saveHeldEventCard(player, card, kind, extra = {}) {
   return saved;
 }
 
-function applyNextTurnEffect(room, player, effect, value) {
+function applyCurrentTurnEffect(room, player, effect, value) {
+  // Events and feud cards drawn in the sixth circle affect that same personal turn (§3.4).
+  // The fallback remains only for compatibility with legacy non-personal event-phase saves.
   const target = room.eventPhase?.personalTurn ? (player.activeTurnEffects ||= {}) : (player.nextTurnEffects ||= {});
   if (effect === 'moveBonus' || effect === 'movePenalty') {
     target[effect] = (Number(target[effect]) || 0) + (Number(value) || 0);
@@ -1831,8 +1833,8 @@ function resolveSailingEventCard(room, player, card) {
     return resultBase;
   }
 
-  if (card.type === 'next-turn') {
-    applyNextTurnEffect(room, player, card.effect, card.value);
+  if (card.type === 'turn-effect') {
+    applyCurrentTurnEffect(room, player, card.effect, card.value);
     const descriptions = {
       moveBonus: `к обычной навигации +${card.value}`,
       movePenalty: `к обычной навигации −${card.value}`,
@@ -1847,11 +1849,11 @@ function resolveSailingEventCard(room, player, card) {
   if (card.type === 'raid') {
     const options = raidBuildingOptions(room, player);
     if (!options.length) {
-      log(room, `${player.name}: «${card.name}». Построек выше I уровня нет — карта ничего не делает.`);
+      log(room, `${player.name}: «${card.name}». Своих построек нет — карта ничего не делает.`);
       return resultBase;
     }
     queueEventDecision(room, player, card, 'raid', options);
-    log(room, `${player.name}: «${card.name}». Нужно выбрать одну свою постройку выше I уровня для понижения.`);
+    log(room, `${player.name}: «${card.name}». Нужно выбрать одну свою постройку для понижения на одну строительную ступень.`);
     return { pending: true, holdEventCard: false };
   }
 
@@ -1999,12 +2001,12 @@ function resolveFeudCard(room, player, factionId, rawCard) {
     return immediate;
   }
   if (card.type === 'skip-income') {
-    applyNextTurnEffect(room, player, 'noIncome', true);
+    applyCurrentTurnEffect(room, player, 'noIncome', true);
     log(room, `${player.name}: карта вражды ${factionName} — в этом личном ходу доход рынков и банков пропускается.`);
     return immediate;
   }
   if (card.type === 'movement-penalty') {
-    applyNextTurnEffect(room, player, 'movePenalty', Math.max(0, Number(card.amount) || 0));
+    applyCurrentTurnEffect(room, player, 'movePenalty', Math.max(0, Number(card.amount) || 0));
     log(room, `${player.name}: карта вражды ${factionName} — максимум обычной навигации в этом личном ходу уменьшается на ${Math.max(0, Number(card.amount) || 0)}.`);
     return immediate;
   }
@@ -2450,11 +2452,14 @@ function completePendingEvent(room, pending) {
   } else if (pending.kind === 'raid') {
     const result = applyRaidDowngrade(room, player, choice.islandId, choice.buildingIndex);
     if (!result.ok) return result;
-    log(room, `${player.name}: «${pending.cardName}». ${result.beforeName} на ${result.island.name} понижено до ${result.afterName}.`);
+    log(room, result.removed
+      ? `${player.name}: «${pending.cardName}». ${result.beforeName} на ${result.island.name} удалено как исходная форма I.`
+      : `${player.name}: «${pending.cardName}». ${result.beforeName} на ${result.island.name} понижено до ${result.afterName}.`);
   } else if (pending.kind === 'boarding') {
     const result = applyBoardingLoss(player, choice.upgradeId);
     if (!result.ok) return result;
-    log(room, `${player.name}: «${pending.cardName}». Снято улучшение «${result.name}».`);
+    const cargoText = result.cargoDiscarded ? ` Вместимость уменьшилась; потеряно единиц груза: ${result.cargoDiscarded}.` : '';
+    log(room, `${player.name}: «${pending.cardName}». Снято улучшение «${result.name}».${cargoText}`);
   } else if (pending.kind === 'storm') {
     const option = (pending.options || []).find(o => o.row === choice.row && o.col === choice.col);
     if (!option) return { ok: false, error: 'Недопустимая клетка шторма.' };
@@ -3545,6 +3550,7 @@ io.on('connection', socket => {
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Карту можно применить только в свой личный ход.' });
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
     if (room.phase !== 'actions' || room.actionsLeft <= 0) return ackSafe(ack, { ok: false, error: 'Для установки нужен один доступный пункт действия.' });
+    if (!isCitadelCell(p.row, p.col)) return ackSafe(ack, { ok: false, error: '«Судовой мастер» устанавливает улучшение бесплатно, но только в Цитадели по общему правилу установки улучшений.' });
     const found = takeSavedCard(p, String(data?.savedCardId || ''));
     if (!found || found.card.kind !== 'ship-master') return ackSafe(ack, { ok: false, error: 'Карта «Судовой мастер» не найдена.' });
     const result = installShipUpgradeFree(p, String(data?.upgradeId || ''));

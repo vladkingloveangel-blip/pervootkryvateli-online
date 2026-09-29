@@ -166,9 +166,17 @@ function drawCyclingDeckCard(deck, rng = Math.random) {
   return deck.drawPile?.shift() || null;
 }
 
+function canonicalSailingEventCard(rawCard) {
+  if (!rawCard) return null;
+  const canonical = SAILING_EVENT_CARDS.find(card =>
+    card.id === rawCard.masterCardId || card.id === rawCard.id
+  );
+  return canonical ? { ...rawCard, ...canonical, masterCardId: canonical.id } : rawCard;
+}
+
 function drawSailingEventCard(room, rng = Math.random) {
   room.eventDeck ||= createSailingEventDeck(rng);
-  return drawCyclingDeckCard(room.eventDeck, rng);
+  return canonicalSailingEventCard(drawCyclingDeckCard(room.eventDeck, rng));
 }
 
 function drawTreasureCard(room, rng = Math.random) {
@@ -724,11 +732,16 @@ function assignmentRequiredAction(room, player, actionsLeft = 0) {
       .filter(([, upgrade]) => upgrade.branch === card.branch && !upgrade.retired)
       .filter(([upgradeId]) => canBuyShipUpgrade(player, upgradeId).ok)
       .map(([upgradeId]) => upgradeId);
-    const shipMasterIds = (player.savedEventCards || []).filter(saved => saved.kind === 'ship-master').map(saved => saved.id);
-    const freeUpgradeIds = Object.entries(SHIP_UPGRADES)
-      .filter(([, upgrade]) => upgrade.branch === card.branch && !upgrade.retired)
-      .filter(([upgradeId]) => canInstallShipUpgradeFree(player, upgradeId).ok)
-      .map(([upgradeId]) => upgradeId);
+    const atCitadel = isCitadelCell(player.row, player.col);
+    const shipMasterIds = atCitadel
+      ? (player.savedEventCards || []).filter(saved => saved.kind === 'ship-master').map(saved => saved.id)
+      : [];
+    const freeUpgradeIds = atCitadel
+      ? Object.entries(SHIP_UPGRADES)
+        .filter(([, upgrade]) => upgrade.branch === card.branch && !upgrade.retired)
+        .filter(([upgradeId]) => canInstallShipUpgradeFree(player, upgradeId).ok)
+        .map(([upgradeId]) => upgradeId)
+      : [];
     if (!upgradeIds.length && !(shipMasterIds.length && freeUpgradeIds.length)) return null;
     return {
       kind: 'ship-upgrade',
@@ -1175,7 +1188,7 @@ function raidBuildingOptions(room, player) {
   for (const island of room?.islands || []) {
     if (island.ownerId !== player.id) continue;
     (island.buildings || []).forEach((building, index) => {
-      if (buildingStage(building) > 1) options.push({ islandId: island.id, islandName: island.name, buildingIndex: index, name: buildingDisplayName(building) });
+      options.push({ islandId: island.id, islandName: island.name, buildingIndex: index, name: buildingDisplayName(building) });
     });
   }
   return options;
@@ -1186,9 +1199,13 @@ function applyRaidDowngrade(room, player, islandId, buildingIndex) {
   const index = Number(buildingIndex);
   if (!island || !Number.isInteger(index) || !island.buildings?.[index]) return { ok: false, error: 'Постройка не найдена.' };
   const before = island.buildings[index];
-  if (buildingStage(before) <= 1) return { ok: false, error: 'Нужно выбрать постройку выше I уровня.' };
+  const beforeName = buildingDisplayName(before);
+  if (buildingStage(before) <= 1) {
+    island.buildings.splice(index, 1);
+    return { ok: true, island, beforeName, afterName: null, removed: true };
+  }
   island.buildings[index] = downgradeBuildingOneStep(before);
-  return { ok: true, island, beforeName: buildingDisplayName(before), afterName: buildingDisplayName(island.buildings[index]) };
+  return { ok: true, island, beforeName, afterName: buildingDisplayName(island.buildings[index]), removed: false };
 }
 
 function applyFeudBuildingDowngrade(room, player, islandId, buildingIndex) {
