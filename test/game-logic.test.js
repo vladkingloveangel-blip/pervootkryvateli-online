@@ -48,6 +48,7 @@ const {
   availableGoodsOnIsland,
   canUpgradeBuilding,
   cargoSaleValue,
+  contractBonusForRevenue,
   isCitadelCell,
   isCitadelPeaceCell,
   fleetArtillery,
@@ -679,8 +680,14 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(loadCargo(room, p, 'bogamia', 'provisions').ok, true);
   p.cargo = null;
   assert.equal(canLoadCargo(room, p, island, 'provisions').ok, false);
+
+  // Смена владельца не снимает общую отметку погрузки текущего раунда.
+  island.ownerId = 'p2';
+  const q = { id: 'p2', row: 5, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], cargo: null, ducats: 0 };
+  assert.equal(canLoadCargo(room, q, island, 'provisions').ok, false);
+
   room.round = 4;
-  assert.equal(canLoadCargo(room, p, island, 'provisions').ok, true);
+  assert.equal(canLoadCargo(room, q, island, 'provisions').ok, true);
 }
 
 // Продажа основного груза возможна только в Цитадели.
@@ -1044,18 +1051,35 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(room.eventDeck.discard.length, 1);
 }
 
-// Сокровища: четыре карты, денежная карта учитывает текущий доход и сначала гасит долг.
+// Пока число физических копий сокровищ не разрешено источником, runtime не придумывает
+// дополнительные экземпляры: по одному каноническому виду. Грузовое сокровище — алмазы.
 {
   const room = { islands: cloneIslands(), treasureDeck: createTreasureDeck(() => 0.5) };
+  assert.equal(room.treasureDeck.drawPile.length, 4);
+  assert.deepEqual(room.treasureDeck.drawPile.map(c => c.id).sort(),
+    ['full-diamonds-hold', 'income-x1', 'income-x2', 'income-x3']);
+  const diamonds = room.treasureDeck.drawPile.find(c => c.id === 'full-diamonds-hold');
+  assert.equal(diamonds.cargoGoodId, 'diamonds');
+
   const island = room.islands.find(i => i.id === 'bogamia');
   island.ownerId = 'p1';
   island.buildings = [{ type: 'farm', level: 1 }, { type: 'market', level: 1 }];
-  const p = { id: 'p1', ducats: 0, debt: 1 };
+  const p = { id: 'p1', shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], cargo: null, ducats: 0, debt: 1 };
   const result = resolveMoneyTreasure(room, p, { id: 'income-x2', name: 'Доход ×2', multiplier: 2, minimum: 4 });
   assert.equal(result.amount, 4);
   assert.equal(p.debt, 0);
   assert.equal(p.ducats, 3);
-  assert.equal(room.treasureDeck.drawPile.length, 4);
+
+  const loaded = fillCargoDirect(room, p, diamonds.cargoGoodId, 'main');
+  assert.equal(loaded.ok, true);
+  assert.equal(p.cargo.goodId, 'diamonds');
+  assert.equal(p.cargo.quantity, 2);
+}
+
+// Контрактная премия равна половине обычной выручки с округлением вниз.
+{
+  assert.equal(contractBonusForRevenue(6), 3);
+  assert.equal(contractBonusForRevenue(5), 2);
 }
 
 // Легендарная колода содержит восемь карт: по две каждого из четырёх видов.

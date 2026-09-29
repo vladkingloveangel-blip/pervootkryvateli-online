@@ -70,6 +70,7 @@ const {
   loadCargo,
   sellCargo,
   cargoSaleValue,
+  contractBonusForRevenue,
   isCitadelCell,
   isCitadelPeaceCell,
   fleetArtillery,
@@ -632,6 +633,7 @@ function publicRoom(room, viewerId = null) {
     balanceCatalog: { session: BALANCE.session, maxShipLevel: BALANCE.maxShipLevel,
       garrisons: BALANCE.garrisons, bastion: { price: BUILDINGS.bastion.price, defense: BUILDINGS.bastion.defense },
       assignmentReplacementPrice: BALANCE.assignmentReplacementPrice, maxEscorts: BALANCE.maxEscorts, contractBonusRatio: BALANCE.contractBonusRatio,
+      loadingLimitPerIslandPerRound: BALANCE.loadingLimitPerIslandPerRound,
       landCompany: BALANCE.landCompany, legendaryEffects: BALANCE.legendaryEffects },
     shipCatalog: Object.fromEntries(Object.entries(SHIPS).map(([id, ship]) => [id, { ...ship }])),
     goodsCatalog: Object.fromEntries(Object.entries(GOODS).map(([id, g]) => [id, {
@@ -1637,16 +1639,16 @@ function resolveSailingEventCard(room, player, card) {
     }
     const holds = emptyCargoHolds(room, player);
     if (!holds.length) {
-      player.savedEventCards ||= [];
-      player.savedEventCards.push({ id: crypto.randomUUID(), kind: 'treasure-cargo', name: treasure.name, goodId: treasure.cargoGoodId, sourceDeck: 'treasure', sourceCard: { ...treasure } });
-      log(room, `${player.name}: «${card.name}» → «${treasure.name}». Пустого трюма нет; карта сокровища сохранена в закрытой руке.`);
+      discardDeckCard(room.treasureDeck, treasure);
+      trackAssignment(room, player, { type: 'treasure-resolved' });
+      log(room, `${player.name}: «${card.name}» → «${treasure.name}». Все трюмы заняты; карта сокровища сброшена без эффекта.`);
       return resultBase;
     }
     if (holds.length === 1) {
       const loaded = fillCargoDirect(room, player, treasure.cargoGoodId, holds[0].id);
       discardDeckCard(room.treasureDeck, treasure);
       trackAssignment(room, player, { type: 'treasure-resolved' });
-      log(room, `${player.name}: «${card.name}» → «${treasure.name}». ${loaded.holdName} заполнен рудой ×${loaded.quantity}.`);
+      log(room, `${player.name}: «${card.name}» → «${treasure.name}». ${loaded.holdName} заполнен товаром «${loaded.good.name}» ×${loaded.quantity}.`);
       return resultBase;
     }
     queueEventDecision(room, player, card, 'cargo', holds, { goodId: treasure.cargoGoodId, treasureCard: { ...treasure } });
@@ -2407,14 +2409,14 @@ function handleLegendaryPlaceStop(room, player) {
     } else {
       const holds = emptyCargoHolds(room, player);
       if (!holds.length) {
-        player.savedEventCards ||= [];
-        player.savedEventCards.push({ id: crypto.randomUUID(), kind: 'treasure-cargo', name: treasure.name, goodId: treasure.cargoGoodId, sourceDeck: 'treasure', sourceCard: { ...treasure } });
-        log(room, `${player.name}: награда «${place.name}» — «${treasure.name}». Пустого трюма нет; карта сохранена.`);
+        discardDeckCard(room.treasureDeck, treasure);
+        trackAssignment(room, player, { type: 'treasure-resolved' });
+        log(room, `${player.name}: награда «${place.name}» — «${treasure.name}». Все трюмы заняты; карта сокровища сброшена без эффекта.`);
       } else if (holds.length === 1) {
         const loaded = fillCargoDirect(room, player, treasure.cargoGoodId, holds[0].id);
         discardDeckCard(room.treasureDeck, treasure);
         trackAssignment(room, player, { type: 'treasure-resolved' });
-        log(room, `${player.name}: награда «${place.name}» — «${treasure.name}». ${loaded.holdName} заполнен рудой ×${loaded.quantity}.`);
+        log(room, `${player.name}: награда «${place.name}» — «${treasure.name}». ${loaded.holdName} заполнен товаром «${loaded.good.name}» ×${loaded.quantity}.`);
       } else {
         room.pendingEvent = {
           id: crypto.randomUUID(), playerId: player.id, kind: 'cargo', cardName: `${place.name}: ${treasure.name}`,
@@ -3219,7 +3221,7 @@ io.on('connection', socket => {
     let contractBonus = 0;
     let contractCredit = null;
     if (isContract) {
-      contractBonus = Math.floor(result.revenue * BALANCE.contractBonusRatio);
+      contractBonus = contractBonusForRevenue(result.revenue);
       contractCredit = creditDucats(p, contractBonus);
     }
     const debtText = result.credit?.debtPaid ? ` Из обычной выручки ${result.credit.debtPaid} уходит в погашение долга; в казну ${result.credit.net}.` : '';

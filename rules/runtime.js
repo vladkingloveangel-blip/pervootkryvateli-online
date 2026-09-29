@@ -50,7 +50,7 @@ const FEUD_CARDS = Object.fromEntries(Object.entries(legacy.feud).map(([id, card
   }),
 ]));
 module.exports = {
-  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-4-islands-economy-4.5',
+  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-4-islands-economy-4.6',
   BALANCE: {
     session: rules.session,
     maxShipLevel: rules.fleet.maxLevel, maxReadableShipLevel: legacy.shipLevel7.level,
@@ -59,6 +59,7 @@ module.exports = {
     garrisons: rules.economy.garrisons, branchLimits: BRANCH_LIMITS, ranks: rules.economy.ranks,
     landCompany: rules.economy.landCompany, combat: rules.scoring.combat,
     contractBonusRatio: rules.economy.contractBonusRatio,
+    loadingLimitPerIslandPerRound: rules.economy.loadingLimitPerIslandPerRound,
     assignmentReplacementPrice: legacy.assignmentReplacementPrice,
     gloryCapture: legacy.gloryCapture, treasuryLossRatio: legacy.treasuryLossRatio,
     attackHistoryWindow: legacy.attackHistoryWindow, attackRebellionThreshold: legacy.attackRebellionThreshold,
@@ -75,6 +76,8 @@ module.exports = {
     ? { ...card, type: 'next-turn', timing: 'next-personal-turn' } : card),
   FEUD_CARDS,
   LEGENDARY_CARDS: rules.legends.legendary.map(card => ({ ...card, quantity: legacy.legendaryQuantities[card.id] })),
-  TREASURE_CARDS: [...rules.legends.treasures.filter(card => card.effect.type === 'income-multiple'), legacy.treasure],
+  // Physical treasure copy counts are unresolved in the source. Runtime keeps one
+  // instance of each canonical treasure kind without inventing additional copies.
+  TREASURE_CARDS: rules.legends.treasures.map(card => copy(card)),
   ANCHOR_GLORY: legacy.anchorGlory,
 };

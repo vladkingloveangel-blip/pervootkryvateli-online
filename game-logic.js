@@ -2117,6 +2117,10 @@ function holdFor(room, player, holdId = 'main') {
   return { id: escort.id, name: def.name, capacity: def.cargo, cargo: escort.cargo || null, setCargo: cargo => { escort.cargo = cargo; } };
 }
 
+function islandLoadingLimit() {
+  return Math.max(1, Math.floor(Number(BALANCE.loadingLimitPerIslandPerRound) || 1));
+}
+
 function canLoadCargo(room, player, island, goodId, holdId = 'main') {
   const good = GOODS[goodId];
   if (!good) return { ok: false, error: 'Неизвестный товар.' };
@@ -2124,7 +2128,7 @@ function canLoadCargo(room, player, island, goodId, holdId = 'main') {
   if (island.ownerId !== player.id) return { ok: false, error: 'Загружать товар можно только на своём острове.' };
   const here = island.cells.some(([r, c]) => r === player.row && c === player.col);
   if (!here) return { ok: false, error: 'Основной корабль должен находиться на клетке этого острова.' };
-  if (island.loadedRound === room.round) return { ok: false, error: 'С этого острова уже выполнялась погрузка в текущем раунде.' };
+  if (islandLoadingLimit() === 1 && island.loadedRound === room.round) return { ok: false, error: 'С этого острова уже выполнялась погрузка в текущем раунде.' };
   if (!availableGoodsOnIsland(island).includes(goodId)) return { ok: false, error: `На острове нет действующего источника товара «${good.name}».` };
   const hold = holdFor(room, player, holdId);
   if (!hold) return { ok: false, error: 'Выбранный трюм недоступен.' };
@@ -2156,6 +2160,11 @@ function cargoSaleValue(player, holdId = 'main') {
   const good = GOODS[cargo.goodId];
   if (!good) return 0;
   return good.price * cargo.quantity;
+}
+
+function contractBonusForRevenue(revenue) {
+  const base = Math.max(0, Math.floor(Number(revenue) || 0));
+  return Math.floor(base * Math.max(0, Number(BALANCE.contractBonusRatio) || 0));
 }
 
 function canSellCargo(room, player, holdId = 'main') {
@@ -2734,6 +2743,7 @@ module.exports = {
   canLoadCargo,
   loadCargo,
   cargoSaleValue,
+  contractBonusForRevenue,
   canSellCargo,
   sellCargo,
   isCitadelPeaceCell,

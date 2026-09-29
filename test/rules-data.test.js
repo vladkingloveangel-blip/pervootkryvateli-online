@@ -215,6 +215,10 @@ test('runtime consumers use canonical prices, characteristics, income and safe m
   }
   for(let count=0;count<3;count++) assert.equal(logic.escortPurchasePrice({escorts:Array(count).fill({})}),rules.fleet.escortPrices[count]);
   assert.deepEqual(data.GOODS,rules.economy.goods);
+  assert.equal(data.BALANCE.loadingLimitPerIslandPerRound,rules.economy.loadingLimitPerIslandPerRound);
+  assert.deepEqual(data.TREASURE_CARDS.map(c=>c.id),rules.legends.treasures.map(c=>c.id));
+  assert.equal(data.TREASURE_CARDS.find(c=>c.id==='full-diamonds-hold').cargoGoodId,'diamonds');
+  assert.equal(data.TREASURE_CARDS.some(c=>c.id==='full-ore-hold'),false);
   assert.deepEqual(data.ANCHOR_CARDS,rules.sea);
   const geometry={islands:map.ISLAND_DEFS.map(({id,cells})=>({id,cells})),land:map.LAND_CELLS,citadel:map.CITADEL_CELLS,special:map.SPECIAL_LAND,hazards:map.HAZARDS,anchors:Object.values(map.ANCHORS).map(({id,cells})=>({id,cells})),places:Object.values(map.LEGENDARY_PLACES).map(({id,row,col})=>({id,row,col}))};
   const hash=crypto.createHash('sha256').update(JSON.stringify(geometry)).digest('hex');
