@@ -3,6 +3,9 @@ const {
   cloneIslands,
   reachableCells,
   mistPathReachableCells,
+  navigationPassabilities,
+  navigationAllowsHazards,
+  hazardsAt,
   isShipProtected,
   isIslandProtected,
   applySeaVeilToShip,
@@ -27,9 +30,8 @@ const {
   shipyardSlotsForPlayer,
   ordinaryEscortExcess,
   removeEscortsForShipyard,
-  createLandinEscort,
-  replaceEscortWithLandin,
   escortUseLimit,
+  escortPurchasePrice,
   escortStatuses,
   buyEscort,
   loadCargo,
@@ -112,7 +114,7 @@ const {
   completeAssignment,
   legendaryPlaceAt,
 } = require('../game-logic');
-const { ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS } = require('../game-data');
+const { BALANCE, MAP_META, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS } = require('../game-data');
 
 function has(cells, row, col) { return cells.some(c => c.row === row && c.col === col); }
 
@@ -208,6 +210,73 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(has(reachableCells(caravel, 2), 5, 6), true);
   assert.equal(has(reachableCells(frigate, 2), 5, 6), false);
   assert.equal(has(reachableCells(frigate, 1), 5, 5), true);
+}
+
+// Этап 3.3: навигационные улучшения расширяют проходимость основного корабля.
+{
+  const reefPilot = { row: 6, col: 6, shipClass: 'brigantine', level: 2, upgrades: ['reefPilot'] };
+  assert.equal(has(reachableCells(reefPilot, 1), 6, 7), true);
+
+  const leadLine = { row: 5, col: 18, shipClass: 'frigate', level: 2, upgrades: ['leadLine'] };
+  assert.equal(has(reachableCells(leadLine, 1), 4, 18), true);
+
+  const iceStem = { row: 22, col: 1, shipClass: 'frigate', level: 2, upgrades: ['iceStem'] };
+  assert.equal(has(reachableCells(iceStem, 1), 23, 1), true);
+
+  const portage = { row: 5, col: 4, shipClass: 'frigate', level: 2, upgrades: ['portageSleds'] };
+  assert.equal(has(reachableCells(portage, 2), 5, 6), true);
+}
+
+// Если навигационное улучшение временно отключено потерей уровня, его проходимость не действует.
+{
+  const p = {
+    row: 6, col: 6, shipClass: 'brigantine', level: 1,
+    upgrades: ['falcons', 'reefPilot'], disabledUpgradeIds: ['reefPilot'],
+  };
+  assert.equal(has(reachableCells(p, 1), 6, 7), false);
+  assert.equal(navigationPassabilities(p).has('reef'), false);
+}
+
+// Если на клетке одновременно несколько препятствий, нужны возможности для каждого.
+{
+  const combined = { shipClass: 'brigantine', level: 2, upgrades: ['reefPilot'] };
+  assert.equal(navigationAllowsHazards(combined, ['shoal', 'reef']), true);
+  assert.equal(navigationAllowsHazards({ shipClass: 'brigantine', level: 1, upgrades: [] }, ['shoal', 'reef']), false);
+  assert.equal(navigationAllowsHazards({ shipClass: 'frigate', level: 1, upgrades: [] }, ['shoal', 'reef']), false);
+}
+
+// Маршрут состоит только из ортогональных шагов; можно остановиться раньше полной дальности.
+{
+  const p = { row: 6, col: 6, shipClass: 'frigate', level: 1, upgrades: [] };
+  const one = reachableCells(p, 1);
+  for (const cell of one) {
+    if (cell.dist === 0) continue;
+    assert.equal(Math.abs(cell.row - p.row) + Math.abs(cell.col - p.col), 1);
+  }
+  const three = reachableCells(p, 3);
+  assert.equal(three.some(cell => cell.dist === 1), true);
+  assert.equal(three.every(cell => cell.dist <= 3), true);
+}
+
+// Любой корабль может закончить движение на сухопутной береговой клетке,
+// но пройти её насквозь может только каравелла или судно с салазками.
+{
+  const ordinary = { row: 5, col: 4, shipClass: 'frigate', level: 1, upgrades: [] };
+  assert.equal(has(reachableCells(ordinary, 1), 5, 5), true);
+  assert.equal(has(reachableCells(ordinary, 2), 5, 6), false);
+  const sleds = { ...ordinary, level: 2, upgrades: ['portageSleds'] };
+  assert.equal(has(reachableCells(sleds, 2), 5, 6), true);
+}
+
+// Карта препятствий возвращает все типы клетки, а не один случайно перезаписанный тип.
+{
+  for (let row = 0; row < 28; row++) {
+    for (let col = 0; col < 28; col++) {
+      const found = hazardsAt(row, col);
+      assert.equal(new Set(found).size, found.length);
+      assert.equal(found.every(type => ['reef', 'shoal', 'ice'].includes(type)), true);
+    }
+  }
 }
 
 // Свободный остров захватывается без действия.
@@ -1390,7 +1459,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
     escorts: [
       { id: 'e1', type: 'cargo', special: false, cargo: { goodId: 'ore', quantity: 5 } },
       { id: 'e2', type: 'combat', special: false, cargo: null },
-      { id: 'e3', type: 'combat', special: true, cargo: null },
+      { id: 'e3', type: 'combat', special: false, cargo: null },
     ],
   };
   room.players.push(p);
@@ -1420,7 +1489,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
     escorts: [
       { id: 'e1', type: 'cargo', special: false, cargo: null },
       { id: 'e2', type: 'combat', special: false, cargo: null },
-      { id: 'e3', type: 'combat', special: true, cargo: null },
+      { id: 'e3', type: 'combat', special: false, cargo: null },
     ],
   };
   room.players.push(p);
@@ -1446,66 +1515,258 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(shipStats(p).artillery, 6); // базовые 5 + бонус II уровня 1, без кулеврин
 }
 
-console.log('game-logic tests: OK');
-
-
-// v0.16: особое сопровождение Ландина совмещает боевой бонус и грузовой трюм.
+// Этап 3.2: обычные ветви требуют первую ступень, а навигационные
+// улучшения являются отдельными одноуровневыми ветвями.
 {
-  assert.equal(ESCORTS.landin.artillery, 6);
-  assert.equal(ESCORTS.landin.cargo, 5);
-  const room = { islands: cloneIslands() };
-  const island = room.islands.find(i => i.id === 'bogamia');
-  island.ownerId = 'p1';
-  island.buildings = [{ type: 'farm', level: 1 }];
-  const p = { id: 'p1', row: island.cells[0][0], col: island.cells[0][1], shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 0, cargo: null };
-  const grant = createLandinEscort(p);
-  assert.equal(grant.ok, true);
-  assert.equal(p.escorts.length, 1);
-  assert.equal(p.escorts[0].type, 'landin');
-  assert.equal(fleetArtillery(room, p), shipStats(p).artillery + 6);
-  const loaded = loadCargo(room, p, island.id, 'provisions', p.escorts[0].id);
-  assert.equal(loaded.ok, true);
-  assert.equal(p.escorts[0].cargo.quantity, 5);
+  const p = { row: 13, col: 13, shipClass: 'carrack', level: 6, ducats: 100, upgrades: [], escorts: [] };
+  assert.equal(buyShipUpgrade(p, 'culverins').ok, false);
+  assert.equal(buyShipUpgrade(p, 'falcons').ok, true);
+  assert.equal(buyShipUpgrade(p, 'culverins').ok, true);
+  assert.equal(buyShipUpgrade(p, 'falcons').ok, false);
+  assert.equal(buyShipUpgrade(p, 'leadLine').ok, true);
+  assert.equal(buyShipUpgrade(p, 'reefPilot').ok, true);
+  assert.equal(buyShipUpgrade(p, 'portageSleds').ok, true);
+  assert.deepEqual(p.upgrades, ['falcons', 'culverins', 'leadLine', 'reefPilot', 'portageSleds']);
 }
 
-// Ландин при заполненном пределе трёх не создаёт четвёртое судно: владелец заменяет одно из имеющихся.
+// Класс не может покупать или бесплатно устанавливать навигационное улучшение,
+// которое дублирует его врождённую проходимость.
 {
+  const pairs = [
+    ['brigantine', 'leadLine'],
+    ['frigate', 'reefPilot'],
+    ['carrack', 'iceStem'],
+    ['caravel', 'portageSleds'],
+  ];
+  for (const [shipClass, upgradeId] of pairs) {
+    const buyer = { row: 13, col: 13, shipClass, level: 6, ducats: 100, upgrades: [], escorts: [] };
+    assert.equal(buyShipUpgrade(buyer, upgradeId).ok, false, `${shipClass} / ${upgradeId}`);
+    assert.equal(installShipUpgradeFree({ ...buyer, upgrades: [] }, upgradeId).ok, false, `free ${shipClass} / ${upgradeId}`);
+  }
+}
+
+// После потери места выбранное улучшение остаётся установленным, но не действует;
+// при восстановлении уровня оно автоматически снова становится активным.
+{
+  const room = { islands: cloneIslands(), players: [] };
   const p = {
-    id: 'p1', shipClass: 'frigate', level: 7, upgrades: [], levelInactiveEscortIds: [],
-    escorts: [
-      { id: 'e1', type: 'cargo', special: false, cargo: { goodId: 'wood', quantity: 5 } },
-      { id: 'e2', type: 'combat', special: false, cargo: null },
-      { id: 'e3', type: 'combat', special: false, cargo: null },
-    ],
+    id: 'stage-3-2', row: 13, col: 13, shipClass: 'carrack', level: 2, ducats: 100,
+    upgrades: ['falcons', 'leadLine'], disabledUpgradeIds: [], escorts: [], levelInactiveEscortIds: [], cargo: null,
   };
-  const result = replaceEscortWithLandin(p, 'e1');
-  assert.equal(result.ok, true);
-  assert.equal(p.escorts.length, 3);
-  assert.equal(p.escorts.some(e => e.id === 'e1'), false);
-  assert.equal(p.escorts.filter(e => e.type === 'landin').length, 1);
-  assert.deepEqual(result.cargoDiscarded, { goodId: 'wood', quantity: 5 });
+  room.players.push(p);
+  const loss = loseShipLevel(room, p);
+  assert.equal(loss.after, 1);
+  assert.equal(setDisabledUpgrades(p, ['leadLine']).ok, true);
+  assert.equal(shipUpgradeStatuses(p).find(u => u.id === 'leadLine').active, false);
+  assert.deepEqual(p.upgrades, ['falcons', 'leadLine']);
+  assert.equal(buyShipLevel(p).ok, true);
+  assert.deepEqual(p.disabledUpgradeIds, []);
+  assert.equal(shipUpgradeStatuses(p).find(u => u.id === 'leadLine').active, true);
 }
 
-// Потеря мест верфи уничтожает выбранное обычное сопровождение и его груз; Ландин места верфи не занимает.
+// Этап 3.4: каноническое сопровождение состоит только из грузовых и боевых судов,
+// использует цены 10/15/20, предел уровня 1/1/2/2/3/3 и общий максимум три.
+{
+  const room = { islands: cloneIslands() };
+  const yard = room.islands.find(i => i.id === 'raisk');
+  yard.ownerId = 'p1';
+  yard.buildings = [{ type: 'shipyard', level: 3 }];
+  const p = {
+    id: 'p1', row: 13, col: 13, shipClass: 'frigate', level: 5, ducats: 100,
+    upgrades: [], escorts: [], levelInactiveEscortIds: [],
+  };
+  assert.equal(shipyardSlotsForPlayer(room, p.id), 3);
+  assert.deepEqual([1,2,3,4,5,6].map(level => escortUseLimit({ level })), [1,1,2,2,3,3]);
+  assert.equal(escortPurchasePrice(p), BALANCE.escortPrices[0]);
+  const first = buyEscort(room, p, 'cargo');
+  assert.equal(first.ok, true);
+  assert.equal(first.price, BALANCE.escortPrices[0]);
+  assert.equal(ESCORTS[first.escort.type].cargo, 5);
+  assert.equal(escortPurchasePrice(p), BALANCE.escortPrices[1]);
+  const second = buyEscort(room, p, 'combat');
+  assert.equal(second.ok, true);
+  assert.equal(second.price, BALANCE.escortPrices[1]);
+  assert.equal(ESCORTS[second.escort.type].artillery, 5);
+  assert.equal(escortPurchasePrice(p), BALANCE.escortPrices[2]);
+  const third = buyEscort(room, p, 'cargo');
+  assert.equal(third.ok, true);
+  assert.equal(third.price, BALANCE.escortPrices[2]);
+  assert.equal(p.escorts.length, 3);
+  assert.equal(escortPurchasePrice(p), null);
+  assert.equal(buyEscort(room, p, 'combat').ok, false);
+}
+
+// Места нескольких собственных верфей складываются; без свободного места новое
+// сопровождение купить нельзя даже при достаточном уровне и количестве дукатов.
+{
+  const room = { islands: cloneIslands() };
+  const a = room.islands.find(i => i.id === 'raisk');
+  const b = room.islands.find(i => i.id === 'bogamia');
+  a.ownerId = b.ownerId = 'p1';
+  a.buildings = [{ type: 'shipyard', level: 1 }];
+  b.buildings = [{ type: 'shipyard', level: 2 }];
+  const p = { id: 'p1', row: 13, col: 13, shipClass: 'frigate', level: 6, ducats: 100, upgrades: [], escorts: [] };
+  assert.equal(shipyardSlotsForPlayer(room, p.id), 3);
+  assert.equal(buyEscort(room, p, 'cargo').ok, true);
+  assert.equal(buyEscort(room, p, 'combat').ok, true);
+  assert.equal(buyEscort(room, p, 'cargo').ok, true);
+
+  b.ownerId = 'other';
+  assert.equal(shipyardSlotsForPlayer(room, p.id), 1);
+  assert.equal(ordinaryEscortExcess(room, p), 2);
+}
+
+// При потере места верфи владелец выбирает конкретные лишние обычные суда:
+// они удаляются, а находившийся на них груз теряется.
 {
   const room = { islands: cloneIslands() };
   const yard = room.islands.find(i => i.id === 'kisalinia');
   yard.ownerId = 'p1';
-  yard.buildings = [{ type: 'shipyard', level: 1 }];
+  yard.buildings = [{ type: 'shipyard', level: 2 }];
   const p = {
-    id: 'p1', shipClass: 'frigate', level: 7, upgrades: [], levelInactiveEscortIds: [],
+    id: 'p1', shipClass: 'frigate', level: 6, upgrades: [], levelInactiveEscortIds: [],
     escorts: [
       { id: 'e1', type: 'cargo', special: false, cargo: { goodId: 'ore', quantity: 5 } },
       { id: 'e2', type: 'combat', special: false, cargo: null },
-      { id: 'landin', type: 'landin', special: true, cargo: null },
+      { id: 'e3', type: 'cargo', special: false, cargo: { goodId: 'wood', quantity: 5 } },
     ],
   };
   assert.equal(ordinaryEscortExcess(room, p), 1);
-  assert.equal(removeEscortsForShipyard(room, p, ['landin']).ok, false);
-  const removed = removeEscortsForShipyard(room, p, ['e1']);
+  assert.equal(removeEscortsForShipyard(room, p, []).ok, false);
+  const removed = removeEscortsForShipyard(room, p, ['e3']);
   assert.equal(removed.ok, true);
-  assert.deepEqual(removed.removed[0].cargoDiscarded, { goodId: 'ore', quantity: 5 });
-  assert.equal(p.escorts.length, 2);
-  assert.equal(p.escorts.some(e => e.type === 'landin'), true);
+  assert.deepEqual(removed.removed[0].cargoDiscarded, { goodId: 'wood', quantity: 5 });
+  assert.equal(p.escorts.some(e => e.id === 'e3'), false);
   assert.equal(ordinaryEscortExcess(room, p), 0);
 }
+
+// Потеря уровня не удаляет лишнее сопровождение: выбранное судно становится
+// неактивным, сохраняет груз, не даёт артиллерию и не может продавать груз.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const yard = room.islands.find(i => i.id === 'raisk');
+  yard.ownerId = 'p1';
+  yard.buildings = [{ type: 'shipyard', level: 3 }];
+  const p = {
+    id: 'p1', row: 13, col: 13, shipClass: 'frigate', level: 5, ducats: 0,
+    upgrades: [], disabledUpgradeIds: [], levelInactiveEscortIds: [],
+    cargo: null,
+    escorts: [
+      { id: 'e1', type: 'combat', special: false, cargo: null },
+      { id: 'e2', type: 'combat', special: false, cargo: null },
+      { id: 'e3', type: 'cargo', special: false, cargo: { goodId: 'ore', quantity: 5 } },
+    ],
+  };
+  room.players.push(p);
+  loseShipLevel(room, p);
+  assert.equal(p.escorts.length, 3);
+
+  assert.equal(setLevelInactiveEscorts(p, ['e3']).ok, true);
+  assert.equal(escortStatuses(room, p).find(e => e.id === 'e3').active, false);
+  assert.equal(p.escorts.find(e => e.id === 'e3').cargo.quantity, 5);
+  assert.equal(sellCargo(room, p, 'e3').ok, false);
+  assert.equal(p.escorts.find(e => e.id === 'e3').cargo.quantity, 5);
+
+  assert.equal(setLevelInactiveEscorts(p, ['e1']).ok, true);
+  assert.equal(escortStatuses(room, p).find(e => e.id === 'e1').active, false);
+  assert.equal(fleetArtillery(room, p), shipStats(p).artillery + ESCORTS.combat.artillery);
+}
+
+// Ландин отсутствует в каноническом каталоге правил и не продаётся; его retired-проекция
+// остаётся читаемой только для старых сохранений.
+{
+  assert.equal(ESCORTS.landin.retired, true);
+  const room = { islands: cloneIslands() };
+  const p = { id: 'legacy', row: 13, col: 13, shipClass: 'frigate', level: 6, ducats: 100, upgrades: [], escorts: [] };
+  assert.equal(buyEscort(room, p, 'landin').ok, false);
+
+  const old = {
+    id: 'legacy', row: 13, col: 13, shipClass: 'frigate', level: 6, upgrades: [],
+    levelInactiveEscortIds: [],
+    escorts: [{ id: 'old-landin', type: 'landin', special: true, cargo: { goodId: 'ore', quantity: 5 } }],
+  };
+  assert.equal(fleetArtillery(room, old), shipStats(old).artillery + ESCORTS.landin.artillery);
+  assert.equal(old.escorts[0].cargo.quantity, 5);
+}
+
+// Этап 3.5: все переходы VI→V→IV→III→II→I теряют ровно один уровень,
+// а обязательная потеря на I возвращает на общую стартовую клетку.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  for (let level = 6; level >= 2; level--) {
+    const p = {
+      id: `loss-${level}`, row: 9, col: 9, shipClass: 'brigantine', level,
+      ducats: 0, upgrades: [], disabledUpgradeIds: [], escorts: [], levelInactiveEscortIds: [], cargo: null,
+    };
+    const before = shipStats(p);
+    const result = loseShipLevel(room, p);
+    assert.equal(result.before, level);
+    assert.equal(result.after, level - 1);
+    assert.equal(result.returnedToStart, false);
+    assert.equal(p.level, level - 1);
+    assert.equal(shipStats(p).artillery, before.artillery - 1);
+  }
+
+  const first = {
+    id: 'loss-I', row: 9, col: 9, shipClass: 'brigantine', level: 1,
+    ducats: 0, upgrades: [], disabledUpgradeIds: [], escorts: [], levelInactiveEscortIds: [], cargo: null,
+  };
+  const returned = loseShipLevel(room, first);
+  assert.equal(returned.returnedToStart, true);
+  assert.equal(first.level, 1);
+  assert.deepEqual([first.row, first.col], MAP_META.startCell);
+}
+
+// Если при потере уровня выбора улучшений не требуется, основной трюм сразу
+// сокращается до новой вместимости. Сбрасывается только излишек.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const p = {
+    id: 'cargo-loss', row: 7, col: 7, shipClass: 'carrack', level: 2,
+    ducats: 0, upgrades: [], disabledUpgradeIds: [], escorts: [], levelInactiveEscortIds: [],
+    cargo: { goodId: 'wood', quantity: 6 },
+  };
+  const loss = loseShipLevel(room, p);
+  assert.equal(loss.after, 1);
+  assert.equal(loss.cargoDiscarded, 1);
+  assert.equal(shipCargoCapacity(p), 5);
+  assert.equal(p.cargo.quantity, 5);
+}
+
+// Полная матрица врождённой проходимости и соответствующих навигационных улучшений.
+// Неподходящий класс без нужной возможности препятствие не проходит.
+{
+  const cases = [
+    { passability: 'reef', nativeClass: 'frigate', upgrade: 'reefPilot', from: [6,6], to: [6,7], distance: 1 },
+    { passability: 'shoal', nativeClass: 'brigantine', upgrade: 'leadLine', from: [5,18], to: [4,18], distance: 1 },
+    { passability: 'ice', nativeClass: 'carrack', upgrade: 'iceStem', from: [22,1], to: [23,1], distance: 1 },
+    { passability: 'land1', nativeClass: 'caravel', upgrade: 'portageSleds', from: [5,4], to: [5,6], distance: 2 },
+  ];
+  const classes = ['brigantine','frigate','caravel','carrack'];
+  for (const item of cases) {
+    for (const shipClass of classes) {
+      const plain = { row: item.from[0], col: item.from[1], shipClass, level: 2, upgrades: [] };
+      assert.equal(
+        has(reachableCells(plain, item.distance), item.to[0], item.to[1]),
+        shipClass === item.nativeClass,
+        `${shipClass} / ${item.passability}`
+      );
+      if (shipClass !== item.nativeClass) {
+        const improved = { ...plain, upgrades: [item.upgrade] };
+        assert.equal(has(reachableCells(improved, item.distance), item.to[0], item.to[1]), true, `${shipClass} + ${item.upgrade}`);
+      }
+    }
+  }
+}
+
+// Берег остаётся допустимой конечной клеткой для обычного корабля, но без
+// land1 сквозное прохождение через сухопутную клетку запрещено.
+{
+  const frigate = { row: 5, col: 4, shipClass: 'frigate', level: 1, upgrades: [] };
+  assert.equal(has(reachableCells(frigate, 1), 5, 5), true);
+  assert.equal(has(reachableCells(frigate, 2), 5, 6), false);
+  const withSleds = { ...frigate, level: 2, upgrades: ['portageSleds'] };
+  assert.equal(has(reachableCells(withSleds, 2), 5, 6), true);
+}
+
+console.log('game-logic tests: OK');

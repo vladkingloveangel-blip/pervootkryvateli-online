@@ -40,6 +40,8 @@ const {
   claimFreeIslandsAt,
   publicIsland,
   shipStats,
+  readableShipLevel,
+  shipUpgradeSlotLimit,
   shipUpgradeStatuses,
   fleetAdjustmentNeeds,
   setDisabledUpgrades,
@@ -617,6 +619,7 @@ function publicRoom(room, viewerId = null) {
     shipUpgradeCatalog: Object.fromEntries(Object.entries(SHIP_UPGRADES).filter(([, u]) => !u.retired).map(([id, u]) => [id, {
       id: u.id, name: u.name, branch: u.branch, order: u.order, price: u.price, requires: u.requires || null,
       artillery: u.artillery || 0, army: u.army || 0, cargo: u.cargo || 0, movement: u.movement || 0,
+      passability: u.passability || null,
     }])),
     escortCatalog: Object.fromEntries(Object.entries(ESCORTS).map(([id, e]) => [id, { ...e }])),
     islands: room.islands.map(i => {
@@ -635,7 +638,7 @@ function publicRoom(room, viewerId = null) {
         cargo: e.cargo ? { ...e.cargo, value: cargoSaleValue(p, e.id) } : null,
       }));
       const cargoEscortCapacity = escorts.filter(e => e.active).reduce((sum, e) => sum + (Number(ESCORTS[e.type]?.cargo) || 0), 0);
-      const level = Math.max(1, Math.min(BALANCE.maxReadableShipLevel, Number(p.level) || 1));
+      const level = readableShipLevel(p);
       const nextLevel = level < BALANCE.maxShipLevel ? SHIP_LEVELS[level + 1] : null;
       return {
         id: p.id,
@@ -684,7 +687,7 @@ function publicRoom(room, viewerId = null) {
         totalCargoCapacity: stats.cargo + cargoEscortCapacity,
         upgrades: shipUpgradeStatuses(p),
         disabledUpgradeIds: p.id === viewerId ? [...(p.disabledUpgradeIds || [])] : [],
-        upgradeSlots: level,
+        upgradeSlots: shipUpgradeSlotLimit(p),
         escorts,
         levelInactiveEscortIds: p.id === viewerId ? [...(p.levelInactiveEscortIds || [])] : [],
         shipyardSlots: shipyardSlotsForPlayer(room, p.id),
@@ -2363,8 +2366,8 @@ function newPlayer(socket, data, color) {
     ducats: BALANCE.session.startingDucats,
     debt: 0,
     level: 1,
-    row: 0,
-    col: 0,
+    row: MAP_META.startCell[0],
+    col: MAP_META.startCell[1],
     specialCards: [],
     cargo: null,
     upgrades: [],

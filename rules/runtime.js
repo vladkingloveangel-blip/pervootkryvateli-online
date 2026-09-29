@@ -16,7 +16,8 @@ for (const [id, building] of Object.entries(BUILDINGS)) {
     (BUILDING_UPGRADES[id] ||= {})[level] = { ...next, price: BUILDINGS[next.type].levels[next.level].price };
   }
 }
-const SHIP_UPGRADES = Object.fromEntries(Object.entries(rules.fleet.upgrades).filter(([, u]) => !u.availability));
+const SHIP_UPGRADES = Object.fromEntries(Object.entries(rules.fleet.upgrades)
+  .filter(([, u]) => !u.availability || (u.availability.status === 'data-ready' && u.availability.consumerStage <= 3)));
 // Read retired content from old saves, but do not sell it again.
 SHIP_UPGRADES[legacy.removedUpgrade.id] = { ...legacy.removedUpgrade, retired: true };
 const SHIP_LEVELS = { ...rules.fleet.levels, [legacy.shipLevel7.level]: { ...legacy.shipLevel7, retired: true } };
@@ -40,7 +41,7 @@ const FEUD_CARDS = Object.fromEntries(Object.entries(legacy.feud).map(([id, card
   }),
 ]));
 module.exports = {
-  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-2-party-clock',
+  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-3-fleet-navigation-final',
   BALANCE: {
     session: rules.session,
     maxShipLevel: rules.fleet.maxLevel, maxReadableShipLevel: legacy.shipLevel7.level,

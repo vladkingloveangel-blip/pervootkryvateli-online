@@ -34,6 +34,7 @@ test('legacy profile references remain valid while canonical master data stays s
 test('compatibility validator rejects broken saved-state references and projections', () => {
   const mutations = [
     x => x.shipLevel7.level++,
+    x => { x.shipLevel7.upgradeSlots = 0; },
     x => x.removedUpgrade.requires = 'missing',
     x => x.removedEscort.cargo = -1,
     x => x.buildingAreas.manor = 0,

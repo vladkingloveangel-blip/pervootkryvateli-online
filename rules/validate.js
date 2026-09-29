@@ -121,21 +121,36 @@ function validateRules(rules, map) {
     records(Object.values(catalog), domain);
     for (const [id, value] of Object.entries(catalog)) check(value.id === id, domain, `key/id mismatch ${id}`);
   }
+  check(fleet.maxLevel === 6, 'fleet.maxLevel', 'expected VI maximum');
   check(Object.keys(fleet.levels).length === fleet.maxLevel, 'levels', 'missing or extra levels');
   for (let level = 1; level <= fleet.maxLevel; level++) {
     const d = fleet.levels[level]; check(d?.level === level, 'levels', `missing ${level}`);
     if (!d) continue;
     for (const key of ['price','statBonus','moveBonus','upgradeSlots','escortLimit']) integer(d[key], `levels.${level}.${key}`);
+    check(d.moveBonus === 0, `levels.${level}.moveBonus`, 'ship levels must not add movement');
+    check(d.upgradeSlots === level, `levels.${level}.upgradeSlots`, 'expected one upgrade slot per level');
   }
   for (const s of Object.values(fleet.ships)) {
     for (const key of ['artillery','army','cargo']) integer(s[key], `${s.id}.${key}`);
     check(Number.isInteger(s.moveMod), s.id, 'missing moveMod');
     check(['shoal','reef','ice','land1'].includes(s.passability), s.id, 'invalid passability');
   }
-  check(Array.isArray(fleet.escortPrices) && fleet.escortPrices.length > 0, 'escortPrices', 'missing prices');
+  check(Array.isArray(fleet.escortPrices) && fleet.escortPrices.length === 3, 'escortPrices', 'expected three escort purchase prices');
   for (const [index, price] of (fleet.escortPrices || []).entries()) positive(price, `escortPrices.${index}`);
+  check(Object.keys(fleet.escorts).length === 2, 'escorts', 'expected cargo and combat escorts only');
+  for (const id of ['cargo','combat']) check(Boolean(fleet.escorts[id]), 'escorts', `missing ${id}`);
   for (const escort of Object.values(fleet.escorts)) for (const key of ['artillery','army','cargo']) integer(escort[key], `${escort.id}.${key}`);
+  check(fleet.escorts.cargo?.artillery === 0 && fleet.escorts.cargo?.army === 0 && fleet.escorts.cargo?.cargo > 0, 'escorts.cargo', 'invalid cargo escort profile');
+  check(fleet.escorts.combat?.artillery > 0 && fleet.escorts.combat?.army === 0 && fleet.escorts.combat?.cargo === 0, 'escorts.combat', 'invalid combat escort profile');
+  for (let level = 1; level <= fleet.maxLevel; level++) {
+    check(fleet.levels[level]?.escortLimit === Math.ceil(level / 2), `levels.${level}.escortLimit`, 'expected 1/1/2/2/3/3 escort limit');
+  }
+  const shipyardLevels = economy.buildings?.shipyard?.levels || {};
+  for (let level = 1; level <= 3; level++) {
+    check(shipyardLevels[level]?.escortSlots === level, `buildings.shipyard.levels.${level}.escortSlots`, 'expected one escort slot per shipyard level');
+  }
   positive(fleet.maxBranchUpgrades, 'fleet.maxBranchUpgrades');
+  const upgradesByBranch = new Map();
   for (const u of Object.values(fleet.upgrades)) {
     integer(u.price, u.id); integer(u.order, u.id, 1);
     check(u.order <= fleet.maxBranchUpgrades, u.id, 'upgrade order exceeds branch limit');
@@ -144,6 +159,22 @@ function validateRules(rules, map) {
       const previous = fleet.upgrades[u.requires];
       check(previous && previous.branch === u.branch && previous.order < u.order, u.id, 'invalid prerequisite');
     }
+    if (!upgradesByBranch.has(u.branch)) upgradesByBranch.set(u.branch, []);
+    upgradesByBranch.get(u.branch).push(u);
+  }
+  for (const [branch, branchUpgrades] of upgradesByBranch) {
+    check(branchUpgrades.length <= fleet.maxBranchUpgrades, `upgrades.${branch}`, 'too many upgrades in branch');
+    unique(branchUpgrades.map(u => u.order), `upgrades.${branch}.orders`);
+  }
+  const navigationUpgrades = Object.values(fleet.upgrades).filter(u => u.passability);
+  check(navigationUpgrades.length === 4, 'navigationUpgrades', 'expected four navigation upgrades');
+  unique(navigationUpgrades.map(u => u.passability), 'navigationUpgrades.passability');
+  unique(navigationUpgrades.map(u => u.branch), 'navigationUpgrades.branches');
+  for (const u of navigationUpgrades) {
+    check(['shoal','reef','ice','land1'].includes(u.passability), u.id, 'invalid navigation passability');
+    check(u.order === 1 && !u.requires, u.id, 'navigation upgrade must be a one-level branch');
+    check(u.branch === u.id, u.id, 'navigation upgrade must use its own branch');
+    check(u.availability?.status === 'data-ready' && u.availability?.consumerStage === 3, u.id, 'navigation upgrade must target stage 3');
   }
   for (const g of Object.values(economy.goods)) integer(g.price, g.id);
   for (const r of Object.values(economy.resources)) ref(r.goodId, goods, r.id);
@@ -410,6 +441,7 @@ function validateCompatibility(rules, legacy) {
   integer(legacy.session?.circlesPerRound, 'legacy.session.circlesPerRound', 1);
   check(legacy.shipLevel7?.level === rules.fleet.maxLevel + 1, 'legacy.shipLevel7', 'expected next retired level');
   for (const key of ['price','statBonus','moveBonus']) integer(legacy.shipLevel7?.[key], `legacy.shipLevel7.${key}`);
+  integer(legacy.shipLevel7?.upgradeSlots, 'legacy.shipLevel7.upgradeSlots', 1);
   const oldUpgrade = legacy.removedUpgrade;
   check(Boolean(oldUpgrade?.id) && !rules.fleet.upgrades[oldUpgrade.id], 'legacy.removedUpgrade', 'must be retired');
   check(Object.values(rules.fleet.upgrades).some(u => u.id === oldUpgrade?.requires && u.branch === oldUpgrade.branch && u.order < oldUpgrade.order), 'legacy.removedUpgrade.requires', 'invalid prerequisite');

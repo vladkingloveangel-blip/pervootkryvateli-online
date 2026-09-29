@@ -10,7 +10,7 @@ const {
   GOODS,
   ISLAND_DEFS,
   ISLAND_BY_CELL,
-  HAZARD_BY_CELL,
+  HAZARDS,
   ANCHORS,
   ANCHOR_CARDS,
   ANCHOR_BY_CELL,
@@ -55,6 +55,8 @@ function islandAt(room, row, col) {
 const SPECIAL_LAND_SET = new Set(SPECIAL_LAND.map(([r, c]) => cellKey(r, c)));
 const CITADEL_SET = new Set(CITADEL_CELLS.map(([r, c]) => cellKey(r, c)));
 const LAND_SET = new Set(LAND_CELLS.map(([r, c]) => cellKey(r, c)));
+const HAZARD_SETS = Object.fromEntries(Object.entries(HAZARDS)
+  .map(([type, cells]) => [type, new Set(cells.map(([r, c]) => cellKey(r, c))) ]));
 
 function isCitadelCell(row, col) {
   return CITADEL_SET.has(cellKey(row, col));
@@ -68,16 +70,25 @@ function isLand(row, col) {
   return LAND_SET.has(cellKey(row, col)) || SPECIAL_LAND_SET.has(cellKey(row, col));
 }
 
-function hazardAt(row, col) {
-  return HAZARD_BY_CELL.get(cellKey(row, col)) || null;
+function hazardsAt(row, col) {
+  const key = cellKey(row, col);
+  return Object.entries(HAZARD_SETS).filter(([, cells]) => cells.has(key)).map(([type]) => type);
 }
 
-function hazardAllowed(shipClass, hazard) {
-  if (!hazard) return true;
-  if (hazard === 'reef') return shipClass === 'frigate';
-  if (hazard === 'ice') return shipClass === 'carrack';
-  if (hazard === 'shoal') return shipClass === 'brigantine';
-  return false;
+function navigationPassabilities(player) {
+  const out = new Set();
+  const innate = SHIPS[player?.shipClass]?.passability;
+  if (innate) out.add(innate);
+  for (const id of activeUpgradeIds(player)) {
+    const passability = SHIP_UPGRADES[id]?.passability;
+    if (passability) out.add(passability);
+  }
+  return out;
+}
+
+function navigationAllowsHazards(player, hazards) {
+  const passabilities = navigationPassabilities(player);
+  return (hazards || []).every(hazard => passabilities.has(hazard));
 }
 
 
@@ -613,7 +624,8 @@ function canInstallShipUpgradeFree(player, upgradeId) {
   if (!isCitadelCell(player.row, player.col)) return { ok: false, error: 'Улучшения устанавливаются только в Цитадели.' };
   player.upgrades ||= [];
   if (player.upgrades.includes(upgradeId)) return { ok: false, error: 'Такое улучшение уже установлено.' };
-  if (player.upgrades.length >= Math.max(1, Number(player.level) || 1)) return { ok: false, error: 'Нет свободного места для улучшения на текущем уровне корабля.' };
+  if (repeatsInnatePassability(player, upgrade)) return { ok: false, error: 'Этот класс корабля уже проходит такое препятствие без улучшения.' };
+  if (player.upgrades.length >= shipUpgradeSlotLimit(player)) return { ok: false, error: 'Нет свободного места для улучшения на текущем уровне корабля.' };
   const branchCountValue = player.upgrades.filter(id => SHIP_UPGRADES[id]?.branch === upgrade.branch).length;
   if (branchCountValue >= BALANCE.maxBranchUpgrades) return { ok: false, error: 'В этой ветви уже установлены два улучшения.' };
   if (upgrade.requires && !player.upgrades.includes(upgrade.requires)) return { ok: false, error: `Сначала установите «${SHIP_UPGRADES[upgrade.requires].name}».` };
@@ -687,7 +699,7 @@ function applyBoardingLoss(player, upgradeId) {
 function stormCellOptions(room, player, islandId) {
   const island = room?.islands?.find(i => i.id === islandId);
   if (!island) return [];
-  return (island.cells || []).filter(([row, col]) => hazardAllowed(player.shipClass, hazardAt(row, col))).map(([row, col]) => ({ row, col }));
+  return (island.cells || []).filter(([row, col]) => navigationAllowsHazards(player, hazardsAt(row, col))).map(([row, col]) => ({ row, col }));
 }
 
 function creditDucats(player, amount) {
@@ -774,7 +786,8 @@ function resolveAnchorEncounter(room, player, rng = Math.random) {
 
 function reachableCells(player, maxDistance) {
   const limit = Math.max(0, Number(maxDistance) || 0);
-  const shipClass = player.shipClass;
+  const passabilities = navigationPassabilities(player);
+  const canCrossLand = passabilities.has('land1');
   const startLand = isLand(player.row, player.col);
   const queue = [{ row: player.row, col: player.col, dist: 0, landStreak: startLand ? 1 : 0 }];
   const seen = new Map();
@@ -794,15 +807,15 @@ function reachableCells(player, maxDistance) {
 
     for (const [row, col] of neighbors) {
       if (row < 0 || row >= MAP_META.rows || col < 0 || col >= MAP_META.cols) continue;
-      const hazard = hazardAt(row, col);
-      if (!hazardAllowed(shipClass, hazard)) continue;
+      const hazards = hazardsAt(row, col);
+      if (!hazards.every(hazard => passabilities.has(hazard))) continue;
 
       const nextLand = isLand(row, col);
       const currentLand = isLand(cur.row, cur.col);
       const nd = cur.dist + 1;
 
       if (nextLand) {
-        if (shipClass === 'caravel') {
+        if (canCrossLand) {
           if (cur.landStreak >= 1) continue;
           const stateKey = `${row},${col},1`;
           if ((seen.get(stateKey) ?? Infinity) <= nd) continue;
@@ -1427,8 +1440,23 @@ function claimFreeIslandsAt(room, player) {
   return claims;
 }
 
+function readableShipLevel(player) {
+  const raw = Math.floor(Number(player?.level) || 1);
+  const level = Math.max(1, Math.min(BALANCE.maxReadableShipLevel, raw));
+  return SHIP_LEVELS[level] ? level : 1;
+}
+
+function shipUpgradeSlotLimit(player) {
+  const level = readableShipLevel(player);
+  return Math.max(1, Number(SHIP_LEVELS[level]?.upgradeSlots) || 1);
+}
+
+function repeatsInnatePassability(player, upgrade) {
+  return Boolean(upgrade?.passability && SHIPS[player?.shipClass]?.passability === upgrade.passability);
+}
+
 function requiredDisabledUpgradeCount(player) {
-  const slots = Math.max(1, Number(player?.level) || 1);
+  const slots = shipUpgradeSlotLimit(player);
   return Math.max(0, (player?.upgrades || []).length - slots);
 }
 
@@ -1507,7 +1535,7 @@ function activeUpgradeIds(player) {
 
 function shipStats(player) {
   const base = SHIPS[player?.shipClass] || SHIPS.brigantine;
-  const level = Math.max(1, Math.min(BALANCE.maxReadableShipLevel, Number(player?.level) || 1));
+  const level = readableShipLevel(player);
   const levelDef = SHIP_LEVELS[level];
   const stats = {
     artillery: base.artillery + levelDef.statBonus,
@@ -1532,7 +1560,7 @@ function shipCargoCapacity(player) {
 
 function canBuyShipLevel(player) {
   if (!isCitadelCell(player.row, player.col)) return { ok: false, error: 'Повышать уровень корабля можно только в Цитадели.' };
-  const current = Math.max(1, Math.min(BALANCE.maxReadableShipLevel, Number(player.level) || 1));
+  const current = readableShipLevel(player);
   if (current >= BALANCE.maxShipLevel) return { ok: false, error: `Достигнут максимальный уровень корабля (${BALANCE.maxShipLevel}).` };
   const next = SHIP_LEVELS[current + 1];
   if (player.ducats < next.price) return { ok: false, error: `Для уровня ${current + 1} нужно ${next.price} дукатов.` };
@@ -1556,7 +1584,8 @@ function canBuyShipUpgrade(player, upgradeId) {
   if (!isCitadelCell(player.row, player.col)) return { ok: false, error: 'Улучшения устанавливаются только в Цитадели.' };
   player.upgrades ||= [];
   if (player.upgrades.includes(upgradeId)) return { ok: false, error: 'Такое улучшение уже установлено.' };
-  if (player.upgrades.length >= Math.max(1, Number(player.level) || 1)) return { ok: false, error: 'Нет свободного места для улучшения на текущем уровне корабля.' };
+  if (repeatsInnatePassability(player, upgrade)) return { ok: false, error: 'Этот класс корабля уже проходит такое препятствие без улучшения.' };
+  if (player.upgrades.length >= shipUpgradeSlotLimit(player)) return { ok: false, error: 'Нет свободного места для улучшения на текущем уровне корабля.' };
   const branchCountValue = player.upgrades.filter(id => SHIP_UPGRADES[id]?.branch === upgrade.branch).length;
   if (branchCountValue >= BALANCE.maxBranchUpgrades) return { ok: false, error: 'В этой ветви уже установлены два улучшения.' };
   if (upgrade.requires && !player.upgrades.includes(upgrade.requires)) {
@@ -1637,6 +1666,8 @@ function removeEscortsForShipyard(room, player, ids) {
   return { ok: true, removed };
 }
 
+// Compatibility only: current rules never create a Landin escort. This helper is
+// retained solely to finish restored legacy pending decisions.
 function createLandinEscort(player) {
   player.escorts ||= [];
   if (player.escorts.some(e => e.type === 'landin')) return { ok: false, error: 'Особое сопровождение Ландина уже получено.' };
@@ -1934,8 +1965,9 @@ function loseShipLevel(room, player) {
     const cargoDiscarded = adjustment.upgradeChoiceNeeded ? 0 : trimMainCargoToCapacity(player);
     return { before, after: player.level, returnedToStart: false, cargoDiscarded, adjustment };
   }
-  player.row = 0;
-  player.col = 0;
+  const [startRow, startCol] = MAP_META.startCell;
+  player.row = startRow;
+  player.col = startCol;
   return { before: 1, after: 1, returnedToStart: true, cargoDiscarded: 0, adjustment: fleetAdjustmentNeeds(player) };
 }
 
@@ -2166,16 +2198,6 @@ function grantMilitaryReward(room, player, island, captureMode, options = {}) {
       const name = addRewardBuilding(island, spec);
       if (name) notes.push(name);
     }
-    if (reward.specialLandinEscort) {
-      player.escorts ||= [];
-      if (player.escorts.length < BALANCE.maxEscorts) {
-        const created = createLandinEscort(player);
-        if (created.ok) notes.push(`особое сопровождение Ландина: +${ESCORTS.landin.artillery} артиллерии и трюм ${ESCORTS.landin.cargo}`);
-      } else {
-        player.pendingLandinEscort = true;
-        notes.push(`особое сопровождение Ландина заменит одно из ${BALANCE.maxEscorts} имеющихся судов по выбору владельца`);
-      }
-    }
   }
   return notes;
 }
@@ -2380,6 +2402,11 @@ module.exports = {
   islandCorrectionOptions,
   removeIslandBuildingForCorrection,
   shipStats,
+  navigationPassabilities,
+  navigationAllowsHazards,
+  hazardsAt,
+  readableShipLevel,
+  shipUpgradeSlotLimit,
   shipUpgradeStatuses,
   fleetAdjustmentNeeds,
   setDisabledUpgrades,
@@ -2397,7 +2424,6 @@ module.exports = {
   ordinaryEscortExcess,
   removeEscortById,
   removeEscortsForShipyard,
-  createLandinEscort,
   replaceEscortWithLandin,
   escortUseLimit,
   escortPurchasePrice,

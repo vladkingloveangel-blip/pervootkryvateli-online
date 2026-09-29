@@ -12,7 +12,8 @@
     "level": 7,
     "price": 23,
     "statBonus": 6,
-    "moveBonus": 2
+    "moveBonus": 2,
+    "upgradeSlots": 7
   },
   "removedUpgrade": {
     "id": "foreMarsel",

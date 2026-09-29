@@ -1595,7 +1595,7 @@
     }
     if (!pending) {
       badge.textContent = 'норма';
-      content.innerHTML = `<div class="event-current">Флотилия соответствует текущим ограничениям.</div><div class="cargo-meta">Здесь появится выбор при потере уровня, места верфи или при получении особого сопровождения Ландина с уже заполненным пределом ${r.balanceCatalog.maxEscorts} судов.</div>`;
+      content.innerHTML = '<div class="event-current">Флотилия соответствует текущим ограничениям.</div><div class="cargo-meta">Здесь появится обязательный выбор при потере уровня основного корабля или места верфи.</div>';
       state.fleetAdjustmentKey = null;
       state.fleetAdjustmentSelection = new Set();
       return;
@@ -1623,7 +1623,7 @@
     let note = '';
     if (pending.stage === 'upgrades' || pending.stage === 'escorts') {
       instruction = `Выберите ровно <strong>${pending.required}</strong> ${pending.stage === 'upgrades' ? 'улучшений' : 'судов сопровождения'}, которые временно не будут действовать.`;
-      note = pending.stage === 'escorts' ? 'Неактивное сопровождение продолжает следовать за флотилией; уже погруженный груз сохраняется.' : 'Улучшения остаются установленными и снова включатся, когда мест станет достаточно.';
+      note = pending.stage === 'escorts' ? 'Неактивное сопровождение продолжает следовать за флотилией; уже погруженный груз сохраняется, но судно не даёт артиллерию и его трюм нельзя загружать или продавать до восстановления уровня.' : 'Улучшения остаются установленными и снова включатся, когда мест станет достаточно.';
     } else if (pending.stage === 'shipyard-remove') {
       instruction = `Выберите ровно <strong>${pending.required}</strong> обычных судов сопровождения для окончательного удаления.`;
       note = 'Это не временное отключение: выбранные суда уничтожаются из-за нехватки мест верфи. Их груз также пропадает.';
@@ -1942,11 +1942,13 @@
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'build-btn';
-      const bonus = [u.artillery ? `арт. +${u.artillery}` : '', u.army ? `войско +${u.army}` : '', u.cargo ? `трюм +${u.cargo}` : '', u.movement ? `ход +${u.movement}` : ''].filter(Boolean).join(', ');
+      const passabilityLabel = { shoal: 'мели', reef: 'рифы', ice: 'льды', land1: '1 клетка суши' }[u.passability] || '';
+      const bonus = [u.artillery ? `арт. +${u.artillery}` : '', u.army ? `войско +${u.army}` : '', u.cargo ? `трюм +${u.cargo}` : '', u.movement ? `ход +${u.movement}` : '', passabilityLabel ? `проход: ${passabilityLabel}` : ''].filter(Boolean).join(', ');
       b.textContent = `${u.name} · ${u.price} дук.${bonus ? ` · ${bonus}` : ''}`;
       const dependencyOk = !u.requires || installedIds.has(u.requires);
       const slotOk = upgrades.length < mine.upgradeSlots;
-      b.disabled = !canBuyHere || mine.ducats < u.price || !dependencyOk || !slotOk;
+      const redundantPassability = Boolean(u.passability && state.room.shipCatalog?.[mine.shipClass]?.passability === u.passability);
+      b.disabled = !canBuyHere || mine.ducats < u.price || !dependencyOk || !slotOk || redundantPassability;
       b.addEventListener('click', () => emitDataAction(b, 'buyShipUpgrade', { upgradeId: id }));
       actions.appendChild(b);
     }

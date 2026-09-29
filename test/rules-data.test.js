@@ -21,7 +21,16 @@ test('validator rejects corruption rather than merely accepting the shipped samp
     x => x.islands.find(i=>i.kind==='state').factionId = 'missing',
     x => delete x.fleet.ships.brigantine.artillery,
     x => delete x.fleet.levels[4],
+    x => { x.fleet.levels[3].moveBonus = 1; },
+    x => { x.fleet.levels[4].upgradeSlots = 3; },
     x => x.fleet.upgrades.culverins.requires = 'missing',
+    x => { x.fleet.upgrades.leadLine.order = 2; },
+    x => { x.fleet.upgrades.leadLine.branch = 'reefPilot'; },
+    x => { delete x.fleet.upgrades.leadLine.availability; },
+    x => { x.fleet.upgrades.thirdArtillery = {...x.fleet.upgrades.falcons,id:'thirdArtillery',name:'Тест',order:1}; },
+    x => { delete x.fleet.escorts.cargo; },
+    x => { x.fleet.levels[4].escortLimit = 3; },
+    x => { x.economy.buildings.shipyard.levels[2].escortSlots = 1; },
     x => x.economy.buildings.farm.levels[1].next.type = 'missing',
     x => x.politics.assignments.mori[0].islandId = 'missing',
     x => x.politics.assignments.mori[8].route[1] = {mapObjectId:'missing'},
@@ -81,7 +90,7 @@ test('ship classes, levels, upgrades, navigation and escorts match source tables
   for (const row of fixture.tables.navigation) {
     const upgrade=Object.values(rules.fleet.upgrades).find(u=>u.name===row[0]);
     assert.equal(upgrade.price,n(row[1])); assert.equal(upgrade.availability.consumerStage,3);
-    assert.equal(data.SHIP_UPGRADES[upgrade.id],undefined);
+    assert.equal(data.SHIP_UPGRADES[upgrade.id].passability,upgrade.passability);
   }
   assert.deepEqual(rules.fleet.escortPrices,[10,15,20]);
   assert.deepEqual(Object.values(rules.fleet.levels).map(l=>l.escortLimit),[1,1,2,2,3,3]);
@@ -171,7 +180,8 @@ test('runtime consumers use canonical prices, characteristics, income and safe m
     for(let level=1;level<=6;level++) {
       const p={shipClass:id,level,upgrades:[]};const stats=logic.shipStats(p);
       assert.equal(stats.artillery,ship.artillery+rules.fleet.levels[level].statBonus);
-      assert.equal(stats.moveMod,ship.moveMod+rules.fleet.levels[level].moveBonus);
+      assert.equal(stats.moveMod,ship.moveMod);
+      assert.equal(logic.shipUpgradeSlotLimit(p),rules.fleet.levels[level].upgradeSlots);
     }
   }
   for(const [id,b] of Object.entries(rules.economy.buildings)) {
@@ -188,14 +198,18 @@ test('runtime consumers use canonical prices, characteristics, income and safe m
   assert.equal(hash,fixture.geometrySha256,'geometry changed from main 252a316');
 });
 
-test('retired content remains readable, cannot be purchased, and new mechanics stay unavailable', () => {
+test('retired fleet content stays compatibility-only while stage 3 navigation upgrades are active', () => {
   const p={row:13,col:13,shipClass:'carrack',level:7,ducats:999,upgrades:['foreMarsel'],escorts:[{id:'old',type:'landin',special:true}]};
+  assert.equal(rules.fleet.levels[7],undefined);
+  assert.equal(data.SHIP_LEVELS[7].retired,true);
   assert.ok(logic.shipStats(p).cargo > 0); assert.equal(p.level,7);
+  assert.equal(logic.shipUpgradeSlotLimit(p),data.SHIP_LEVELS[7].upgradeSlots);
   assert.equal(logic.buyShipLevel(p).ok,false);
   const buyer={...p,level:6,upgrades:[]};
   assert.equal(logic.buyShipUpgrade(buyer,'foreMarsel').ok,false);
   assert.equal(logic.installShipUpgradeFree(buyer,'foreMarsel').ok,false);
-  assert.equal(logic.buyShipUpgrade(buyer,'leadLine').ok,false);
+  assert.equal(data.SHIP_UPGRADES.leadLine.passability,'shoal');
+  assert.equal(logic.buyShipUpgrade(buyer,'leadLine').ok,true);
   assert.equal(data.MILITARY_REWARDS.landin.specialLandinEscort,undefined);
   assert.equal(logic.buyEscort({islands:[]},buyer,'landin').ok,false);
   assert.equal(data.FACTIONS.mori,undefined);
