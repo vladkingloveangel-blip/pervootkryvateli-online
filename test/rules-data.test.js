@@ -166,12 +166,16 @@ test('complete known sea, assignment, feud and event decks match appendix rows',
   assert.deepEqual(rules.politics.assignments.mori.slice(0,8).map(c=>c.islandId),['renaika','chertog','kisalinia','yukon','erkalon','asigoriy','atlantia','adia']);
 });
 
-test('stage 5.2 activates canonical PvP sea combat scoring without prematurely activating later stage-5 consumers', () => {
-  assert.equal(rules.implementation.activeProfile,'stage-5-combat-politics-5.2');
+test('stage 5.3 activates canonical island capture and army scoring without prematurely activating later stage-5 consumers', () => {
+  assert.equal(rules.implementation.activeProfile,'stage-5-combat-politics-5.3');
   assert.equal(rules.implementation.pendingConsumers.every(item => item.consumerStage >= 5),true);
   assert.equal(rules.scoring.combat.attacksPerOpponentPerRound,1);
   assert.equal(data.BALANCE.combat.attacksPerOpponentPerRound,rules.scoring.combat.attacksPerOpponentPerRound);
   assert.deepEqual(data.BALANCE.fleetScoring,rules.scoring.fleet);
+  assert.deepEqual(data.BALANCE.armyScoring,rules.scoring.army);
+  assert.equal(data.BALANCE.combat.capturedBuildingsKeptRatio,0.5);
+  assert.deepEqual(data.BALANCE.armyScoring.capture.map(x=>x.points),[0,1,2,3,4,5]);
+  assert.equal(data.BALANCE.armyScoring.defenseVictory,3);
   assert.equal(data.BALANCE.fleetScoring.playerVictory,2);
   assert.equal(data.BALANCE.fleetScoring.defenseVictory,2);
   assert.equal(data.BALANCE.attackHistoryWindow,undefined);

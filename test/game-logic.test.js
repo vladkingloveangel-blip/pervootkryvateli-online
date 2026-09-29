@@ -61,6 +61,11 @@ const {
   loseShipLevel,
   battleLevelLoss,
   awardFleetVictoryPoints,
+  armyCapturePoints,
+  awardArmyVictoryPoints,
+  capturedBuildingRetentionOptions,
+  removeCapturedBuildingForRetention,
+  finalizeCapturedBuildingRetention,
   seaBattle,
   assaultIsland,
   areAllies,
@@ -843,12 +848,40 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(p.fleetPoints, 4);
 }
 
-// Штурм независимого Агмора: каравелла I (войско 5) побеждает гарнизон 3,
-// получает остров, 5 дукатов и 2 славы за первое военное покорение.
+// Очки армии не смешиваются со славой и ограничиваются одним результатом против соперника за раунд.
+{
+  assert.deepEqual([0,1,4,5,8,9,12,13,16,17].map(armyCapturePoints), [0,1,1,2,2,3,3,4,4,5]);
+  const room = { round: 4 };
+  const p = { id: 'p', armyPoints: 0, glory: 9 };
+  assert.deepEqual(awardArmyVictoryPoints(room, [p], 'q', 3), [{ playerId: 'p', opponentId: 'q', points: 3 }]);
+  assert.deepEqual(awardArmyVictoryPoints(room, [p], 'q', 3), []);
+  assert.deepEqual(awardArmyVictoryPoints(room, [p], null, 2), [{ playerId: 'p', opponentId: null, points: 2 }]);
+  room.round = 5;
+  assert.deepEqual(awardArmyVictoryPoints(room, [p], 'q', 3), [{ playerId: 'p', opponentId: 'q', points: 3 }]);
+  assert.equal(p.armyPoints, 8);
+  assert.equal(p.glory, 9);
+}
+
+// Успешная защита острова игрока даёт владельцу 3 очка армии.
+{
+  const room = { round: 2, islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'bogamia');
+  island.ownerId = 'b';
+  island.buildings = [{ type: 'fort', level: 1 }];
+  const a = { id: 'a', row: 5, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
+  const b = { id: 'b', row: 1, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
+  room.players = [a, b];
+  const result = assaultIsland(room, a, island, 'preserve');
+  assert.equal(result.outcome, 'defender');
+  assert.equal(b.armyPoints, 3);
+  assert.deepEqual(result.armyPointAwards, [{ playerId: 'b', opponentId: 'a', points: 3 }]);
+}
+
+// Штурм независимого Агмора: защита 3 даёт 1 очко армии по канонической шкале.
 {
   const room = { round: 1, islands: cloneIslands(), players: [] };
   const island = room.islands.find(i => i.id === 'agmor');
-  const a = { id: 'a', row: 13, col: 7, shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, glory: 0 };
+  const a = { id: 'a', row: 13, col: 7, shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, glory: 0, armyPoints: 0 };
   room.players = [a];
   assert.equal(islandDefenseArmy(room, island).total, 3);
   const result = assaultIsland(room, a, island, 'preserve');
@@ -856,24 +889,27 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(result.outcome, 'attacker');
   assert.equal(island.ownerId, 'a');
   assert.equal(a.ducats, 5);
-  assert.equal(a.glory, 2);
-  assert.equal(island.firstMilitaryConquered, true);
+  assert.equal(a.glory, 0);
+  assert.equal(a.armyPoints, 1);
+  assert.deepEqual(result.armyPointAwards, [{ playerId: 'a', opponentId: null, points: 1 }]);
 }
 
-// Разорение при успешном штурме удаляет инфраструктуру.
+// После захвата сохраняется половина существовавшей инфраструктуры; новый владелец выбирает потери.
 {
   const room = { round: 2, islands: cloneIslands(), players: [] };
   const island = room.islands.find(i => i.id === 'bogamia');
   island.ownerId = 'b';
   island.buildings = [{ type: 'farm', level: 1 }, { type: 'fort', level: 1 }];
-  const a = { id: 'a', row: 5, col: 1, shipClass: 'caravel', level: 7, upgrades: ['musketeers', 'pikemen'], escorts: [], ducats: 0, glory: 0 };
-  const b = { id: 'b', row: 1, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0 };
+  const a = { id: 'a', row: 5, col: 1, shipClass: 'caravel', level: 7, upgrades: ['musketeers', 'pikemen'], escorts: [], ducats: 0, glory: 0, armyPoints: 0 };
+  const b = { id: 'b', row: 1, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
   room.players = [a, b];
-  assert.equal(islandDefenseArmy(room, island).total, 4);
   const result = assaultIsland(room, a, island, 'raze');
   assert.equal(result.outcome, 'attacker');
-  assert.equal(island.buildings.length, 0);
-  assert.equal(island.ownerId, 'a');
+  assert.deepEqual(result.captureRetention, { ratio: 0.5, initialCount: 2, keepCount: 1, removeCount: 1 });
+  assert.equal(capturedBuildingRetentionOptions(island).length, 2);
+  assert.equal(removeCapturedBuildingForRetention(room, a, island.id, 1).ok, true);
+  finalizeCapturedBuildingRetention(island);
+  assert.deepEqual(island.buildings.map(b => [b.type, b.level]), [['farm', 1]]);
 }
 
 // Если корабль владельца находится на острове, его войско добавляется к защите.
@@ -1016,7 +1052,9 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const win = jointAssaultIsland(room2, a2, island2, 'preserve', ['c2'], []);
   assert.equal(win.outcome, 'attacker');
   assert.equal(island2.ownerId, 'a2');
-  assert.equal(a2.glory, 4); // защита 10 => 4 славы инициатору
+  assert.equal(a2.armyPoints, 3); // защита 10 => 3 очка армии инициатору
+  assert.equal(a2.glory, 0);
+  assert.equal(c2.armyPoints || 0, 0); // распределение союзных очков — блок 5.4
   assert.equal(c2.glory, 0);
 }
 

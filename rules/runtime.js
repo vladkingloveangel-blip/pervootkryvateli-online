@@ -50,14 +50,14 @@ const FEUD_CARDS = Object.fromEntries(Object.entries(legacy.feud).map(([id, card
   }),
 ]));
 module.exports = {
-  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-5-combat-politics-5.2',
+  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-5-combat-politics-5.3',
   BALANCE: {
     session: rules.session,
     maxShipLevel: rules.fleet.maxLevel, maxReadableShipLevel: legacy.shipLevel7.level,
     escortPrices: rules.fleet.escortPrices, maxBranchUpgrades: rules.fleet.maxBranchUpgrades,
     maxEscorts: rules.fleet.escortPrices.length,
     garrisons: rules.economy.garrisons, branchLimits: BRANCH_LIMITS, ranks: rules.economy.ranks,
-    landCompany: rules.economy.landCompany, combat: rules.scoring.combat, fleetScoring: rules.scoring.fleet,
+    landCompany: rules.economy.landCompany, combat: rules.scoring.combat, fleetScoring: rules.scoring.fleet, armyScoring: rules.scoring.army,
     contractBonusRatio: rules.economy.contractBonusRatio,
     loadingLimitPerIslandPerRound: rules.economy.loadingLimitPerIslandPerRound,
     assignmentReplacementPrice: legacy.assignmentReplacementPrice,

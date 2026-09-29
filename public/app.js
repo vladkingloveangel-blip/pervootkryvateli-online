@@ -820,6 +820,7 @@
       $('hudShipLevel').textContent = `${shipName(mine.shipClass)} · ${ROMAN[mine.level] || mine.level}`;
       $('hudDucats').textContent = mine.ducats ?? 0;
       $('hudGlory').textContent = mine.glory ?? 0;
+      $('hudArmyPoints').textContent = mine.armyPoints ?? 0;
       $('hudFleetPoints').textContent = mine.fleetPoints ?? 0;
       $('hudCargo').textContent = `${cargo.quantity}/${cargo.capacity}`;
       $('hudDebtBtn').classList.toggle('hidden', !(mine.debt > 0));
@@ -906,7 +907,7 @@
       const skip = mine.skipTurns ? ` · пропусков хода: ${mine.skipTurns}` : '';
       const suzerain = mine.suzerainId ? r.factions?.find(f => f.id === mine.suzerainId)?.name : null;
       const politics = suzerain ? ` · вассал: ${suzerain}` : (mine.enemyFactionIds?.length ? ` · вражда: ${mine.enemyFactionIds.length}` : '');
-      $('youStatus').innerHTML = `<strong>${escapeHtml(mine.name)}</strong><br><span class="muted">${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level} · ${mine.ducats} дукатов${mine.debt ? ` · долг ${mine.debt}` : ''} · очки флота ${mine.fleetPoints || 0} · слава ${mine.glory || 0} · островов ${mine.islandCount} · клетка ${mine.col + 1}:${mine.row + 1}${escapeHtml(cargo)}${escapeHtml(cards)}${escapeHtml(eventHand)}${escapeHtml(legendary)}${escapeHtml(skip)}${escapeHtml(politics)}</span>`;
+      $('youStatus').innerHTML = `<strong>${escapeHtml(mine.name)}</strong><br><span class="muted">${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level} · ${mine.ducats} дукатов${mine.debt ? ` · долг ${mine.debt}` : ''} · очки армии ${mine.armyPoints || 0} · очки флота ${mine.fleetPoints || 0} · слава ${mine.glory || 0} · островов ${mine.islandCount} · клетка ${mine.col + 1}:${mine.row + 1}${escapeHtml(cargo)}${escapeHtml(cards)}${escapeHtml(eventHand)}${escapeHtml(legendary)}${escapeHtml(skip)}${escapeHtml(politics)}</span>`;
     }
 
     renderPlayers();
@@ -950,7 +951,7 @@
       const suzerainName = p.suzerainId ? state.room.factions?.find(f => f.id === p.suzerainId)?.name : null;
       const politicalLabel = suzerainName ? ` · вассал ${suzerainName}` : (p.enemyFactionIds?.length ? ` · вражда ${p.enemyFactionIds.length}` : '');
       const readyLabel = !r.started ? (p.ready ? ' · ✓ готов' : ' · не готов') : '';
-      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${p.id === r.leaderId ? ' · ведущий' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · флот ${p.fleetPoints || 0} · слава ${p.glory || 0} · островов ${p.islandCount} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
+      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${p.id === r.leaderId ? ' · ведущий' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · армия ${p.armyPoints || 0} · флот ${p.fleetPoints || 0} · слава ${p.glory || 0} · островов ${p.islandCount} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
       if (!isSpectator && isHost && !r.started) {
         const actions = el.querySelector('.player-side-actions');
         if (p.id !== r.leaderId) {
@@ -1578,13 +1579,22 @@
     const area = report.overArea > 0 ? `Площадь: <strong>${report.usedArea}/${report.effectiveArea}</strong> — нужно освободить минимум ${report.overArea}.` : `Площадь: ${report.usedArea}/${report.effectiveArea}.`;
     badge.textContent = pending.viewerCanRespond ? 'обязательно' : 'ожидание';
 
-    if (!pending.viewerCanRespond) {
-      content.innerHTML = `<div class="event-current"><strong>${escapeHtml(pending.islandName)}</strong><br>${escapeHtml(playerName(pending.playerId))} должен удалить лишние постройки.</div><div class="event-effect">Статус: ${escapeHtml(report.status || '—')} · ${area}${branches ? `<br>Превышение ветвей: ${branches}.` : ''}</div>`;
-      return;
+    if ((pending.kind || 'constraints') === 'capture-retention') {
+      const remaining = Math.max(0, Number(pending.remainingRemovals) || 0);
+      if (!pending.viewerCanRespond) {
+        content.innerHTML = `<div class="event-current"><strong>${escapeHtml(pending.islandName)}</strong><br>${escapeHtml(playerName(pending.playerId))} выбирает постройки, которые будут уничтожены после захвата.</div><div class="event-effect">Сохранится ${pending.keepCount} из ${pending.initialBuildingCount} существовавших построек · осталось выбрать: ${remaining}.</div>`;
+        return;
+      }
+      const removed = pending.removed?.length ? `<div class="cargo-meta">Уже выбрано для уничтожения: ${pending.removed.map(escapeHtml).join(', ')}.</div>` : '';
+      content.innerHTML = `<div class="event-current"><strong>${escapeHtml(pending.islandName)}</strong><br>${escapeHtml(pending.reason || '')}</div><div class="event-effect">Сохранится ${pending.keepCount} из ${pending.initialBuildingCount} существовавших построек · осталось выбрать: ${remaining}.</div><div class="cargo-meta">Награды, появившиеся уже после штурма, в этот выбор не входят.</div>${removed}`;
+    } else {
+      if (!pending.viewerCanRespond) {
+        content.innerHTML = `<div class="event-current"><strong>${escapeHtml(pending.islandName)}</strong><br>${escapeHtml(playerName(pending.playerId))} должен удалить лишние постройки.</div><div class="event-effect">Статус: ${escapeHtml(report.status || '—')} · ${area}${branches ? `<br>Превышение ветвей: ${branches}.` : ''}</div>`;
+        return;
+      }
+      const removed = pending.removed?.length ? `<div class="cargo-meta">Уже удалено: ${pending.removed.map(escapeHtml).join(', ')}.</div>` : '';
+      content.innerHTML = `<div class="event-current"><strong>${escapeHtml(pending.islandName)}</strong> · статус «${escapeHtml(report.status || '—')}»<br>${escapeHtml(pending.reason || '')}</div><div class="event-effect">${area}${branches ? `<br>Превышение ветвей: ${branches}.` : ''}</div><div class="cargo-meta">Удаляйте выбранные постройки без компенсации, пока одновременно не будут соблюдены площадь и предел каждой обычной ветви.</div>${removed}`;
     }
-
-    const removed = pending.removed?.length ? `<div class="cargo-meta">Уже удалено: ${pending.removed.map(escapeHtml).join(', ')}.</div>` : '';
-    content.innerHTML = `<div class="event-current"><strong>${escapeHtml(pending.islandName)}</strong> · статус «${escapeHtml(report.status || '—')}»<br>${escapeHtml(pending.reason || '')}</div><div class="event-effect">${area}${branches ? `<br>Превышение ветвей: ${branches}.` : ''}</div><div class="cargo-meta">Удаляйте выбранные постройки без компенсации, пока одновременно не будут соблюдены площадь и предел каждой обычной ветви.</div>${removed}`;
 
     for (const option of pending.options || []) {
       const b = document.createElement('button');
@@ -2626,24 +2636,22 @@
           carpenterLabel.append(` Корабельный плотник: предотвратить потерю уровня при проигранном штурме · ещё ${carpenterUseCost} действие`);
           card.appendChild(carpenterLabel);
         }
-        for (const mode of ['preserve', 'raze']) {
-          const row = document.createElement('div');
-          row.className = 'combat-button-row';
-          const solo = document.createElement('button');
-          solo.type = 'button';
-          solo.className = mode === 'raze' ? 'danger-soft' : '';
-          solo.textContent = mode === 'raze' ? 'Разорить · одному' : 'Сохранить · одному';
-          solo.disabled = !canAct || mine.inPeaceZone || (firstRound && pvpIsland) || (island.ownerId && usedAttackTargets.has(island.ownerId)) || (island.ownerId && (mine.brokenAlliesThisTurn || []).includes(island.ownerId)) || Boolean(island.legendaryVeil?.remaining);
-          if (island.ownerId && usedAttackTargets.has(island.ownerId)) solo.title = 'Лимит нападения на владельца этого острова в текущем раунде уже использован.';
-          solo.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, captureMode: mode, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
-          const together = document.createElement('button');
-          together.type = 'button';
-          together.textContent = mode === 'raze' ? `Разорить · союз (${attackAllies.length})` : `Сохранить · союз (${attackAllies.length})`;
-          together.disabled = solo.disabled || attackAllies.length === 0;
-          together.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, captureMode: mode, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
-          row.appendChild(solo); row.appendChild(together);
-          card.appendChild(row);
-        }
+        const row = document.createElement('div');
+        row.className = 'combat-button-row';
+        const solo = document.createElement('button');
+        solo.type = 'button';
+        solo.className = 'danger-soft';
+        solo.textContent = 'Штурмовать · одному';
+        solo.disabled = !canAct || mine.inPeaceZone || (firstRound && pvpIsland) || (island.ownerId && usedAttackTargets.has(island.ownerId)) || (island.ownerId && (mine.brokenAlliesThisTurn || []).includes(island.ownerId)) || Boolean(island.legendaryVeil?.remaining);
+        if (island.ownerId && usedAttackTargets.has(island.ownerId)) solo.title = 'Лимит нападения на владельца этого острова в текущем раунде уже использован.';
+        solo.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
+        const together = document.createElement('button');
+        together.type = 'button';
+        together.textContent = `Штурмовать · союз (${attackAllies.length})`;
+        together.disabled = solo.disabled || attackAllies.length === 0;
+        together.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
+        row.appendChild(solo); row.appendChild(together);
+        card.appendChild(row);
         actions.appendChild(card);
       }
     }

@@ -27,6 +27,9 @@ const {
   islandConstraintReport,
   islandCorrectionOptions,
   removeIslandBuildingForCorrection,
+  capturedBuildingRetentionOptions,
+  removeCapturedBuildingForRetention,
+  finalizeCapturedBuildingRetention,
   normalizeIslandGarrison,
   stoneworksSupportCapacity,
   bastionSupportSummary,
@@ -507,6 +510,7 @@ function publicRoom(room, viewerId = null) {
     } : null,
     pendingIslandCorrection: room.pendingIslandCorrection ? {
       id: room.pendingIslandCorrection.id,
+      kind: room.pendingIslandCorrection.kind || 'constraints',
       playerId: room.pendingIslandCorrection.playerId,
       islandId: room.pendingIslandCorrection.islandId,
       islandName: room.pendingIslandCorrection.islandName,
@@ -515,6 +519,9 @@ function publicRoom(room, viewerId = null) {
         ...room.pendingIslandCorrection.report,
         branchViolations: (room.pendingIslandCorrection.report.branchViolations || []).map(v => ({ ...v })),
       } : null,
+      initialBuildingCount: Number(room.pendingIslandCorrection.initialBuildingCount) || 0,
+      keepCount: Number(room.pendingIslandCorrection.keepCount) || 0,
+      remainingRemovals: Number(room.pendingIslandCorrection.remainingRemovals) || 0,
       viewerCanRespond: room.pendingIslandCorrection.playerId === viewerId,
       options: room.pendingIslandCorrection.playerId === viewerId ? (room.pendingIslandCorrection.options || []).map(o => ({ ...o })) : [],
       removed: room.pendingIslandCorrection.playerId === viewerId ? [...(room.pendingIslandCorrection.removed || [])] : [],
@@ -635,7 +642,7 @@ function publicRoom(room, viewerId = null) {
     ruleset: RULESET,
     runtimeProfile: RUNTIME_PROFILE,
     balanceCatalog: { session: BALANCE.session, maxShipLevel: BALANCE.maxShipLevel,
-      combat: BALANCE.combat, fleetScoring: BALANCE.fleetScoring,
+      combat: BALANCE.combat, fleetScoring: BALANCE.fleetScoring, armyScoring: BALANCE.armyScoring,
       garrisons: BALANCE.garrisons, bastion: { price: BUILDINGS.bastion.price, defense: BUILDINGS.bastion.defense },
       assignmentReplacementPrice: BALANCE.assignmentReplacementPrice, maxEscorts: BALANCE.maxEscorts, contractBonusRatio: BALANCE.contractBonusRatio,
       loadingLimitPerIslandPerRound: BALANCE.loadingLimitPerIslandPerRound,
@@ -678,6 +685,7 @@ function publicRoom(room, viewerId = null) {
         debt: Number(p.debt) || 0,
         glory: Number(p.glory) || 0,
         fleetPoints: Number(p.fleetPoints) || 0,
+        armyPoints: Number(p.armyPoints) || 0,
         level,
         row: p.row,
         col: p.col,
@@ -944,7 +952,7 @@ function pendingDecisionError(room) {
   if (room?.pendingFeud) return 'Сначала разрешите карту вражды.';
   if (room?.pendingAssignmentChoice) return 'Сначала решите, оставлять ли поручение сюзерена.';
   if (room?.pendingStatePrize) return 'Сначала разместите призовые здания за полное подчинение государства.';
-  if (room?.pendingIslandCorrection) return 'Сначала удалите лишние постройки с острова после потери статуса.';
+  if (room?.pendingIslandCorrection) return room.pendingIslandCorrection.kind === 'capture-retention' ? 'Сначала выберите постройки, которые будут уничтожены после захвата острова.' : 'Сначала удалите лишние постройки с острова после потери статуса.';
   if (room?.pendingFleetAdjustment) return 'Сначала завершите обязательный выбор по флотилии или поддержке бастионов.';
   if (room?.pendingLegendaryReaction) return 'Сначала разрешите реакцию «Покров моря».';
   return null;
@@ -1341,10 +1349,22 @@ function refreshPendingIslandCorrection(room) {
   if (!pending) return false;
   const island = room.islands?.find(i => i.id === pending.islandId);
   const player = playerById(room, pending.playerId);
-  if (!island || !player || island.ownerId !== player.id) {
+  if (!island || !player || island.ownerId !== player.id) { room.pendingIslandCorrection = null; return false; }
+
+  if ((pending.kind || 'constraints') === 'capture-retention') {
+    pending.islandName = island.name;
+    pending.report = islandConstraintReport(island);
+    pending.options = capturedBuildingRetentionOptions(island);
+    const remaining = Math.max(0, Number(pending.remainingRemovals) || 0);
+    if (remaining > 0 && pending.options.length) return true;
+    finalizeCapturedBuildingRetention(island);
+    const deferredStatePrize = pending.deferredStatePrize || null;
+    log(room, `${player.name} завершает последствия захвата ${island.name}: сохранено ${pending.keepCount} из ${pending.initialBuildingCount} захваченных построек.`);
     room.pendingIslandCorrection = null;
+    if (deferredStatePrize?.triggered) queueStatePrizeFromAssault(room, player, { statePrize: deferredStatePrize });
     return false;
   }
+
   const report = islandConstraintReport(island);
   if (report.legal) {
     log(room, `${player.name}: ${island.name} снова соответствует ограничениям статуса «${report.status}»: площадь ${report.usedArea}/${report.effectiveArea}, предел ветви ${report.branchLimit}.`);
@@ -1381,6 +1401,7 @@ function queueIslandCorrectionIfNeeded(room, preferredIslandId = null, reason = 
 }
 
 function continueAfterIslandCorrection(room) {
+  if (hasPendingDecision(room)) return;
   if (queueIslandCorrectionIfNeeded(room)) return;
   if (room.eventPhase?.active) processEventPhase(room);
 }
@@ -1438,19 +1459,35 @@ function queueStatePrizeFromAssault(room, attacker, result) {
   return advanceStatePrizePlacement(room);
 }
 
+function queueCaptureRetentionFromAssault(room, attacker, island, result) {
+  const retention = result?.captureRetention;
+  if (result?.outcome !== 'attacker' || !retention) return false;
+  if (retention.removeCount <= 0) { finalizeCapturedBuildingRetention(island); return false; }
+  room.pendingIslandCorrection = {
+    id: crypto.randomUUID(), kind: 'capture-retention', playerId: attacker.id, islandId: island.id, islandName: island.name,
+    reason: `После захвата сохраняется половина существовавшей инфраструктуры острова: нужно удалить ${retention.removeCount} построок.`,
+    report: islandConstraintReport(island), initialBuildingCount: retention.initialCount, keepCount: retention.keepCount,
+    remainingRemovals: retention.removeCount, options: capturedBuildingRetentionOptions(island), removed: [],
+    deferredStatePrize: result.statePrize?.triggered ? result.statePrize : null,
+  };
+  log(room, `${attacker.name} должен выбрать ${retention.removeCount} построок на ${island.name}, которые будут уничтожены после захвата; сохранится ${retention.keepCount} из ${retention.initialCount}.`);
+  return true;
+}
+
 function logAssaultResult(room, attacker, island, result) {
   const attackNames = allianceNames(room, result.attackerParticipantIds);
   const defenseNames = allianceNames(room, result.defenderParticipantIds);
   if (result.outcome === 'attacker') {
-    const modeText = result.captureMode === 'raze' ? 'разоряет постройки' : 'сохраняет инфраструктуру';
+    const retentionText = result.captureRetention ? ` После захвата сохраняется ${result.captureRetention.keepCount} из ${result.captureRetention.initialCount} существовавших построек.` : '';
     const rewardText = result.rewardNotes.length ? ` Награда: ${result.rewardNotes.join(', ')}.` : '';
-    const gloryText = result.glory ? ` Слава +${result.glory}.` : '';
-    log(room, `${attacker.name} и союзники [${attackNames}] штурмуют ${island.name}: войско ${result.attackerPower} против защиты ${result.defense.total}. Остров получает инициатор ${attacker.name}; ${modeText}.${gloryText}${rewardText}`);
+    const armyText = (result.armyPointAwards || []).map(a => `${playerById(room, a.playerId)?.name || 'Игрок'} +${a.points}`).join(', ');
+    log(room, `${attacker.name} и союзники [${attackNames}] штурмуют ${island.name}: войско ${result.attackerPower} против защиты ${result.defense.total}. Остров получает инициатор ${attacker.name}.${retentionText} Очки армии: ${armyText || 'без начисления'}.${rewardText}`);
     trackAssignment(room, attacker, { type: 'capture-island', islandId: island.id });
   } else if (result.outcome === 'defender') {
     const losses = (result.levelLosses || []).map(loss => describeLevelLoss(room, loss)).join('; ');
     const companies = (result.discardedLandCompanies || []).map(x => `${playerById(room, x.playerId)?.name || 'Игрок'} теряет роту +${x.army}`).join('; ');
-    log(room, `Штурм ${island.name}: ${result.attackerPower}:${result.defense.total}. Защита устояла${defenseNames ? ` [${defenseNames}]` : ''}. Потери нападающих: ${[losses, companies].filter(Boolean).join('; ') || 'нет'}.`);
+    const armyText = (result.armyPointAwards || []).map(a => `${playerById(room, a.playerId)?.name || 'Игрок'} +${a.points}`).join(', ');
+    log(room, `Штурм ${island.name}: ${result.attackerPower}:${result.defense.total}. Защита устояла${defenseNames ? ` [${defenseNames}]` : ''}. Очки армии: ${armyText || 'без начисления'}. Потери нападающих: ${[losses, companies].filter(Boolean).join('; ') || 'нет'}.`);
   } else {
     const losses = Object.entries(result.treasuryLosses || {}).map(([id, amount]) => `${playerById(room, id)?.name || 'Игрок'} −${amount}`).join(', ');
     log(room, `Штурм ${island.name}: ${result.attackerPower}:${result.defense.total}. Ничья, контроль не меняется. Потери казны участников: ${losses || 'нет'}.`);
@@ -1496,7 +1533,8 @@ function beginAssaultResolution(room, attacker, island, captureMode, inviteAllie
     chargeBattleCharacterCosts(room, result);
     logAssaultResult(room, attacker, island, result);
     if (result.outcome === 'attacker') {
-      queueStatePrizeFromAssault(room, attacker, result);
+      const capturePending = queueCaptureRetentionFromAssault(room, attacker, island, result);
+      if (!capturePending) queueStatePrizeFromAssault(room, attacker, result);
       refreshPoliticsWithLog(room);
     }
     const fleetPending = queueFleetAdjustmentsForLosses(room, result.levelLosses, `Потеря уровня после штурма ${island.name}.`);
@@ -1587,7 +1625,8 @@ function resolvePendingBattle(room) {
       chargeBattleCharacterCosts(room, result);
       logAssaultResult(room, attacker, island, result);
       if (result.outcome === 'attacker') {
-        queueStatePrizeFromAssault(room, attacker, result);
+        const capturePending = queueCaptureRetentionFromAssault(room, attacker, island, result);
+        if (!capturePending) queueStatePrizeFromAssault(room, attacker, result);
         refreshPoliticsWithLog(room);
       }
     }
@@ -2179,6 +2218,8 @@ function advanceRound(room) {
     player.characterReplacedRound = null;
     player.fleetPointRound = room.round;
     player.fleetPointOpponentIds = [];
+    player.armyPointRound = room.round;
+    player.armyPointOpponentIds = [];
     player.attackLimitRound = room.round;
     player.attackCountsThisRound = {};
   }
@@ -2549,6 +2590,9 @@ function newPlayer(socket, data, color) {
     fleetPoints: 0,
     fleetPointRound: null,
     fleetPointOpponentIds: [],
+    armyPoints: 0,
+    armyPointRound: null,
+    armyPointOpponentIds: [],
     skipTurns: 0,
     personalTurnNo: 0,
     attackLimitRound: null,
@@ -2881,7 +2925,7 @@ io.on('connection', socket => {
     room.factionState = {};
     room.players.forEach(p => {
       p.row = 0; p.col = 0; p.ducats = BALANCE.session.startingDucats; p.debt = 0; p.level = 1; p.specialCards = []; p.cargo = null; p.upgrades = []; p.disabledUpgradeIds = []; p.escorts = []; p.levelInactiveEscortIds = []; p.nextEscortId = 0;
-      p.glory = 0; p.fleetPoints = 0; p.fleetPointRound = room.round; p.fleetPointOpponentIds = []; p.skipTurns = 0; p.personalTurnNo = 0; p.attackLimitRound = room.round; p.attackCountsThisRound = {}; p.brokenAlliesThisTurn = []; p.pendingLegendary = 0; p.pendingLandinEscort = false; p.legendaryCards = []; p.legendaryEffects = { seaCurses: [] }; p.savedEventCards = []; p.nextTurnEffects = {}; p.activeTurnEffects = {}; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignment = null; p.replacedAssignmentConditions = []; p.landCompany = null; p.bastionPriority = []; p.inactiveBastionIslandIds = []; p.character = null; p.characterReplacedRound = null; p.palaceUsed = false;
+      p.glory = 0; p.fleetPoints = 0; p.fleetPointRound = room.round; p.fleetPointOpponentIds = []; p.armyPoints = 0; p.armyPointRound = room.round; p.armyPointOpponentIds = []; p.skipTurns = 0; p.personalTurnNo = 0; p.attackLimitRound = room.round; p.attackCountsThisRound = {}; p.brokenAlliesThisTurn = []; p.pendingLegendary = 0; p.pendingLandinEscort = false; p.legendaryCards = []; p.legendaryEffects = { seaCurses: [] }; p.savedEventCards = []; p.nextTurnEffects = {}; p.activeTurnEffects = {}; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignment = null; p.replacedAssignmentConditions = []; p.landCompany = null; p.bastionPriority = []; p.inactiveBastionIslandIds = []; p.character = null; p.characterReplacedRound = null; p.palaceUsed = false;
     });
     refreshFactionExistence(room);
     log(room, `Партия началась. Порядок: ${room.order.map(id => room.players.find(p => p.id === id)?.name).join(' → ')}.`);
@@ -3651,11 +3695,17 @@ io.on('connection', socket => {
     if (pending.playerId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Лишние постройки должен выбрать владелец острова.' });
     const player = playerById(room, pending.playerId);
     if (!player) return ackSafe(ack, { ok: false, error: 'Владелец острова не найден.' });
-    const result = removeIslandBuildingForCorrection(room, player, pending.islandId, data?.buildingIndex);
+    const captureRetention = (pending.kind || 'constraints') === 'capture-retention';
+    const result = captureRetention
+      ? removeCapturedBuildingForRetention(room, player, pending.islandId, data?.buildingIndex)
+      : removeIslandBuildingForCorrection(room, player, pending.islandId, data?.buildingIndex);
     if (!result.ok) return ackSafe(ack, result);
     pending.removed ||= [];
     pending.removed.push(result.name);
-    log(room, `${player.name} удаляет ${result.name} с острова ${result.island.name} без компенсации для восстановления допустимых ограничений.`);
+    if (captureRetention) pending.remainingRemovals = Math.max(0, (Number(pending.remainingRemovals) || 0) - 1);
+    log(room, captureRetention
+      ? `${player.name} выбирает ${result.name} на ${result.island.name} для уничтожения после захвата.`
+      : `${player.name} удаляет ${result.name} с острова ${result.island.name} без компенсации для восстановления допустимых ограничений.`);
     if (result.garrisonChanged) {
       if (result.oldGarrison === 'permanent' && result.newGarrison === 'guard') log(room, `${result.island.name}: постоянный гарнизон становится городской стражей (+${BALANCE.garrisons.guard.defense}).`);
       else if (result.oldGarrison && !result.newGarrison) log(room, `${result.island.name}: городской отряд распущен из-за потери статуса города.`);

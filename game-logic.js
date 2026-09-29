@@ -2442,6 +2442,72 @@ function awardFleetVictoryPoints(room, winners, opponentId, points) {
   return awards;
 }
 
+function armyCapturePoints(defense) {
+  const value = Math.max(0, Number(defense) || 0);
+  const band = (BALANCE.armyScoring?.capture || []).find(item =>
+    value >= Number(item.min || 0) && (item.max == null || value <= Number(item.max)));
+  return Math.max(0, Math.floor(Number(band?.points) || 0));
+}
+
+function armyVictoryAlreadyScored(room, player, opponentId) {
+  if (!room || !player || !opponentId) return false;
+  if (Number(player.armyPointRound) !== Number(room.round)) return false;
+  const limit = Math.max(1, Number(BALANCE.armyScoring?.perOpponentPerRound) || 1);
+  const opponent = String(opponentId);
+  return (player.armyPointOpponentIds || []).filter(id => String(id) === opponent).length >= limit;
+}
+
+function awardArmyVictoryPoints(room, winners, opponentId, points) {
+  const round = Number(room?.round) || 1;
+  const amount = Math.max(0, Math.floor(Number(points) || 0));
+  if (amount <= 0) return [];
+  const awards = [];
+  for (const player of winners || []) {
+    if (!player) continue;
+    if (opponentId) {
+      if (Number(player.armyPointRound) !== round) { player.armyPointRound = round; player.armyPointOpponentIds = []; }
+      player.armyPointOpponentIds ||= [];
+      const opponent = String(opponentId);
+      if (armyVictoryAlreadyScored(room, player, opponent)) continue;
+      player.armyPointOpponentIds.push(opponent);
+    }
+    player.armyPoints = Math.max(0, Number(player.armyPoints) || 0) + amount;
+    awards.push({ playerId: player.id, opponentId: opponentId ? String(opponentId) : null, points: amount });
+  }
+  return awards;
+}
+
+function captureRetentionPlan(island) {
+  const buildings = Array.isArray(island?.buildings) ? island.buildings : [];
+  const ratio = Math.max(0, Math.min(1, Number(BALANCE.combat?.capturedBuildingsKeptRatio) || 0));
+  const initialCount = buildings.length;
+  const keepCount = Math.floor(initialCount * ratio);
+  const removeCount = Math.max(0, initialCount - keepCount);
+  if (removeCount > 0) for (const building of buildings) building.captureRetentionPending = true;
+  return { ratio, initialCount, keepCount, removeCount };
+}
+
+function capturedBuildingRetentionOptions(island) {
+  if (!island) return [];
+  return islandCorrectionOptions(island).filter(option => Boolean(island.buildings?.[option.buildingIndex]?.captureRetentionPending));
+}
+
+function removeCapturedBuildingForRetention(room, player, islandId, buildingIndex) {
+  const island = room?.islands?.find(i => i.id === islandId);
+  if (!island || island.ownerId !== player?.id) return { ok: false, error: 'Выбирать судьбу построек может только новый владелец острова.' };
+  const index = Number(buildingIndex);
+  const building = Number.isInteger(index) && index >= 0 ? island.buildings?.[index] : null;
+  if (!building?.captureRetentionPending) return { ok: false, error: 'Эта постройка не относится к инфраструктуре, захваченной в текущем штурме.' };
+  const oldGarrison = island.garrisonType || null;
+  const [removed] = island.buildings.splice(index, 1);
+  const newGarrison = normalizeIslandGarrison(island);
+  return { ok: true, island, building: removed, name: buildingDisplayName(removed), garrisonChanged: oldGarrison !== newGarrison, oldGarrison, newGarrison: newGarrison || null };
+}
+
+function finalizeCapturedBuildingRetention(island) {
+  for (const building of island?.buildings || []) delete building.captureRetentionPending;
+}
+
 function jointSeaBattle(room, attacker, defender, attackerAllyIds = [], defenderAllyIds = [], options = {}) {
   if (!room || !attacker || !defender) return { ok: false, error: 'Участник морского боя не найден.' };
   if (attacker.id === defender.id) return { ok: false, error: 'Нельзя атаковать собственный корабль.' };
@@ -2635,6 +2701,8 @@ function jointAssaultIsland(room, attacker, island, captureMode = 'preserve', at
     captureMode,
     rewardNotes: [],
     glory: 0,
+    armyPointAwards: [],
+    captureRetention: null,
     levelLosses: [],
     discardedLandCompanies: [],
     treasuryLosses: {},
@@ -2643,13 +2711,10 @@ function jointAssaultIsland(room, attacker, island, captureMode = 'preserve', at
   if (attackerPower > defense.total) {
     result.outcome = 'attacker';
     result.previousOwnerId = island.ownerId || null;
-    if (captureMode === 'raze') island.buildings = [];
+    result.captureRetention = captureRetentionPlan(island);
     island.ownerId = attacker.id;
-    if (!island.firstMilitaryConquered) {
-      island.firstMilitaryConquered = true;
-      result.glory = gloryForDefense(defense.total);
-      attacker.glory = (Number(attacker.glory) || 0) + result.glory;
-    }
+    if (!island.firstMilitaryConquered) island.firstMilitaryConquered = true;
+    result.armyPointAwards = awardArmyVictoryPoints(room, [attacker], result.previousOwnerId, armyCapturePoints(defense.total));
 
     const islandRewardWasClaimable = !island.rewardClaimed;
     const factionId = factionIdForIsland(island);
@@ -2672,6 +2737,7 @@ function jointAssaultIsland(room, attacker, island, captureMode = 'preserve', at
     }
   } else if (attackerPower < defense.total) {
     result.outcome = 'defender';
+    if (defender) result.armyPointAwards = awardArmyVictoryPoints(room, [defender], attacker.id, BALANCE.armyScoring?.defenseVictory);
     const carpenterIds = new Set((options.shipCarpenterPlayerIds || []).map(String));
     for (const p of attackers) {
       result.levelLosses.push({
@@ -2890,6 +2956,13 @@ module.exports = {
   battleLevelLoss,
   fleetVictoryAlreadyScored,
   awardFleetVictoryPoints,
+  armyCapturePoints,
+  armyVictoryAlreadyScored,
+  awardArmyVictoryPoints,
+  captureRetentionPlan,
+  capturedBuildingRetentionOptions,
+  removeCapturedBuildingForRetention,
+  finalizeCapturedBuildingRetention,
   gloryForDefense,
   areAllies,
   addAlliance,
