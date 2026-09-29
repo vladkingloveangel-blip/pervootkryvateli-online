@@ -619,6 +619,7 @@ function publicRoom(room, viewerId = null) {
     shipUpgradeCatalog: Object.fromEntries(Object.entries(SHIP_UPGRADES).filter(([, u]) => !u.retired).map(([id, u]) => [id, {
       id: u.id, name: u.name, branch: u.branch, order: u.order, price: u.price, requires: u.requires || null,
       artillery: u.artillery || 0, army: u.army || 0, cargo: u.cargo || 0, movement: u.movement || 0,
+      passability: u.passability || null,
     }])),
     escortCatalog: Object.fromEntries(Object.entries(ESCORTS).map(([id, e]) => [id, { ...e }])),
     islands: room.islands.map(i => {

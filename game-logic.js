@@ -613,6 +613,7 @@ function canInstallShipUpgradeFree(player, upgradeId) {
   if (!isCitadelCell(player.row, player.col)) return { ok: false, error: 'Улучшения устанавливаются только в Цитадели.' };
   player.upgrades ||= [];
   if (player.upgrades.includes(upgradeId)) return { ok: false, error: 'Такое улучшение уже установлено.' };
+  if (repeatsInnatePassability(player, upgrade)) return { ok: false, error: 'Этот класс корабля уже проходит такое препятствие без улучшения.' };
   if (player.upgrades.length >= shipUpgradeSlotLimit(player)) return { ok: false, error: 'Нет свободного места для улучшения на текущем уровне корабля.' };
   const branchCountValue = player.upgrades.filter(id => SHIP_UPGRADES[id]?.branch === upgrade.branch).length;
   if (branchCountValue >= BALANCE.maxBranchUpgrades) return { ok: false, error: 'В этой ветви уже установлены два улучшения.' };
@@ -1438,6 +1439,10 @@ function shipUpgradeSlotLimit(player) {
   return Math.max(1, Number(SHIP_LEVELS[level]?.upgradeSlots) || 1);
 }
 
+function repeatsInnatePassability(player, upgrade) {
+  return Boolean(upgrade?.passability && SHIPS[player?.shipClass]?.passability === upgrade.passability);
+}
+
 function requiredDisabledUpgradeCount(player) {
   const slots = shipUpgradeSlotLimit(player);
   return Math.max(0, (player?.upgrades || []).length - slots);
@@ -1567,6 +1572,7 @@ function canBuyShipUpgrade(player, upgradeId) {
   if (!isCitadelCell(player.row, player.col)) return { ok: false, error: 'Улучшения устанавливаются только в Цитадели.' };
   player.upgrades ||= [];
   if (player.upgrades.includes(upgradeId)) return { ok: false, error: 'Такое улучшение уже установлено.' };
+  if (repeatsInnatePassability(player, upgrade)) return { ok: false, error: 'Этот класс корабля уже проходит такое препятствие без улучшения.' };
   if (player.upgrades.length >= shipUpgradeSlotLimit(player)) return { ok: false, error: 'Нет свободного места для улучшения на текущем уровне корабля.' };
   const branchCountValue = player.upgrades.filter(id => SHIP_UPGRADES[id]?.branch === upgrade.branch).length;
   if (branchCountValue >= BALANCE.maxBranchUpgrades) return { ok: false, error: 'В этой ветви уже установлены два улучшения.' };

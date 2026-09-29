@@ -1942,11 +1942,13 @@
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'build-btn';
-      const bonus = [u.artillery ? `арт. +${u.artillery}` : '', u.army ? `войско +${u.army}` : '', u.cargo ? `трюм +${u.cargo}` : '', u.movement ? `ход +${u.movement}` : ''].filter(Boolean).join(', ');
+      const passabilityLabel = { shoal: 'мели', reef: 'рифы', ice: 'льды', land1: '1 клетка суши' }[u.passability] || '';
+      const bonus = [u.artillery ? `арт. +${u.artillery}` : '', u.army ? `войско +${u.army}` : '', u.cargo ? `трюм +${u.cargo}` : '', u.movement ? `ход +${u.movement}` : '', passabilityLabel ? `проход: ${passabilityLabel}` : ''].filter(Boolean).join(', ');
       b.textContent = `${u.name} · ${u.price} дук.${bonus ? ` · ${bonus}` : ''}`;
       const dependencyOk = !u.requires || installedIds.has(u.requires);
       const slotOk = upgrades.length < mine.upgradeSlots;
-      b.disabled = !canBuyHere || mine.ducats < u.price || !dependencyOk || !slotOk;
+      const redundantPassability = Boolean(u.passability && state.room.shipCatalog?.[mine.shipClass]?.passability === u.passability);
+      b.disabled = !canBuyHere || mine.ducats < u.price || !dependencyOk || !slotOk || redundantPassability;
       b.addEventListener('click', () => emitDataAction(b, 'buyShipUpgrade', { upgradeId: id }));
       actions.appendChild(b);
     }

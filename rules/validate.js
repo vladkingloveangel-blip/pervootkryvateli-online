@@ -139,6 +139,7 @@ function validateRules(rules, map) {
   for (const [index, price] of (fleet.escortPrices || []).entries()) positive(price, `escortPrices.${index}`);
   for (const escort of Object.values(fleet.escorts)) for (const key of ['artillery','army','cargo']) integer(escort[key], `${escort.id}.${key}`);
   positive(fleet.maxBranchUpgrades, 'fleet.maxBranchUpgrades');
+  const upgradesByBranch = new Map();
   for (const u of Object.values(fleet.upgrades)) {
     integer(u.price, u.id); integer(u.order, u.id, 1);
     check(u.order <= fleet.maxBranchUpgrades, u.id, 'upgrade order exceeds branch limit');
@@ -147,6 +148,22 @@ function validateRules(rules, map) {
       const previous = fleet.upgrades[u.requires];
       check(previous && previous.branch === u.branch && previous.order < u.order, u.id, 'invalid prerequisite');
     }
+    if (!upgradesByBranch.has(u.branch)) upgradesByBranch.set(u.branch, []);
+    upgradesByBranch.get(u.branch).push(u);
+  }
+  for (const [branch, branchUpgrades] of upgradesByBranch) {
+    check(branchUpgrades.length <= fleet.maxBranchUpgrades, `upgrades.${branch}`, 'too many upgrades in branch');
+    unique(branchUpgrades.map(u => u.order), `upgrades.${branch}.orders`);
+  }
+  const navigationUpgrades = Object.values(fleet.upgrades).filter(u => u.passability);
+  check(navigationUpgrades.length === 4, 'navigationUpgrades', 'expected four navigation upgrades');
+  unique(navigationUpgrades.map(u => u.passability), 'navigationUpgrades.passability');
+  unique(navigationUpgrades.map(u => u.branch), 'navigationUpgrades.branches');
+  for (const u of navigationUpgrades) {
+    check(['shoal','reef','ice','land1'].includes(u.passability), u.id, 'invalid navigation passability');
+    check(u.order === 1 && !u.requires, u.id, 'navigation upgrade must be a one-level branch');
+    check(u.branch === u.id, u.id, 'navigation upgrade must use its own branch');
+    check(u.availability?.status === 'data-ready' && u.availability?.consumerStage === 3, u.id, 'navigation upgrade must target stage 3');
   }
   for (const g of Object.values(economy.goods)) integer(g.price, g.id);
   for (const r of Object.values(economy.resources)) ref(r.goodId, goods, r.id);

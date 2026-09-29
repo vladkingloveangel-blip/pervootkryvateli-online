@@ -108,7 +108,11 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.deepEqual(watch.room.balanceCatalog.landCompany, canonical.economy.landCompany);
   assert.equal(watch.room.balanceCatalog.legendaryEffects['sea-curse'].amount, canonical.legends.legendary.find(c => c.id === 'sea-curse').effect.amount);
   assert.equal(watch.room.shipLevelCatalog[7], undefined);
-  assert.equal(watch.room.shipUpgradeCatalog.leadLine, undefined);
+  assert.equal(watch.room.shipUpgradeCatalog.leadLine.price, canonical.fleet.upgrades.leadLine.price);
+  assert.equal(watch.room.shipUpgradeCatalog.leadLine.passability, 'shoal');
+  assert.equal(watch.room.shipUpgradeCatalog.reefPilot.passability, 'reef');
+  assert.equal(watch.room.shipUpgradeCatalog.iceStem.passability, 'ice');
+  assert.equal(watch.room.shipUpgradeCatalog.portageSleds.passability, 'land1');
   assert.equal(watch.room.shipUpgradeCatalog.foreMarsel, undefined);
   assert.equal(watch.room.buildingCatalog.admiralty, undefined);
   await stop(); // Abrupt restart: pending state must survive without disconnect handlers.

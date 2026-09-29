@@ -1446,6 +1446,55 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(shipStats(p).artillery, 6); // базовые 5 + бонус II уровня 1, без кулеврин
 }
 
+// Этап 3.2: обычные ветви требуют первую ступень, а навигационные
+// улучшения являются отдельными одноуровневыми ветвями.
+{
+  const p = { row: 13, col: 13, shipClass: 'carrack', level: 6, ducats: 100, upgrades: [], escorts: [] };
+  assert.equal(buyShipUpgrade(p, 'culverins').ok, false);
+  assert.equal(buyShipUpgrade(p, 'falcons').ok, true);
+  assert.equal(buyShipUpgrade(p, 'culverins').ok, true);
+  assert.equal(buyShipUpgrade(p, 'falcons').ok, false);
+  assert.equal(buyShipUpgrade(p, 'leadLine').ok, true);
+  assert.equal(buyShipUpgrade(p, 'reefPilot').ok, true);
+  assert.equal(buyShipUpgrade(p, 'portageSleds').ok, true);
+  assert.deepEqual(p.upgrades, ['falcons', 'culverins', 'leadLine', 'reefPilot', 'portageSleds']);
+}
+
+// Класс не может покупать или бесплатно устанавливать навигационное улучшение,
+// которое дублирует его врождённую проходимость.
+{
+  const pairs = [
+    ['brigantine', 'leadLine'],
+    ['frigate', 'reefPilot'],
+    ['carrack', 'iceStem'],
+    ['caravel', 'portageSleds'],
+  ];
+  for (const [shipClass, upgradeId] of pairs) {
+    const buyer = { row: 13, col: 13, shipClass, level: 6, ducats: 100, upgrades: [], escorts: [] };
+    assert.equal(buyShipUpgrade(buyer, upgradeId).ok, false, `${shipClass} / ${upgradeId}`);
+    assert.equal(installShipUpgradeFree({ ...buyer, upgrades: [] }, upgradeId).ok, false, `free ${shipClass} / ${upgradeId}`);
+  }
+}
+
+// После потери места выбранное улучшение остаётся установленным, но не действует;
+// при восстановлении уровня оно автоматически снова становится активным.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const p = {
+    id: 'stage-3-2', row: 13, col: 13, shipClass: 'carrack', level: 2, ducats: 100,
+    upgrades: ['falcons', 'leadLine'], disabledUpgradeIds: [], escorts: [], levelInactiveEscortIds: [], cargo: null,
+  };
+  room.players.push(p);
+  const loss = loseShipLevel(room, p);
+  assert.equal(loss.after, 1);
+  assert.equal(setDisabledUpgrades(p, ['leadLine']).ok, true);
+  assert.equal(shipUpgradeStatuses(p).find(u => u.id === 'leadLine').active, false);
+  assert.deepEqual(p.upgrades, ['falcons', 'leadLine']);
+  assert.equal(buyShipLevel(p).ok, true);
+  assert.deepEqual(p.disabledUpgradeIds, []);
+  assert.equal(shipUpgradeStatuses(p).find(u => u.id === 'leadLine').active, true);
+}
+
 console.log('game-logic tests: OK');
 
 
