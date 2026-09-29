@@ -17,6 +17,14 @@ const {
   build,
   upgradeBuilding,
   marketIncomeForPlayer,
+  hasOwnedBuilding,
+  lighthouseDepartureBonus,
+  bestAdmiraltyLevelAtPlayer,
+  characterOptionsAtAdmiralty,
+  takeCharacter,
+  replaceCharacter,
+  consumeCharacter,
+  cartographerAnchorOptions,
   claimFreeIslandsAt,
   shipStats,
   shipUpgradeStatuses,
@@ -83,6 +91,7 @@ const {
   prizeBuildingPlacementOptions,
   placePrizeBuilding,
   islandConstraintReport,
+  islandStatus,
   islandCorrectionOptions,
   removeIslandBuildingForCorrection,
   stoneworksSupportCapacity,
@@ -111,13 +120,15 @@ const {
   discardRandomHeldCard,
   createAssignmentDecks,
   issueAssignment,
+  offerAssignmentCards,
+  chooseAssignmentOffer,
   canReplaceAssignment,
   replaceAssignment,
   assignmentEventMatches,
   completeAssignment,
   legendaryPlaceAt,
 } = require('../game-logic');
-const { BALANCE, MAP_META, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS, BUILDINGS } = require('../game-data');
+const { BALANCE, MAP_META, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS, BUILDINGS, CHARACTERS, ANCHORS } = require('../game-data');
 
 function has(cells, row, col) { return cells.some(c => c.row === row && c.col === col); }
 
@@ -433,6 +444,131 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const remainingTradeIndex = island.buildings.findIndex(b => BUILDINGS[b.type]?.branch === 'money');
   assert.equal(upgradeBuilding(room, p, island.id, remainingTradeIndex).afterName, 'Банк II');
   assert.equal(build(room, p, island.id, 'market').ok, false);
+}
+
+// Общественные здания не входят в обычные ветви, требуют пищевой источник,
+// уникальны по названию на острове и используют канонические цены.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1';
+  island.area = 20;
+  const [row, col] = island.cells[0];
+  const p = { id: 'p1', row, col, ducats: 500 };
+  room.players.push(p);
+  island.buildings = [{ type: 'farm', level: 1 }];
+  for (const type of ['lighthouse', 'observatory', 'embassy', 'cartography', 'admiralty']) {
+    const before = p.ducats;
+    const result = build(room, p, island.id, type);
+    assert.equal(result.ok, true, type);
+    assert.equal(before - p.ducats, BUILDINGS[type].price);
+  }
+  assert.equal(build(room, p, island.id, 'lighthouse').ok, false);
+  assert.equal(hasOwnedBuilding(room, p.id, 'observatory'), true);
+  assert.equal(islandConstraintReport(island).branchViolations.length, 0);
+}
+
+// Дворец строится только в уже существующем городе/крупном порту.
+// Сам Дворец не может быть зданием, которое создаёт требуемый городской статус.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1'; island.area = 20;
+  const [row, col] = island.cells[0];
+  const p = { id: 'p1', row, col, ducats: 500 };
+  room.players.push(p);
+  island.buildings = [{ type: 'manor', level: 1 }, { type: 'market', level: 1 }, { type: 'fort', level: 1 }, { type: 'lumbermill', level: 1 }];
+  assert.equal(build(room, p, island.id, 'palace').ok, false);
+  island.buildings.push({ type: 'quarry', level: 1 });
+  assert.equal(islandStatus(island), 'Город');
+  assert.equal(build(room, p, island.id, 'palace').ok, true);
+}
+
+// Адмиралтейство I/II/III требует пищевую ступень I/II/III и повышается
+// последовательно без дополнительной клетки.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1'; island.area = 20;
+  const [row, col] = island.cells[0];
+  const p = { id: 'p1', row, col, ducats: 500 };
+  room.players.push(p);
+  island.buildings = [{ type: 'farm', level: 1 }];
+  assert.equal(build(room, p, island.id, 'admiralty').ok, true);
+  assert.equal(bestAdmiraltyLevelAtPlayer(room, p), 1);
+  assert.equal(upgradeBuilding(room, p, island.id, 1).ok, false);
+  island.buildings[0].level = 2;
+  assert.equal(upgradeBuilding(room, p, island.id, 1).afterName, 'Адмиралтейство II');
+  assert.equal(upgradeBuilding(room, p, island.id, 1).ok, false);
+  island.buildings[0].level = 3;
+  assert.equal(upgradeBuilding(room, p, island.id, 1).afterName, 'Адмиралтейство III');
+  assert.equal(island.buildings.length, 2);
+}
+
+// Маяк даёт ровно +1 только при начале навигации у своего острова с Маяком;
+// несколько маяков игрока не складываются.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const a = room.islands.find(i => i.id === 'maikan');
+  const b = room.islands.find(i => i.id === 'bogamia');
+  a.ownerId = b.ownerId = 'p1';
+  a.buildings = [{ type: 'lighthouse', level: 1 }];
+  b.buildings = [{ type: 'lighthouse', level: 1 }];
+  const p = { id: 'p1', row: a.cells[0][0], col: a.cells[0][1] };
+  room.players.push(p);
+  assert.equal(lighthouseDepartureBonus(room, p), 1);
+  p.row = 0; p.col = 0;
+  assert.equal(lighthouseDepartureBonus(room, p), 0);
+}
+
+// Персонаж берётся только у подходящего Адмиралтейства, один на основной корабль,
+// недоступен второму игроку, а замена неиспользованного персонажа ограничена одним разом за раунд.
+{
+  const room = { round: 3, islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1';
+  island.buildings = [{ type: 'admiralty', level: 3 }];
+  const [row, col] = island.cells[0];
+  const p1 = { id: 'p1', row, col, character: null, characterReplacedRound: null };
+  const p2 = { id: 'p2', row, col, character: null, characterReplacedRound: null };
+  room.players.push(p1, p2);
+  assert.equal(characterOptionsAtAdmiralty(room, p1).length, 6);
+  assert.equal(takeCharacter(room, p1, 'navigator').ok, true);
+  island.ownerId = 'p2';
+  assert.equal(characterOptionsAtAdmiralty(room, p2).some(c => c.id === 'navigator'), false);
+  island.ownerId = 'p1';
+  assert.equal(replaceCharacter(room, p1, 'cartographer').ok, true);
+  assert.equal(replaceCharacter(room, p1, 'firstMate').ok, false);
+  room.round = 4;
+  assert.equal(replaceCharacter(room, p1, 'firstMate').ok, true);
+  island.buildings = [];
+  assert.equal(p1.character.id, 'firstMate');
+  assert.equal(consumeCharacter(p1, 'firstMate').ok, true);
+  assert.equal(p1.character, null);
+}
+
+// Картограф использует манхэттенскую дальность до клеток якорей.
+{
+  const first = Object.entries(ANCHORS)[0];
+  const [color, anchor] = first;
+  const [row, col] = anchor.cells[0];
+  const options = cartographerAnchorOptions({ row, col });
+  assert.equal(options.some(o => o.color === color && o.distance === 0), true);
+}
+
+// Посольство может выдать две допустимые карты, выбранная становится активной,
+// а невыбранная возвращается в колоду и перемешивается.
+{
+  const room = { round: 2, islands: cloneIslands(), assignmentDecks: createAssignmentDecks(() => 0.25) };
+  const p = { id: 'p1', level: 1, upgrades: [], activeAssignment: null, replacedAssignmentConditions: [] };
+  const offered = offerAssignmentCards(room, p, 'lionia', 2, () => 0.25);
+  assert.equal(offered.ok, true);
+  assert.equal(offered.cards.length, 2);
+  const unchosen = offered.cards[1].id;
+  const result = chooseAssignmentOffer(room, p, 'lionia', offered.cards, offered.cards[0].id, () => 0.25);
+  assert.equal(result.ok, true);
+  assert.equal(p.activeAssignment.card.id, offered.cards[0].id);
+  assert.equal(room.assignmentDecks.lionia.drawPile.some(c => c.id === unchosen), true);
 }
 
 // Уровни II–VI: новые характеристики без бонуса движения; VII читается для старых комнат.

@@ -1,7 +1,7 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '' };
+  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '' };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
   const shipName = id => state.room?.shipCatalog?.[id]?.name || state.shipCatalog?.[id]?.name || $('shipSelect').querySelector(`option[value="${id}"]`)?.textContent || 'Корабль';
   fetch('/api/rules').then(response => response.ok ? response.json() : null).then(rules => {
@@ -1298,7 +1298,15 @@
       label.className = 'action-group-label';
       label.textContent = `Решение: «${pending.cardName}»`;
       actions.appendChild(label);
-      if (pending.kind === 'cargo') {
+      if (pending.kind === 'observatory') {
+        for (const option of pending.options || []) {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = option.id === 'replace' ? 'build-btn primary' : 'build-btn';
+          b.textContent = option.name;
+          b.addEventListener('click', () => socket.emit('respondEvent', { eventId: pending.id, choice: option.id }, handleGameAck));
+          actions.appendChild(b);
+        }
+      } else if (pending.kind === 'cargo') {
         for (const option of pending.options || []) {
           const b = document.createElement('button');
           b.type = 'button'; b.className = 'build-btn primary';
@@ -1706,6 +1714,20 @@
 
     const pending = r.pendingAssignmentChoice;
     if (pending?.viewerCanRespond) {
+      if (pending.kind === 'embassy') {
+        const label = document.createElement('div');
+        label.className = 'action-group-label';
+        label.textContent = 'Посольство: выберите одно из двух допустимых поручений';
+        actions.appendChild(label);
+        for (const option of pending.options || []) {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = 'build-btn primary';
+          b.textContent = `«${option.text}» · ${option.reward} дук.`;
+          b.addEventListener('click', () => socket.emit('respondAssignmentChoice', { choiceId: pending.id, assignmentId: option.id }, handleGameAck));
+          actions.appendChild(b);
+        }
+        return;
+      }
       const label = document.createElement('div');
       label.className = 'action-group-label';
       label.textContent = `Оставить поручение «${pending.assignment?.text || 'текущее'}» или заменить за ${r.balanceCatalog.assignmentReplacementPrice} дуката?`;
@@ -1885,6 +1907,7 @@
         <span>Лимит сопровождения</span><strong>${escorts.length}/${mine.escortUseLimit}</strong>
         <span>Поддержка бастионов</span><strong>${mine.supportedBastionIslandIds?.length || 0}/${mine.bastionSupportCapacity || 0}</strong>
         <span>Рота ландскнехтов</span><strong>${mine.landCompany ? `+${mine.landCompany.army} при штурме` : 'нет'}</strong>
+        <span>Персонаж</span><strong>${escapeHtml(mine.character?.name || 'нет')}</strong>
       </div>
       <div class="building-line"><span class="muted">Улучшения:</span> ${escapeHtml(upgradeNames)}</div>
       <div class="building-line"><span class="muted">Сопровождение:</span> ${escapeHtml(escortNames)}</div>
@@ -1894,6 +1917,78 @@
     const canAct = myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending();
     const canBuyHere = canAct && mine.atCitadel;
     const myTurnAnyPhase = myTurn && ['navigation', 'actions'].includes(mine.phase) && !isDecisionPending();
+
+    const characterCatalog = state.room.characterCatalog || {};
+    const character = mine.character;
+    const characterLabel = document.createElement('div');
+    characterLabel.className = 'action-group-label';
+    characterLabel.textContent = 'Персонаж Адмиралтейства';
+    actions.appendChild(characterLabel);
+
+    if (!character && (mine.characterAcquisitionOptions || []).length) {
+      for (const option of mine.characterAcquisitionOptions) {
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'build-btn';
+        button.textContent = `Взять «${option.name}» · 1 действие`;
+        button.disabled = !canAct;
+        button.addEventListener('click', () => socket.emit('takeCharacter', { characterId: option.id }, handleGameAck));
+        actions.appendChild(button);
+      }
+    } else if (!character && mine.admiraltyLevelHere) {
+      const note = document.createElement('div');
+      note.className = 'cargo-meta'; note.textContent = 'Все персонажи, доступные этому уровню Адмиралтейства, сейчас находятся у других игроков.';
+      actions.appendChild(note);
+    } else if (character) {
+      const effectNote = document.createElement('div');
+      effectNote.className = 'cargo-meta';
+      const deferred = {
+        scout: 'Разведчик сохранён на корабле, но просмотр закрытых карт не включён до решения Р29 о зонах видимости.',
+        treasureHunter: 'Искатель сокровищ сохранён на корабле; его выбор из двух сокровищ будет подключён вместе с синхронизацией колоды сокровищ.',
+        shipCarpenter: 'Корабельный плотник сохранён на корабле; предотвращение боевой потери уровня будет подключено в блоке боя.',
+      };
+      effectNote.textContent = deferred[character.id] || `«${character.name}» готов к одноразовому применению.`;
+      actions.appendChild(effectNote);
+
+      if (character.id === 'navigator') {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
+        b.textContent = 'Штурман: перебросить d6 · 1 действие';
+        b.disabled = !(myTurn && mine.phase === 'navigation' && mine.roll !== null && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending());
+        b.addEventListener('click', () => socket.emit('useNavigator', {}, handleGameAck)); actions.appendChild(b);
+      } else if (character.id === 'cartographer') {
+        for (const option of mine.cartographerAnchorOptions || []) {
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
+          b.textContent = `Картограф: посмотреть «${option.name}» · ${option.distance} кл. · 1 действие`;
+          b.disabled = !(myTurn && mine.phase === 'navigation' && mine.roll === null && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending());
+          b.addEventListener('click', () => socket.emit('useCartographer', { color: option.color }, res => {
+            if (res?.ok && res.card) state.characterPeek = `${res.anchorName}: «${res.card.name}» · арт. ${res.card.artillery ?? '—'} · награда ${res.card.reward}`;
+            handleGameAck(res); renderFleet();
+          }));
+          actions.appendChild(b);
+        }
+        if (state.characterPeek) {
+          const peek = document.createElement('div'); peek.className = 'event-effect'; peek.textContent = state.characterPeek; actions.appendChild(peek);
+        }
+      } else if (character.id === 'firstMate') {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
+        b.textContent = 'Первый помощник: +1 дополнительное действие · бесплатно';
+        b.disabled = !(myTurn && mine.phase === 'actions' && !isDecisionPending());
+        b.addEventListener('click', () => socket.emit('useFirstMate', {}, handleGameAck)); actions.appendChild(b);
+      }
+
+      if ((mine.characterReplacementOptions || []).length) {
+        const replaceLabel = document.createElement('div');
+        replaceLabel.className = 'cargo-meta';
+        replaceLabel.textContent = 'Неиспользованного персонажа можно заменить здесь один раз за раунд:';
+        actions.appendChild(replaceLabel);
+        for (const option of mine.characterReplacementOptions) {
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn';
+          b.textContent = `Заменить на «${option.name}» · 1 действие`;
+          b.disabled = !canAct;
+          b.addEventListener('click', () => socket.emit('replaceCharacter', { characterId: option.id }, handleGameAck));
+          actions.appendChild(b);
+        }
+      }
+    }
 
     if (mine.landCompany) {
       const companyLabel = document.createElement('div');
@@ -2241,12 +2336,30 @@
       }
     }
 
+    const palace = island.buildings.find(b => b.type === 'palace');
+    if (palace && (mine?.enemyFactionIds || []).length) {
+      const palaceLabel = document.createElement('div');
+      palaceLabel.className = 'action-group-label';
+      palaceLabel.textContent = 'Дворец';
+      actions.appendChild(palaceLabel);
+      for (const factionId of mine.enemyFactionIds || []) {
+        const faction = (r.factions || []).find(f => f.id === factionId && f.exists);
+        if (!faction) continue;
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'build-btn';
+        button.textContent = mine.palaceUsed ? 'Дворец уже использован в этой партии' : `Прекратить вражду: ${faction.name} · 1 действие`;
+        button.disabled = !canAct || Boolean(mine.palaceUsed);
+        button.addEventListener('click', () => socket.emit('usePalace', { islandId: island.id, factionId }, handleGameAck));
+        actions.appendChild(button);
+      }
+    }
+
     const catalog = state.room.buildingCatalog || {};
     const buildLabel = document.createElement('div');
     buildLabel.className = 'action-group-label';
     buildLabel.textContent = 'Строительство';
     actions.appendChild(buildLabel);
-    const ordered = ['farm', 'lumbermill', 'quarry', 'mine', 'fort', 'market', 'exotic', 'slaves', 'gold', 'diamonds'];
+    const ordered = ['farm', 'lumbermill', 'quarry', 'mine', 'fort', 'market', 'exotic', 'slaves', 'gold', 'diamonds', 'lighthouse', 'observatory', 'embassy', 'palace', 'cartography', 'admiralty'];
     for (const id of ordered) {
       const def = catalog[id];
       if (!def) continue;

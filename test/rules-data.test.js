@@ -123,10 +123,15 @@ test('every economic table row, building chain, price, income and defense matche
     const b=Object.values(rules.economy.buildings).find(b=>b.name===row[0]);
     assert.deepEqual(Object.values(b.levels).map(l=>l.price),b.id==='admiralty'?row[1].split('; ').map(n):[n(row[1])]);
     assert.equal(b.availability.consumerStage,4); assert.equal(b.buildable,false);
+    assert.equal(data.BUILDINGS[b.id].buildable,true);
   }
   assert.deepEqual(['guard','permanentUpgrade','permanentDirect'].map(id=>rules.economy.garrisons[id].price),fixture.tables.garrisons.map(row=>n(row[1])));
   assert.deepEqual(['guard','permanentUpgrade','permanentDirect'].map(id=>rules.economy.garrisons[id].defense),[1,3,2]);
   assert.equal(rules.economy.buildings.bastion.defense,10);
+  assert.deepEqual(data.BUILDING_UPGRADES.admiralty[1],{type:'admiralty',level:2,price:15});
+  assert.deepEqual(data.BUILDING_UPGRADES.admiralty[2],{type:'admiralty',level:3,price:20});
+  assert.equal(Object.keys(data.CHARACTERS).length,6);
+  assert.equal(data.CHARACTERS.scout.effect.unresolved,'R29');
 });
 
 test('all 28 island cards match appendix A, including resources and one-time rewards', () => {

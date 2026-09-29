@@ -105,7 +105,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.ruleset.rulesetVersion, canonical.metadata.rulesetVersion);
   assert.equal(watch.room.balanceCatalog.bastion.price, canonical.economy.buildings.bastion.price);
   assert.equal(watch.room.balanceCatalog.bastion.defense, canonical.economy.buildings.bastion.defense);
-  assert.equal(watch.room.runtimeProfile, 'stage-4-islands-economy-4.3');
+  assert.equal(watch.room.runtimeProfile, 'stage-4-islands-economy-4.4');
   assert.equal(watch.room.shipCatalog.brigantine.artillery, canonical.fleet.ships.brigantine.artillery);
   assert.deepEqual(watch.room.balanceCatalog.landCompany, canonical.economy.landCompany);
   assert.equal(watch.room.balanceCatalog.legendaryEffects['sea-curse'].amount, canonical.legends.legendary.find(c => c.id === 'sea-curse').effect.amount);
@@ -119,7 +119,10 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.escortCatalog.cargo.cargo, canonical.fleet.escorts.cargo.cargo);
   assert.equal(watch.room.escortCatalog.combat.artillery, canonical.fleet.escorts.combat.artillery);
   assert.equal(watch.room.escortCatalog.landin.retired, true);
-  assert.equal(watch.room.buildingCatalog.admiralty, undefined);
+  assert.equal(watch.room.buildingCatalog.admiralty.price, canonical.economy.buildings.admiralty.price);
+  assert.equal(watch.room.buildingCatalog.lighthouse.price, canonical.economy.buildings.lighthouse.price);
+  assert.equal(watch.room.characterCatalog.navigator.admiraltyLevel, 1);
+  assert.equal(watch.room.characterCatalog.scout.effect.unresolved, 'R29');
   await stop(); // Abrupt restart: pending state must survive without disconnect handlers.
   // Emulate a persisted room created before rulesDataVersion existed. Keep the complete
   // pre-stage-1 decks and an unfinished fleet decision instead of rebuilding them.

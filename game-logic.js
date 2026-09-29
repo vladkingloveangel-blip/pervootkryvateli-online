@@ -7,6 +7,7 @@ const {
   MILITARY_REWARDS,
   BUILDINGS,
   BUILDING_UPGRADES,
+  CHARACTERS,
   GOODS,
   ISLAND_DEFS,
   ISLAND_BY_CELL,
@@ -260,10 +261,9 @@ function ensureAssignmentPlayer(player) {
   return player;
 }
 
-function issueAssignment(room, player, factionId, rng = Math.random) {
+function assignAssignmentCard(room, player, factionId, card, rng = Math.random) {
   ensureAssignmentPlayer(player);
   if (player.activeAssignment) return { ok: false, error: 'У игрока уже есть активное поручение.' };
-  const card = drawAssignmentCard(room, player, factionId, rng);
   if (!card) return { ok: false, empty: true, error: 'Подходящего поручения сейчас нет.' };
   player.activeAssignment = {
     instanceId: `${factionId}:${card.id}:${Date.now()}:${Math.floor((Number(rng()) || 0) * 1e9)}`,
@@ -272,6 +272,37 @@ function issueAssignment(room, player, factionId, rng = Math.random) {
     issuedRound: Number(room.round) || 1,
   };
   return { ok: true, assignment: player.activeAssignment };
+}
+
+function issueAssignment(room, player, factionId, rng = Math.random) {
+  ensureAssignmentPlayer(player);
+  if (player.activeAssignment) return { ok: false, error: 'У игрока уже есть активное поручение.' };
+  const card = drawAssignmentCard(room, player, factionId, rng);
+  return assignAssignmentCard(room, player, factionId, card, rng);
+}
+
+function offerAssignmentCards(room, player, factionId, count = 2, rng = Math.random) {
+  ensureAssignmentPlayer(player);
+  if (player.activeAssignment) return { ok: false, error: 'У игрока уже есть активное поручение.', cards: [] };
+  const cards = [];
+  for (let i = 0; i < Math.max(1, Number(count) || 1); i++) {
+    const card = drawAssignmentCard(room, player, factionId, rng);
+    if (!card) break;
+    cards.push(card);
+  }
+  return { ok: true, cards };
+}
+
+function chooseAssignmentOffer(room, player, factionId, offeredCards, cardId, rng = Math.random) {
+  const cards = (offeredCards || []).map(card => ({ ...card }));
+  const chosen = cards.find(card => card.id === cardId);
+  if (!chosen) return { ok: false, error: 'Выберите одно из предложенных поручений.' };
+  room.assignmentDecks ||= createAssignmentDecks(rng);
+  const deck = room.assignmentDecks[factionId];
+  if (!deck) return { ok: false, error: 'Колода поручений не найдена.' };
+  const returned = cards.filter(card => card.id !== chosen.id);
+  if (returned.length) deck.drawPile = shuffleCards([...(deck.drawPile || []), ...returned], rng);
+  return assignAssignmentCard(room, player, factionId, chosen, rng);
 }
 
 function canReplaceAssignment(player) {
@@ -965,7 +996,7 @@ function roman(level) {
 function buildingDisplayName(building) {
   const def = BUILDINGS[building?.type];
   if (!def) return building?.type || 'Постройка';
-  if (def.fixedName) return def.name;
+  if (def.fixedName || (def.category === 'public' && def.id !== 'admiralty')) return def.name;
   return `${def.name} ${roman(building.level || 1)}`;
 }
 
@@ -975,6 +1006,107 @@ function buildingCount(island, type) {
 
 function branchCount(island, branch) {
   return island.buildings.filter(b => BUILDINGS[b.type]?.branch === branch).length;
+}
+
+function hasOwnedBuilding(room, playerId, type) {
+  return (room?.islands || []).some(island =>
+    island.ownerId === playerId && (island.buildings || []).some(building => building.type === type));
+}
+
+function ownedIslandAtPlayer(room, player) {
+  return (room?.islands || []).find(island => island.ownerId === player?.id && playerOnIsland(player, island)) || null;
+}
+
+function lighthouseDepartureBonus(room, player) {
+  const island = ownedIslandAtPlayer(room, player);
+  return island && (island.buildings || []).some(building => building.type === 'lighthouse')
+    ? Math.max(0, Number(BUILDINGS.lighthouse?.effect?.amount) || 0)
+    : 0;
+}
+
+function bestAdmiraltyLevelAtPlayer(room, player) {
+  let best = 0;
+  for (const island of room?.islands || []) {
+    if (island.ownerId !== player?.id || !playerOnIsland(player, island)) continue;
+    for (const building of island.buildings || []) {
+      if (building.type === 'admiralty') best = Math.max(best, Number(building.level) || 1);
+    }
+  }
+  return best;
+}
+
+function heldCharacterId(player) {
+  return typeof player?.character === 'string' ? player.character : player?.character?.id || null;
+}
+
+function characterOptionsAtAdmiralty(room, player, { replacing = false } = {}) {
+  const admiraltyLevel = bestAdmiraltyLevelAtPlayer(room, player);
+  if (!admiraltyLevel) return [];
+  const currentId = heldCharacterId(player);
+  const unavailable = new Set((room?.players || [])
+    .filter(other => other.id !== player.id)
+    .map(heldCharacterId)
+    .filter(Boolean));
+  return Object.values(CHARACTERS)
+    .filter(character => character.admiraltyLevel <= admiraltyLevel)
+    .filter(character => !unavailable.has(character.id))
+    .filter(character => !replacing || character.id !== currentId)
+    .map(character => ({ ...character }));
+}
+
+function canTakeCharacter(room, player, characterId) {
+  if (!room || !player) return { ok: false, error: 'Игрок не найден.' };
+  if (heldCharacterId(player)) return { ok: false, error: 'На основном корабле уже есть персонаж.' };
+  const character = characterOptionsAtAdmiralty(room, player).find(item => item.id === characterId);
+  if (!character) return { ok: false, error: 'Этот персонаж недоступен в текущем Адмиралтействе.' };
+  return { ok: true, character };
+}
+
+function takeCharacter(room, player, characterId) {
+  const allowed = canTakeCharacter(room, player, characterId);
+  if (!allowed.ok) return allowed;
+  player.character = { id: allowed.character.id };
+  return { ok: true, character: allowed.character };
+}
+
+function canReplaceCharacter(room, player, characterId) {
+  if (!heldCharacterId(player)) return { ok: false, error: 'На основном корабле нет персонажа для замены.' };
+  if (Number(player.characterReplacedRound) === Number(room?.round)) {
+    return { ok: false, error: 'Неиспользованного персонажа уже заменяли в этом раунде.' };
+  }
+  const character = characterOptionsAtAdmiralty(room, player, { replacing: true }).find(item => item.id === characterId);
+  if (!character) return { ok: false, error: 'Этот персонаж недоступен для замены в текущем Адмиралтействе.' };
+  return { ok: true, character };
+}
+
+function replaceCharacter(room, player, characterId) {
+  const allowed = canReplaceCharacter(room, player, characterId);
+  if (!allowed.ok) return allowed;
+  const previousId = heldCharacterId(player);
+  player.character = { id: allowed.character.id };
+  player.characterReplacedRound = Number(room.round) || 1;
+  return { ok: true, previousId, character: allowed.character };
+}
+
+function consumeCharacter(player, expectedId) {
+  const id = heldCharacterId(player);
+  if (!id || (expectedId && id !== expectedId)) return { ok: false, error: 'Нужный персонаж не находится на основном корабле.' };
+  const character = CHARACTERS[id];
+  player.character = null;
+  return { ok: true, character };
+}
+
+function cartographerAnchorOptions(player) {
+  const range = Math.max(0, Number(CHARACTERS.cartographer?.effect?.range) || 0);
+  const out = [];
+  for (const [color, anchor] of Object.entries(ANCHORS)) {
+    let distance = Infinity;
+    for (const [row, col] of anchor.cells || []) {
+      distance = Math.min(distance, Math.abs(Number(player?.row) - row) + Math.abs(Number(player?.col) - col));
+    }
+    if (distance <= range) out.push({ id: color, color, name: anchor.name, distance });
+  }
+  return out.sort((a, b) => a.distance - b.distance || a.color.localeCompare(b.color));
 }
 
 function tradeBuildingIndices(island) {
@@ -1448,7 +1580,10 @@ function canBuild(room, player, island, type) {
   const hasFood = foodStage(island) >= 1;
   if (type !== 'farm' && !hasFood) return { ok: false, error: 'Сначала нужна ферма или поместье.' };
   if (def.resource && !island.resources.includes(def.resource)) return { ok: false, error: `На острове нет ресурса «${def.resource}».` };
-  if (def.unique && buildingCount(island, type) >= 1) return { ok: false, error: 'Такой редкий промысел на острове уже есть.' };
+  if (def.unique && buildingCount(island, type) >= 1) return { ok: false, error: 'Такое здание на острове уже есть.' };
+  if (type === 'palace' && !['Город', 'Крупный порт'].includes(islandStatus(island))) {
+    return { ok: false, error: 'Дворец можно строить только в уже существующем городе или крупном порту.' };
+  }
 
   const candidate = cloneIslandWithBuildings(island, [...island.buildings, { type, level: 1 }]);
   if (usedArea(candidate) > effectiveArea(candidate)) return { ok: false, error: 'На острове не хватает свободной площади.' };
@@ -2495,6 +2630,16 @@ module.exports = {
   dismissLandCompany,
   landCompanyAssaultArmy,
   marketIncomeForPlayer,
+  hasOwnedBuilding,
+  lighthouseDepartureBonus,
+  bestAdmiraltyLevelAtPlayer,
+  characterOptionsAtAdmiralty,
+  canTakeCharacter,
+  takeCharacter,
+  canReplaceCharacter,
+  replaceCharacter,
+  consumeCharacter,
+  cartographerAnchorOptions,
   claimFreeIslandsAt,
   publicIsland,
   usedArea,
@@ -2553,6 +2698,8 @@ module.exports = {
   createAssignmentDecks,
   drawAssignmentCard,
   issueAssignment,
+  offerAssignmentCards,
+  chooseAssignmentOffer,
   canReplaceAssignment,
   replaceAssignment,
   assignmentEventMatches,
