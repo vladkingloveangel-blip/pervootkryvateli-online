@@ -51,6 +51,11 @@ const {
   contractBonusForRevenue,
   isCitadelCell,
   isCitadelPeaceCell,
+  seaAttackPositionAllowed,
+  attackCountThisRound,
+  attackTargetsThisRound,
+  canAttackPlayerThisRound,
+  registerPlayerAttack,
   fleetArtillery,
   islandDefenseArmy,
   loseShipLevel,
@@ -706,10 +711,10 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 }
 
 
-// Зона мира включает клетки Цитадели и соседние морские клетки.
+// Зона мира включает только клетки с территорией Цитадели; соседнее море не защищено.
 {
   assert.equal(isCitadelPeaceCell(13, 13), true);
-  assert.equal(isCitadelPeaceCell(12, 13), true);
+  assert.equal(isCitadelPeaceCell(12, 13), false);
   assert.equal(isCitadelPeaceCell(5, 1), false);
 }
 
@@ -754,17 +759,27 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(b.skipTurns, 1);
 }
 
-// В первом раунде морской PvP запрещён, и одну цель нельзя атаковать дважды за один личный ход.
+// В первом раунде PvP запрещён. Со второго раунда морская атака разрешена
+// с клетки цели или одной из восьми соседних, но только один раз на этого игрока за общий раунд.
 {
   const room = { round: 1, islands: cloneIslands(), players: [] };
-  const a = { id: 'a', row: 10, col: 10, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 5, personalTurnNo: 1, attackedThisTurn: [], attackHistory: {} };
-  const b = { id: 'b', row: 10, col: 10, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 5, personalTurnNo: 1, attackedThisTurn: [], attackHistory: {} };
+  const a = { id: 'a', row: 9, col: 9, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 5 };
+  const b = { id: 'b', row: 10, col: 10, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 5 };
   room.players = [a, b];
+  assert.equal(seaAttackPositionAllowed(a, b), true);
   assert.equal(seaBattle(room, a, b).ok, false);
+
   room.round = 2;
   assert.equal(seaBattle(room, a, b).ok, true);
-  a.row = b.row = 10; a.col = b.col = 10;
+  assert.equal(attackCountThisRound(room, a, b.id), 1);
+  assert.deepEqual(attackTargetsThisRound(room, a), ['b']);
+  a.row = 9; a.col = 9; b.row = 10; b.col = 10;
   assert.equal(seaBattle(room, a, b).ok, false);
+
+  room.round = 3;
+  assert.equal(attackCountThisRound(room, a, b.id), 0);
+  assert.deepEqual(attackTargetsThisRound(room, a), []);
+  assert.equal(canAttackPlayerThisRound(room, a, b.id).ok, true);
 }
 
 // Штурм независимого Агмора: каравелла I (войско 5) побеждает гарнизон 3,
@@ -814,28 +829,42 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(defense.total, 9);
 }
 
-// Третья атака на один корабль в пределах десяти личных ходов вызывает бунт владений:
-// все постройки выше I уровня атакующего понижаются на одну ступень.
+// Прежней механики «третьей атаки за десять личных ходов» больше нет:
+ // атака разрешается заново в новом общем раунде и не понижает постройки атакующего.
 {
   const room = { round: 2, islands: cloneIslands(), players: [] };
   const island = room.islands.find(i => i.id === 'kisalinia');
   island.ownerId = 'a';
   island.buildings = [{ type: 'farm', level: 3 }, { type: 'shipyard', level: 2 }, { type: 'fort', level: 1 }];
-  const a = { id: 'a', row: 10, col: 10, shipClass: 'frigate', level: 7, upgrades: [], escorts: [], ducats: 20, personalTurnNo: 1, attackedThisTurn: [], attackHistory: {} };
-  const b = { id: 'b', row: 10, col: 10, shipClass: 'brigantine', level: 7, upgrades: [], escorts: [], ducats: 20 };
+  const a = { id: 'a', row: 10, col: 10, shipClass: 'frigate', level: 6, upgrades: [], escorts: [], ducats: 20 };
+  const b = { id: 'b', row: 10, col: 10, shipClass: 'frigate', level: 6, upgrades: [], escorts: [], ducats: 20 };
   room.players = [a, b];
-  let result = seaBattle(room, a, b);
-  assert.equal(result.rebellion, false);
-  for (const turnNo of [5, 9]) {
-    a.personalTurnNo = turnNo;
-    a.attackedThisTurn = [];
+  for (const round of [2, 3, 4]) {
+    room.round = round;
     a.row = b.row = 10; a.col = b.col = 10;
-    result = seaBattle(room, a, b);
+    const result = seaBattle(room, a, b);
+    assert.equal(result.ok, true);
+    assert.equal(result.rebellion, undefined);
   }
-  assert.equal(result.rebellion, true);
-  assert.equal(island.buildings[0].level, 2);
-  assert.equal(island.buildings[1].level, 1);
-  assert.equal(island.buildings[2].level, 1);
+  assert.deepEqual(island.buildings.map(b => [b.type, b.level]), [['farm',3],['shipyard',2],['fort',1]]);
+}
+
+// Морская атака, штурм острова игрока и враждебный эффект используют один общий
+// лимит пары «нападающий — игрок-цель». Нейтральные цели в него не входят.
+{
+  const room = { round: 2, islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'bogamia');
+  island.ownerId = 'b';
+  const a = { id: 'a', row: 5, col: 1, shipClass: 'caravel', level: 2, upgrades: [], escorts: [], ducats: 0 };
+  const b = { id: 'b', row: 1, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0 };
+  room.players = [a, b];
+
+  assert.equal(registerPlayerAttack(room, a, b.id).ok, true);
+  assert.equal(registerPlayerAttack(room, a, b.id).ok, false);
+  assert.equal(assaultIsland(room, a, island, 'preserve').ok, false);
+
+  room.round = 3;
+  assert.equal(assaultIsland(room, a, island, 'preserve').ok, true);
 }
 
 

@@ -2192,13 +2192,16 @@ function playerOnIsland(player, island) {
 }
 
 function isCitadelPeaceCell(row, col) {
-  if (isCitadelCell(row, col)) return true;
-  for (const [r, c] of CITADEL_CELLS) {
-    if (Math.abs(r - row) + Math.abs(c - col) !== 1) continue;
-    // По правилам в зону мира входят морские клетки, соседние по стороне с берегом Цитадели.
-    if (!isLand(row, col)) return true;
-  }
-  return false;
+  // Зона мира — только клетки, на которых есть территория Цитадели.
+  // Соседние морские клетки этой защиты не получают.
+  return isCitadelCell(row, col);
+}
+
+function seaAttackPositionAllowed(attacker, defender) {
+  if (!attacker || !defender) return false;
+  const dr = Math.abs(Number(attacker.row) - Number(defender.row));
+  const dc = Math.abs(Number(attacker.col) - Number(defender.col));
+  return Number.isFinite(dr) && Number.isFinite(dc) && dr <= 1 && dc <= 1;
 }
 
 function fleetArtillery(room, player) {
@@ -2291,34 +2294,42 @@ function downgradeBuildingOneStep(building) {
   return back ? { ...building, ...back } : { ...building };
 }
 
-function downgradePlayerBuildings(room, playerId) {
-  let changed = 0;
-  for (const island of room.islands || []) {
-    if (island.ownerId !== playerId) continue;
-    island.buildings = (island.buildings || []).map(b => {
-      const stage = buildingStage(b);
-      if (stage <= 1) return b;
-      changed += 1;
-      return downgradeBuildingOneStep(b);
-    });
-  }
-  return changed;
+function attackCountThisRound(room, attacker, defenderId) {
+  if (!room || !attacker || !defenderId) return 0;
+  if (Number(attacker.attackLimitRound) !== Number(room.round)) return 0;
+  return Math.max(0, Number(attacker.attackCountsThisRound?.[String(defenderId)]) || 0);
 }
 
-function registerShipAttack(room, attacker, defenderId) {
-  attacker.attackedThisTurn ||= [];
-  if (attacker.attackedThisTurn.includes(defenderId)) {
-    return { ok: false, error: 'Один и тот же корабль можно атаковать не более одного раза за личный ход.' };
+function attackTargetsThisRound(room, attacker) {
+  if (!room || !attacker || Number(attacker.attackLimitRound) !== Number(room.round)) return [];
+  return Object.entries(attacker.attackCountsThisRound || {})
+    .filter(([, count]) => Number(count) > 0)
+    .map(([id]) => id);
+}
+
+function canAttackPlayerThisRound(room, attacker, defenderId) {
+  if (!room || !attacker || !defenderId) return { ok: false, error: 'Не удалось проверить предел нападений.' };
+  if (Number(room.round) === 1) return { ok: false, error: 'В первом раунде игроки не нападают друг на друга.' };
+  const limit = Math.max(0, Number(BALANCE.combat?.attacksPerOpponentPerRound) || 0);
+  const count = attackCountThisRound(room, attacker, defenderId);
+  if (count >= limit) {
+    return { ok: false, error: 'На одного конкретного игрока можно нападать не более одного раза за общий раунд.' };
   }
-  attacker.attackedThisTurn.push(defenderId);
-  attacker.attackHistory ||= {};
-  const turnNo = Math.max(1, Number(attacker.personalTurnNo) || 1);
-  const minTurn = turnNo - BALANCE.attackHistoryWindow + 1;
-  const history = (attacker.attackHistory[defenderId] || []).filter(n => n >= minTurn);
-  history.push(turnNo);
-  const rebellion = history.length >= BALANCE.attackRebellionThreshold;
-  attacker.attackHistory[defenderId] = rebellion ? [] : history;
-  return { ok: true, rebellion };
+  return { ok: true, count, limit };
+}
+
+function registerPlayerAttack(room, attacker, defenderId) {
+  const check = canAttackPlayerThisRound(room, attacker, defenderId);
+  if (!check.ok) return check;
+  const round = Number(room.round) || 1;
+  if (Number(attacker.attackLimitRound) !== round) {
+    attacker.attackLimitRound = round;
+    attacker.attackCountsThisRound = {};
+  }
+  const id = String(defenderId);
+  attacker.attackCountsThisRound ||= {};
+  attacker.attackCountsThisRound[id] = (Number(attacker.attackCountsThisRound[id]) || 0) + 1;
+  return { ok: true, count: attacker.attackCountsThisRound[id], limit: check.limit };
 }
 
 function allianceKey(aId, bId) {
@@ -2382,12 +2393,12 @@ function splitLoot(loot, winners, priorityId) {
   return shares;
 }
 
-function jointSeaBattle(room, attacker, defender, attackerAllyIds = [], defenderAllyIds = []) {
+function jointSeaBattle(room, attacker, defender, attackerAllyIds = [], defenderAllyIds = [], options = {}) {
   if (!room || !attacker || !defender) return { ok: false, error: 'Участник морского боя не найден.' };
   if (attacker.id === defender.id) return { ok: false, error: 'Нельзя атаковать собственный корабль.' };
   if (room.round === 1) return { ok: false, error: 'В первом раунде игроки не нападают друг на друга.' };
-  if (attacker.row !== defender.row || attacker.col !== defender.col) return { ok: false, error: 'Для морского боя корабли должны находиться на одной клетке.' };
-  if (isCitadelPeaceCell(attacker.row, attacker.col)) return { ok: false, error: 'В зоне мира Цитадели морские бои запрещены.' };
+  if (!seaAttackPositionAllowed(attacker, defender)) return { ok: false, error: 'Для морской атаки нужно находиться на клетке цели или на одной из восьми соседних клеток.' };
+  if (isCitadelPeaceCell(attacker.row, attacker.col) || isCitadelPeaceCell(defender.row, defender.col)) return { ok: false, error: 'В зоне мира Цитадели морские бои запрещены.' };
   if (areAllies(room, attacker, defender)) return { ok: false, error: 'Союзники не могут нападать друг на друга.' };
   if (isFormerAllyBlocked(attacker, defender.id)) return { ok: false, error: 'В этот личный ход нельзя атаковать бывшего союзника.' };
 
@@ -2399,22 +2410,29 @@ function jointSeaBattle(room, attacker, defender, attackerAllyIds = [], defender
     if (used.has(p.id)) return { ok: false, error: 'Один корабль не может участвовать за обе стороны.' };
     if (!areAllies(room, attacker, p)) return { ok: false, error: `${p.name || 'Игрок'} не является союзником инициатора.` };
     if (areAllies(room, defender, p)) return { ok: false, error: `${p.name || 'Игрок'} связан союзом с целью и не может атаковать её.` };
-    if (p.row !== defender.row || p.col !== defender.col) return { ok: false, error: `${p.name || 'Союзник'} находится не на клетке корабля-цели.` };
+    if (!seaAttackPositionAllowed(p, defender)) return { ok: false, error: `${p.name || 'Союзник'} должен находиться на клетке цели или на одной из восьми соседних клеток.` };
     used.add(p.id);
   }
   for (const p of defendingAllies) {
     if (used.has(p.id)) return { ok: false, error: 'Один корабль не может участвовать за обе стороны.' };
     if (!areAllies(room, defender, p)) return { ok: false, error: `${p.name || 'Игрок'} не является союзником защитника.` };
     if (areAllies(room, attacker, p) || isFormerAllyBlocked(attacker, p.id)) return { ok: false, error: `${p.name || 'Игрок'} не может участвовать против инициатора в этом бою.` };
-    if (p.row !== defender.row || p.col !== defender.col) return { ok: false, error: `${p.name || 'Союзник'} находится не на клетке корабля-цели.` };
+    if (!seaAttackPositionAllowed(p, defender)) return { ok: false, error: `${p.name || 'Союзник'} должен находиться на клетке цели или на одной из восьми соседних клеток.` };
     used.add(p.id);
   }
 
-  const attackRegistration = registerShipAttack(room, attacker, defender.id);
-  if (!attackRegistration.ok) return attackRegistration;
-
   const attackers = [attacker, ...attackingAllies];
   const defenders = [defender, ...defendingAllies];
+  const skipRegistrationIds = new Set((options.skipAttackRegistrationIds || []).map(String));
+  for (const participant of attackers) {
+    if (skipRegistrationIds.has(String(participant.id))) continue;
+    const check = canAttackPlayerThisRound(room, participant, defender.id);
+    if (!check.ok) return { ...check, attackerId: participant.id };
+  }
+  for (const participant of attackers) {
+    if (skipRegistrationIds.has(String(participant.id))) continue;
+    registerPlayerAttack(room, participant, defender.id);
+  }
   const attackerPower = attackers.reduce((sum, p) => sum + fleetArtillery(room, p), 0);
   const defenderPower = defenders.reduce((sum, p) => sum + fleetArtillery(room, p), 0);
   const result = {
@@ -2427,8 +2445,6 @@ function jointSeaBattle(room, attacker, defender, attackerAllyIds = [], defender
     loot: 0,
     lootShares: {},
     levelLosses: [],
-    rebellion: false,
-    downgradedBuildings: 0,
   };
 
   if (attackerPower === defenderPower) {
@@ -2450,10 +2466,6 @@ function jointSeaBattle(room, attacker, defender, attackerAllyIds = [], defender
     result.lootShares = splitLoot(loot, winners, attackerWon ? attacker.id : defender.id);
   }
 
-  if (attackRegistration.rebellion) {
-    result.rebellion = true;
-    result.downgradedBuildings = downgradePlayerBuildings(room, attacker.id);
-  }
   return result;
 }
 
@@ -2497,7 +2509,7 @@ function grantMilitaryReward(room, player, island, captureMode, options = {}) {
   return notes;
 }
 
-function jointAssaultIsland(room, attacker, island, captureMode = 'preserve', attackerAllyIds = [], defenderAllyIds = []) {
+function jointAssaultIsland(room, attacker, island, captureMode = 'preserve', attackerAllyIds = [], defenderAllyIds = [], options = {}) {
   if (!room || !attacker || !island) return { ok: false, error: 'Цель штурма не найдена.' };
   if (!['preserve', 'raze'].includes(captureMode)) return { ok: false, error: 'Неизвестный результат захвата.' };
   if (!playerOnIsland(attacker, island)) return { ok: false, error: 'Для штурма основной корабль должен находиться на клетке этого острова.' };
@@ -2532,6 +2544,18 @@ function jointAssaultIsland(room, attacker, island, captureMode = 'preserve', at
   }
 
   const attackers = [attacker, ...attackingAllies];
+  if (defender) {
+    const skipRegistrationIds = new Set((options.skipAttackRegistrationIds || []).map(String));
+    for (const participant of attackers) {
+      if (skipRegistrationIds.has(String(participant.id))) continue;
+      const check = canAttackPlayerThisRound(room, participant, defender.id);
+      if (!check.ok) return { ...check, attackerId: participant.id };
+    }
+    for (const participant of attackers) {
+      if (skipRegistrationIds.has(String(participant.id))) continue;
+      registerPlayerAttack(room, participant, defender.id);
+    }
+  }
   const ownerParticipates = Boolean(defender && playerOnIsland(defender, island));
   const defenders = [...(ownerParticipates ? [defender] : []), ...defendingAllies];
   const baseDefense = islandDefenseArmy(room, island);
@@ -2810,6 +2834,10 @@ module.exports = {
   seaBattle,
   jointAssaultIsland,
   assaultIsland,
-  downgradePlayerBuildings,
+  seaAttackPositionAllowed,
+  attackCountThisRound,
+  attackTargetsThisRound,
+  canAttackPlayerThisRound,
+  registerPlayerAttack,
   isCitadelCell,
 };

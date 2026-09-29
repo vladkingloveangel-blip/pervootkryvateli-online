@@ -751,6 +751,11 @@
   function areAlliesClient(aId, bId) {
     return (state.room?.alliances || []).some(pair => (pair[0] === aId && pair[1] === bId) || (pair[0] === bId && pair[1] === aId));
   }
+  function seaAttackPositionClient(attacker, target) {
+    if (!attacker || !target) return false;
+    return Math.abs(Number(attacker.row) - Number(target.row)) <= 1
+      && Math.abs(Number(attacker.col) - Number(target.col)) <= 1;
+  }
   function playerOnIslandClient(player, island) {
     return Boolean(player && island?.cells?.some(([r, c]) => r === player.row && c === player.col));
   }
@@ -858,7 +863,7 @@
     const anchorRelevant = Boolean(currentAnchorCell());
     const pendingCombat = Boolean(r.pendingBattle || r.pendingLegendaryReaction);
     const myTurnActions = Boolean(r.started && mine && r.activePlayerId === state.myId && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0);
-    const seaTargets = mine ? r.players.some(p => p.id !== state.myId && p.row === mine.row && p.col === mine.col && !areAlliesClient(state.myId, p.id)) : false;
+    const seaTargets = mine ? r.players.some(p => p.id !== state.myId && seaAttackPositionClient(mine, p) && !areAlliesClient(state.myId, p.id)) : false;
     const islandTargets = mine ? currentIslands().some(i => i.ownerId !== state.myId && !(i.kind === 'free' && !i.ownerId) && (!i.ownerId || !areAlliesClient(state.myId, i.ownerId))) : false;
     const combatRelevant = pendingCombat || (myTurnActions && !mine?.inPeaceZone && (seaTargets || islandTargets));
 
@@ -1139,7 +1144,7 @@
     const hereIsland = hereIslands.find(i => i.id === state.selectedIslandId) || hereIslands[0] || null;
     const hereAnchor = currentAnchorCell();
     const hereLegendary = currentLegendaryPlace();
-    const seaTargets = r.players.filter(p => p.id !== state.myId && p.row === mine.row && p.col === mine.col && !areAlliesClient(state.myId, p.id));
+    const seaTargets = r.players.filter(p => p.id !== state.myId && seaAttackPositionClient(mine, p) && !areAlliesClient(state.myId, p.id));
     const islandTargets = hereIslands.filter(i => i.ownerId !== state.myId && !(i.kind === 'free' && !i.ownerId) && (!i.ownerId || !areAlliesClient(state.myId, i.ownerId)));
 
     if (mine.atCitadel) {
@@ -2540,7 +2545,8 @@
     const firstRound = r.round === 1;
     badge.textContent = mine.inPeaceZone ? 'зона мира' : `арт. ${mine.fleetArtillery} · штурм ${mine.assaultArmy ?? mine.stats?.army ?? 0}`;
 
-    const seaTargets = r.players.filter(p => p.id !== state.myId && p.row === mine.row && p.col === mine.col && !areAlliesClient(state.myId, p.id));
+    const usedAttackTargets = new Set(mine.attackedPlayerIdsThisRound || []);
+    const seaTargets = r.players.filter(p => p.id !== state.myId && seaAttackPositionClient(mine, p) && !areAlliesClient(state.myId, p.id));
     const islandTargets = currentIslands().filter(i => i.ownerId !== state.myId && !(i.kind === 'free' && !i.ownerId) && (!i.ownerId || !areAlliesClient(state.myId, i.ownerId)));
 
     const notes = [];
@@ -2557,8 +2563,8 @@
       for (const target of seaTargets) {
         const card = document.createElement('div');
         card.className = 'combat-target';
-        const attackAllies = r.players.filter(p => p.id !== state.myId && p.id !== target.id && areAlliesClient(state.myId, p.id) && !areAlliesClient(target.id, p.id) && p.row === target.row && p.col === target.col);
-        const defenseAllies = r.players.filter(p => p.id !== state.myId && p.id !== target.id && areAlliesClient(target.id, p.id) && !areAlliesClient(state.myId, p.id) && p.row === target.row && p.col === target.col);
+        const attackAllies = r.players.filter(p => p.id !== state.myId && p.id !== target.id && areAlliesClient(state.myId, p.id) && !areAlliesClient(target.id, p.id) && seaAttackPositionClient(p, target) && !(p.attackedPlayerIdsThisRound || []).includes(target.id));
+        const defenseAllies = r.players.filter(p => p.id !== state.myId && p.id !== target.id && areAlliesClient(target.id, p.id) && !areAlliesClient(state.myId, p.id) && seaAttackPositionClient(p, target));
         card.innerHTML = `<div><strong>${escapeHtml(target.name)}</strong><div class="cargo-meta">Флотилия цели: артиллерия ${target.fleetArtillery}. Ваши союзники в позиции: ${attackAllies.length}; союзники защиты в позиции: ${defenseAllies.length}.${target.legendaryStatus?.shipVeilTurns ? ` Покров моря: ${target.legendaryStatus.shipVeilTurns} хода.` : ''}</div></div>`;
         const row = document.createElement('div');
         row.className = 'combat-button-row';
@@ -2566,7 +2572,8 @@
         solo.type = 'button';
         solo.className = 'danger-soft';
         solo.textContent = `Атаковать · ${mine.fleetArtillery}:${target.fleetArtillery}`;
-        solo.disabled = !canAct || firstRound || mine.inPeaceZone || (mine.brokenAlliesThisTurn || []).includes(target.id) || Boolean(target.legendaryStatus?.shipVeilTurns);
+        solo.disabled = !canAct || firstRound || mine.inPeaceZone || target.inPeaceZone || usedAttackTargets.has(target.id) || (mine.brokenAlliesThisTurn || []).includes(target.id) || Boolean(target.legendaryStatus?.shipVeilTurns);
+        if (usedAttackTargets.has(target.id)) solo.title = 'Лимит нападения на этого игрока в текущем раунде уже использован.';
         solo.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: false }, handleGameAck));
         const together = document.createElement('button');
         together.type = 'button';
@@ -2599,7 +2606,8 @@
           solo.type = 'button';
           solo.className = mode === 'raze' ? 'danger-soft' : '';
           solo.textContent = mode === 'raze' ? 'Разорить · одному' : 'Сохранить · одному';
-          solo.disabled = !canAct || mine.inPeaceZone || (firstRound && pvpIsland) || (island.ownerId && (mine.brokenAlliesThisTurn || []).includes(island.ownerId)) || Boolean(island.legendaryVeil?.remaining);
+          solo.disabled = !canAct || mine.inPeaceZone || (firstRound && pvpIsland) || (island.ownerId && usedAttackTargets.has(island.ownerId)) || (island.ownerId && (mine.brokenAlliesThisTurn || []).includes(island.ownerId)) || Boolean(island.legendaryVeil?.remaining);
+          if (island.ownerId && usedAttackTargets.has(island.ownerId)) solo.title = 'Лимит нападения на владельца этого острова в текущем раунде уже использован.';
           solo.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, captureMode: mode, inviteAllies: false }, handleGameAck));
           const together = document.createElement('button');
           together.type = 'button';

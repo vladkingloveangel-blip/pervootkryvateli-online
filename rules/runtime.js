@@ -50,7 +50,7 @@ const FEUD_CARDS = Object.fromEntries(Object.entries(legacy.feud).map(([id, card
   }),
 ]));
 module.exports = {
-  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-4-islands-economy-4.7',
+  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-5-combat-politics-5.1',
   BALANCE: {
     session: rules.session,
     maxShipLevel: rules.fleet.maxLevel, maxReadableShipLevel: legacy.shipLevel7.level,
@@ -62,7 +62,6 @@ module.exports = {
     loadingLimitPerIslandPerRound: rules.economy.loadingLimitPerIslandPerRound,
     assignmentReplacementPrice: legacy.assignmentReplacementPrice,
     gloryCapture: legacy.gloryCapture, treasuryLossRatio: legacy.treasuryLossRatio,
-    attackHistoryWindow: legacy.attackHistoryWindow, attackRebellionThreshold: legacy.attackRebellionThreshold,
     reclaimIslandFallback: rules.events.feud.lionia.find(c => c.effect.type === 'reclaim-island').effect.fallbackDucats,
     legendaryEffects: Object.fromEntries(rules.legends.legendary.map(c => [c.id, c.effect])),
   },
