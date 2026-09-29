@@ -166,6 +166,21 @@ test('complete known sea, assignment, feud and event decks match appendix rows',
   assert.deepEqual(rules.politics.assignments.mori.slice(0,8).map(c=>c.islandId),['renaika','chertog','kisalinia','yukon','erkalon','asigoriy','atlantia','adia']);
 });
 
+test('stage 4 finalization marks completed consumers active without crossing into later stages', () => {
+  assert.equal(rules.implementation.activeProfile,'stage-4-islands-economy-4.7');
+  assert.equal(rules.implementation.pendingConsumers.every(item => item.consumerStage >= 5),true);
+  for (const resolved of [
+    'fleet.upgrades.*.passability',
+    'economy.buildings.*.area',
+    'economy.ranks.*.branchLimit',
+    'economy.garrisons',
+    'economy.buildings.fortress.levels.3.next',
+    'economy.buildings.*.effect',
+    'characters',
+    'legends.treasures',
+  ]) assert.equal(rules.implementation.pendingConsumers.some(item => item.path === resolved),false,resolved);
+});
+
 test('unknown physical copies and author decisions remain explicit, never guessed', () => {
   for (const id of ['R05','R06','R07','R21','R29','remaining-prize-buildings']) assert.ok(rules.metadata.unresolved.includes(id));
   assert.equal(rules.legends.legendaryDeck.copiesByKind,null);

@@ -791,9 +791,13 @@
   function cargoSummary(player, room) {
     if (!player) return { quantity: 0, capacity: 0 };
     const escortCatalog = room?.escortCatalog || {};
-    const cargoEscorts = (player.escorts || []).filter(e => e.active && (escortCatalog[e.type]?.cargo || 0) > 0);
+    // Временно неактивное из-за уровня грузовое сопровождение сохраняет уже
+    // погруженный груз. HUD поэтому показывает его груз и физический трюм,
+    // хотя грузить/продавать через это судно до восстановления уровня нельзя.
+    const cargoEscorts = (player.escorts || []).filter(e => (escortCatalog[e.type]?.cargo || 0) > 0);
     const quantity = (player.cargo?.quantity || 0) + cargoEscorts.reduce((sum, e) => sum + (e.cargo?.quantity || 0), 0);
-    return { quantity, capacity: player.totalCargoCapacity || player.cargoCapacity || 0 };
+    const capacity = (player.cargoCapacity || 0) + cargoEscorts.reduce((sum, e) => sum + (escortCatalog[e.type]?.cargo || 0), 0);
+    return { quantity, capacity };
   }
 
   function renderMobileHud() {
@@ -1397,7 +1401,7 @@
     const myTurn = r.started && r.activePlayerId === state.myId;
     const canUse = myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending();
     const emptyHolds = [];
-    if (!mine.cargo) emptyHolds.push({ id: 'main', name: `Основной трюм (${mine.cargoCapacity})` });
+    if (!mine.cargo && !mine.landCompany) emptyHolds.push({ id: 'main', name: `Основной трюм (${mine.cargoCapacity})` });
     for (const e of mine.escorts || []) {
       const def = r.escortCatalog?.[e.type];
       if (e.active && (def?.cargo || 0) > 0 && !e.cargo) emptyHolds.push({ id: e.id, name: `${def.name || 'Сопровождение'} (${def.cargo})` });
@@ -2696,7 +2700,8 @@
     if (kind === 'island') {
       const owner = data.ownerId ? playerName(data.ownerId) : (data.faction || (data.kind === 'free' ? 'Свободный остров' : data.kind === 'independent' ? 'Независимый остров' : 'Нет владельца'));
       const resources = data.resources?.length ? data.resources.join(', ') : 'нет';
-      meta.innerHTML = `<span>Владелец: <strong>${escapeHtml(owner)}</strong></span><span>Площадь: <strong>${data.area}</strong></span><span>Гарнизон: <strong>${data.army ?? 0}</strong></span><span>Ресурс: <strong>${escapeHtml(resources)}</strong></span>`;
+      const defense = data.defenseArmy ?? data.army ?? 0;
+      meta.innerHTML = `<span>Владелец: <strong>${escapeHtml(owner)}</strong></span><span>Площадь: <strong>${data.area}</strong></span><span>Исходный гарнизон: <strong>${data.army ?? 0}</strong></span><span>Текущая защита: <strong>${defense}</strong></span><span>Ресурс: <strong>${escapeHtml(resources)}</strong></span>`;
       const here = currentIslands().some(i => i.id === data.id);
       if (here) {
         state.selectedIslandId = data.id;

@@ -46,6 +46,8 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(canonical.metadata.schemaVersion, 1);
   assert.equal(canonical.politics.factions.kadingir.fullConquestPrize.ducats, 50);
   assert.equal(canonical.islands.length, 28);
+  assert.equal(canonical.implementation.activeProfile, 'stage-4-islands-economy-4.7');
+  assert.equal(canonical.implementation.pendingConsumers.every(item => item.consumerStage >= 5), true);
   const a = (await api('/api/auth/register', null, { username: 'playerone', password: 'password1' })).data;
   const b = (await api('/api/auth/register', null, { username: 'playertwo', password: 'password2' })).data;
   const c = (await api('/api/auth/register', null, { username: 'playerthree', password: 'password3' })).data;
@@ -105,7 +107,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.ruleset.rulesetVersion, canonical.metadata.rulesetVersion);
   assert.equal(watch.room.balanceCatalog.bastion.price, canonical.economy.buildings.bastion.price);
   assert.equal(watch.room.balanceCatalog.bastion.defense, canonical.economy.buildings.bastion.defense);
-  assert.equal(watch.room.runtimeProfile, 'stage-4-islands-economy-4.6');
+  assert.equal(watch.room.runtimeProfile, 'stage-4-islands-economy-4.7');
   assert.equal(watch.room.shipCatalog.brigantine.artillery, canonical.fleet.ships.brigantine.artillery);
   assert.deepEqual(watch.room.balanceCatalog.landCompany, canonical.economy.landCompany);
   assert.deepEqual(watch.room.balanceCatalog.garrisons, canonical.economy.garrisons);
