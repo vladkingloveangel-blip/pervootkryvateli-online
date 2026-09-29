@@ -624,7 +624,7 @@ function publicRoom(room, viewerId = null) {
       },
     },
     citadelCells: CITADEL_CELLS,
-    anchorCells: Object.entries(ANCHORS).flatMap(([color, def]) => def.cells.map(([row, col]) => ({ color, row, col, name: def.name, glory: def.glory }))),
+    anchorCells: Object.entries(ANCHORS).flatMap(([color, def]) => def.cells.map(([row, col]) => ({ color, row, col, name: def.name, fleetPoints: def.fleetPoints }))),
     anchorDecks: Object.fromEntries(Object.entries(room.anchorDecks || {}).map(([color, deck]) => [color, { remaining: deck.drawPile?.length || 0, discard: deck.discard?.length || 0 }])),
     buildingCatalog: Object.fromEntries(Object.entries(BUILDINGS).filter(([, b]) => b.buildable !== false).map(([id, b]) => [id, {
       id: b.id,
@@ -1641,26 +1641,26 @@ function resolvePendingBattle(room) {
   return result;
 }
 
-function handleAnchorStop(room, player) {
+function handleAnchorAction(room, player) {
   const result = resolveAnchorEncounter(room, player);
   if (!result?.ok || !result.triggered) return result;
   room.actionsLeft = Math.max(0, (Number(room.actionsLeft) || 0) - (result.actionCost || 0));
   const card = result.card;
   if (result.outcome === 'quiet') {
-    log(room, `${player.name} останавливается на ${result.anchor.name.toLowerCase()}: «${card.name}». Карта не расходует действие.`);
+    log(room, `${player.name} открывает карту ${result.anchor.name.toLowerCase()}: «${card.name}». Действие не расходуется.`);
     return result;
   }
   if (result.outcome === 'win') {
     const credit = result.reward;
     const debtText = credit?.debtPaid ? ` Из награды ${credit.debtPaid} уходит в погашение долга; в казну ${credit.net}.` : '';
-    log(room, `${player.name}: ${result.anchor.name}, «${card.name}» (артиллерия ${card.artillery}). Флотилия ${result.fleetPower} — победа: награда ${card.reward} дукатов, слава +${result.glory}.${debtText} Осталось действий: ${room.actionsLeft}.`);
+    log(room, `${player.name}: ${result.anchor.name}, «${card.name}» (артиллерия ${card.artillery}). Флотилия ${result.fleetPower} — победа: награда ${card.reward} дукатов, очки флота +${result.fleetPoints}.${debtText} Осталось действий: ${room.actionsLeft}.`);
     trackAssignment(room, player, { type: 'anchor-win', color: result.anchor.color || anchorAt(player.row, player.col)?.color });
   } else if (result.outcome === 'loss') {
     const p = result.penalty;
     const debtText = p.addedDebt ? ` Недостающие ${p.addedDebt} записаны в долг; общий долг ${p.debt}.` : '';
     log(room, `${player.name}: ${result.anchor.name}, «${card.name}» (артиллерия ${card.artillery}). Флотилия ${result.fleetPower} — поражение: штраф ${p.required} дукатов, уплачено ${p.paid}.${debtText} Уровень корабля не снижается. Осталось действий: ${room.actionsLeft}.`);
   } else {
-    log(room, `${player.name}: ${result.anchor.name}, «${card.name}» — ничья ${result.fleetPower}:${card.artillery}. Награды нет; ${player.name} пропустит следующий личный ход. Осталось действий: ${room.actionsLeft}.`);
+    log(room, `${player.name}: ${result.anchor.name}, «${card.name}» — ничья ${result.fleetPower}:${card.artillery}. Награды и иных последствий нет. Осталось действий: ${room.actionsLeft}.`);
   }
   return result;
 }
@@ -2970,7 +2970,6 @@ io.on('connection', socket => {
     room.movePoints = 0;
     room.phase = 'actions';
     handleArrival(room, p);
-    handleAnchorStop(room, p);
     log(room, `${p.name} остался на месте.`);
     ackSafe(ack, { ok: true });
     emitRoom(room);
@@ -2997,8 +2996,26 @@ io.on('connection', socket => {
     room.phase = 'actions';
     log(room, `${p.name} переместился на клетку ${col + 1}:${row + 1}.`);
     handleArrival(room, p);
-    handleAnchorStop(room, p);
     ackSafe(ack, { ok: true });
+    emitRoom(room);
+  });
+
+  onSocketEvent(socket, 'fightAnchor', (_data, ack) => {
+    const room = getRoom(socket.data.roomCode);
+    const p = currentPlayer(room);
+    if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
+    if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
+    if (room.phase !== 'actions') return ackSafe(ack, { ok: false, error: 'Морской бой на якоре объявляют в фазе действий.' });
+    if ((Number(room.actionsLeft) || 0) <= 0) return ackSafe(ack, { ok: false, error: 'Для объявления боя на якоре нужно иметь доступное действие.' });
+    const anchor = anchorAt(p.row, p.col);
+    if (!anchor) return ackSafe(ack, { ok: false, error: 'Основной корабль не находится на клетке морского якоря.' });
+    const visitKey = `${p.row},${p.col}`;
+    if ((p.visitedAnchors || []).includes(visitKey)) return ackSafe(ack, { ok: false, error: 'Эта клетка якоря уже дала вам карту в текущем раунде.' });
+
+    const result = handleAnchorAction(room, p);
+    if (!result?.ok) return ackSafe(ack, result);
+    if (!result.triggered) return ackSafe(ack, { ok: false, error: 'Бой на якоре сейчас недоступен.' });
+    ackSafe(ack, { ok: true, result });
     emitRoom(room);
   });
 

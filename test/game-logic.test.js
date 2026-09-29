@@ -1141,21 +1141,48 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(decks.blue.drawPile.filter(c => c.id === 'smugglers').length, 2);
 }
 
-// Победа на синем якоре: награда + слава, карта уходит в сброс, визит отмечается.
+// Победа на синем якоре: награда +1 очко флота, карта уходит в сброс, клетка отмечается на раунд.
 {
-  const p = { id: 'p1', row: 5, col: 11, shipClass: 'frigate', level: 7, upgrades: ['falcons', 'culverins'], escorts: [], ducats: 1, debt: 0, glory: 0, visitedAnchors: [] };
+  const p = { id: 'p1', row: 5, col: 11, shipClass: 'frigate', level: 7, upgrades: ['falcons', 'culverins'], escorts: [], ducats: 1, debt: 0, glory: 0, fleetPoints: 0, visitedAnchors: [] };
   const room = { round: 2, players: [p], islands: cloneIslands(), anchorDecks: { blue: { drawPile: [{ id: 'test', name: 'Тестовый конвой', artillery: 4, reward: 8, quiet: false }], discard: [] } } };
   const result = resolveAnchorEncounter(room, p);
   assert.equal(result.triggered, true);
   assert.equal(result.outcome, 'win');
   assert.equal(result.actionCost, 1);
   assert.equal(p.ducats, 9);
-  assert.equal(p.glory, 1);
+  assert.equal(p.glory, 0);
+  assert.equal(p.fleetPoints, 1);
+  assert.equal(result.fleetPoints, 1);
   assert.equal(room.anchorDecks.blue.discard.length, 1);
   assert.equal(p.visitedAnchors.includes('5,11'), true);
   const second = resolveAnchorEncounter(room, p);
   assert.equal(second.triggered, false);
   assert.equal(second.reason, 'already-visited');
+}
+
+// Жёлтый и красный якоря дают 2 и 3 очка флота соответственно.
+{
+  const yellow = { id: 'y', row: 10, col: 16, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0, fleetPoints: 0, visitedAnchors: [] };
+  const red = { id: 'r', row: 26, col: 21, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0, fleetPoints: 0, visitedAnchors: [] };
+  const roomY = { round: 2, players: [yellow], islands: cloneIslands(), anchorDecks: { yellow: { drawPile: [{ id: 'y-win', name: 'Жёлтый тест', artillery: 0, reward: 0, quiet: false }], discard: [] } } };
+  const roomR = { round: 2, players: [red], islands: cloneIslands(), anchorDecks: { red: { drawPile: [{ id: 'r-win', name: 'Красный тест', artillery: 0, reward: 0, quiet: false }], discard: [] } } };
+  assert.equal(resolveAnchorEncounter(roomY, yellow).fleetPoints, 2);
+  assert.equal(yellow.fleetPoints, 2);
+  assert.equal(resolveAnchorEncounter(roomR, red).fleetPoints, 3);
+  assert.equal(red.fleetPoints, 3);
+}
+
+// Ограничение действует на конкретную клетку: другой синий якорь того же раунда можно разыграть.
+{
+  const p = { id: 'p1', row: 5, col: 11, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0, fleetPoints: 0, visitedAnchors: [] };
+  const room = { round: 2, players: [p], islands: cloneIslands(), anchorDecks: { blue: { drawPile: [
+    { id: 'b1', name: 'Первый', artillery: 0, reward: 0, quiet: false },
+    { id: 'b2', name: 'Второй', artillery: 0, reward: 0, quiet: false },
+  ], discard: [] } } };
+  assert.equal(resolveAnchorEncounter(room, p).outcome, 'win');
+  p.row = 9; p.col = 1;
+  assert.equal(resolveAnchorEncounter(room, p).outcome, 'win');
+  assert.equal(p.fleetPoints, 2);
 }
 
 // Поражение на якоре берёт 30% казны, но минимум 2; нехватка создаёт долг.
@@ -1186,18 +1213,19 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(p.debt, 0);
 }
 
-// Ничья на якоре не даёт награды и заставляет пропустить следующий личный ход.
+// Ничья на якоре не даёт награды и не накладывает дополнительных последствий.
 {
   const p = { id: 'p1', row: 5, col: 25, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 10, debt: 0, glory: 0, visitedAnchors: [], skipTurns: 0 };
   const room = { round: 2, players: [p], islands: cloneIslands(), anchorDecks: { yellow: { drawPile: [{ id: 'tie', name: 'Ровный противник', artillery: 5, reward: 20, quiet: false }], discard: [] } } };
   const result = resolveAnchorEncounter(room, p);
   assert.equal(result.outcome, 'tie');
-  assert.equal(p.skipTurns, 1);
+  assert.equal(p.skipTurns, 0);
   assert.equal(p.ducats, 10);
   assert.equal(p.glory, 0);
+  assert.equal(p.fleetPoints || 0, 0);
 }
 
-// «На море тихо» не тратит действие и не меняет казну/славу.
+// «На море тихо» не тратит действие и не меняет казну или очки флота.
 {
   const p = { id: 'p1', row: 9, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 10, debt: 0, glory: 0, visitedAnchors: [] };
   const room = { round: 2, players: [p], islands: cloneIslands(), anchorDecks: { blue: { drawPile: [{ id: 'calm', name: 'На море тихо', artillery: null, reward: 0, quiet: true }], discard: [] } } };
@@ -1206,6 +1234,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(result.actionCost, 0);
   assert.equal(p.ducats, 10);
   assert.equal(p.glory, 0);
+  assert.equal(p.fleetPoints || 0, 0);
 }
 
 

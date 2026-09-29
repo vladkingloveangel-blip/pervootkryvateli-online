@@ -46,7 +46,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(canonical.metadata.schemaVersion, 1);
   assert.equal(canonical.politics.factions.kadingir.fullConquestPrize.ducats, 50);
   assert.equal(canonical.islands.length, 28);
-  assert.equal(canonical.implementation.activeProfile, 'stage-5-combat-politics-5.4');
+  assert.equal(canonical.implementation.activeProfile, 'stage-5-combat-politics-5.5');
   assert.equal(canonical.implementation.pendingConsumers.every(item => item.consumerStage >= 5), true);
   const a = (await api('/api/auth/register', null, { username: 'playerone', password: 'password1' })).data;
   const b = (await api('/api/auth/register', null, { username: 'playertwo', password: 'password2' })).data;
@@ -107,7 +107,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.ruleset.rulesetVersion, canonical.metadata.rulesetVersion);
   assert.equal(watch.room.balanceCatalog.bastion.price, canonical.economy.buildings.bastion.price);
   assert.equal(watch.room.balanceCatalog.bastion.defense, canonical.economy.buildings.bastion.defense);
-  assert.equal(watch.room.runtimeProfile, 'stage-5-combat-politics-5.4');
+  assert.equal(watch.room.runtimeProfile, 'stage-5-combat-politics-5.5');
   assert.equal(watch.room.shipCatalog.brigantine.artillery, canonical.fleet.ships.brigantine.artillery);
   assert.deepEqual(watch.room.balanceCatalog.landCompany, canonical.economy.landCompany);
   assert.deepEqual(watch.room.balanceCatalog.garrisons, canonical.economy.garrisons);
@@ -115,6 +115,8 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.balanceCatalog.contractBonusRatio, canonical.economy.contractBonusRatio);
   assert.equal(watch.room.balanceCatalog.combat.attacksPerOpponentPerRound, canonical.scoring.combat.attacksPerOpponentPerRound);
   assert.deepEqual(watch.room.balanceCatalog.fleetScoring, canonical.scoring.fleet);
+  assert.equal(watch.room.anchorCells.find(a=>a.color==='blue').fleetPoints, canonical.scoring.fleet.anchor.blue);
+  assert.equal(watch.room.anchorCells.some(a=>Object.hasOwn(a,'glory')), false);
   assert.deepEqual(watch.room.balanceCatalog.armyScoring, canonical.scoring.army);
   assert.equal(watch.room.balanceCatalog.legendaryEffects['sea-curse'].amount, canonical.legends.legendary.find(c => c.id === 'sea-curse').effect.amount);
   assert.equal(watch.room.shipLevelCatalog[7], undefined);

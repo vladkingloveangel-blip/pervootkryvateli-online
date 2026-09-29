@@ -778,7 +778,7 @@ function resolveAnchorEncounter(room, player, rng = Math.random) {
     card: { id: card.id, name: card.name, artillery: card.artillery, reward: card.reward, quiet: Boolean(card.quiet) },
     fleetPower: fleetArtillery(room, player),
     outcome: card.quiet ? 'quiet' : 'tie',
-    glory: 0,
+    fleetPoints: 0,
     actionCost: card.quiet ? 0 : 1,
     reward: null,
     penalty: null,
@@ -788,13 +788,11 @@ function resolveAnchorEncounter(room, player, rng = Math.random) {
     if (result.fleetPower > card.artillery) {
       result.outcome = 'win';
       result.reward = creditDucats(player, card.reward);
-      result.glory = anchor.glory;
-      player.glory = (Number(player.glory) || 0) + anchor.glory;
+      result.fleetPoints = Math.max(0, Math.floor(Number(BALANCE.fleetScoring?.anchor?.[anchor.color]) || 0));
+      player.fleetPoints = Math.max(0, Number(player.fleetPoints) || 0) + result.fleetPoints;
     } else if (result.fleetPower < card.artillery) {
       result.outcome = 'loss';
       result.penalty = anchorLoss(player);
-    } else {
-      player.skipTurns = (Number(player.skipTurns) || 0) + 1;
     }
   }
 
@@ -810,7 +808,7 @@ function resolveAnchorEncounter(room, player, rng = Math.random) {
     rewardValue: card.reward,
     fleetPower: result.fleetPower,
     outcome: result.outcome,
-    glory: result.glory,
+    fleetPoints: result.fleetPoints,
     reward: result.reward ? { ...result.reward } : null,
     penalty: result.penalty ? { ...result.penalty } : null,
   };

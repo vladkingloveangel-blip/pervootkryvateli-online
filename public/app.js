@@ -1183,14 +1183,24 @@
     }
 
     if (hereAnchor) {
-      const encounter = mine.lastAnchorEncounter;
+      const visitKey = `${mine.row},${mine.col}`;
+      const visitedHere = (mine.visitedAnchors || []).includes(visitKey);
+      const encounter = Number(mine.lastAnchorEncounter?.round) === Number(r.round)
+        && Number(mine.lastAnchorEncounter?.row) === Number(mine.row)
+        && Number(mine.lastAnchorEncounter?.col) === Number(mine.col)
+        ? mine.lastAnchorEncounter
+        : null;
       title.textContent = hereAnchor.name;
       if (encounter) {
         const outcome = encounter.outcome === 'win' ? 'Победа' : encounter.outcome === 'loss' ? 'Поражение' : encounter.outcome === 'tie' ? 'Ничья' : 'Тихое море';
-        text.textContent = `${outcome} · результат столкновения уже разыгран автоматически`;
+        text.textContent = `${outcome} · карта этой клетки уже разыграна в текущем раунде`;
         addAction('Посмотреть результат', 'actions');
+      } else if (visitedHere) {
+        text.textContent = 'Эта клетка якоря уже дала вам карту в текущем раунде.';
+        addAction('Открыть морские якоря', 'actions');
       } else {
-        text.textContent = 'Столкновение на якоре разыгрывается автоматически при остановке.';
+        text.textContent = 'Бой на якоре добровольный и объявляется в фазе действий.';
+        addAction('Открыть морские якоря', 'actions', 'danger-soft');
       }
       overlay.classList.remove('hidden');
       return;
@@ -2192,7 +2202,9 @@
   function renderAnchors() {
     const mine = me();
     const content = $('anchorContent');
+    const actions = $('anchorActions');
     const badge = $('anchorBadge');
+    actions.innerHTML = '';
     if (!mine) {
       badge.textContent = '—';
       content.textContent = 'Данные якорей недоступны.';
@@ -2202,7 +2214,12 @@
     const cells = state.room.anchorCells || [];
     const here = cells.find(a => a.row === mine.row && a.col === mine.col) || null;
     const visitedHere = here && (mine.visitedAnchors || []).includes(`${mine.row},${mine.col}`);
-    const encounter = here ? mine.lastAnchorEncounter : null;
+    const encounter = here
+      && Number(mine.lastAnchorEncounter?.round) === Number(state.room.round)
+      && Number(mine.lastAnchorEncounter?.row) === Number(mine.row)
+      && Number(mine.lastAnchorEncounter?.col) === Number(mine.col)
+      ? mine.lastAnchorEncounter
+      : null;
     const decks = state.room.anchorDecks || {};
     const deckLine = ['blue','yellow','red'].map(color => {
       const label = color === 'blue' ? 'Синяя' : color === 'yellow' ? 'Жёлтая' : 'Красная';
@@ -2210,12 +2227,12 @@
       return `${label}: ${d.remaining} в колоде / ${d.discard} в сбросе`;
     }).join(' · ');
 
-    badge.textContent = here ? (visitedHere ? 'посещён' : 'якорь') : 'море';
+    badge.textContent = here ? (visitedHere ? 'разыгран' : 'якорь') : 'море';
     let html = `<div class="anchor-decks">${escapeHtml(deckLine)}</div>`;
     if (here) {
-      html += `<div class="anchor-note"><strong>${escapeHtml(here.name)}</strong> · победа даёт ${here.glory} славы. ${visitedHere ? 'Эта клетка уже разыграна вами в текущем раунде.' : 'Если навигация только что завершилась здесь, карта разыгрывается автоматически.'}</div>`;
+      html += `<div class="anchor-note"><strong>${escapeHtml(here.name)}</strong> · победа даёт ${here.fleetPoints || 0} очк. флота. ${visitedHere ? 'Эта клетка уже дала вам карту в текущем раунде.' : 'Бой добровольный: объявите его в свою фазу действий. Союзник не участвует.'}</div>`;
     } else {
-      html += '<div class="anchor-note">Карту получают только при остановке на клетке якоря после навигации. Простое прохождение через клетку не срабатывает.</div>';
+      html += '<div class="anchor-note">Карту не открывают при прохождении или самой остановке. На клетке якоря можно добровольно объявить бой в свою фазу действий.</div>';
     }
 
     if (encounter) {
@@ -2225,18 +2242,31 @@
       if (encounter.outcome === 'win') {
         const gross = encounter.reward?.gross ?? encounter.rewardValue ?? 0;
         const paid = encounter.reward?.debtPaid || 0;
-        effect = `Награда ${gross} дукатов${paid ? `; ${paid} ушло в долг` : ''}. Слава +${encounter.glory || 0}.`;
+        effect = `Награда ${gross} дукатов${paid ? `; ${paid} ушло в долг` : ''}. Очки флота +${encounter.fleetPoints || 0}.`;
       } else if (encounter.outcome === 'loss') {
         const p = encounter.penalty || {};
         effect = `Штраф ${p.required || 0}: уплачено ${p.paid || 0}${p.addedDebt ? `, долг +${p.addedDebt}` : ''}.`;
       } else if (encounter.outcome === 'tie') {
-        effect = 'Награды нет; следующий личный ход будет пропущен.';
+        effect = 'Награды и иных последствий нет.';
       } else {
         effect = 'Действие не расходуется.';
       }
       html += `<div class="anchor-result"><strong>Последнее столкновение:</strong><br>${escapeHtml(encounter.anchorName)} · «${escapeHtml(encounter.cardName)}» · артиллерия ${enemy}<br>Флотилия ${encounter.fleetPower} · ${outcome}. ${escapeHtml(effect)}</div>`;
     }
     content.innerHTML = html;
+
+    if (here && !visitedHere) {
+      const myTurn = state.room.activePlayerId === state.myId;
+      const canFight = myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending();
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'danger-soft';
+      button.textContent = 'Вступить в бой · 1 действие';
+      button.title = 'Если открыта карта «На море тихо», действие не расходуется.';
+      button.disabled = !canFight;
+      button.addEventListener('click', () => socket.emit('fightAnchor', {}, handleGameAck));
+      actions.appendChild(button);
+    }
   }
 
   function renderIsland() {
@@ -2760,7 +2790,7 @@
         action.onclick = () => { closeMapInfo(); openMobileTab('ship'); };
       }
     } else if (kind === 'anchor') {
-      meta.innerHTML = `<span>Морское сражение</span><span>Награда за победу: <strong>+${data.glory || 0} славы</strong></span>`;
+      meta.innerHTML = `<span>Морской якорь</span><span>Бой добровольный в фазе действий</span><span>Победа: <strong>+${data.fleetPoints || 0} очк. флота</strong></span>`;
     } else if (kind === 'legendary') {
       const reward = data.reward === 'legendary' ? 'случайная легендарная карта' : data.reward === 'treasure' ? 'случайная карта сокровища' : 'награда пока не определена';
       const here = me() && Number(me().row) === Number(data.row) && Number(me().col) === Number(data.col);
