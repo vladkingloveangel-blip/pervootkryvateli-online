@@ -40,6 +40,8 @@ const {
   claimFreeIslandsAt,
   publicIsland,
   shipStats,
+  readableShipLevel,
+  shipUpgradeSlotLimit,
   shipUpgradeStatuses,
   fleetAdjustmentNeeds,
   setDisabledUpgrades,
@@ -635,7 +637,7 @@ function publicRoom(room, viewerId = null) {
         cargo: e.cargo ? { ...e.cargo, value: cargoSaleValue(p, e.id) } : null,
       }));
       const cargoEscortCapacity = escorts.filter(e => e.active).reduce((sum, e) => sum + (Number(ESCORTS[e.type]?.cargo) || 0), 0);
-      const level = Math.max(1, Math.min(BALANCE.maxReadableShipLevel, Number(p.level) || 1));
+      const level = readableShipLevel(p);
       const nextLevel = level < BALANCE.maxShipLevel ? SHIP_LEVELS[level + 1] : null;
       return {
         id: p.id,
@@ -684,7 +686,7 @@ function publicRoom(room, viewerId = null) {
         totalCargoCapacity: stats.cargo + cargoEscortCapacity,
         upgrades: shipUpgradeStatuses(p),
         disabledUpgradeIds: p.id === viewerId ? [...(p.disabledUpgradeIds || [])] : [],
-        upgradeSlots: level,
+        upgradeSlots: shipUpgradeSlotLimit(p),
         escorts,
         levelInactiveEscortIds: p.id === viewerId ? [...(p.levelInactiveEscortIds || [])] : [],
         shipyardSlots: shipyardSlotsForPlayer(room, p.id),

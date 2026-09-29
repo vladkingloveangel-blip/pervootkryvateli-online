@@ -21,6 +21,8 @@ test('validator rejects corruption rather than merely accepting the shipped samp
     x => x.islands.find(i=>i.kind==='state').factionId = 'missing',
     x => delete x.fleet.ships.brigantine.artillery,
     x => delete x.fleet.levels[4],
+    x => { x.fleet.levels[3].moveBonus = 1; },
+    x => { x.fleet.levels[4].upgradeSlots = 3; },
     x => x.fleet.upgrades.culverins.requires = 'missing',
     x => x.economy.buildings.farm.levels[1].next.type = 'missing',
     x => x.politics.assignments.mori[0].islandId = 'missing',
@@ -171,7 +173,8 @@ test('runtime consumers use canonical prices, characteristics, income and safe m
     for(let level=1;level<=6;level++) {
       const p={shipClass:id,level,upgrades:[]};const stats=logic.shipStats(p);
       assert.equal(stats.artillery,ship.artillery+rules.fleet.levels[level].statBonus);
-      assert.equal(stats.moveMod,ship.moveMod+rules.fleet.levels[level].moveBonus);
+      assert.equal(stats.moveMod,ship.moveMod);
+      assert.equal(logic.shipUpgradeSlotLimit(p),rules.fleet.levels[level].upgradeSlots);
     }
   }
   for(const [id,b] of Object.entries(rules.economy.buildings)) {
@@ -190,7 +193,10 @@ test('runtime consumers use canonical prices, characteristics, income and safe m
 
 test('retired content remains readable, cannot be purchased, and new mechanics stay unavailable', () => {
   const p={row:13,col:13,shipClass:'carrack',level:7,ducats:999,upgrades:['foreMarsel'],escorts:[{id:'old',type:'landin',special:true}]};
+  assert.equal(rules.fleet.levels[7],undefined);
+  assert.equal(data.SHIP_LEVELS[7].retired,true);
   assert.ok(logic.shipStats(p).cargo > 0); assert.equal(p.level,7);
+  assert.equal(logic.shipUpgradeSlotLimit(p),data.SHIP_LEVELS[7].upgradeSlots);
   assert.equal(logic.buyShipLevel(p).ok,false);
   const buyer={...p,level:6,upgrades:[]};
   assert.equal(logic.buyShipUpgrade(buyer,'foreMarsel').ok,false);

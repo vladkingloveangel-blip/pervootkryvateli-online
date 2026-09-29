@@ -613,7 +613,7 @@ function canInstallShipUpgradeFree(player, upgradeId) {
   if (!isCitadelCell(player.row, player.col)) return { ok: false, error: 'Улучшения устанавливаются только в Цитадели.' };
   player.upgrades ||= [];
   if (player.upgrades.includes(upgradeId)) return { ok: false, error: 'Такое улучшение уже установлено.' };
-  if (player.upgrades.length >= Math.max(1, Number(player.level) || 1)) return { ok: false, error: 'Нет свободного места для улучшения на текущем уровне корабля.' };
+  if (player.upgrades.length >= shipUpgradeSlotLimit(player)) return { ok: false, error: 'Нет свободного места для улучшения на текущем уровне корабля.' };
   const branchCountValue = player.upgrades.filter(id => SHIP_UPGRADES[id]?.branch === upgrade.branch).length;
   if (branchCountValue >= BALANCE.maxBranchUpgrades) return { ok: false, error: 'В этой ветви уже установлены два улучшения.' };
   if (upgrade.requires && !player.upgrades.includes(upgrade.requires)) return { ok: false, error: `Сначала установите «${SHIP_UPGRADES[upgrade.requires].name}».` };
@@ -1427,8 +1427,19 @@ function claimFreeIslandsAt(room, player) {
   return claims;
 }
 
+function readableShipLevel(player) {
+  const raw = Math.floor(Number(player?.level) || 1);
+  const level = Math.max(1, Math.min(BALANCE.maxReadableShipLevel, raw));
+  return SHIP_LEVELS[level] ? level : 1;
+}
+
+function shipUpgradeSlotLimit(player) {
+  const level = readableShipLevel(player);
+  return Math.max(1, Number(SHIP_LEVELS[level]?.upgradeSlots) || 1);
+}
+
 function requiredDisabledUpgradeCount(player) {
-  const slots = Math.max(1, Number(player?.level) || 1);
+  const slots = shipUpgradeSlotLimit(player);
   return Math.max(0, (player?.upgrades || []).length - slots);
 }
 
@@ -1507,7 +1518,7 @@ function activeUpgradeIds(player) {
 
 function shipStats(player) {
   const base = SHIPS[player?.shipClass] || SHIPS.brigantine;
-  const level = Math.max(1, Math.min(BALANCE.maxReadableShipLevel, Number(player?.level) || 1));
+  const level = readableShipLevel(player);
   const levelDef = SHIP_LEVELS[level];
   const stats = {
     artillery: base.artillery + levelDef.statBonus,
@@ -1532,7 +1543,7 @@ function shipCargoCapacity(player) {
 
 function canBuyShipLevel(player) {
   if (!isCitadelCell(player.row, player.col)) return { ok: false, error: 'Повышать уровень корабля можно только в Цитадели.' };
-  const current = Math.max(1, Math.min(BALANCE.maxReadableShipLevel, Number(player.level) || 1));
+  const current = readableShipLevel(player);
   if (current >= BALANCE.maxShipLevel) return { ok: false, error: `Достигнут максимальный уровень корабля (${BALANCE.maxShipLevel}).` };
   const next = SHIP_LEVELS[current + 1];
   if (player.ducats < next.price) return { ok: false, error: `Для уровня ${current + 1} нужно ${next.price} дукатов.` };
@@ -1556,7 +1567,7 @@ function canBuyShipUpgrade(player, upgradeId) {
   if (!isCitadelCell(player.row, player.col)) return { ok: false, error: 'Улучшения устанавливаются только в Цитадели.' };
   player.upgrades ||= [];
   if (player.upgrades.includes(upgradeId)) return { ok: false, error: 'Такое улучшение уже установлено.' };
-  if (player.upgrades.length >= Math.max(1, Number(player.level) || 1)) return { ok: false, error: 'Нет свободного места для улучшения на текущем уровне корабля.' };
+  if (player.upgrades.length >= shipUpgradeSlotLimit(player)) return { ok: false, error: 'Нет свободного места для улучшения на текущем уровне корабля.' };
   const branchCountValue = player.upgrades.filter(id => SHIP_UPGRADES[id]?.branch === upgrade.branch).length;
   if (branchCountValue >= BALANCE.maxBranchUpgrades) return { ok: false, error: 'В этой ветви уже установлены два улучшения.' };
   if (upgrade.requires && !player.upgrades.includes(upgrade.requires)) {
@@ -2380,6 +2391,8 @@ module.exports = {
   islandCorrectionOptions,
   removeIslandBuildingForCorrection,
   shipStats,
+  readableShipLevel,
+  shipUpgradeSlotLimit,
   shipUpgradeStatuses,
   fleetAdjustmentNeeds,
   setDisabledUpgrades,

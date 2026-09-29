@@ -82,6 +82,10 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(started.players.find(p=>p.id===joinedSecond.playerId).shipClass,'carrack');
   assert.deepEqual(started.order,[joinedSecond.playerId,joinedFourth.playerId,created.playerId,joinedThird.playerId]);
   assert.equal(started.players.every(p=>p.ducats===canonical.session.startingDucats),true);
+  const lockedClass = started.players.find(p=>p.id===created.playerId).shipClass;
+  const attemptedClass = lockedClass === 'brigantine' ? 'frigate' : 'brigantine';
+  assert.equal((await emit(first, 'changeShip', { shipClass: attemptedClass })).ok, false);
+  assert.equal(rows()[0].state.players.find(p=>p.id===created.playerId).shipClass, lockedClass);
   const active = second;
   assert.equal((await emit(active, 'skipNavigation')).ok, true);
   assert.equal((await emit(active, 'endTurn')).ok, true);

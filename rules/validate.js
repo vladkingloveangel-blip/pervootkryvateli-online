@@ -121,11 +121,14 @@ function validateRules(rules, map) {
     records(Object.values(catalog), domain);
     for (const [id, value] of Object.entries(catalog)) check(value.id === id, domain, `key/id mismatch ${id}`);
   }
+  check(fleet.maxLevel === 6, 'fleet.maxLevel', 'expected VI maximum');
   check(Object.keys(fleet.levels).length === fleet.maxLevel, 'levels', 'missing or extra levels');
   for (let level = 1; level <= fleet.maxLevel; level++) {
     const d = fleet.levels[level]; check(d?.level === level, 'levels', `missing ${level}`);
     if (!d) continue;
     for (const key of ['price','statBonus','moveBonus','upgradeSlots','escortLimit']) integer(d[key], `levels.${level}.${key}`);
+    check(d.moveBonus === 0, `levels.${level}.moveBonus`, 'ship levels must not add movement');
+    check(d.upgradeSlots === level, `levels.${level}.upgradeSlots`, 'expected one upgrade slot per level');
   }
   for (const s of Object.values(fleet.ships)) {
     for (const key of ['artillery','army','cargo']) integer(s[key], `${s.id}.${key}`);
@@ -410,6 +413,7 @@ function validateCompatibility(rules, legacy) {
   integer(legacy.session?.circlesPerRound, 'legacy.session.circlesPerRound', 1);
   check(legacy.shipLevel7?.level === rules.fleet.maxLevel + 1, 'legacy.shipLevel7', 'expected next retired level');
   for (const key of ['price','statBonus','moveBonus']) integer(legacy.shipLevel7?.[key], `legacy.shipLevel7.${key}`);
+  integer(legacy.shipLevel7?.upgradeSlots, 'legacy.shipLevel7.upgradeSlots', 1);
   const oldUpgrade = legacy.removedUpgrade;
   check(Boolean(oldUpgrade?.id) && !rules.fleet.upgrades[oldUpgrade.id], 'legacy.removedUpgrade', 'must be retired');
   check(Object.values(rules.fleet.upgrades).some(u => u.id === oldUpgrade?.requires && u.branch === oldUpgrade.branch && u.order < oldUpgrade.order), 'legacy.removedUpgrade.requires', 'invalid prerequisite');
