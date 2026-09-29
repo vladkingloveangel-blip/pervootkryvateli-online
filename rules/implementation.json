@@ -1,6 +1,6 @@
 {
-  "activeProfile": "stage-6-events-legends-6.5",
-  "note": "Read rules/ as master data. Stage 6.3-6.5 were reverified against master §§10.2-10.5. Expeditions now require one action at the player's own island with a Cartographic Chamber and reshuffle returned/skipped cards; Hellfire removes base-form level I buildings; an existing Sea Veil cancels a played hostile legendary card after its card/action are spent. R05 remains unresolved, so active runtime no longer invents legacy 2×4 legendary copies or discard recycling and records owed random legendary rewards as pending. R06 remains unresolved for Vortex, Icebergs and Rose.",
+  "activeProfile": "stage-6-events-legends-6.6",
+  "note": "Read rules/ as master data plus explicit author overrides from 2026-09-30. Stage 6.6 resolves R05/R06 for the mobile game: random legendary rewards use a uniform four-type pool with replacement and no physical deck/discard; the first visit to every legendary place grants its named card plus one random legendary card; Cartographic Chamber expeditions grant one random treasure. Legacy pendingLegendary is migrated into real random cards and legacy legendaryDeck state is retired.",
   "pendingConsumers": [
     {
       "path": "scoring.titles",

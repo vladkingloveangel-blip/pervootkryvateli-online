@@ -46,7 +46,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(canonical.metadata.schemaVersion, 1);
   assert.equal(canonical.politics.factions.kadingir.fullConquestPrize.ducats, 50);
   assert.equal(canonical.islands.length, 28);
-  assert.equal(canonical.implementation.activeProfile, 'stage-6-events-legends-6.5');
+  assert.equal(canonical.implementation.activeProfile, 'stage-6-events-legends-6.6');
   assert.equal(canonical.implementation.pendingConsumers.some(item => item.consumerStage <= 5), false);
   const a = (await api('/api/auth/register', null, { username: 'playerone', password: 'password1' })).data;
   const b = (await api('/api/auth/register', null, { username: 'playertwo', password: 'password2' })).data;
@@ -107,7 +107,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.ruleset.rulesetVersion, canonical.metadata.rulesetVersion);
   assert.equal(watch.room.balanceCatalog.bastion.price, canonical.economy.buildings.bastion.price);
   assert.equal(watch.room.balanceCatalog.bastion.defense, canonical.economy.buildings.bastion.defense);
-  assert.equal(watch.room.runtimeProfile, 'stage-6-events-legends-6.5');
+  assert.equal(watch.room.runtimeProfile, 'stage-6-events-legends-6.6');
   assert.equal(watch.room.shipCatalog.brigantine.artillery, canonical.fleet.ships.brigantine.artillery);
   assert.deepEqual(watch.room.balanceCatalog.landCompany, canonical.economy.landCompany);
   assert.deepEqual(watch.room.balanceCatalog.garrisons, canonical.economy.garrisons);
@@ -141,9 +141,12 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.namedPlaceCards.length,10);
   assert.equal(watch.room.namedPlaceCards.every(card=>card.visibility==='public' && card.claimedBy===null),true);
   assert.equal(watch.room.eventDecks.expeditions.remaining,10);
-  assert.equal(watch.room.eventDecks.legendary.remaining,0);
-  assert.equal(watch.room.eventDecks.legendary.total,8);
-  assert.equal(watch.room.eventDecks.legendary.unresolved,'R05');
+  assert.equal(Object.hasOwn(watch.room.eventDecks,'legendary'),false);
+  assert.deepEqual(watch.room.legendaryPool,{
+    mode:'random-with-replacement',
+    selection:'uniform',
+    typeIds:['sea-veil','hellfire','mist-path','sea-curse'],
+  });
   assert.equal(watch.room.players.every(player=>player.hasActiveExpedition===false && player.expeditionHistoryCount===0),true);
   assert.equal(Object.hasOwn(watch.room.balanceCatalog,'assignmentReplacementPrice'),false);
   assert.equal(watch.room.balanceCatalog.legendaryEffects['sea-curse'].amount, canonical.legends.legendary.find(c => c.id === 'sea-curse').effect.amount);

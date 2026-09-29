@@ -171,9 +171,9 @@ test('complete known sea, assignment, feud and event decks match appendix rows',
   assert.deepEqual(rules.politics.assignments.mori.slice(0,8).map(c=>c.islandId),['renaika','chertog','kisalinia','yukon','erkalon','asigoriy','atlantia','adia']);
 });
 
-test('stage 6.5 activates legendary-card effects while stage 7 consumers remain pending', () => {
-  assert.equal(rules.implementation.activeProfile,'stage-6-events-legends-6.5');
-  assert.equal(data.RUNTIME_PROFILE,'stage-6-events-legends-6.5');
+test('stage 6.6 resolves digital legendary rewards while stage 7 consumers remain pending', () => {
+  assert.equal(rules.implementation.activeProfile,'stage-6-events-legends-6.6');
+  assert.equal(data.RUNTIME_PROFILE,'stage-6-events-legends-6.6');
   assert.equal(rules.implementation.pendingConsumers.some(item => item.consumerStage <= 6),false);
   assert.deepEqual(rules.implementation.pendingConsumers.map(item => item.consumerStage),[7,7]);
   assert.equal(rules.implementation.pendingConsumers.some(item => item.path === 'events.sailing.*.timing'),false);
@@ -189,7 +189,8 @@ test('stage 6.5 activates legendary-card effects while stage 7 consumers remain 
   assert.equal(data.EXPEDITION_CARDS.length,10);
   assert.deepEqual(data.BALANCE.expeditionLimits,rules.legends.expeditionLimits);
   assert.deepEqual(data.BALANCE.legendaryEffects,Object.fromEntries(rules.legends.legendary.map(card=>[card.id,card.effect])));
-  assert.deepEqual(data.BALANCE.legendaryDeck,rules.legends.legendaryDeck);
+  assert.deepEqual(data.BALANCE.legendaryPool,rules.legends.legendaryPool);
+  assert.equal(data.LEGENDARY_PLACE_RULES.every(place=>place.reward?.type==='legendary' && place.reward.count===1),true);
   assert.deepEqual(data.BALANCE.legendaryEffects['sea-veil'],{type:'protect',durationPersonalTurns:3,hostileCardReactionExpiry:'end-of-current-turn',reactionActionCost:0});
   assert.deepEqual(data.BALANCE.legendaryEffects['sea-curse'],{type:'movement-penalty',amount:3,durationPersonalTurns:3});
   assert.deepEqual(data.BALANCE.legendaryEffects.hellfire,{type:'downgrade-all-buildings',steps:1});
@@ -258,17 +259,23 @@ test('stage 6.5 activates legendary-card effects while stage 7 consumers remain 
   ]) assert.equal(rules.implementation.pendingConsumers.some(item => item.path === resolved),false,resolved);
 });
 
-test('unknown physical copies and author decisions remain explicit, never guessed', () => {
-  for (const id of ['R05','R06','R07','R21','R29']) assert.ok(rules.metadata.unresolved.includes(id));
-  assert.equal(rules.metadata.unresolved.includes('remaining-prize-buildings'),false);
-  assert.equal(rules.legends.legendaryDeck.copiesByKind,null);
-  assert.equal(rules.legends.legendaryDeck.reshuffle,null);
-  assert.equal(rules.legends.treasureDeck.copiesByKind,null);
-  for(const c of rules.legends.legendary) assert.equal(c.quantity,null);
-  for(const id of ['vortex','icebergs','rose']) {
-    const p=rules.legends.places.find(p=>p.id===id);
-    assert.deepEqual(p.reward,{type:'treasure',count:1}); assert.equal(p.unresolved,'R06');
+test('author decisions R05/R06 are resolved digitally while unrelated unknowns stay explicit', () => {
+  for (const id of ['R07','R21','R29','treasure-copies']) assert.ok(rules.metadata.unresolved.includes(id));
+  assert.equal(rules.metadata.unresolved.includes('R05'),false);
+  assert.equal(rules.metadata.unresolved.includes('R06'),false);
+  assert.deepEqual(rules.metadata.authorOverrides.resolved,['R05','R06']);
+  assert.equal(rules.legends.legendaryPool.mode,'random-with-replacement');
+  assert.equal(rules.legends.legendaryPool.selection,'uniform');
+  assert.deepEqual(rules.legends.legendaryPool.typeIds,['sea-veil','hellfire','mist-path','sea-curse']);
+  assert.equal(rules.legends.legendaryPool.consumedOnUse,true);
+  assert.equal(Object.hasOwn(rules.legends,'legendaryDeck'),false);
+  assert.equal(rules.legends.legendary.every(card=>!Object.hasOwn(card,'quantity')),true);
+  for(const place of rules.legends.places) {
+    assert.deepEqual(place.reward,{type:'legendary',count:1});
+    assert.equal(place.unresolved,undefined);
+    assert.equal(place.rewardStatus,undefined);
   }
+  assert.equal(rules.legends.treasureDeck.copiesByKind,null);
   assert.equal(rules.legends.treasures.at(-1).onNoEmptyHold,'discard');
   assert.equal(rules.legends.treasures.at(-1).cargoGoodId,'diamonds');
   assert.equal(rules.politics.paidAssignmentReplacement,false);

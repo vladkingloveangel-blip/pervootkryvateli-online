@@ -84,7 +84,6 @@ const {
   drawSailingEventCard,
   createTreasureDeck,
   drawTreasureCard,
-  createLegendaryDeck,
   createExpeditionDeck,
   drawLegendaryCard,
   discardDeckCard,
@@ -1294,48 +1293,44 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(contractBonusForRevenue(5), 2);
 }
 
-// Р05 задаёт только общий размер 8, но не распределение четырёх видов и не
-// разрешает восстановление из сброса. Активный runtime не подставляет legacy 2×4.
+// Цифровой легендарный пул содержит четыре типа и выбирает независимо с возвращением.
 {
-  const room = { legendaryDeck: createLegendaryDeck(() => 0.5) };
-  assert.equal(room.legendaryDeck.total, 8);
-  assert.equal(room.legendaryDeck.unresolved, 'R05');
-  assert.equal(room.legendaryDeck.drawPile.length, 0);
-  assert.equal(drawLegendaryCard(room), null);
-
-  room.legendaryDeck = {
-    drawPile: [{ ...LEGENDARY_CARDS.find(card => card.id === 'sea-veil'), copy: 1 }],
-    discard: [{ ...LEGENDARY_CARDS.find(card => card.id === 'hellfire'), copy: 1 }],
-    total: 8,
-    unresolved: 'R05',
-  };
-  assert.equal(drawLegendaryCard(room)?.id, 'sea-veil');
-  assert.equal(drawLegendaryCard(room), null);
-  assert.equal(room.legendaryDeck.discard.length, 1);
+  assert.equal(BALANCE.legendaryPool.mode,'random-with-replacement');
+  assert.equal(BALANCE.legendaryPool.selection,'uniform');
+  assert.deepEqual(
+    [0,0.25,0.5,0.75].map(value=>drawLegendaryCard(null,()=>value).id),
+    ['sea-veil','hellfire','mist-path','sea-curse']
+  );
+  assert.equal(drawLegendaryCard(null,()=>0).id,'sea-veil');
+  assert.equal(drawLegendaryCard(null,()=>0).id,'sea-veil'); // тот же тип может выпасть повторно
 }
 
-// Если каноническая награда требует случайную легендарную карту при нерешённом Р05,
-// сама награда не теряется: фиксируется ожидающий экземпляр без выбора его вида.
+// Адия сохраняет собственную военную награду отдельно от новой награды первого
+// открытия: первый захват даёт 20 дукатов и две случайные легендарные карты.
 {
   const islands = cloneIslands();
   const adia = islands.find(island => island.id === 'adia');
   adia.army = 0;
   const [row,col] = adia.cells[0];
   const player = {
-    id:'r05-player', name:'R05', row, col, shipClass:'brigantine', level:1,
+    id:'digital-legendary-player', name:'Digital', row, col, shipClass:'brigantine', level:1,
     upgrades:[], escorts:[], ducats:0, debt:0, armyPoints:0,
-    attackCountsThisRound:{}, namedPlaceCards:[], pendingLegendary:0,
+    attackCountsThisRound:{}, namedPlaceCards:[], legendaryCards:[],
   };
   const room = {
     round:2, islands, players:[player], alliances:[], factionState:{},
-    legendaryPlacesExplored:{}, legendaryDeck:createLegendaryDeck(),
+    legendaryPlacesExplored:{},
   };
-  const result = jointAssaultIsland(room, player, adia);
+  const discovery = claimLegendaryPlaceDiscovery(room, player, 'adia', ()=>0);
+  assert.equal(discovery.first,true);
+  assert.equal(discovery.legendaryCard.id,'sea-veil');
+  const result = jointAssaultIsland(room, player, adia, [], [], { rng:()=>0 });
   assert.equal(result.ok,true);
   assert.equal(result.outcome,'attacker');
   assert.equal(player.ducats,20);
-  assert.equal(player.pendingLegendary,1);
-  assert.equal(player.legendaryCards.length,0);
+  assert.equal(result.legendaryDiscovery,undefined);
+  assert.deepEqual(player.legendaryCards.map(card=>card.id),['sea-veil','sea-veil']);
+  assert.equal(Object.hasOwn(player,'pendingLegendary'),false);
 }
 
 // Найденный груз можно положить напрямую в любой пустой активный трюм до полной вместимости.
@@ -1609,7 +1604,6 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 {
   const room = {
     islands: cloneIslands(),
-    legendaryDeck: { drawPile: [], discard: [] },
     eventDeck: { drawPile: [], discard: [] },
     treasureDeck: { drawPile: [], discard: [] },
   };
@@ -2150,10 +2144,13 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const p = {
     id: 'p1', row: target.cells[0][0], col: target.cells[0][1], ducats: 4, debt: 0,
     replacedAssignmentConditions: ['old-paid-condition'],
+    pendingLegendary: 2,
+    legendaryCards: [],
     activeAssignment: { factionId: 'mori', card: { ...moriCard }, issuedRound: 3 },
   };
   const room = {
     round: 6, islands, players: [p],
+    legendaryDeck: { drawPile:[{id:'legacy-card'}], discard:[], total:8, unresolved:'R05' },
     assignmentDecks: { lionia: { drawPile: [], discard: [] } },
     pendingAssignmentChoice: { id: 'old-paid-choice', playerId: 'p1', factionId: 'mori' },
     eventPhase: { active: true, stage: 'assignment-replace', assignmentQueue: [{ playerId: 'p1', factionId: 'mori' }], replacementQueue: ['p1'], replacementIndex: 0 },
@@ -2165,6 +2162,9 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(room.assignmentDecks.mori.drawPile.length, 9); // активная карта не дублируется в восстановленной колоде
   assert.deepEqual(room.assignmentDecks.lionia.removed, []);
   assert.equal(Object.hasOwn(p, 'replacedAssignmentConditions'), false);
+  assert.equal(Object.hasOwn(room,'legendaryDeck'),false);
+  assert.equal(Object.hasOwn(p,'pendingLegendary'),false);
+  assert.deepEqual(p.legendaryCards.map(card=>card.id),['mist-path','mist-path']);
   assert.match(p.activeAssignment.instanceId, /^legacy:p1:mori:mori-1:/);
   assert.equal(p.activeAssignment.progress.kind, 'mori-service');
   assert.equal(p.activeAssignment.progress.departureRequired, true);
@@ -2193,39 +2193,49 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 // за первооткрывателем; повторный визит другого игрока её не передаёт.
 {
   const room = { legendaryPlacesExplored: {} };
-  const firstPlayer = { id: 'p1', namedPlaceCards: [] };
-  const secondPlayer = { id: 'p2', namedPlaceCards: [] };
-  const first = claimLegendaryPlaceDiscovery(room, firstPlayer, 'kraken');
+  const firstPlayer = { id: 'p1', namedPlaceCards: [], legendaryCards: [] };
+  const secondPlayer = { id: 'p2', namedPlaceCards: [], legendaryCards: [] };
+  const first = claimLegendaryPlaceDiscovery(room, firstPlayer, 'kraken', ()=>0.75);
   assert.equal(first.first, true);
   assert.equal(first.namedCard.id, 'place-kraken');
+  assert.equal(first.legendaryCard.id, 'sea-curse');
   assert.equal(room.legendaryPlacesExplored.kraken, 'p1');
   assert.deepEqual(firstPlayer.namedPlaceCards.map(card=>card.id), ['place-kraken']);
-  const repeat = claimLegendaryPlaceDiscovery(room, secondPlayer, 'kraken');
+  assert.deepEqual(firstPlayer.legendaryCards.map(card=>card.id), ['sea-curse']);
+  const repeat = claimLegendaryPlaceDiscovery(room, secondPlayer, 'kraken', ()=>0);
   assert.equal(repeat.first, false);
   assert.equal(repeat.exploredBy, 'p1');
   assert.deepEqual(secondPlayer.namedPlaceCards, []);
+  assert.deepEqual(secondPlayer.legendaryCards, []);
 }
 
-// Легендарный остров открывается первым успешным военным захватом. Его обычная
-// островная награда выдаётся один раз, а повторный захват не создаёт вторую именную карту.
+// Легендарный остров теперь открывается первым посещением, а военная награда остаётся
+// отдельной. Последующий захват не создаёт вторую именную или легендарную награду места.
 {
   const islands = cloneIslands();
   const atlantia = islands.find(island => island.id === 'atlantia');
   atlantia.army = 0;
   const [row,col] = atlantia.cells[0];
-  const firstPlayer = { id:'p1', name:'One', row, col, shipClass:'brigantine', level:1, upgrades:[], escorts:[], ducats:0, debt:0, armyPoints:0, attackCountsThisRound:{}, namedPlaceCards:[] };
-  const room = { round:2, islands, players:[firstPlayer], alliances:[], factionState:{}, legendaryPlacesExplored:{}, legendaryDeck:{drawPile:[],discard:[]} };
-  const first = jointAssaultIsland(room, firstPlayer, atlantia);
+  const firstPlayer = { id:'p1', name:'One', row, col, shipClass:'brigantine', level:1, upgrades:[], escorts:[], ducats:0, debt:0, armyPoints:0, attackCountsThisRound:{}, namedPlaceCards:[], legendaryCards:[] };
+  const room = { round:2, islands, players:[firstPlayer], alliances:[], factionState:{}, legendaryPlacesExplored:{} };
+
+  const discovery = claimLegendaryPlaceDiscovery(room, firstPlayer, 'atlantia', ()=>0.25);
+  assert.equal(discovery.first,true);
+  assert.equal(discovery.namedCard.id,'place-atlantia');
+  assert.equal(discovery.legendaryCard.id,'hellfire');
+  assert.deepEqual(firstPlayer.namedPlaceCards.map(card=>card.id), ['place-atlantia']);
+  assert.deepEqual(firstPlayer.legendaryCards.map(card=>card.id), ['hellfire']);
+
+  const first = jointAssaultIsland(room, firstPlayer, atlantia, [], [], { rng:()=>0 });
   assert.equal(first.ok, true);
   assert.equal(first.outcome, 'attacker');
-  assert.equal(first.legendaryDiscovery.first, true);
-  assert.equal(first.legendaryDiscovery.namedCard.id, 'place-atlantia');
+  assert.equal(first.legendaryDiscovery, undefined);
   assert.equal(firstPlayer.ducats, 15);
-  assert.deepEqual(firstPlayer.namedPlaceCards.map(card=>card.id), ['place-atlantia']);
+  assert.deepEqual(firstPlayer.legendaryCards.map(card=>card.id), ['hellfire']);
   assert.equal(atlantia.rewardClaimed, true);
 
   firstPlayer.row = 0; firstPlayer.col = 0;
-  const secondPlayer = { id:'p2', name:'Two', row, col, shipClass:'brigantine', level:1, upgrades:[], escorts:[], ducats:0, debt:0, armyPoints:0, attackCountsThisRound:{}, namedPlaceCards:[] };
+  const secondPlayer = { id:'p2', name:'Two', row, col, shipClass:'brigantine', level:1, upgrades:[], escorts:[], ducats:0, debt:0, armyPoints:0, attackCountsThisRound:{}, namedPlaceCards:[], legendaryCards:[] };
   room.players.push(secondPlayer);
   const second = jointAssaultIsland(room, secondPlayer, atlantia);
   assert.equal(second.ok, true);
@@ -2233,6 +2243,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(second.legendaryDiscovery, undefined);
   assert.equal(secondPlayer.ducats, 0);
   assert.deepEqual(secondPlayer.namedPlaceCards, []);
+  assert.deepEqual(secondPlayer.legendaryCards, []);
   assert.equal(room.legendaryPlacesExplored.atlantia, 'p1');
 }
 
@@ -2363,7 +2374,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 // Последний остров, которым ещё владеет само государство, прекращает Лионию и даёт приз инициатору,
 // даже если прежние острова Лионии принадлежат другим игрокам. Вассал освобождается, вражда исчезает.
 {
-  const room = { islands: cloneIslands(), players: [], factionState: {}, round: 3, legendaryDeck: createLegendaryDeck() };
+  const room = { islands: cloneIslands(), players: [], factionState: {}, round: 3 };
   const landin = room.islands.find(i => i.id === 'landin');
   const frandia = room.islands.find(i => i.id === 'frandia');
   const eidon = room.islands.find(i => i.id === 'eidon');
@@ -2435,7 +2446,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 // Авторское решение по Кадингиру: итоговый приз равен 50 дукатам.
 // Он заменяет денежную награду карточки последнего государственного острова и не складывается с её 30 дукатами.
 {
-  const room = { islands: cloneIslands(), players: [], factionState: {}, round: 2, legendaryDeck: createLegendaryDeck() };
+  const room = { islands: cloneIslands(), players: [], factionState: {}, round: 2 };
   const island = room.islands.find(i => i.id === 'kadingir');
   island.army = 0;
   const p = { id: 'p1', row: island.cells[0][0], col: island.cells[0][1], shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0, glory: 0, enemyFactionIds: [] };
@@ -3201,7 +3212,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(canAttackPlayerThisRound(battleRoom, ally, target.id).ok, false);
   assert.equal(jointSeaBattle(battleRoom, a, target, [ally.id], []).ok, false);
 
-  const stateRoom = { islands: cloneIslands(), players: [], factionState: {}, round: 2, legendaryDeck: createLegendaryDeck() };
+  const stateRoom = { islands: cloneIslands(), players: [], factionState: {}, round: 2 };
   const kadingir = stateRoom.islands.find(i => i.id === 'kadingir');
   kadingir.army = 0;
   const conqueror = {

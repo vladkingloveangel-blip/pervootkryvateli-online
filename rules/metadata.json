@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "rulesetVersion": "master-2026-09-28-data-v1",
+  "rulesetVersion": "master-2026-09-28-author-2026-09-30-data-v1",
   "source": {
     "title": "Первооткрыватели — мастер-версия книги правил",
     "baseEdition": "0.10",
@@ -9,12 +9,18 @@
   },
   "precedence": "Appendix numeric tables override examples and descriptive prose.",
   "unresolved": [
-    "R05",
-    "R06",
     "R07",
     "R21",
     "R29",
     "treasure-copies"
   ],
-  "implementationStage": 2
+  "implementationStage": 2,
+  "authorOverrides": {
+    "date": "2026-09-30",
+    "resolved": [
+      "R05",
+      "R06"
+    ],
+    "summary": "Digital/mobile rule: legendary rewards are independent uniform random selections with replacement from the four legendary card types; the first visit to any legendary place grants one such card plus its named place card, while Cartographic Chamber expeditions grant one random treasure."
+  }
 }

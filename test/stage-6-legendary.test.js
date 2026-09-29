@@ -130,7 +130,6 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   room.pendingBattle = null;
   room.pendingAlliance = null;
   room.alliances = [];
-  room.legendaryDeck = { drawPile: [], discard: [] };
 
   source.row = 24; source.col = 6;
   target.row = 24; target.col = 6;
@@ -155,7 +154,7 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   let state = changed.state;
   assert.equal(state.pendingLegendaryReaction.kind, 'sea-curse');
   assert.equal(state.pendingLegendaryReaction.targetPlayerId, targetId);
-  assert.equal(state.eventDecks.legendary.discard, 1);
+  assert.equal(Object.hasOwn(state.eventDecks,'legendary'), false);
   assert.equal(state.players.find(player => player.id === sourceId).legendaryCardCount, 0);
 
   changed = await change(targetSocket, 'respondLegendaryReaction', {
@@ -167,12 +166,12 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   state = changed.state;
   const targetView = state.players.find(player => player.id === targetId);
   assert.equal(state.pendingLegendaryReaction, null);
-  assert.equal(state.eventDecks.legendary.discard, 2);
+  assert.equal(Object.hasOwn(state.eventDecks,'legendary'), false);
   assert.equal(targetView.legendaryCardCount, 0);
   assert.equal(targetView.legendaryStatus.shipVeilTurns, 0);
   assert.deepEqual(targetView.legendaryStatus.seaCurseTurns, []);
   assert.equal(targetView.legendaryStatus.seaCursePenalty, 0);
-  assert.equal(state.log.some(entry => entry.text.includes('Обе легендарные карты сброшены') && entry.text.includes('трёхходовая защита не начинается')), true);
+  assert.equal(state.log.some(entry => entry.text.includes('Обе легендарные карты расходованы') && entry.text.includes('трёхходовая защита не начинается')), true);
 
   const persisted = readDb().game_rooms[0].state;
   const persistedTarget = persisted.players.find(player => player.id === targetId);
@@ -211,7 +210,6 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   protectedRoom.pendingBattle = null;
   protectedRoom.pendingAlliance = null;
   protectedRoom.alliances = [];
-  protectedRoom.legendaryDeck = { drawPile: [], discard: [], total: 8, unresolved: 'R05' };
   protectedSource.row = 24; protectedSource.col = 6;
   protectedTarget.row = 24; protectedTarget.col = 6;
   protectedSource.attackLimitRound = 2;
@@ -241,9 +239,53 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   const protectedTargetView = state.players.find(player => player.id === targetId);
   assert.equal(protectedSourceView.actionsLeft, rules.session.actionsPerTurn - 1);
   assert.equal(protectedSourceView.legendaryCardCount, 0);
-  assert.equal(state.eventDecks.legendary.discard, 1);
+  assert.equal(Object.hasOwn(state.eventDecks,'legendary'), false);
   assert.equal(state.pendingLegendaryReaction, null);
   assert.equal(protectedTargetView.legendaryStatus.shipVeilTurns, 3);
   assert.equal(protectedTargetView.legendaryStatus.seaCursePenalty, 0);
   assert.equal(state.log.some(entry => entry.text.includes('действующий «Покров моря» отменяет эффект') && entry.text.includes('Карта и действие потрачены')), true);
+
+  // 6.6: легендарный остров открывается первым посещением, без военного захвата.
+  await stop();
+  protectedSourceSocket.disconnect();
+  protectedTargetSocket.disconnect();
+  const visitDb = readDb();
+  const visitRoom = visitDb.game_rooms[0].state;
+  const visitSource = visitRoom.players.find(player => player.id === sourceId);
+  const atlantia = visitRoom.islands.find(island => island.id === 'atlantia');
+  visitRoom.round = 2;
+  visitRoom.circle = 3;
+  visitRoom.turnIndex = visitRoom.order.indexOf(sourceId);
+  visitRoom.phase = 'navigation';
+  visitRoom.roll = null;
+  visitRoom.movePoints = null;
+  visitRoom.eventPhase = null;
+  visitRoom.pendingEvent = null;
+  visitRoom.pendingFeud = null;
+  visitRoom.pendingAssignmentChoice = null;
+  visitRoom.pendingIslandCorrection = null;
+  visitRoom.pendingFleetAdjustment = null;
+  visitRoom.pendingLegendaryReaction = null;
+  visitRoom.pendingBattle = null;
+  visitRoom.pendingAlliance = null;
+  visitRoom.legendaryPlacesExplored ||= {};
+  delete visitRoom.legendaryPlacesExplored.atlantia;
+  visitSource.row = atlantia.cells[0][0];
+  visitSource.col = atlantia.cells[0][1];
+  visitSource.namedPlaceCards = [];
+  visitSource.legendaryCards = [];
+  visitSource.activeExpedition = null;
+  writeDb(visitDb);
+
+  await start();
+  const visitSourceSocket = await connect();
+  assert.equal((await emit(visitSourceSocket, 'resumeRoom', { code: created.code, accountToken: sourceAccount.token })).ok, true);
+  changed = await change(visitSourceSocket, 'skipNavigation', {});
+  state = changed.state;
+  const visitSourceView = state.players.find(player => player.id === sourceId);
+  assert.equal(state.legendaryPlaces.find(place => place.id === 'atlantia').exploredBy, sourceId);
+  assert.equal(visitSourceView.namedPlaceCards.some(card => card.id === 'place-atlantia'), true);
+  assert.equal(visitSourceView.legendaryCardCount, 1);
+  assert.equal(state.islands.find(island => island.id === 'atlantia').ownerId, null);
+  assert.equal(state.log.some(entry => entry.text.includes('первым открывает легендарный остров «Атлантия»') && entry.text.includes('случайная легендарная карта')), true);
 });

@@ -100,7 +100,6 @@ const {
   drawSailingEventCard,
   createTreasureDeck,
   drawTreasureCard,
-  createLegendaryDeck,
   createExpeditionDeck,
   createFeudDecks,
   drawFeudCard,
@@ -117,6 +116,7 @@ const {
   settleVassalTax,
   legendaryPlaceAt,
   legendaryPlaceRule,
+  legendaryPlaceForIsland,
   claimLegendaryPlaceDiscovery,
   canTakeExpedition,
   takeExpedition,
@@ -550,13 +550,12 @@ function publicRoom(room, viewerId = null) {
     eventDecks: {
       sailing: { remaining: room.eventDeck?.drawPile?.length || 0, discard: room.eventDeck?.discard?.length || 0 },
       treasure: { remaining: room.treasureDeck?.drawPile?.length || 0, discard: room.treasureDeck?.discard?.length || 0 },
-      legendary: {
-        remaining: room.legendaryDeck?.drawPile?.length || 0,
-        discard: room.legendaryDeck?.discard?.length || 0,
-        total: Number(room.legendaryDeck?.total) || Number(BALANCE.legendaryDeck?.total) || 0,
-        unresolved: room.legendaryDeck?.unresolved || BALANCE.legendaryDeck?.unresolved || null,
-      },
       expeditions: { remaining: room.expeditionDeck?.drawPile?.length || 0 },
+    },
+    legendaryPool: {
+      mode: BALANCE.legendaryPool?.mode || 'random-with-replacement',
+      selection: BALANCE.legendaryPool?.selection || 'uniform',
+      typeIds: [...(BALANCE.legendaryPool?.typeIds || [])],
     },
     factions: POLITICAL_FACTION_ORDER.map(factionId => {
       const f = FACTIONS[factionId];
@@ -794,7 +793,6 @@ function publicRoom(room, viewerId = null) {
         atCitadel: isCitadelCell(p.row, p.col),
         inPeaceZone: isCitadelPeaceCell(p.row, p.col),
         skipTurns: Number(p.skipTurns) || 0,
-        pendingLegendary: Number(p.pendingLegendary) || 0,
         pendingLandinEscort: Boolean(p.pendingLandinEscort),
         visitedAnchors: [...(p.visitedAnchors || [])],
         lastAnchorEncounter: p.lastAnchorEncounter ? { ...p.lastAnchorEncounter } : null,
@@ -1341,12 +1339,11 @@ function peekLegendaryCard(player, ref) {
   return null;
 }
 
-function consumeLegendaryCard(room, player, ref) {
+function consumeLegendaryCard(_room, player, ref) {
   const found = peekLegendaryCard(player, ref);
   if (!found) return null;
   if (found.source === 'legendary') {
     const [card] = player.legendaryCards.splice(found.index, 1);
-    discardDeckCard(room.legendaryDeck, card);
     return { ...found, card };
   }
   player.specialCards.splice(found.index, 1);
@@ -1666,12 +1663,12 @@ function resolvePendingLegendaryReaction(room, useVeil, cardRef = null) {
 
     if (pending.kind === 'sea-curse') {
       applySeaVeilHostileReactionToShip(target, source.id);
-      log(room, `${target.name} реакцией разыгрывает «Покров моря» против «Морского проклятия» ${source.name}. Обе легендарные карты сброшены; трёхходовая защита не начинается, реактивная защита действует только до конца текущего хода ${source.name}.`);
+      log(room, `${target.name} реакцией разыгрывает «Покров моря» против «Морского проклятия» ${source.name}. Обе легендарные карты расходованы; трёхходовая защита не начинается, реактивная защита действует только до конца текущего хода ${source.name}.`);
     } else if (pending.kind === 'hellfire') {
       const island = room.islands.find(i => i.id === pending.islandId);
       if (!island) return { ok: false, error: 'Остров реакции не найден.' };
       applySeaVeilHostileReactionToIsland(island, target, source.id);
-      log(room, `${target.name} реакцией разыгрывает «Покров моря» против «Пламени Ада» ${source.name}. Обе легендарные карты сброшены; ${island.name} защищён только до конца текущего хода ${source.name}, без трёх следующих личных ходов.`);
+      log(room, `${target.name} реакцией разыгрывает «Покров моря» против «Пламени Ада» ${source.name}. Обе легендарные карты расходованы; ${island.name} защищён только до конца текущего хода ${source.name}, без трёх следующих личных ходов.`);
     } else if (pending.kind === 'sea-attack') {
       applySeaVeilToShip(target, { sourcePlayerId: target.id, ignoreCurrentTurn: false });
       log(room, `${target.name} реакцией разыгрывает «Покров моря». Морская атака ${source.name} отменена; корабль защищён на ${BALANCE.legendaryEffects['sea-veil'].durationPersonalTurns} следующих личных хода ${target.name}.`);
@@ -1864,12 +1861,7 @@ function resolveSailingEventCard(room, player, card) {
     if (legendary) {
       player.legendaryCards ||= [];
       player.legendaryCards.push(legendary);
-      log(room, `${player.name}: «${card.name}». Получена одна случайная легендарная карта в закрытую руку.`);
-    } else if (room.legendaryDeck?.unresolved) {
-      player.pendingLegendary = (Number(player.pendingLegendary) || 0) + 1;
-      log(room, `${player.name}: «${card.name}». Положенная случайная легендарная карта отмечена как ожидающая авторского решения ${room.legendaryDeck.unresolved}.`);
-    } else {
-      log(room, `${player.name}: «${card.name}», но легендарная колода пуста.`);
+      log(room, `${player.name}: «${card.name}». Случайно получена легендарная карта «${legendary.name}».`);
     }
     return resultBase;
   }
@@ -2674,62 +2666,23 @@ function logLegendaryDiscovery(room, player, discovery) {
   if (!discovery?.first) return;
   const placeKind = discovery.place.kind === 'island' ? 'легендарный остров' : 'легендарное морское место';
   const named = discovery.namedCard ? ` Именная карта «${discovery.namedCard.name}» остаётся у первооткрывателя ${player.name}.` : '';
-  log(room, `${player.name} первым открывает ${placeKind} «${discovery.place.name}».${named}`);
+  const legendary = discovery.legendaryCard ? ` За первое открытие получена случайная легендарная карта «${discovery.legendaryCard.name}».` : '';
+  log(room, `${player.name} первым открывает ${placeKind} «${discovery.place.name}».${named}${legendary}`);
 }
 
 function handleLegendaryPlaceStop(room, player) {
   const mapPlace = legendaryPlaceAt(player.row, player.col);
-  if (!mapPlace) return null;
-  trackAssignment(room, player, { type: 'visit-place', placeId: mapPlace.id });
-  const place = legendaryPlaceRule(mapPlace.id);
-  const discovery = claimLegendaryPlaceDiscovery(room, player, mapPlace.id);
-  if (!discovery?.first) return { place: place || mapPlace, first: false, discovery };
+  let place = mapPlace ? legendaryPlaceRule(mapPlace.id) : null;
+  if (!place) {
+    const island = (room.islands || []).find(item => playerOnIsland(player, item) && legendaryPlaceForIsland(item.id));
+    if (island) place = legendaryPlaceForIsland(island.id);
+  }
+  if (!place) return null;
+
+  if (place.kind === 'sea') trackAssignment(room, player, { type: 'visit-place', placeId: place.id });
+  const discovery = claimLegendaryPlaceDiscovery(room, player, place.id);
+  if (!discovery?.first) return { place, first: false, discovery };
   logLegendaryDiscovery(room, player, discovery);
-
-  if (place?.unresolved) {
-    log(room, `${player.name}: разовая награда «${place.name}» не разыгрывается до авторского решения ${place.unresolved}.`);
-    return { place, first: true, discovery, rewardPending: true };
-  }
-
-  if (place?.reward?.type === 'legendary') {
-    const card = drawLegendaryCard(room);
-    if (card) {
-      player.legendaryCards ||= [];
-      player.legendaryCards.push(card);
-      log(room, `${player.name}: награда «${place.name}» — случайная легендарная карта.`);
-    } else if (room.legendaryDeck?.unresolved) {
-      player.pendingLegendary = (Number(player.pendingLegendary) || 0) + 1;
-      log(room, `${player.name}: награда «${place.name}» — одна случайная легендарная карта отмечена как ожидающая решения ${room.legendaryDeck.unresolved}.`);
-    }
-  } else if (place?.reward?.type === 'treasure') {
-    const treasure = drawTreasureCard(room);
-    const treasureAssignmentInstanceId = player.activeAssignment?.instanceId || null;
-    if (!treasure) return { place, first: true, discovery };
-    if (treasure.multiplier) {
-      const result = resolveMoneyTreasure(room, player, treasure);
-      discardDeckCard(room.treasureDeck, treasure);
-      trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: treasureAssignmentInstanceId });
-      log(room, `${player.name}: награда «${place.name}» — сокровище «${treasure.name}», получено ${result.amount} дукатов.`);
-    } else {
-      const holds = emptyCargoHolds(room, player);
-      if (!holds.length) {
-        discardDeckCard(room.treasureDeck, treasure);
-        trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: treasureAssignmentInstanceId });
-        log(room, `${player.name}: награда «${place.name}» — «${treasure.name}». Все трюмы заняты; карта сокровища сброшена без эффекта.`);
-      } else if (holds.length === 1) {
-        const loaded = fillCargoDirect(room, player, treasure.cargoGoodId, holds[0].id);
-        discardDeckCard(room.treasureDeck, treasure);
-        trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: treasureAssignmentInstanceId });
-        log(room, `${player.name}: награда «${place.name}» — «${treasure.name}». ${loaded.holdName} заполнен товаром «${loaded.good.name}» ×${loaded.quantity}.`);
-      } else {
-        room.pendingEvent = {
-          id: crypto.randomUUID(), playerId: player.id, kind: 'cargo', cardName: `${place.name}: ${treasure.name}`,
-          options: holds.map(o => ({ ...o })), goodId: treasure.cargoGoodId, treasureCard: { ...treasure }, treasureAssignmentInstanceId, origin: 'legendary-place',
-        };
-        log(room, `${player.name}: награда «${place.name}» — «${treasure.name}». Нужно выбрать пустой трюм.`);
-      }
-    }
-  }
   return { place, first: true, discovery };
 }
 
@@ -2893,7 +2846,6 @@ function newPlayer(socket, data, color) {
     attackLimitRound: null,
     attackCountsThisRound: {},
     brokenAlliesThisTurn: [],
-    pendingLegendary: 0,
     pendingLandinEscort: false,
     legendaryCards: [],
     legendaryEffects: { seaCurses: [] },
@@ -3010,7 +2962,6 @@ io.on('connection', socket => {
       anchorDecks: createAnchorDecks(),
       eventDeck: createSailingEventDeck(),
       treasureDeck: createTreasureDeck(),
-      legendaryDeck: createLegendaryDeck(),
       expeditionDeck: createExpeditionDeck(),
       pendingExpeditionRewards: [],
       feudDecks: createFeudDecks(),
@@ -3212,7 +3163,6 @@ io.on('connection', socket => {
     room.anchorDecks = createAnchorDecks();
     room.eventDeck = createSailingEventDeck();
     room.treasureDeck = createTreasureDeck();
-    room.legendaryDeck = createLegendaryDeck();
     room.expeditionDeck = createExpeditionDeck();
     room.pendingExpeditionRewards = [];
     room.feudDecks = createFeudDecks();
@@ -3221,7 +3171,7 @@ io.on('connection', socket => {
     room.factionState = {};
     room.players.forEach(p => {
       p.row = 0; p.col = 0; p.ducats = BALANCE.session.startingDucats; p.debt = 0; p.level = 1; p.specialCards = []; p.cargo = null; p.upgrades = []; p.disabledUpgradeIds = []; p.escorts = []; p.levelInactiveEscortIds = []; p.nextEscortId = 0;
-      p.glory = 0; p.fleetPoints = 0; p.fleetPointRound = room.round; p.fleetPointOpponentIds = []; p.armyPoints = 0; p.armyPointRound = room.round; p.armyPointOpponentIds = []; p.skipTurns = 0; p.personalTurnNo = 0; p.attackLimitRound = room.round; p.attackCountsThisRound = {}; p.brokenAlliesThisTurn = []; p.pendingLegendary = 0; p.pendingLandinEscort = false; p.activeExpedition = null; p.expeditionHistory = []; p.expeditionDrawRound = null; p.expeditionsDrawnThisRound = 0; p.legendaryCards = []; p.legendaryEffects = { seaCurses: [] }; p.savedEventCards = []; p.nextTurnEffects = {}; p.activeTurnEffects = {}; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignment = null; p.landCompany = null; p.bastionPriority = []; p.inactiveBastionIslandIds = []; p.character = null; p.characterReplacedRound = null; p.palaceUsed = false;
+      p.glory = 0; p.fleetPoints = 0; p.fleetPointRound = room.round; p.fleetPointOpponentIds = []; p.armyPoints = 0; p.armyPointRound = room.round; p.armyPointOpponentIds = []; p.skipTurns = 0; p.personalTurnNo = 0; p.attackLimitRound = room.round; p.attackCountsThisRound = {}; p.brokenAlliesThisTurn = []; p.pendingLandinEscort = false; p.activeExpedition = null; p.expeditionHistory = []; p.expeditionDrawRound = null; p.expeditionsDrawnThisRound = 0; p.legendaryCards = []; p.legendaryEffects = { seaCurses: [] }; p.savedEventCards = []; p.nextTurnEffects = {}; p.activeTurnEffects = {}; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignment = null; p.landCompany = null; p.bastionPriority = []; p.inactiveBastionIslandIds = []; p.character = null; p.characterReplacedRound = null; p.palaceUsed = false;
     });
     refreshFactionExistence(room);
     log(room, `Партия началась. Порядок: ${room.order.map(id => room.players.find(p => p.id === id)?.name).join(' → ')}.`);

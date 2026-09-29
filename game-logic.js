@@ -156,15 +156,6 @@ function createTreasureDeck(rng = Math.random) {
   return { drawPile: shuffleCards(expandCardDefinitions(TREASURE_CARDS), rng), discard: [] };
 }
 
-function createLegendaryDeck() {
-  return {
-    drawPile: [],
-    discard: [],
-    total: Math.max(0, Number(BALANCE.legendaryDeck?.total) || 0),
-    unresolved: BALANCE.legendaryDeck?.unresolved || null,
-  };
-}
-
 function createExpeditionDeck(rng = Math.random) {
   return { drawPile: shuffleCards(expandCardDefinitions(EXPEDITION_CARDS), rng) };
 }
@@ -196,16 +187,18 @@ function drawTreasureCard(room, rng = Math.random) {
   return drawCyclingDeckCard(room.treasureDeck, rng);
 }
 
-function drawLegendaryCard(room) {
-  room.legendaryDeck ||= createLegendaryDeck();
-  // R05 does not define either the initial copy distribution or discard recycling.
-  // Existing saved draw piles remain readable, but active runtime never invents cards
-  // or reshuffles the legendary discard into a new draw pile.
-  room.legendaryDeck.drawPile ||= [];
-  room.legendaryDeck.discard ||= [];
-  if (room.legendaryDeck.total == null) room.legendaryDeck.total = Math.max(0, Number(BALANCE.legendaryDeck?.total) || 0);
-  if (!Object.hasOwn(room.legendaryDeck, 'unresolved')) room.legendaryDeck.unresolved = BALANCE.legendaryDeck?.unresolved || null;
-  return room.legendaryDeck.drawPile.shift() || null;
+function drawLegendaryCard(_room, rng = Math.random) {
+  const ids = Array.isArray(BALANCE.legendaryPool?.typeIds) && BALANCE.legendaryPool.typeIds.length
+    ? BALANCE.legendaryPool.typeIds
+    : LEGENDARY_CARDS.map(card => card.id);
+  const candidates = ids
+    .map(id => LEGENDARY_CARDS.find(card => card.id === id))
+    .filter(Boolean);
+  if (!candidates.length) return null;
+  const raw = Number(rng());
+  const roll = Number.isFinite(raw) ? Math.min(0.999999999999, Math.max(0, raw)) : 0;
+  const chosen = candidates[Math.floor(roll * candidates.length)];
+  return JSON.parse(JSON.stringify(chosen));
 }
 
 function discardDeckCard(deck, card) {
@@ -519,6 +512,10 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
     delete room.pendingLegendaryReaction.captureMode;
     changed = true;
   }
+  if (Object.hasOwn(room, 'legendaryDeck')) {
+    delete room.legendaryDeck;
+    changed = true;
+  }
 
   for (const factionId of Object.keys(ASSIGNMENT_CARDS)) {
     if (!room.assignmentDecks[factionId]) {
@@ -544,6 +541,19 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
   for (const player of room.players) {
     if (Object.hasOwn(player, 'replacedAssignmentConditions')) {
       delete player.replacedAssignmentConditions;
+      changed = true;
+    }
+    const pendingLegendary = Math.max(0, Math.floor(Number(player.pendingLegendary) || 0));
+    if (pendingLegendary > 0) {
+      player.legendaryCards ||= [];
+      for (let i = 0; i < pendingLegendary; i++) {
+        const card = drawLegendaryCard(room, rng);
+        if (card) player.legendaryCards.push(card);
+      }
+      delete player.pendingLegendary;
+      changed = true;
+    } else if (Object.hasOwn(player, 'pendingLegendary')) {
+      delete player.pendingLegendary;
       changed = true;
     }
     const assignment = player.activeAssignment;
@@ -919,12 +929,12 @@ function namedPlaceCardFor(placeId) {
   return NAMED_PLACE_CARDS.find(card => card.placeId === String(placeId || '')) || null;
 }
 
-function claimLegendaryPlaceDiscovery(room, player, placeId) {
+function claimLegendaryPlaceDiscovery(room, player, placeId, rng = Math.random) {
   const place = legendaryPlaceRule(placeId);
-  if (!room || !player || !place) return { ok: false, first: false, place: place || null, namedCard: null };
+  if (!room || !player || !place) return { ok: false, first: false, place: place || null, namedCard: null, legendaryCards: [] };
   room.legendaryPlacesExplored ||= {};
   const exploredBy = room.legendaryPlacesExplored[place.id] || null;
-  if (exploredBy) return { ok: true, first: false, place, exploredBy, namedCard: null };
+  if (exploredBy) return { ok: true, first: false, place, exploredBy, namedCard: null, legendaryCards: [] };
 
   room.legendaryPlacesExplored[place.id] = player.id;
   const card = namedPlaceCardFor(place.id);
@@ -934,7 +944,26 @@ function claimLegendaryPlaceDiscovery(room, player, placeId) {
     namedCard = JSON.parse(JSON.stringify(card));
     player.namedPlaceCards.push(namedCard);
   }
-  return { ok: true, first: true, place, exploredBy: player.id, namedCard };
+
+  const legendaryCards = [];
+  const count = place.reward?.type === 'legendary' ? Math.max(0, Number(place.reward.count) || 0) : 0;
+  player.legendaryCards ||= [];
+  for (let i = 0; i < count; i++) {
+    const legendary = drawLegendaryCard(room, rng);
+    if (legendary) {
+      player.legendaryCards.push(legendary);
+      legendaryCards.push(legendary);
+    }
+  }
+  return {
+    ok: true,
+    first: true,
+    place,
+    exploredBy: player.id,
+    namedCard,
+    legendaryCards,
+    legendaryCard: legendaryCards[0] || null,
+  };
 }
 
 function expeditionHistory(player) {
@@ -1253,8 +1282,7 @@ function discardRandomHeldCard(room, player, rng = Math.random) {
   const ref = refs[Math.floor(rng() * refs.length)];
   if (ref.source === 'special') player.specialCards.splice(ref.index, 1);
   else if (ref.source === 'legendary') {
-    const [card] = player.legendaryCards.splice(ref.index, 1);
-    discardDeckCard(room.legendaryDeck, card);
+    player.legendaryCards.splice(ref.index, 1);
   } else {
     const [card] = player.savedEventCards.splice(ref.index, 1);
     if (card?.sourceCard) {
@@ -3284,15 +3312,10 @@ function grantMilitaryReward(room, player, island, options = {}) {
     player.legendaryCards ||= [];
     let drawn = 0;
     for (let i = 0; i < reward.legendary; i++) {
-      const card = drawLegendaryCard(room);
+      const card = drawLegendaryCard(room, options.rng || Math.random);
       if (card) { player.legendaryCards.push(card); drawn += 1; }
     }
     if (drawn) notes.push(`легендарная карта ×${drawn}`);
-    if (drawn < reward.legendary && room.legendaryDeck?.unresolved) {
-      const pending = Math.max(0, Number(reward.legendary) - drawn);
-      player.pendingLegendary = (Number(player.pendingLegendary) || 0) + pending;
-      notes.push(`случайная легендарная карта ×${pending} ожидает решения ${room.legendaryDeck.unresolved}`);
-    }
   }
   return notes;
 }
@@ -3380,10 +3403,6 @@ function jointAssaultIsland(room, attacker, island, attackerAllyIds = [], defend
     const firstMilitaryConquest = !island.firstMilitaryConquered;
     if (firstMilitaryConquest) island.firstMilitaryConquered = true;
     if (firstMilitaryConquest) result.armyPointAwards = awardArmyVictoryPoints(room, [attacker], result.previousOwnerId, armyCapturePoints(defense.total));
-    if (firstMilitaryConquest) {
-      const legendaryIsland = legendaryPlaceForIsland(island.id);
-      if (legendaryIsland) result.legendaryDiscovery = claimLegendaryPlaceDiscovery(room, attacker, legendaryIsland.id);
-    }
 
     result.statePrize = resolveStateMilitaryCapture(room, attacker, island, result.previousOwnerId);
     const replaceIslandCash = Boolean(
@@ -3391,7 +3410,7 @@ function jointAssaultIsland(room, attacker, island, attackerAllyIds = [], defend
       && !result.statePrize.amountUnresolved
       && result.statePrize.excludesIslandDucats
     );
-    result.rewardNotes = grantMilitaryReward(room, attacker, island, { skipDucats: replaceIslandCash });
+    result.rewardNotes = grantMilitaryReward(room, attacker, island, { skipDucats: replaceIslandCash, rng: options.rng || Math.random });
     if (result.statePrize?.triggered) {
       if (result.statePrize.amountUnresolved) {
         result.rewardNotes.push(`итоговый приз ${result.statePrize.factionName}: сумма ожидает решения автора`);
@@ -3572,7 +3591,6 @@ module.exports = {
   drawSailingEventCard,
   createTreasureDeck,
   drawTreasureCard,
-  createLegendaryDeck,
   createExpeditionDeck,
   createFeudDecks,
   drawFeudCard,

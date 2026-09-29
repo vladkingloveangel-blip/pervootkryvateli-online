@@ -129,9 +129,14 @@ test('appendix G assignments and legendary places reference the entities named i
   ]);
   assert.deepEqual(rules.politics.assignments.suniksiya.find(c => c.id === 'suniksiya-delivery-wood-stone').goodIds,['wood','stone']);
   for (const p of rules.legends.places) {
-    if (p.kind === 'island') assert.deepEqual(p.reward,{type:'island-reward',islandId:p.islandId});
-    else assert.deepEqual(p.reward,{type:p.id === 'kraken' ? 'legendary':'treasure',count:1});
+    assert.deepEqual(p.reward,{type:'legendary',count:1});
   }
+  assert.deepEqual(rules.legends.legendaryPool,{
+    mode:'random-with-replacement',
+    selection:'uniform',
+    typeIds:['sea-veil','hellfire','mist-path','sea-curse'],
+    consumedOnUse:true,
+  });
 });
 
 test('validator rejects malformed effect values and broken cross-catalog references', () => {

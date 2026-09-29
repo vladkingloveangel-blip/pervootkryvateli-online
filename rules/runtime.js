@@ -55,7 +55,7 @@ const FEUD_CARDS = Object.fromEntries(Object.entries(rules.events.feud).map(([fa
   })),
 ]));
 module.exports = {
-  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-6-events-legends-6.5',
+  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-6-events-legends-6.6',
   BALANCE: {
     session: rules.session,
     maxShipLevel: rules.fleet.maxLevel, maxReadableShipLevel: legacy.shipLevel7.level,
@@ -68,7 +68,7 @@ module.exports = {
     gloryCapture: legacy.gloryCapture, treasuryLossRatio: legacy.treasuryLossRatio,
     reclaimIslandFallback: rules.events.feud.lionia.find(c => c.effect.type === 'reclaim-island').effect.fallbackDucats,
     legendaryEffects: Object.fromEntries(rules.legends.legendary.map(c => [c.id, c.effect])),
-    legendaryDeck: copy(rules.legends.legendaryDeck),
+    legendaryPool: copy(rules.legends.legendaryPool),
     expeditionLimits: copy(rules.legends.expeditionLimits),
   },
   SHIPS: rules.fleet.ships, SHIP_LEVELS, SHIP_UPGRADES,
@@ -85,8 +85,6 @@ module.exports = {
   LEGENDARY_PLACE_RULES: rules.legends.places.map(place => copy(place)),
   NAMED_PLACE_CARDS: rules.legends.namedCards.map(card => copy(card)),
   EXPEDITION_CARDS: rules.legends.expeditions.map(card => copy(card)),
-  // R05 leaves the eight-card copy distribution unresolved. Keep canonical card kinds
-  // without projecting the legacy temporary 2×4 composition into active rules.
   LEGENDARY_CARDS: rules.legends.legendary.map(card => copy(card)),
   // Physical treasure copy counts are unresolved in the source. Runtime keeps one
   // instance of each canonical treasure kind without inventing additional copies.

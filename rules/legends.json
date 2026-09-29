@@ -21,7 +21,7 @@
       "kind": "sea",
       "mapPlaceId": "abyss",
       "reward": {
-        "type": "treasure",
+        "type": "legendary",
         "count": 1
       },
       "availability": {
@@ -36,7 +36,7 @@
       "kind": "sea",
       "mapPlaceId": "pharaoh",
       "reward": {
-        "type": "treasure",
+        "type": "legendary",
         "count": 1
       },
       "availability": {
@@ -51,7 +51,7 @@
       "kind": "sea",
       "mapPlaceId": "pearl",
       "reward": {
-        "type": "treasure",
+        "type": "legendary",
         "count": 1
       },
       "availability": {
@@ -66,11 +66,9 @@
       "kind": "sea",
       "mapPlaceId": "vortex",
       "reward": {
-        "type": "treasure",
+        "type": "legendary",
         "count": 1
       },
-      "unresolved": "R06",
-      "rewardStatus": "table-value-pending-author-confirmation",
       "availability": {
         "status": "data-ready",
         "consumerStage": 6
@@ -83,11 +81,9 @@
       "kind": "sea",
       "mapPlaceId": "icebergs",
       "reward": {
-        "type": "treasure",
+        "type": "legendary",
         "count": 1
       },
-      "unresolved": "R06",
-      "rewardStatus": "table-value-pending-author-confirmation",
       "availability": {
         "status": "data-ready",
         "consumerStage": 6
@@ -100,11 +96,9 @@
       "kind": "sea",
       "mapPlaceId": "rose",
       "reward": {
-        "type": "treasure",
+        "type": "legendary",
         "count": 1
       },
-      "unresolved": "R06",
-      "rewardStatus": "table-value-pending-author-confirmation",
       "availability": {
         "status": "data-ready",
         "consumerStage": 6
@@ -117,8 +111,8 @@
       "kind": "island",
       "islandId": "atlantia",
       "reward": {
-        "type": "island-reward",
-        "islandId": "atlantia"
+        "type": "legendary",
+        "count": 1
       },
       "availability": {
         "status": "data-ready",
@@ -132,8 +126,8 @@
       "kind": "island",
       "islandId": "adia",
       "reward": {
-        "type": "island-reward",
-        "islandId": "adia"
+        "type": "legendary",
+        "count": 1
       },
       "availability": {
         "status": "data-ready",
@@ -147,8 +141,8 @@
       "kind": "island",
       "islandId": "skull",
       "reward": {
-        "type": "island-reward",
-        "islandId": "skull"
+        "type": "legendary",
+        "count": 1
       },
       "availability": {
         "status": "data-ready",
@@ -440,7 +434,6 @@
     {
       "id": "sea-veil",
       "name": "Покров моря",
-      "quantity": null,
       "availability": {
         "status": "data-ready",
         "consumerStage": 6
@@ -456,7 +449,6 @@
     {
       "id": "hellfire",
       "name": "Пламя Ада",
-      "quantity": null,
       "availability": {
         "status": "data-ready",
         "consumerStage": 6
@@ -470,7 +462,6 @@
     {
       "id": "mist-path",
       "name": "Путь сквозь туман",
-      "quantity": null,
       "availability": {
         "status": "data-ready",
         "consumerStage": 6
@@ -483,7 +474,6 @@
     {
       "id": "sea-curse",
       "name": "Морское проклятие",
-      "quantity": null,
       "availability": {
         "status": "data-ready",
         "consumerStage": 6
@@ -496,13 +486,6 @@
       }
     }
   ],
-  "legendaryDeck": {
-    "total": 8,
-    "copiesByKind": null,
-    "reshuffle": null,
-    "giftDiscard": null,
-    "unresolved": "R05"
-  },
   "treasures": [
     {
       "id": "income-x1",
@@ -568,5 +551,16 @@
       "setupTotal": 4,
       "fullDiamondsCopies": 3
     }
+  },
+  "legendaryPool": {
+    "mode": "random-with-replacement",
+    "selection": "uniform",
+    "typeIds": [
+      "sea-veil",
+      "hellfire",
+      "mist-path",
+      "sea-curse"
+    ],
+    "consumedOnUse": true
   }
 }

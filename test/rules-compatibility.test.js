@@ -10,7 +10,7 @@ const copy = value => JSON.parse(JSON.stringify(value));
 
 test('legacy profile references remain valid while canonical master data stays separate', () => {
   assert.deepEqual(validateCompatibility(rules,legacy),[]);
-  assert.equal(runtime.RUNTIME_PROFILE,'stage-6-events-legends-6.5');
+  assert.equal(runtime.RUNTIME_PROFILE,'stage-6-events-legends-6.6');
   assert.equal(runtime.BALANCE.session.startingDucats,rules.session.startingDucats);
   assert.equal(runtime.BALANCE.session.players.min,4);
   assert.equal(runtime.BALANCE.session.players.max,6);
@@ -55,10 +55,10 @@ test('legacy profile references remain valid while canonical master data stays s
     ...rules.legends.treasures.filter(c => c.effect.type === 'income-multiple').map(c => c.id),legacy.treasure.id,
   ]);
   assert.deepEqual(rules.legends.treasures.find(c => c.id === 'full-diamonds-hold').effect,{type:'fill-hold',goodId:'diamonds'});
-  assert.equal(rules.legends.legendaryDeck.copiesByKind,null);
-  assert.equal(rules.legends.legendaryDeck.reshuffle,null);
-  assert.deepEqual(runtime.BALANCE.legendaryDeck,rules.legends.legendaryDeck);
-  assert.equal(runtime.LEGENDARY_CARDS.every(card => card.quantity === null),true); // active runtime no longer projects legacy 2×4 into R05.
+  assert.deepEqual(runtime.BALANCE.legendaryPool,rules.legends.legendaryPool);
+  assert.deepEqual(runtime.LEGENDARY_CARDS,rules.legends.legendary);
+  assert.equal(runtime.LEGENDARY_CARDS.every(card => !Object.hasOwn(card,'quantity')),true);
+  assert.equal(Object.hasOwn(runtime.BALANCE,'legendaryDeck'),false);
 });
 
 test('compatibility validator rejects broken saved-state references and projections', () => {
