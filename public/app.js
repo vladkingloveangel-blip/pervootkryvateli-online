@@ -820,6 +820,7 @@
       $('hudShipLevel').textContent = `${shipName(mine.shipClass)} · ${ROMAN[mine.level] || mine.level}`;
       $('hudDucats').textContent = mine.ducats ?? 0;
       $('hudGlory').textContent = mine.glory ?? 0;
+      $('hudFleetPoints').textContent = mine.fleetPoints ?? 0;
       $('hudCargo').textContent = `${cargo.quantity}/${cargo.capacity}`;
       $('hudDebtBtn').classList.toggle('hidden', !(mine.debt > 0));
       $('hudDebt').textContent = mine.debt || 0;
@@ -905,7 +906,7 @@
       const skip = mine.skipTurns ? ` · пропусков хода: ${mine.skipTurns}` : '';
       const suzerain = mine.suzerainId ? r.factions?.find(f => f.id === mine.suzerainId)?.name : null;
       const politics = suzerain ? ` · вассал: ${suzerain}` : (mine.enemyFactionIds?.length ? ` · вражда: ${mine.enemyFactionIds.length}` : '');
-      $('youStatus').innerHTML = `<strong>${escapeHtml(mine.name)}</strong><br><span class="muted">${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level} · ${mine.ducats} дукатов${mine.debt ? ` · долг ${mine.debt}` : ''} · слава ${mine.glory || 0} · островов ${mine.islandCount} · клетка ${mine.col + 1}:${mine.row + 1}${escapeHtml(cargo)}${escapeHtml(cards)}${escapeHtml(eventHand)}${escapeHtml(legendary)}${escapeHtml(skip)}${escapeHtml(politics)}</span>`;
+      $('youStatus').innerHTML = `<strong>${escapeHtml(mine.name)}</strong><br><span class="muted">${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level} · ${mine.ducats} дукатов${mine.debt ? ` · долг ${mine.debt}` : ''} · очки флота ${mine.fleetPoints || 0} · слава ${mine.glory || 0} · островов ${mine.islandCount} · клетка ${mine.col + 1}:${mine.row + 1}${escapeHtml(cargo)}${escapeHtml(cards)}${escapeHtml(eventHand)}${escapeHtml(legendary)}${escapeHtml(skip)}${escapeHtml(politics)}</span>`;
     }
 
     renderPlayers();
@@ -949,7 +950,7 @@
       const suzerainName = p.suzerainId ? state.room.factions?.find(f => f.id === p.suzerainId)?.name : null;
       const politicalLabel = suzerainName ? ` · вассал ${suzerainName}` : (p.enemyFactionIds?.length ? ` · вражда ${p.enemyFactionIds.length}` : '');
       const readyLabel = !r.started ? (p.ready ? ' · ✓ готов' : ' · не готов') : '';
-      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${p.id === r.leaderId ? ' · ведущий' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · слава ${p.glory || 0} · островов ${p.islandCount} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
+      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${p.id === r.leaderId ? ' · ведущий' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · флот ${p.fleetPoints || 0} · слава ${p.glory || 0} · островов ${p.islandCount} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
       if (!isSpectator && isHost && !r.started) {
         const actions = el.querySelector('.player-side-actions');
         if (p.id !== r.leaderId) {
@@ -1953,7 +1954,7 @@
       const deferred = {
         scout: 'Разведчик сохранён на корабле, но просмотр закрытых карт не включён до решения Р29 о зонах видимости.',
         treasureHunter: 'Искатель сокровищ сохранён на корабле; его выбор из двух сокровищ будет подключён вместе с синхронизацией колоды сокровищ.',
-        shipCarpenter: 'Корабельный плотник сохранён на корабле; предотвращение боевой потери уровня будет подключено в блоке боя.',
+        shipCarpenter: 'Корабельный плотник может предотвратить одну потерю уровня в бою. При объявлении своей атаки заранее отметьте его применение; дополнительное действие списывается только если уровень действительно сохранён.',
       };
       effectNote.textContent = deferred[character.id] || `«${character.name}» готов к одноразовому применению.`;
       actions.appendChild(effectNote);
@@ -2543,6 +2544,8 @@
     const myTurn = r.activePlayerId === state.myId;
     const canAct = myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending();
     const firstRound = r.round === 1;
+    const carpenterUseCost = Math.max(0, Number(r.characterCatalog?.shipCarpenter?.useActionCost) || 0);
+    const canArmCarpenter = (mine.actionsLeft ?? 0) >= 1 + carpenterUseCost;
     badge.textContent = mine.inPeaceZone ? 'зона мира' : `арт. ${mine.fleetArtillery} · штурм ${mine.assaultArmy ?? mine.stats?.army ?? 0}`;
 
     const usedAttackTargets = new Set(mine.attackedPlayerIdsThisRound || []);
@@ -2563,6 +2566,17 @@
       for (const target of seaTargets) {
         const card = document.createElement('div');
         card.className = 'combat-target';
+        let carpenterToggle = null;
+        if (mine.character?.id === 'shipCarpenter') {
+          const carpenterLabel = document.createElement('label');
+          carpenterLabel.className = 'cargo-meta';
+          carpenterToggle = document.createElement('input');
+          carpenterToggle.type = 'checkbox';
+          carpenterToggle.disabled = !canArmCarpenter;
+          carpenterLabel.appendChild(carpenterToggle);
+          carpenterLabel.append(` Корабельный плотник: предотвратить потерю уровня при поражении · ещё ${carpenterUseCost} действие`);
+          card.appendChild(carpenterLabel);
+        }
         const attackAllies = r.players.filter(p => p.id !== state.myId && p.id !== target.id && areAlliesClient(state.myId, p.id) && !areAlliesClient(target.id, p.id) && seaAttackPositionClient(p, target) && !(p.attackedPlayerIdsThisRound || []).includes(target.id));
         const defenseAllies = r.players.filter(p => p.id !== state.myId && p.id !== target.id && areAlliesClient(target.id, p.id) && !areAlliesClient(state.myId, p.id) && seaAttackPositionClient(p, target));
         card.innerHTML = `<div><strong>${escapeHtml(target.name)}</strong><div class="cargo-meta">Флотилия цели: артиллерия ${target.fleetArtillery}. Ваши союзники в позиции: ${attackAllies.length}; союзники защиты в позиции: ${defenseAllies.length}.${target.legendaryStatus?.shipVeilTurns ? ` Покров моря: ${target.legendaryStatus.shipVeilTurns} хода.` : ''}</div></div>`;
@@ -2574,12 +2588,12 @@
         solo.textContent = `Атаковать · ${mine.fleetArtillery}:${target.fleetArtillery}`;
         solo.disabled = !canAct || firstRound || mine.inPeaceZone || target.inPeaceZone || usedAttackTargets.has(target.id) || (mine.brokenAlliesThisTurn || []).includes(target.id) || Boolean(target.legendaryStatus?.shipVeilTurns);
         if (usedAttackTargets.has(target.id)) solo.title = 'Лимит нападения на этого игрока в текущем раунде уже использован.';
-        solo.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: false }, handleGameAck));
+        solo.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
         const together = document.createElement('button');
         together.type = 'button';
         together.textContent = `Позвать союзников (${attackAllies.length})`;
         together.disabled = solo.disabled || attackAllies.length === 0;
-        together.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: true }, handleGameAck));
+        together.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
         row.appendChild(solo); row.appendChild(together);
         card.appendChild(row);
         actions.appendChild(card);
@@ -2598,7 +2612,20 @@
         const defenseAllies = island.ownerId ? r.players.filter(p => p.id !== state.myId && p.id !== island.ownerId && areAlliesClient(island.ownerId, p.id) && !areAlliesClient(state.myId, p.id) && playerOnIslandClient(p, island)) : [];
         const card = document.createElement('div');
         card.className = 'combat-target';
-        card.innerHTML = `<div><strong>${escapeHtml(island.name)}</strong><div class="cargo-meta">${escapeHtml(owner)} · ваша сила ${mine.assaultArmy ?? mine.stats?.army ?? 0} · базовая защита ${island.defenseArmy ?? island.army} · союзники атаки в позиции ${attackAllies.length} · защиты ${defenseAllies.length}${island.legendaryVeil?.remaining ? ` · Покров моря ${island.legendaryVeil.remaining} хода` : ''}</div></div>`;
+        const islandInfo = document.createElement('div');
+        islandInfo.innerHTML = `<strong>${escapeHtml(island.name)}</strong><div class="cargo-meta">${escapeHtml(owner)} · ваша сила ${mine.assaultArmy ?? mine.stats?.army ?? 0} · базовая защита ${island.defenseArmy ?? island.army} · союзники атаки в позиции ${attackAllies.length} · защиты ${defenseAllies.length}${island.legendaryVeil?.remaining ? ` · Покров моря ${island.legendaryVeil.remaining} хода` : ''}</div>`;
+        card.appendChild(islandInfo);
+        let carpenterToggle = null;
+        if (mine.character?.id === 'shipCarpenter') {
+          const carpenterLabel = document.createElement('label');
+          carpenterLabel.className = 'cargo-meta';
+          carpenterToggle = document.createElement('input');
+          carpenterToggle.type = 'checkbox';
+          carpenterToggle.disabled = !canArmCarpenter;
+          carpenterLabel.appendChild(carpenterToggle);
+          carpenterLabel.append(` Корабельный плотник: предотвратить потерю уровня при проигранном штурме · ещё ${carpenterUseCost} действие`);
+          card.appendChild(carpenterLabel);
+        }
         for (const mode of ['preserve', 'raze']) {
           const row = document.createElement('div');
           row.className = 'combat-button-row';
@@ -2608,12 +2635,12 @@
           solo.textContent = mode === 'raze' ? 'Разорить · одному' : 'Сохранить · одному';
           solo.disabled = !canAct || mine.inPeaceZone || (firstRound && pvpIsland) || (island.ownerId && usedAttackTargets.has(island.ownerId)) || (island.ownerId && (mine.brokenAlliesThisTurn || []).includes(island.ownerId)) || Boolean(island.legendaryVeil?.remaining);
           if (island.ownerId && usedAttackTargets.has(island.ownerId)) solo.title = 'Лимит нападения на владельца этого острова в текущем раунде уже использован.';
-          solo.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, captureMode: mode, inviteAllies: false }, handleGameAck));
+          solo.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, captureMode: mode, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
           const together = document.createElement('button');
           together.type = 'button';
           together.textContent = mode === 'raze' ? `Разорить · союз (${attackAllies.length})` : `Сохранить · союз (${attackAllies.length})`;
           together.disabled = solo.disabled || attackAllies.length === 0;
-          together.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, captureMode: mode, inviteAllies: true }, handleGameAck));
+          together.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, captureMode: mode, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
           row.appendChild(solo); row.appendChild(together);
           card.appendChild(row);
         }

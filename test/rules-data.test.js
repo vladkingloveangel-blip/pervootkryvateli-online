@@ -166,11 +166,14 @@ test('complete known sea, assignment, feud and event decks match appendix rows',
   assert.deepEqual(rules.politics.assignments.mori.slice(0,8).map(c=>c.islandId),['renaika','chertog','kisalinia','yukon','erkalon','asigoriy','atlantia','adia']);
 });
 
-test('stage 5.1 activates common attack rules without prematurely activating later stage-5 consumers', () => {
-  assert.equal(rules.implementation.activeProfile,'stage-5-combat-politics-5.1');
+test('stage 5.2 activates canonical PvP sea combat scoring without prematurely activating later stage-5 consumers', () => {
+  assert.equal(rules.implementation.activeProfile,'stage-5-combat-politics-5.2');
   assert.equal(rules.implementation.pendingConsumers.every(item => item.consumerStage >= 5),true);
   assert.equal(rules.scoring.combat.attacksPerOpponentPerRound,1);
   assert.equal(data.BALANCE.combat.attacksPerOpponentPerRound,rules.scoring.combat.attacksPerOpponentPerRound);
+  assert.deepEqual(data.BALANCE.fleetScoring,rules.scoring.fleet);
+  assert.equal(data.BALANCE.fleetScoring.playerVictory,2);
+  assert.equal(data.BALANCE.fleetScoring.defenseVictory,2);
   assert.equal(data.BALANCE.attackHistoryWindow,undefined);
   assert.equal(data.BALANCE.attackRebellionThreshold,undefined);
   for (const resolved of [

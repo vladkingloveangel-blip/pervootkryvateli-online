@@ -59,6 +59,8 @@ const {
   fleetArtillery,
   islandDefenseArmy,
   loseShipLevel,
+  battleLevelLoss,
+  awardFleetVictoryPoints,
   seaBattle,
   assaultIsland,
   areAllies,
@@ -733,6 +735,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(b.level, 1);
   assert.equal(a.ducats, 12);
   assert.equal(b.ducats, 0);
+  assert.equal(a.fleetPoints, 2);
+  assert.deepEqual(result.fleetPointAwards, [{ playerId: 'a', opponentId: 'b', points: 2 }]);
 }
 
 // При поражении корабля I уровня он не получает уровень 0, а возвращается на старт.
@@ -745,18 +749,27 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(result.outcome, 'defender');
   assert.equal(a.level, 1);
   assert.deepEqual([a.row, a.col], [0, 0]);
+  assert.equal(b.fleetPoints, 2);
 }
 
-// Ничья морского боя заставляет обоих пропустить следующий личный ход.
+// Каноническая ничья морского боя не меняет уровни, дукаты, груз и не даёт пропуска хода.
 {
   const room = { round: 2, islands: cloneIslands(), players: [] };
-  const a = { id: 'a', row: 10, col: 10, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 5, personalTurnNo: 1, attackedThisTurn: [], attackHistory: {} };
-  const b = { id: 'b', row: 10, col: 10, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 5, personalTurnNo: 1, attackedThisTurn: [], attackHistory: {} };
+  const a = { id: 'a', row: 10, col: 10, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 5, cargo: { goodId: 'wood', quantity: 2 } };
+  const b = { id: 'b', row: 10, col: 10, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 5, cargo: { goodId: 'stone', quantity: 2 } };
   room.players = [a, b];
   const result = seaBattle(room, a, b);
   assert.equal(result.outcome, 'tie');
-  assert.equal(a.skipTurns, 1);
-  assert.equal(b.skipTurns, 1);
+  assert.equal(a.skipTurns || 0, 0);
+  assert.equal(b.skipTurns || 0, 0);
+  assert.equal(a.level, 1);
+  assert.equal(b.level, 1);
+  assert.equal(a.ducats, 5);
+  assert.equal(b.ducats, 5);
+  assert.deepEqual(a.cargo, { goodId: 'wood', quantity: 2 });
+  assert.deepEqual(b.cargo, { goodId: 'stone', quantity: 2 });
+  assert.equal(a.fleetPoints || 0, 0);
+  assert.equal(b.fleetPoints || 0, 0);
 }
 
 // В первом раунде PvP запрещён. Со второго раунда морская атака разрешена
@@ -780,6 +793,54 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(attackCountThisRound(room, a, b.id), 0);
   assert.deepEqual(attackTargetsThisRound(room, a), []);
   assert.equal(canAttackPlayerThisRound(room, a, b.id).ok, true);
+}
+
+// Корабельный плотник предотвращает одну боевую потерю уровня и после применения
+// возвращается в колоду персонажей. Без явного применения уровень теряется обычно.
+{
+  const room = { round: 2, islands: cloneIslands(), players: [] };
+  const a = { id: 'a', row: 10, col: 10, shipClass: 'brigantine', level: 2, upgrades: [], escorts: [], ducats: 5, character: { id: 'shipCarpenter' } };
+  const b = { id: 'b', row: 10, col: 10, shipClass: 'frigate', level: 2, upgrades: [], escorts: [], ducats: 5 };
+  room.players = [a, b];
+  const result = seaBattle(room, a, b, { shipCarpenterPlayerIds: ['a'] });
+  assert.equal(result.outcome, 'defender');
+  assert.equal(a.level, 2);
+  assert.equal(a.character, null);
+  assert.equal(result.levelLoss.prevented, true);
+  assert.equal(result.levelLoss.preventedByCharacter, 'shipCarpenter');
+}
+
+// Плотник работает и при проигранном штурме, но предотвращает только потерю уровня:
+// рота ландскнехтов всё равно погибает по правилу неудачного штурма.
+{
+  const room = { round: 2, islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'adia');
+  const a = {
+    id: 'a', row: island.cells[0][0], col: island.cells[0][1],
+    shipClass: 'brigantine', level: 2, upgrades: [], escorts: [], ducats: 0,
+    character: { id: 'shipCarpenter' }, landCompany: { army: 3, arsenalLevel: 1 },
+  };
+  room.players = [a];
+  const result = assaultIsland(room, a, island, 'preserve', { shipCarpenterPlayerIds: ['a'] });
+  assert.equal(result.outcome, 'defender');
+  assert.equal(a.level, 2);
+  assert.equal(a.character, null);
+  assert.equal(a.landCompany, null);
+  assert.equal(result.levelLoss.prevented, true);
+}
+
+// Ограничение очков флота хранится отдельно от дукатов/старого счётчика славы:
+// против одного и того же соперника в одном раунде повторного начисления нет.
+{
+  const room = { round: 4 };
+  const p = { id: 'p', fleetPoints: 0, glory: 7 };
+  assert.deepEqual(awardFleetVictoryPoints(room, [p], 'q', 2), [{ playerId: 'p', opponentId: 'q', points: 2 }]);
+  assert.deepEqual(awardFleetVictoryPoints(room, [p], 'q', 2), []);
+  assert.equal(p.fleetPoints, 2);
+  assert.equal(p.glory, 7);
+  room.round = 5;
+  assert.deepEqual(awardFleetVictoryPoints(room, [p], 'q', 2), [{ playerId: 'p', opponentId: 'q', points: 2 }]);
+  assert.equal(p.fleetPoints, 4);
 }
 
 // Штурм независимого Агмора: каравелла I (войско 5) побеждает гарнизон 3,

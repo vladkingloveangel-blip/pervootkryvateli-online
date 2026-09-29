@@ -635,7 +635,7 @@ function publicRoom(room, viewerId = null) {
     ruleset: RULESET,
     runtimeProfile: RUNTIME_PROFILE,
     balanceCatalog: { session: BALANCE.session, maxShipLevel: BALANCE.maxShipLevel,
-      combat: BALANCE.combat,
+      combat: BALANCE.combat, fleetScoring: BALANCE.fleetScoring,
       garrisons: BALANCE.garrisons, bastion: { price: BUILDINGS.bastion.price, defense: BUILDINGS.bastion.defense },
       assignmentReplacementPrice: BALANCE.assignmentReplacementPrice, maxEscorts: BALANCE.maxEscorts, contractBonusRatio: BALANCE.contractBonusRatio,
       loadingLimitPerIslandPerRound: BALANCE.loadingLimitPerIslandPerRound,
@@ -677,6 +677,7 @@ function publicRoom(room, viewerId = null) {
         ducats: p.ducats,
         debt: Number(p.debt) || 0,
         glory: Number(p.glory) || 0,
+        fleetPoints: Number(p.fleetPoints) || 0,
         level,
         row: p.row,
         col: p.col,
@@ -1259,9 +1260,32 @@ function allBattleInvitesAnswered(pending) {
 
 function describeLevelLoss(room, loss) {
   const player = playerById(room, loss.playerId);
+  if (loss.preventedByCharacter === 'shipCarpenter') return `${player?.name || 'Игрок'}: Корабельный плотник предотвращает потерю уровня`;
   if (loss.returnedToStart) return `${player?.name || 'Игрок'}: I уровень → старт`;
   const cargo = loss.cargoDiscarded ? `, сброшено груза ${loss.cargoDiscarded}` : '';
   return `${player?.name || 'Игрок'}: ${loss.before} → ${loss.after}${cargo}`;
+}
+
+function shipCarpenterRequest(room, player, requested) {
+  if (!requested) return { ok: true, playerIds: [] };
+  if ((typeof player?.character === 'string' ? player.character : player?.character?.id) !== 'shipCarpenter') {
+    return { ok: false, error: 'На основном корабле нет Корабельного плотника.' };
+  }
+  const cost = Math.max(0, Number(CHARACTERS.shipCarpenter?.useActionCost) || 0);
+  if ((Number(room?.actionsLeft) || 0) < 1 + cost) {
+    return { ok: false, error: `Для атаки с возможным применением Корабельного плотника нужно оставить ещё ${cost} действие.` };
+  }
+  return { ok: true, playerIds: [player.id], cost };
+}
+
+function chargeBattleCharacterCosts(room, result) {
+  const activeId = currentPlayer(room)?.id;
+  const used = (result?.levelLosses || []).filter(loss => loss.preventedByCharacter === 'shipCarpenter' && loss.playerId === activeId);
+  if (!used.length) return 0;
+  const cost = Math.max(0, Number(CHARACTERS.shipCarpenter?.useActionCost) || 0) * used.length;
+  room.actionsLeft = Math.max(0, (Number(room.actionsLeft) || 0) - cost);
+  result.characterActionCost = cost;
+  return cost;
 }
 
 function logSeaBattleResult(room, attacker, defender, result) {
@@ -1269,12 +1293,14 @@ function logSeaBattleResult(room, attacker, defender, result) {
   const defenseNames = allianceNames(room, result.defenderParticipantIds);
   const score = `${result.attackerPower}:${result.defenderPower}`;
   if (result.outcome === 'tie') {
-    log(room, `Морской бой ${attacker.name} против ${defender.name}: ${score}. Ничья. Участники атаки: ${attackNames}; защиты: ${defenseNames}. Все участники пропускают следующий личный ход.`);
+    log(room, `Морской бой ${attacker.name} против ${defender.name}: ${score}. Ничья. Участники атаки: ${attackNames}; защиты: ${defenseNames}. Уровни, дукаты и груз не меняются; пропуска хода нет.`);
   } else {
     const winners = result.outcome === 'attacker' ? attackNames : defenseNames;
     const losses = (result.levelLosses || []).map(loss => describeLevelLoss(room, loss)).join('; ') || 'без потери уровней';
     const shares = Object.entries(result.lootShares || {}).filter(([, amount]) => amount > 0).map(([id, amount]) => `${playerById(room, id)?.name || 'Игрок'} +${amount}`).join(', ');
-    log(room, `Морской бой ${attacker.name} против ${defender.name}: ${score}. Побеждают: ${winners}. Потери уровней: ${losses}. Добыча ${result.loot} дукатов${shares ? ` (${shares})` : ''}.`);
+    const points = (result.fleetPointAwards || []).map(a => `${playerById(room, a.playerId)?.name || 'Игрок'} +${a.points}`).join(', ');
+    const carpenterCost = result.characterActionCost ? ` Корабельный плотник: −${result.characterActionCost} действие.` : '';
+    log(room, `Морской бой ${attacker.name} против ${defender.name}: ${score}. Побеждают: ${winners}. Потери уровней: ${losses}. Добыча ${result.loot} дукатов${shares ? ` (${shares})` : ''}. Очки флота: ${points || 'без начисления'}.${carpenterCost}`);
   }
 }
 
@@ -1431,15 +1457,16 @@ function logAssaultResult(room, attacker, island, result) {
   }
 }
 
-function beginSeaBattleResolution(room, attacker, target, inviteAllies) {
+function beginSeaBattleResolution(room, attacker, target, inviteAllies, combatOptions = {}) {
   const eligible = eligibleSeaBattleInvites(room, attacker, target, Boolean(inviteAllies));
   const invites = [
     ...eligible.attackerInvites.map(playerId => ({ playerId, side: 'attacker', response: null })),
     ...eligible.defenderInvites.map(playerId => ({ playerId, side: 'defender', response: null })),
   ];
   if (!invites.length) {
-    const result = jointSeaBattle(room, attacker, target, [], [], { skipAttackRegistrationIds: [attacker.id] });
+    const result = jointSeaBattle(room, attacker, target, [], [], { ...combatOptions, skipAttackRegistrationIds: [attacker.id] });
     if (!result.ok) return result;
+    chargeBattleCharacterCosts(room, result);
     logSeaBattleResult(room, attacker, target, result);
     const fleetPending = queueFleetAdjustmentsForLosses(room, result.levelLosses, 'Потеря уровня после морского боя.');
     if (!fleetPending) queueIslandCorrectionIfNeeded(room, null, 'последствия морского боя и бунта владений');
@@ -1448,7 +1475,7 @@ function beginSeaBattleResolution(room, attacker, target, inviteAllies) {
   }
   room.pendingBattle = {
     id: crypto.randomUUID(), kind: 'sea', attackerId: attacker.id, targetPlayerId: target.id,
-    invites, captureMode: null,
+    invites, captureMode: null, shipCarpenterPlayerIds: [...(combatOptions.shipCarpenterPlayerIds || [])],
   };
   const invitedAttackers = allianceNames(room, eligible.attackerInvites);
   const invitedDefenders = allianceNames(room, eligible.defenderInvites);
@@ -1456,7 +1483,7 @@ function beginSeaBattleResolution(room, attacker, target, inviteAllies) {
   return { ok: true, pending: true };
 }
 
-function beginAssaultResolution(room, attacker, island, captureMode, inviteAllies) {
+function beginAssaultResolution(room, attacker, island, captureMode, inviteAllies, combatOptions = {}) {
   const owner = island.ownerId ? playerById(room, island.ownerId) : null;
   const eligible = eligibleAssaultInvites(room, attacker, island, Boolean(inviteAllies));
   const invites = [
@@ -1464,8 +1491,9 @@ function beginAssaultResolution(room, attacker, island, captureMode, inviteAllie
     ...eligible.defenderInvites.map(playerId => ({ playerId, side: 'defender', response: null })),
   ];
   if (!invites.length) {
-    const result = jointAssaultIsland(room, attacker, island, captureMode, [], [], { skipAttackRegistrationIds: island.ownerId ? [attacker.id] : [] });
+    const result = jointAssaultIsland(room, attacker, island, captureMode, [], [], { ...combatOptions, skipAttackRegistrationIds: island.ownerId ? [attacker.id] : [] });
     if (!result.ok) return result;
+    chargeBattleCharacterCosts(room, result);
     logAssaultResult(room, attacker, island, result);
     if (result.outcome === 'attacker') {
       queueStatePrizeFromAssault(room, attacker, result);
@@ -1479,6 +1507,7 @@ function beginAssaultResolution(room, attacker, island, captureMode, inviteAllie
   room.pendingBattle = {
     id: crypto.randomUUID(), kind: 'assault', attackerId: attacker.id, islandId: island.id,
     captureMode, invites, targetPlayerId: owner?.id || null,
+    shipCarpenterPlayerIds: [...(combatOptions.shipCarpenterPlayerIds || [])],
   };
   const invitedAttackers = allianceNames(room, eligible.attackerInvites);
   const invitedDefenders = allianceNames(room, eligible.defenderInvites);
@@ -1513,12 +1542,12 @@ function resolvePendingLegendaryReaction(room, useVeil, cardRef = null) {
 
   room.pendingLegendaryReaction = null;
   if (pending.kind === 'sea-attack') {
-    const result = beginSeaBattleResolution(room, source, target, pending.inviteAllies);
+    const result = beginSeaBattleResolution(room, source, target, pending.inviteAllies, { shipCarpenterPlayerIds: pending.shipCarpenterPlayerIds || [] });
     return result;
   }
   if (pending.kind === 'assault') {
     const island = room.islands.find(i => i.id === pending.islandId);
-    return beginAssaultResolution(room, source, island, pending.captureMode, pending.inviteAllies);
+    return beginAssaultResolution(room, source, island, pending.captureMode, pending.inviteAllies, { shipCarpenterPlayerIds: pending.shipCarpenterPlayerIds || [] });
   }
   if (pending.kind === 'hellfire') {
     const island = room.islands.find(i => i.id === pending.islandId);
@@ -1539,13 +1568,23 @@ function resolvePendingBattle(room) {
   if (pending.kind === 'sea') {
     const defender = playerById(room, pending.targetPlayerId);
     const attackerIds = [attacker.id, ...acceptedIds(pending, 'attacker')];
-    result = jointSeaBattle(room, attacker, defender, acceptedIds(pending, 'attacker'), acceptedIds(pending, 'defender'), { skipAttackRegistrationIds: attackerIds });
-    if (result.ok) logSeaBattleResult(room, attacker, defender, result);
+    result = jointSeaBattle(room, attacker, defender, acceptedIds(pending, 'attacker'), acceptedIds(pending, 'defender'), {
+      skipAttackRegistrationIds: attackerIds,
+      shipCarpenterPlayerIds: pending.shipCarpenterPlayerIds || [],
+    });
+    if (result.ok) {
+      chargeBattleCharacterCosts(room, result);
+      logSeaBattleResult(room, attacker, defender, result);
+    }
   } else {
     const island = room.islands.find(i => i.id === pending.islandId);
     const attackerIds = island.ownerId ? [attacker.id, ...acceptedIds(pending, 'attacker')] : [];
-    result = jointAssaultIsland(room, attacker, island, pending.captureMode, acceptedIds(pending, 'attacker'), acceptedIds(pending, 'defender'), { skipAttackRegistrationIds: attackerIds });
+    result = jointAssaultIsland(room, attacker, island, pending.captureMode, acceptedIds(pending, 'attacker'), acceptedIds(pending, 'defender'), {
+      skipAttackRegistrationIds: attackerIds,
+      shipCarpenterPlayerIds: pending.shipCarpenterPlayerIds || [],
+    });
     if (result.ok) {
+      chargeBattleCharacterCosts(room, result);
       logAssaultResult(room, attacker, island, result);
       if (result.outcome === 'attacker') {
         queueStatePrizeFromAssault(room, attacker, result);
@@ -2138,6 +2177,8 @@ function advanceRound(room) {
   for (const player of room.players) {
     player.visitedAnchors = [];
     player.characterReplacedRound = null;
+    player.fleetPointRound = room.round;
+    player.fleetPointOpponentIds = [];
     player.attackLimitRound = room.round;
     player.attackCountsThisRound = {};
   }
@@ -2505,6 +2546,9 @@ function newPlayer(socket, data, color) {
     characterReplacedRound: null,
     palaceUsed: false,
     glory: 0,
+    fleetPoints: 0,
+    fleetPointRound: null,
+    fleetPointOpponentIds: [],
     skipTurns: 0,
     personalTurnNo: 0,
     attackLimitRound: null,
@@ -2837,7 +2881,7 @@ io.on('connection', socket => {
     room.factionState = {};
     room.players.forEach(p => {
       p.row = 0; p.col = 0; p.ducats = BALANCE.session.startingDucats; p.debt = 0; p.level = 1; p.specialCards = []; p.cargo = null; p.upgrades = []; p.disabledUpgradeIds = []; p.escorts = []; p.levelInactiveEscortIds = []; p.nextEscortId = 0;
-      p.glory = 0; p.skipTurns = 0; p.personalTurnNo = 0; p.attackLimitRound = room.round; p.attackCountsThisRound = {}; p.brokenAlliesThisTurn = []; p.pendingLegendary = 0; p.pendingLandinEscort = false; p.legendaryCards = []; p.legendaryEffects = { seaCurses: [] }; p.savedEventCards = []; p.nextTurnEffects = {}; p.activeTurnEffects = {}; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignment = null; p.replacedAssignmentConditions = []; p.landCompany = null; p.bastionPriority = []; p.inactiveBastionIslandIds = []; p.character = null; p.characterReplacedRound = null; p.palaceUsed = false;
+      p.glory = 0; p.fleetPoints = 0; p.fleetPointRound = room.round; p.fleetPointOpponentIds = []; p.skipTurns = 0; p.personalTurnNo = 0; p.attackLimitRound = room.round; p.attackCountsThisRound = {}; p.brokenAlliesThisTurn = []; p.pendingLegendary = 0; p.pendingLandinEscort = false; p.legendaryCards = []; p.legendaryEffects = { seaCurses: [] }; p.savedEventCards = []; p.nextTurnEffects = {}; p.activeTurnEffects = {}; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignment = null; p.replacedAssignmentConditions = []; p.landCompany = null; p.bastionPriority = []; p.inactiveBastionIslandIds = []; p.character = null; p.characterReplacedRound = null; p.palaceUsed = false;
     });
     refreshFactionExistence(room);
     log(room, `Партия началась. Порядок: ${room.order.map(id => room.players.find(p => p.id === id)?.name).join(' → ')}.`);
@@ -3739,6 +3783,8 @@ io.on('connection', socket => {
     if (!seaAttackPositionAllowed(p, target)) return ackSafe(ack, { ok: false, error: 'Для морской атаки нужно находиться на клетке цели или на одной из восьми соседних клеток.' });
     if (isCitadelPeaceCell(p.row, p.col) || isCitadelPeaceCell(target.row, target.col)) return ackSafe(ack, { ok: false, error: 'В зоне мира Цитадели морские бои запрещены.' });
     if (isShipProtected(target)) return ackSafe(ack, { ok: false, error: `Флотилия ${target.name} защищена «Покровом моря» и сейчас не может быть атакована.` });
+    const carpenter = shipCarpenterRequest(room, p, Boolean(data?.useShipCarpenter));
+    if (!carpenter.ok) return ackSafe(ack, carpenter);
     const attackLimit = registerPlayerAttack(room, p, target.id);
     if (!attackLimit.ok) return ackSafe(ack, attackLimit);
 
@@ -3748,6 +3794,7 @@ io.on('connection', socket => {
       room.pendingLegendaryReaction = {
         id: crypto.randomUUID(), kind: 'sea-attack', sourcePlayerId: p.id, targetPlayerId: target.id,
         inviteAllies: Boolean(data?.inviteAllies),
+        shipCarpenterPlayerIds: carpenter.playerIds,
       };
       log(room, `${p.name} объявляет морскую атаку на ${target.name} и тратит действие. ${target.name} может ответить «Покровом моря».`);
       ackSafe(ack, { ok: true, pending: true });
@@ -3755,7 +3802,7 @@ io.on('connection', socket => {
       return;
     }
 
-    const result = beginSeaBattleResolution(room, p, target, Boolean(data?.inviteAllies));
+    const result = beginSeaBattleResolution(room, p, target, Boolean(data?.inviteAllies), { shipCarpenterPlayerIds: carpenter.playerIds });
     if (!result.ok) { room.actionsLeft += 1; return ackSafe(ack, result); }
     ackSafe(ack, result);
     emitRoom(room);
@@ -3780,6 +3827,8 @@ io.on('connection', socket => {
     if (owner && room.round === 1) return ackSafe(ack, { ok: false, error: 'В первом раунде нельзя нападать на острова других игроков.' });
     if (isCitadelPeaceCell(p.row, p.col)) return ackSafe(ack, { ok: false, error: 'В зоне мира Цитадели штурм запрещён.' });
     if (isIslandProtected(island)) return ackSafe(ack, { ok: false, error: `${island.name} защищён «Покровом моря» и сейчас не может быть атакован.` });
+    const carpenter = shipCarpenterRequest(room, p, Boolean(data?.useShipCarpenter));
+    if (!carpenter.ok) return ackSafe(ack, carpenter);
     if (owner) {
       const attackLimit = registerPlayerAttack(room, p, owner.id);
       if (!attackLimit.ok) return ackSafe(ack, attackLimit);
@@ -3793,6 +3842,7 @@ io.on('connection', socket => {
       room.pendingLegendaryReaction = {
         id: crypto.randomUUID(), kind: 'assault', sourcePlayerId: p.id, targetPlayerId: owner.id,
         islandId: island.id, captureMode, inviteAllies: Boolean(data?.inviteAllies),
+        shipCarpenterPlayerIds: carpenter.playerIds,
       };
       log(room, `${p.name} объявляет штурм ${island.name} и тратит действие. ${owner.name} может ответить «Покровом моря».`);
       ackSafe(ack, { ok: true, pending: true });
@@ -3800,7 +3850,7 @@ io.on('connection', socket => {
       return;
     }
 
-    const result = beginAssaultResolution(room, p, island, captureMode, Boolean(data?.inviteAllies));
+    const result = beginAssaultResolution(room, p, island, captureMode, Boolean(data?.inviteAllies), { shipCarpenterPlayerIds: carpenter.playerIds });
     if (!result.ok) { room.actionsLeft += 1; return ackSafe(ack, result); }
     ackSafe(ack, result);
     emitRoom(room);

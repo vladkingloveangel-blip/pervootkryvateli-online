@@ -2268,6 +2268,26 @@ function loseShipLevel(room, player) {
   return { before: 1, after: 1, returnedToStart: true, cargoDiscarded: 0, adjustment: fleetAdjustmentNeeds(player) };
 }
 
+function battleLevelLoss(room, player, options = {}) {
+  const before = Math.max(1, Math.min(BALANCE.maxReadableShipLevel, Number(player?.level) || 1));
+  const useShipCarpenter = Boolean(options.useShipCarpenter);
+  const preventLevels = Math.max(0, Number(CHARACTERS.shipCarpenter?.effect?.levels) || 0);
+  if (useShipCarpenter && preventLevels >= 1 && heldCharacterId(player) === 'shipCarpenter') {
+    consumeCharacter(player, 'shipCarpenter');
+    return {
+      before,
+      after: before,
+      returnedToStart: false,
+      cargoDiscarded: 0,
+      adjustment: fleetAdjustmentNeeds(player),
+      prevented: true,
+      preventedLevels: Math.min(1, preventLevels),
+      preventedByCharacter: 'shipCarpenter',
+    };
+  }
+  return { ...loseShipLevel(room, player), prevented: false, preventedByCharacter: null };
+}
+
 function treasuryLoss30(player) {
   const loss = Math.floor((Number(player?.ducats) || 0) * BALANCE.treasuryLossRatio);
   player.ducats = Math.max(0, (Number(player?.ducats) || 0) - loss);
@@ -2393,6 +2413,35 @@ function splitLoot(loot, winners, priorityId) {
   return shares;
 }
 
+function fleetVictoryAlreadyScored(room, player, opponentId) {
+  if (!room || !player || !opponentId) return false;
+  if (Number(player.fleetPointRound) !== Number(room.round)) return false;
+  const limit = Math.max(1, Number(BALANCE.fleetScoring?.perOpponentPerRound) || 1);
+  const opponent = String(opponentId);
+  const count = (player.fleetPointOpponentIds || []).filter(id => String(id) === opponent).length;
+  return count >= limit;
+}
+
+function awardFleetVictoryPoints(room, winners, opponentId, points) {
+  const round = Number(room?.round) || 1;
+  const amount = Math.max(0, Math.floor(Number(points) || 0));
+  const awards = [];
+  for (const player of winners || []) {
+    if (!player || !opponentId) continue;
+    if (Number(player.fleetPointRound) !== round) {
+      player.fleetPointRound = round;
+      player.fleetPointOpponentIds = [];
+    }
+    player.fleetPointOpponentIds ||= [];
+    const opponent = String(opponentId);
+    if (fleetVictoryAlreadyScored(room, player, opponent)) continue;
+    player.fleetPointOpponentIds.push(opponent);
+    player.fleetPoints = Math.max(0, Number(player.fleetPoints) || 0) + amount;
+    awards.push({ playerId: player.id, opponentId: opponent, points: amount });
+  }
+  return awards;
+}
+
 function jointSeaBattle(room, attacker, defender, attackerAllyIds = [], defenderAllyIds = [], options = {}) {
   if (!room || !attacker || !defender) return { ok: false, error: 'Участник морского боя не найден.' };
   if (attacker.id === defender.id) return { ok: false, error: 'Нельзя атаковать собственный корабль.' };
@@ -2445,10 +2494,11 @@ function jointSeaBattle(room, attacker, defender, attackerAllyIds = [], defender
     loot: 0,
     lootShares: {},
     levelLosses: [],
+    fleetPointAwards: [],
   };
 
   if (attackerPower === defenderPower) {
-    for (const p of [...attackers, ...defenders]) p.skipTurns = (Number(p.skipTurns) || 0) + 1;
+    // Каноническая ничья не накладывает дополнительных последствий.
   } else {
     const attackerWon = attackerPower > defenderPower;
     const winners = attackerWon ? attackers : defenders;
@@ -2457,8 +2507,16 @@ function jointSeaBattle(room, attacker, defender, attackerAllyIds = [], defender
     result.outcome = attackerWon ? 'attacker' : 'defender';
     result.winnerIds = winners.map(p => p.id);
     result.loserIds = losers.map(p => p.id);
-    for (const p of losers) result.levelLosses.push({ playerId: p.id, ...loseShipLevel(room, p) });
+    const carpenterIds = new Set((options.shipCarpenterPlayerIds || []).map(String));
+    for (const p of losers) {
+      result.levelLosses.push({
+        playerId: p.id,
+        ...battleLevelLoss(room, p, { useShipCarpenter: carpenterIds.has(String(p.id)) }),
+      });
+    }
     if (result.levelLosses.length === 1) result.levelLoss = result.levelLosses[0];
+    const fleetPoints = attackerWon ? BALANCE.fleetScoring.playerVictory : BALANCE.fleetScoring.defenseVictory;
+    result.fleetPointAwards = awardFleetVictoryPoints(room, winners, attackerWon ? defender.id : attacker.id, fleetPoints);
     const loot = Math.min(BALANCE.combat.lootMax, Math.max(0, Number(treasurySource.ducats) || 0));
     treasurySource.ducats -= loot;
     result.loot = loot;
@@ -2469,8 +2527,8 @@ function jointSeaBattle(room, attacker, defender, attackerAllyIds = [], defender
   return result;
 }
 
-function seaBattle(room, attacker, defender) {
-  return jointSeaBattle(room, attacker, defender, [], []);
+function seaBattle(room, attacker, defender, options = {}) {
+  return jointSeaBattle(room, attacker, defender, [], [], options);
 }
 
 function addRewardBuilding(island, spec) {
@@ -2614,8 +2672,12 @@ function jointAssaultIsland(room, attacker, island, captureMode = 'preserve', at
     }
   } else if (attackerPower < defense.total) {
     result.outcome = 'defender';
+    const carpenterIds = new Set((options.shipCarpenterPlayerIds || []).map(String));
     for (const p of attackers) {
-      result.levelLosses.push({ playerId: p.id, ...loseShipLevel(room, p) });
+      result.levelLosses.push({
+        playerId: p.id,
+        ...battleLevelLoss(room, p, { useShipCarpenter: carpenterIds.has(String(p.id)) }),
+      });
       if (p.landCompany) {
         result.discardedLandCompanies.push({ playerId: p.id, army: landCompanyAssaultArmy(p) });
         p.landCompany = null;
@@ -2630,8 +2692,8 @@ function jointAssaultIsland(room, attacker, island, captureMode = 'preserve', at
   return result;
 }
 
-function assaultIsland(room, attacker, island, captureMode = 'preserve') {
-  return jointAssaultIsland(room, attacker, island, captureMode, [], []);
+function assaultIsland(room, attacker, island, captureMode = 'preserve', options = {}) {
+  return jointAssaultIsland(room, attacker, island, captureMode, [], [], options);
 }
 
 function publicIsland(island, room = null) {
@@ -2825,6 +2887,9 @@ module.exports = {
   fleetArtillery,
   islandDefenseArmy,
   loseShipLevel,
+  battleLevelLoss,
+  fleetVictoryAlreadyScored,
+  awardFleetVictoryPoints,
   gloryForDefense,
   areAllies,
   addAlliance,
