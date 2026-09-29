@@ -1,0 +1,99 @@
+{
+  "availability": {
+    "status": "data-ready",
+    "consumerStage": 5
+  },
+  "fleet": {
+    "anchor": {
+      "blue": 1,
+      "yellow": 2,
+      "red": 3
+    },
+    "playerVictory": 2,
+    "defenseVictory": 2,
+    "perOpponentPerRound": 1
+  },
+  "army": {
+    "capture": [
+      {
+        "min": 0,
+        "max": 0,
+        "points": 0
+      },
+      {
+        "min": 1,
+        "max": 4,
+        "points": 1
+      },
+      {
+        "min": 5,
+        "max": 8,
+        "points": 2
+      },
+      {
+        "min": 9,
+        "max": 12,
+        "points": 3
+      },
+      {
+        "min": 13,
+        "max": 16,
+        "points": 4
+      },
+      {
+        "min": 17,
+        "max": null,
+        "points": 5
+      }
+    ],
+    "defenseVictory": 3,
+    "perOpponentPerRound": 1
+  },
+  "combat": {
+    "lootMax": 3,
+    "anchorLoss": {
+      "minimum": 2,
+      "ratio": 0.3
+    },
+    "attacksPerOpponentPerRound": 1,
+    "alliancePartners": 1,
+    "capturedBuildingsKeptRatio": 0.5
+  },
+  "titles": [
+    {
+      "id": "islands",
+      "name": "Мастер владений",
+      "metric": "owned-island-count"
+    },
+    {
+      "id": "wealth",
+      "name": "Мастер казны",
+      "metric": "ducats-minus-debt"
+    },
+    {
+      "id": "army",
+      "name": "Мастер армии",
+      "metric": "army-points"
+    },
+    {
+      "id": "fleet",
+      "name": "Мастер флота",
+      "metric": "fleet-points"
+    },
+    {
+      "id": "prestige",
+      "name": "Мастер престижа",
+      "metric": "island-and-public-building-prestige"
+    },
+    {
+      "id": "legendaryPlaces",
+      "name": "Мастер легендарных мест",
+      "metric": "named-place-cards"
+    }
+  ],
+  "titleEligibility": {
+    "minimumOwnedIslands": 1,
+    "ties": "shared",
+    "consumerStage": 7
+  }
+}

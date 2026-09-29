@@ -1,0 +1,116 @@
+{
+  "characters": [
+    {
+      "id": "navigator",
+      "name": "Штурман",
+      "admiraltyLevel": 1,
+      "effect": {
+        "type": "reroll-navigation",
+        "rerolls": 1,
+        "secondResultMandatory": true
+      },
+      "acquireActionCost": 1,
+      "useActionCost": 1,
+      "uses": 1,
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 4
+      },
+      "iconKey": "character.navigator"
+    },
+    {
+      "id": "scout",
+      "name": "Разведчик",
+      "admiraltyLevel": 1,
+      "effect": {
+        "type": "inspect-hidden-cards",
+        "range": 4,
+        "distance": "manhattan",
+        "assignmentVisibility": null,
+        "unresolved": "R29"
+      },
+      "acquireActionCost": 1,
+      "useActionCost": 1,
+      "uses": 1,
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 4
+      },
+      "iconKey": "character.scout"
+    },
+    {
+      "id": "cartographer",
+      "name": "Картограф",
+      "admiraltyLevel": 2,
+      "effect": {
+        "type": "peek-sea-deck",
+        "range": 4,
+        "distance": "manhattan",
+        "count": 1
+      },
+      "acquireActionCost": 1,
+      "useActionCost": 1,
+      "uses": 1,
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 4
+      },
+      "iconKey": "character.cartographer"
+    },
+    {
+      "id": "treasureHunter",
+      "name": "Искатель сокровищ",
+      "admiraltyLevel": 2,
+      "effect": {
+        "type": "choose-treasure",
+        "draw": 2,
+        "keep": 1
+      },
+      "acquireActionCost": 1,
+      "useActionCost": 1,
+      "uses": 1,
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 4
+      },
+      "iconKey": "character.treasureHunter"
+    },
+    {
+      "id": "firstMate",
+      "name": "Первый помощник",
+      "admiraltyLevel": 3,
+      "effect": {
+        "type": "extra-action",
+        "count": 1
+      },
+      "acquireActionCost": 1,
+      "useActionCost": 0,
+      "uses": 1,
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 4
+      },
+      "iconKey": "character.firstMate"
+    },
+    {
+      "id": "shipCarpenter",
+      "name": "Корабельный плотник",
+      "admiraltyLevel": 3,
+      "effect": {
+        "type": "prevent-battle-level-loss",
+        "levels": 1,
+        "anchorPenaltyExcluded": true
+      },
+      "acquireActionCost": 1,
+      "useActionCost": 1,
+      "uses": 1,
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 4
+      },
+      "iconKey": "character.shipCarpenter"
+    }
+  ],
+  "limitPerPlayer": 1,
+  "replacementsPerRound": 1
+}

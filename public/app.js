@@ -1,10 +1,35 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '' };
-  const SHIP_NAMES = { brigantine: 'Бригантина', frigate: 'Фрегат', caravel: 'Каравелла', carrack: 'Каракка' };
+  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '' };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+  const shipName = id => state.room?.shipCatalog?.[id]?.name || state.shipCatalog?.[id]?.name || $('shipSelect').querySelector(`option[value="${id}"]`)?.textContent || 'Корабль';
+  fetch('/api/rules').then(response => response.ok ? response.json() : null).then(rules => {
+    if (!rules?.fleet?.ships) return;
+    state.shipCatalog = rules.fleet.ships;
+    const terrain = { shoal: 'мели', reef: 'рифы', land1: '1 клетка суши', ice: 'льды' };
+    for (const option of $('shipSelect').options) {
+      const ship = state.shipCatalog[option.value];
+      if (!ship) continue;
+      option.textContent = `${ship.name} — арт. ${ship.artillery} · войско ${ship.army} · трюм ${ship.cargo} · ход ${ship.moveMod >= 0 ? '+' : ''}${ship.moveMod} · ${terrain[ship.passability] || ''}`;
+    }
+  }).catch(() => {});
   let deferredInstallPrompt = null;
+  const pendingDataActions = new Set();
+  function emitDataAction(button, event, payload) {
+    const key = `${event}:${JSON.stringify(payload)}`;
+    if (pendingDataActions.has(key) || button.disabled) return;
+    pendingDataActions.add(key);
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    socket.timeout(10000).emit(event, payload, (error, result) => {
+      pendingDataActions.delete(key);
+      button.removeAttribute('aria-busy');
+      // A fresh server snapshot decides availability; never blindly re-enable.
+      handleGameAck(error ? { ok: false, error: 'Не удалось подтвердить действие. Дождитесь обновления игры.' } : result);
+      if (!error && result?.ok === false) render();
+    });
+  }
 
   const roomFromUrl = new URLSearchParams(location.search).get('room');
   const inviteRoomCode = String(roomFromUrl || '').toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 5);
@@ -229,7 +254,7 @@
         const detail = document.createElement('div');
         detail.className = 'muted';
         detail.textContent = (room.started ? 'Игра · раунд ' + room.round + ', круг ' + room.circle : 'Лобби') +
-          ' · игроков ' + room.playerCount + '/5' + (room.isYourTurn ? ' · Твой ход' : room.activePlayerName ? ' · ход: ' + room.activePlayerName : '');
+          ' · игроков ' + room.playerCount + (room.isYourTurn ? ' · Твой ход' : room.activePlayerName ? ' · ход: ' + room.activePlayerName : '');
         const names = document.createElement('div');
         names.className = 'muted';
         names.textContent = room.players.map(p => p.name).join(', ');
@@ -340,7 +365,7 @@
       const card = document.createElement('div');
       card.className = 'admin-room-card';
       const players = room.players.map(p => `${escapeHtml(p.name)}${p.username ? ` (@${escapeHtml(p.username)})` : ''}${p.connected ? '' : ' · офлайн'}`).join('<br>');
-      card.innerHTML = `<div><strong>Комната ${escapeHtml(room.code)}</strong><div class="muted">${room.started ? `Игра · раунд ${room.round}, круг ${room.circle}` : 'Лобби'} · игроков ${room.players.length}/5${room.activePlayerName ? ` · ход: ${escapeHtml(room.activePlayerName)}` : ''}</div><div class="admin-players">${players}</div></div><div class="admin-room-actions"></div>`;
+      card.innerHTML = `<div><strong>Комната ${escapeHtml(room.code)}</strong><div class="muted">${room.started ? `Игра · раунд ${room.round}, круг ${room.circle}` : 'Лобби'} · игроков ${room.players.length}${room.activePlayerName ? ` · ход: ${escapeHtml(room.activePlayerName)}` : ''}</div><div class="admin-players">${players}</div></div><div class="admin-room-actions"></div>`;
       const actions = card.querySelector('.admin-room-actions');
       const watch = document.createElement('button');
       watch.className = 'small primary';
@@ -465,6 +490,7 @@
   socket.on('roomState', room => {
     if (state.spectating) return;
     state.room = room;
+    if (room?.shipCatalog) state.shipCatalog = room.shipCatalog;
     const incomingMine = room?.players?.find(p => p.id === state.myId);
     if (!incomingMine || incomingMine.phase !== 'navigation') state.mapMovePending = false;
     render();
@@ -472,6 +498,7 @@
   socket.on('adminRoomState', room => {
     if (!state.spectating) return;
     state.room = room;
+    if (room?.shipCatalog) state.shipCatalog = room.shipCatalog;
     setGameScreenActive(true);
     $('spectatorRoomCode').textContent = room.code;
     render();
@@ -778,7 +805,7 @@
     if (mine) {
       const cargo = cargoSummary(mine, r);
       $('hudPlayerName').textContent = mine.name;
-      $('hudShipLevel').textContent = `${SHIP_NAMES[mine.shipClass] || 'Корабль'} · ${ROMAN[mine.level] || mine.level}`;
+      $('hudShipLevel').textContent = `${shipName(mine.shipClass)} · ${ROMAN[mine.level] || mine.level}`;
       $('hudDucats').textContent = mine.ducats ?? 0;
       $('hudGlory').textContent = mine.glory ?? 0;
       $('hudCargo').textContent = `${cargo.quantity}/${cargo.capacity}`;
@@ -790,7 +817,7 @@
       $('hudDebtBtn').classList.add('hidden');
     }
 
-    $('hudRound').textContent = !r.started ? `Лобби · ${r.players.length}/5` : `Раунд ${r.round} · круг ${r.circle}/5`;
+    $('hudRound').textContent = !r.started ? `Лобби · ${r.players.length}/${r.balanceCatalog.session.players.max}` : `Раунд ${r.round} · круг ${r.circle}/${r.balanceCatalog.session.circlesPerRound}`;
     $('hudTurn').textContent = !r.started
       ? 'Ожидание старта'
       : r.eventPhase?.active
@@ -851,10 +878,10 @@
     $('entry').classList.add('hidden');
     $('game').classList.remove('hidden');
     $('roomCode').textContent = r.code;
-    $('roundLabel').textContent = !r.started ? 'Лобби' : r.eventPhase?.active ? `Раунд ${r.round} · общая Фаза событий` : `Раунд ${r.round} · круг ${r.circle}/5`;
+    $('roundLabel').textContent = !r.started ? 'Лобби' : r.eventPhase?.active ? `Раунд ${r.round} · общая Фаза событий` : `Раунд ${r.round} · круг ${r.circle}/${r.balanceCatalog.session.circlesPerRound}`;
     const a = active();
     const eventPlayer = r.eventPhase?.currentPlayerId ? r.players.find(p => p.id === r.eventPhase.currentPlayerId) : null;
-    $('turnLabel').textContent = !r.started ? `Игроков: ${r.players.length}/5` : r.eventPhase?.active ? `Событие: ${eventPlayer?.name || '—'}` : (a ? `Ход: ${a.name}` : '—');
+    $('turnLabel').textContent = !r.started ? `Игроков: ${r.players.length}/${r.balanceCatalog.session.players.max}` : r.eventPhase?.active ? `Событие: ${eventPlayer?.name || '—'}` : (a ? `Ход: ${a.name}` : '—');
 
     const mine = me();
     renderMobileHud();
@@ -866,7 +893,7 @@
       const skip = mine.skipTurns ? ` · пропусков хода: ${mine.skipTurns}` : '';
       const suzerain = mine.suzerainId ? r.factions?.find(f => f.id === mine.suzerainId)?.name : null;
       const politics = suzerain ? ` · вассал: ${suzerain}` : (mine.enemyFactionIds?.length ? ` · вражда: ${mine.enemyFactionIds.length}` : '');
-      $('youStatus').innerHTML = `<strong>${escapeHtml(mine.name)}</strong><br><span class="muted">${SHIP_NAMES[mine.shipClass]} ${ROMAN[mine.level] || mine.level} · ${mine.ducats} дукатов${mine.debt ? ` · долг ${mine.debt}` : ''} · слава ${mine.glory || 0} · островов ${mine.islandCount} · клетка ${mine.col + 1}:${mine.row + 1}${escapeHtml(cargo)}${escapeHtml(cards)}${escapeHtml(eventHand)}${escapeHtml(legendary)}${escapeHtml(skip)}${escapeHtml(politics)}</span>`;
+      $('youStatus').innerHTML = `<strong>${escapeHtml(mine.name)}</strong><br><span class="muted">${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level} · ${mine.ducats} дукатов${mine.debt ? ` · долг ${mine.debt}` : ''} · слава ${mine.glory || 0} · островов ${mine.islandCount} · клетка ${mine.col + 1}:${mine.row + 1}${escapeHtml(cargo)}${escapeHtml(cards)}${escapeHtml(eventHand)}${escapeHtml(legendary)}${escapeHtml(skip)}${escapeHtml(politics)}</span>`;
     }
 
     renderPlayers();
@@ -904,7 +931,7 @@
       const suzerainName = p.suzerainId ? state.room.factions?.find(f => f.id === p.suzerainId)?.name : null;
       const politicalLabel = suzerainName ? ` · вассал ${suzerainName}` : (p.enemyFactionIds?.length ? ` · вражда ${p.enemyFactionIds.length}` : '');
       const readyLabel = !r.started ? (p.ready ? ' · ✓ готов' : ' · не готов') : '';
-      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${SHIP_NAMES[p.shipClass]} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · слава ${p.glory || 0} · островов ${p.islandCount} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${order ? `#${order}` : ''}</span></div>`;
+      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · слава ${p.glory || 0} · островов ${p.islandCount} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${order ? `#${order}` : ''}</span></div>`;
       if (!isSpectator && !r.started && p.isYou) {
         const readyBtn = document.createElement('button');
         readyBtn.className = p.ready ? 'small danger-soft' : 'small primary';
@@ -924,11 +951,11 @@
       }
       $('players').appendChild(el);
     });
-    const allReady = r.players.length >= 2 && r.players.every(p => p.ready && p.connected);
+    const allReady = r.players.length >= r.balanceCatalog.session.players.min && r.players.every(p => p.ready && p.connected);
     const waitingReady = r.players.filter(p => !p.ready || !p.connected).length;
     $('startBtn').classList.toggle('hidden', isSpectator || r.started || !isHost);
-    $('startBtn').disabled = r.players.length < 2 || r.players.length > 5 || !allReady;
-    $('startBtn').textContent = r.players.length < 2 ? 'Нужен ещё 1 игрок' : (!allReady ? `Ждём готовности: ${waitingReady}` : 'Начать игру');
+    $('startBtn').disabled = r.players.length < r.balanceCatalog.session.players.min || r.players.length > r.balanceCatalog.session.players.max || !allReady;
+    $('startBtn').textContent = r.players.length < r.balanceCatalog.session.players.min ? `Нужно ещё игроков: ${r.balanceCatalog.session.players.min - r.players.length}` : (!allReady ? `Ждём готовности: ${waitingReady}` : 'Начать игру');
 
     $('closeRoomBtn').classList.toggle('hidden', isSpectator || !isHost);
     $('leaveRoomBtn').classList.toggle('hidden', isSpectator || isHost || r.started);
@@ -1520,7 +1547,7 @@
     }
     if (!pending) {
       badge.textContent = 'норма';
-      content.innerHTML = '<div class="event-current">Флотилия соответствует текущим ограничениям.</div><div class="cargo-meta">Здесь появится выбор при потере уровня, места верфи или при получении особого сопровождения Ландина с уже заполненным пределом трёх судов.</div>';
+      content.innerHTML = `<div class="event-current">Флотилия соответствует текущим ограничениям.</div><div class="cargo-meta">Здесь появится выбор при потере уровня, места верфи или при получении особого сопровождения Ландина с уже заполненным пределом ${r.balanceCatalog.maxEscorts} судов.</div>`;
       state.fleetAdjustmentKey = null;
       state.fleetAdjustmentSelection = new Set();
       return;
@@ -1554,7 +1581,7 @@
       note = 'Это не временное отключение: выбранные суда уничтожаются из-за нехватки мест верфи. Их груз также пропадает.';
     } else if (pending.stage === 'landin-replace') {
       instruction = 'Выберите <strong>одно</strong> имеющееся судно, которое заменит особое сопровождение Ландина.';
-      note = 'Ландин занимает одно из трёх мест сопровождения и совмещает боевые и торговые возможности: +6 артиллерии и отдельный трюм 5. Груз заменённого судна пропадёт.';
+      note = `Сопровождение Ландина: +${r.escortCatalog.landin.artillery} артиллерии, трюм ${r.escortCatalog.landin.cargo}. Груз заменённого судна пропадёт.`;
     }
     content.innerHTML = `<div class="event-current"><strong>Обязательное решение по флотилии</strong><br>${escapeHtml(pending.reason || '')}</div><div class="event-effect">${instruction}</div>${note ? `<div class="cargo-meta">${escapeHtml(note)}</div>` : ''}`;
 
@@ -1616,7 +1643,7 @@
       const withheld = share ? Math.floor(assignment.reward * share) : 0;
       const net = assignment.reward - withheld;
       html = `<div class="event-current"><strong>${escapeHtml(suzerain.name)}</strong><br>«${escapeHtml(assignment.text)}»</div><div class="event-effect">Награда: ${assignment.reward} дукатов${withheld ? ` · сюзерен удержит ${withheld}, вам ${net}` : ''}.</div>`;
-      if (assignment.type === 'delivery') html += '<div class="cargo-meta">Для доставки засчитывается только полный трюм, полученный после выдачи этого поручения. Подходящая продажа в Цитадели автоматически получает контрактную премию +50%.</div>';
+      if (assignment.type === 'delivery') html += `<div class="cargo-meta">Для доставки засчитывается только полный трюм, полученный после выдачи этого поручения. Подходящая продажа в Цитадели автоматически получает контрактную премию +${r.balanceCatalog.contractBonusRatio * 100}%.</div>`;
       if (mine.replacedAssignmentConditions?.length) html += `<div class="cargo-meta">Уже платно заменённых условий: ${mine.replacedAssignmentConditions.length}.</div>`;
     } else {
       html = `<div class="event-current"><strong>${escapeHtml(suzerain.name)}</strong><br>Активного поручения нет. Новое выдаётся в ближайшей общей Фазе событий по правилам.</div>`;
@@ -1628,14 +1655,14 @@
     if (pending?.viewerCanRespond) {
       const label = document.createElement('div');
       label.className = 'action-group-label';
-      label.textContent = `Оставить поручение «${pending.assignment?.text || 'текущее'}» или заменить за 2 дуката?`;
+      label.textContent = `Оставить поручение «${pending.assignment?.text || 'текущее'}» или заменить за ${r.balanceCatalog.assignmentReplacementPrice} дуката?`;
       actions.appendChild(label);
       const keep = document.createElement('button');
       keep.type = 'button'; keep.className = 'build-btn'; keep.textContent = 'Оставить поручение';
       keep.addEventListener('click', () => socket.emit('respondAssignmentChoice', { choiceId: pending.id, replace: false }, handleGameAck));
       actions.appendChild(keep);
       const repl = document.createElement('button');
-      repl.type = 'button'; repl.className = 'build-btn primary'; repl.textContent = 'Заменить за 2 дуката'; repl.disabled = !pending.canReplace;
+      repl.type = 'button'; repl.className = 'build-btn primary'; repl.textContent = `Заменить за ${r.balanceCatalog.assignmentReplacementPrice} дуката`; repl.disabled = !pending.canReplace;
       repl.title = pending.replaceError || '';
       repl.addEventListener('click', () => socket.emit('respondAssignmentChoice', { choiceId: pending.id, replace: true }, handleGameAck));
       actions.appendChild(repl);
@@ -1704,10 +1731,10 @@
     if (state.mistCardRef && !cards.some(c => c.source === state.mistCardRef.source && c.index === state.mistCardRef.index && c.kind === 'mist-path')) state.mistCardRef = null;
 
     const descriptions = {
-      'sea-veil': 'Защитить свою флотилию или один свой остров на три следующих личных хода.',
+      'sea-veil': `Защитить свою флотилию или один свой остров на ${r.balanceCatalog.legendaryEffects['sea-veil'].durationPersonalTurns} следующих личных хода.`,
       hellfire: 'На клетке чужого острова понизить каждую постройку выше I уровня на одну ступень.',
       'mist-path': 'Перенести флотилию на любую клетку, достижимую без запрещённых препятствий.',
-      'sea-curse': 'На одной клетке с чужим кораблём дать −3 к обычному движению на три следующих личных хода.',
+      'sea-curse': `На одной клетке с чужим кораблём дать −${r.balanceCatalog.legendaryEffects['sea-curse'].amount} к обычному движению на ${r.balanceCatalog.legendaryEffects['sea-curse'].durationPersonalTurns} следующих личных хода.`,
     };
 
     for (const ref of cards) {
@@ -1847,9 +1874,9 @@
     if (mine.nextLevel) {
       levelBtn.textContent = `Повысить до ${ROMAN[mine.nextLevel.level] || mine.nextLevel.level} · ${mine.nextLevel.price} дук.`;
       levelBtn.disabled = !canBuyHere || mine.ducats < mine.nextLevel.price;
-      levelBtn.addEventListener('click', () => socket.emit('buyShipLevel', {}, handleGameAck));
+      levelBtn.addEventListener('click', () => emitDataAction(levelBtn, 'buyShipLevel', {}));
     } else {
-      levelBtn.textContent = 'Достигнут VII уровень';
+      levelBtn.textContent = `Достигнут ${ROMAN[state.room.balanceCatalog.maxShipLevel]} уровень`;
       levelBtn.disabled = true;
     }
     actions.appendChild(levelBtn);
@@ -1860,7 +1887,7 @@
     actions.appendChild(upLabel);
     const installedIds = new Set(upgrades.map(u => u.id));
     const upgradeCatalog = state.room.shipUpgradeCatalog || {};
-    const ordered = ['falcons', 'culverins', 'musketeers', 'pikemen', 'orlop', 'sternStores', 'foreStengha', 'foreMarsel'];
+    const ordered = Object.keys(upgradeCatalog);
     for (const id of ordered) {
       const u = upgradeCatalog[id];
       if (!u || installedIds.has(id)) continue;
@@ -1872,7 +1899,7 @@
       const dependencyOk = !u.requires || installedIds.has(u.requires);
       const slotOk = upgrades.length < mine.upgradeSlots;
       b.disabled = !canBuyHere || mine.ducats < u.price || !dependencyOk || !slotOk;
-      b.addEventListener('click', () => socket.emit('buyShipUpgrade', { upgradeId: id }, handleGameAck));
+      b.addEventListener('click', () => emitDataAction(b, 'buyShipUpgrade', { upgradeId: id }));
       actions.appendChild(b);
     }
 
@@ -1892,7 +1919,7 @@
     actions.appendChild(escortLabel);
     const price = mine.nextEscortPrice;
     const ordinaryCount = escorts.filter(e => !e.special).length;
-    const escortRoom = ordinaryCount < mine.shipyardSlots && escorts.length < mine.escortUseLimit && escorts.length < 3;
+    const escortRoom = ordinaryCount < mine.shipyardSlots && escorts.length < mine.escortUseLimit && escorts.length < state.room.balanceCatalog.maxEscorts;
     for (const type of ['cargo', 'combat']) {
       const e = escortCatalog[type];
       if (!e) continue;
@@ -1902,7 +1929,7 @@
       const spec = type === 'cargo' ? `трюм ${e.cargo}` : `арт. ${e.artillery}`;
       b.textContent = price == null ? `${e.name} · лимит` : `${e.name} · ${price} дук. · ${spec}`;
       b.disabled = !canBuyHere || price == null || mine.ducats < price || !escortRoom;
-      b.addEventListener('click', () => socket.emit('buyEscort', { escortType: type }, handleGameAck));
+      b.addEventListener('click', () => emitDataAction(b, 'buyEscort', { escortType: type }));
       actions.appendChild(b);
     }
 
@@ -1917,17 +1944,17 @@
       for (const island of guardTargets) {
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'build-btn';
-        b.textContent = `Городская стража → ${island.name} · 6 дук. · +5 защиты`;
-        b.disabled = !canBuyHere || mine.ducats < 6;
-        b.addEventListener('click', () => socket.emit('buyCityGuard', { islandId: island.id }, handleGameAck));
+        b.textContent = `Городская стража → ${island.name} · ${state.room.balanceCatalog.garrisons.guard.price} дук. · +${state.room.balanceCatalog.garrisons.guard.defense} защиты`;
+        b.disabled = !canBuyHere || mine.ducats < state.room.balanceCatalog.garrisons.guard.price;
+        b.addEventListener('click', () => emitDataAction(b, 'buyCityGuard', { islandId: island.id }));
         actions.appendChild(b);
       }
       for (const island of permanentTargets) {
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'build-btn';
-        b.textContent = `Постоянный гарнизон → ${island.name} · 12 дук. · +10 защиты`;
-        b.disabled = !canBuyHere || mine.ducats < 12;
-        b.addEventListener('click', () => socket.emit('buyPermanentGarrison', { islandId: island.id }, handleGameAck));
+        b.textContent = `Постоянный гарнизон → ${island.name} · ${state.room.balanceCatalog.garrisons.permanentUpgrade.price} дук. · +${state.room.balanceCatalog.garrisons.permanentUpgrade.defense} защиты`;
+        b.disabled = !canBuyHere || mine.ducats < state.room.balanceCatalog.garrisons.permanentUpgrade.price;
+        b.addEventListener('click', () => emitDataAction(b, 'buyPermanentGarrison', { islandId: island.id }));
         actions.appendChild(b);
       }
     }
@@ -2141,7 +2168,7 @@
       if (arsenal) {
         const companyBtn = document.createElement('button');
         companyBtn.type = 'button'; companyBtn.className = 'build-btn';
-        companyBtn.textContent = mine?.landCompany ? `Рота уже снаряжена · +${mine.landCompany.army}` : `Снарядить роту · Арсенал ${ROMAN[arsenal.level] || arsenal.level} · +${(arsenal.level || 1) + 2} войска`;
+        companyBtn.textContent = mine?.landCompany ? `Рота уже снаряжена · +${mine.landCompany.army}` : `Снарядить роту · Арсенал ${ROMAN[arsenal.level] || arsenal.level} · +${r.balanceCatalog.landCompany.armyByArsenalLevel[arsenal.level]} войска`;
         companyBtn.disabled = !canAct || Boolean(mine?.landCompany) || Boolean(mine?.cargo);
         companyBtn.addEventListener('click', () => socket.emit('formLandCompany', { islandId: island.id }, handleGameAck));
         actions.appendChild(companyBtn);
@@ -2149,9 +2176,9 @@
       if (!bastion) {
         const bastionBtn = document.createElement('button');
         bastionBtn.type = 'button'; bastionBtn.className = 'build-btn';
-        bastionBtn.textContent = `Бастион · 10 дук. · +8 защиты`;
-        bastionBtn.disabled = !canAct || mine.ducats < 10 || (mine.bastionCount || 0) >= (mine.bastionSupportCapacity || 0);
-        bastionBtn.addEventListener('click', () => socket.emit('buildBastion', { islandId: island.id }, handleGameAck));
+        bastionBtn.textContent = `Бастион · ${state.room.balanceCatalog.bastion.price} дук. · +${state.room.balanceCatalog.bastion.defense} защиты`;
+        bastionBtn.disabled = !canAct || mine.ducats < state.room.balanceCatalog.bastion.price || (mine.bastionCount || 0) >= (mine.bastionSupportCapacity || 0);
+        bastionBtn.addEventListener('click', () => emitDataAction(bastionBtn, 'buildBastion', { islandId: island.id }));
         actions.appendChild(bastionBtn);
       } else if (!bastion.supported && (mine?.bastionSupportCapacity || 0) > 0) {
         const supportBtn = document.createElement('button');

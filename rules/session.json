@@ -1,0 +1,16 @@
+{
+  "players": {
+    "min": 4,
+    "max": 6
+  },
+  "startingDucats": 15,
+  "circlesPerRound": 6,
+  "eventCircle": 6,
+  "actionsPerTurn": 3,
+  "dieSides": 6,
+  "taxUnderpaymentActionLimit": 2,
+  "availability": {
+    "status": "data-ready",
+    "consumerStage": 2
+  }
+}

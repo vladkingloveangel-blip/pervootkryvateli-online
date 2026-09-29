@@ -42,6 +42,10 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   const rows = () => JSON.parse(fs.readFileSync(file, 'utf8')).game_rooms;
   t.after(async () => { sockets.forEach(s => s.disconnect()); if (child?.exitCode === null) await stop(); fs.rmSync(dir, { recursive: true, force: true }); });
   await start();
+  const canonical = await (await fetch(base + '/api/rules')).json();
+  assert.equal(canonical.metadata.schemaVersion, 1);
+  assert.equal(canonical.politics.factions.kadingir.fullConquestPrize.ducats, 50);
+  assert.equal(canonical.islands.length, 28);
   const a = (await api('/api/auth/register', null, { username: 'playerone', password: 'password1' })).data;
   const b = (await api('/api/auth/register', null, { username: 'playertwo', password: 'password2' })).data;
   const stranger = (await api('/api/auth/register', null, { username: 'stranger', password: 'password3' })).data;
@@ -68,7 +72,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   const active = started.order[0] === created.playerId ? first : second;
   assert.equal((await emit(active, 'skipNavigation')).ok, true);
   assert.equal((await emit(active, 'endTurn')).ok, true);
-  const beforeRestart = rows()[0].state;
+  let beforeRestart = rows()[0].state;
   const list = await api('/api/my-games?accountId=' + b.user.id, a.token);
   assert.equal(list.response.headers.get('cache-control'), 'no-store');
   assert.equal(list.data.rooms[0].code, code);
@@ -80,7 +84,33 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal((await emit(watcher, 'adminWatchRoom', { accountToken: stranger.token, code })).ok, false);
   const watch = await emit(watcher, 'adminWatchRoom', { accountToken: admin.token, code });
   assert.equal(watch.room.adminSpectator, true); assert.equal(watch.room.players.length, 2);
+  assert.equal(watch.room.ruleset.rulesetVersion, canonical.metadata.rulesetVersion);
+  assert.equal(watch.room.balanceCatalog.bastion.price, canonical.economy.buildings.bastion.price);
+  assert.equal(watch.room.balanceCatalog.bastion.defense, canonical.economy.buildings.bastion.defense);
+  assert.equal(watch.room.shipCatalog.brigantine.artillery, canonical.fleet.ships.brigantine.artillery);
+  assert.deepEqual(watch.room.balanceCatalog.landCompany, canonical.economy.landCompany);
+  assert.equal(watch.room.balanceCatalog.legendaryEffects['sea-curse'].amount, canonical.legends.legendary.find(c => c.id === 'sea-curse').effect.amount);
+  assert.equal(watch.room.shipLevelCatalog[7], undefined);
+  assert.equal(watch.room.shipUpgradeCatalog.leadLine, undefined);
+  assert.equal(watch.room.shipUpgradeCatalog.foreMarsel, undefined);
+  assert.equal(watch.room.buildingCatalog.admiralty, undefined);
   await stop(); // Abrupt restart: pending state must survive without disconnect handlers.
+  // Emulate a persisted room created before rulesDataVersion existed. Keep the complete
+  // pre-stage-1 decks and an unfinished fleet decision instead of rebuilding them.
+  const savedDatabase = JSON.parse(fs.readFileSync(file,'utf8'));
+  const legacyRoom = savedDatabase.game_rooms[0].state;
+  delete legacyRoom.rulesDataVersion; delete legacyRoom.rulesSchemaVersion; delete legacyRoom.runtimeProfile;
+  const oldPlayer = legacyRoom.players.find(p => p.id === created.playerId);
+  Object.assign(oldPlayer,{ shipClass:'brigantine',level:7,upgrades:['foreStengha','foreMarsel'],
+    escorts:[{id:'old-landin',type:'landin',special:true,cargo:{goodId:'ore',quantity:5}}],nextEscortId:1 });
+  const oldIsland = legacyRoom.islands.find(i => i.id === 'asigoriy');
+  Object.assign(oldIsland,{area:4,army:12,resources:['Рудная жила']});
+  legacyRoom.anchorDecks.red.drawPile[0].artillery = 23;
+  legacyRoom.treasureDeck.drawPile[0] = {id:'full-ore-hold',name:'Полный трюм руды',cargoGoodId:'ore',copy:1};
+  legacyRoom.pendingFleetAdjustment = {id:'old-choice',playerId:oldPlayer.id,stage:'landin-replace',required:1,
+    options:[{id:'old-landin',name:'Особое сопровождение Ландина'}]};
+  fs.writeFileSync(file,JSON.stringify(savedDatabase));
+  beforeRestart = structuredClone(legacyRoom);
   await start();
   assert.match(output, /Restored 1 unfinished rooms/);
   const health = (await api('/health')).data;
@@ -88,6 +118,14 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   const newDevice = await connect(); const restoredWatcher = await connect();
   const restored = await emit(restoredWatcher, 'adminWatchRoom', { code, accountToken: admin.token });
   assert.equal(restored.room.players.every(p => !p.connected), true);
+  const restoredPlayer = restored.room.players.find(p => p.id === created.playerId);
+  assert.equal(restoredPlayer.level,7);
+  assert.equal(restoredPlayer.stats.artillery,canonical.fleet.ships.brigantine.artillery + 6);
+  assert.equal(restoredPlayer.escorts[0].type,'landin');
+  assert.equal(restored.room.pendingFleetAdjustment.id,'old-choice');
+  assert.equal(restored.room.islands.find(i => i.id === 'asigoriy').area,4);
+  assert.equal(restored.room.anchorDecks.red.remaining,legacyRoom.anchorDecks.red.drawPile.length);
+  assert.equal(restored.room.ruleset.rulesetVersion,canonical.metadata.rulesetVersion);
   assert.equal((await emit(newDevice, 'resumeRoom', { code, accountToken: stranger.token, playerToken: created.playerToken })).ok, false);
   const resumed = await emit(newDevice, 'resumeRoom', { code, accountToken: a.token });
   assert.equal(resumed.ok, true); assert.equal(resumed.playerId, created.playerId);

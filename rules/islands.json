@@ -1,0 +1,515 @@
+[
+  {
+    "id": "bogamia",
+    "name": "Богамия",
+    "kind": "free",
+    "area": 3,
+    "army": 0,
+    "factionId": null,
+    "resourceIds": [
+      "wood"
+    ],
+    "reward": {
+      "trigger": "first-acquisition"
+    },
+    "rewardText": "—.",
+    "source": "А.1.1",
+    "iconKey": "island.bogamia"
+  },
+  {
+    "id": "renaika",
+    "name": "Ренаика",
+    "kind": "free",
+    "area": 3,
+    "army": 0,
+    "factionId": null,
+    "resourceIds": [
+      "exotic"
+    ],
+    "reward": {
+      "trigger": "first-acquisition"
+    },
+    "rewardText": "—.",
+    "source": "А.1.2",
+    "iconKey": "island.renaika"
+  },
+  {
+    "id": "rit",
+    "name": "Рит",
+    "kind": "free",
+    "area": 3,
+    "army": 0,
+    "factionId": null,
+    "resourceIds": [
+      "stone"
+    ],
+    "reward": {
+      "trigger": "first-acquisition"
+    },
+    "rewardText": "—.",
+    "source": "А.1.3",
+    "iconKey": "island.rit"
+  },
+  {
+    "id": "sengoi",
+    "name": "Сэнгой",
+    "kind": "free",
+    "area": 3,
+    "army": 0,
+    "factionId": null,
+    "resourceIds": [
+      "ore"
+    ],
+    "reward": {
+      "trigger": "first-acquisition"
+    },
+    "rewardText": "—.",
+    "source": "А.1.4",
+    "iconKey": "island.sengoi"
+  },
+  {
+    "id": "adzai",
+    "name": "Адзаи",
+    "kind": "free",
+    "area": 4,
+    "army": 0,
+    "factionId": null,
+    "resourceIds": [
+      "wood"
+    ],
+    "reward": {
+      "trigger": "first-acquisition"
+    },
+    "rewardText": "—.",
+    "source": "А.1.5",
+    "iconKey": "island.adzai"
+  },
+  {
+    "id": "chertog",
+    "name": "Чертог",
+    "kind": "free",
+    "area": 4,
+    "army": 0,
+    "factionId": null,
+    "resourceIds": [
+      "ore"
+    ],
+    "reward": {
+      "trigger": "first-acquisition",
+      "legendaryCardId": "mist-path"
+    },
+    "rewardText": "Одноразовая карта «Путь сквозь туман» при первом получении.",
+    "source": "А.1.6",
+    "iconKey": "island.chertog"
+  },
+  {
+    "id": "dalerog",
+    "name": "Далерог",
+    "kind": "free",
+    "area": 5,
+    "army": 0,
+    "factionId": null,
+    "resourceIds": [
+      "wood"
+    ],
+    "reward": {
+      "trigger": "first-acquisition"
+    },
+    "rewardText": "—.",
+    "source": "А.1.7",
+    "iconKey": "island.dalerog"
+  },
+  {
+    "id": "kukokum",
+    "name": "Кукокум",
+    "kind": "free",
+    "area": 6,
+    "army": 0,
+    "factionId": null,
+    "resourceIds": [
+      "ore"
+    ],
+    "reward": {
+      "trigger": "first-acquisition"
+    },
+    "rewardText": "—.",
+    "source": "А.1.8",
+    "iconKey": "island.kukokum"
+  },
+  {
+    "id": "raisk",
+    "name": "Райск",
+    "kind": "free",
+    "area": 7,
+    "army": 0,
+    "factionId": null,
+    "resourceIds": [
+      "stone"
+    ],
+    "reward": {
+      "trigger": "first-acquisition"
+    },
+    "rewardText": "—.",
+    "source": "А.1.9",
+    "iconKey": "island.raisk"
+  },
+  {
+    "id": "erkalon",
+    "name": "Эркалон",
+    "kind": "free",
+    "area": 7,
+    "army": 0,
+    "factionId": null,
+    "resourceIds": [
+      "stone"
+    ],
+    "reward": {
+      "trigger": "first-acquisition"
+    },
+    "rewardText": "—.",
+    "source": "А.1.10",
+    "iconKey": "island.erkalon"
+  },
+  {
+    "id": "kisalinia",
+    "name": "Кисалиния",
+    "kind": "free",
+    "area": 10,
+    "army": 0,
+    "factionId": null,
+    "resourceIds": [
+      "wood",
+      "ore"
+    ],
+    "reward": {
+      "trigger": "first-acquisition",
+      "buildings": [
+        {
+          "type": "fort",
+          "level": 1
+        }
+      ]
+    },
+    "rewardText": "Форт I при первом получении.",
+    "source": "А.1.11",
+    "iconKey": "island.kisalinia"
+  },
+  {
+    "id": "agmor",
+    "name": "Агмор",
+    "kind": "independent",
+    "area": 3,
+    "army": 3,
+    "factionId": null,
+    "resourceIds": [
+      "stone"
+    ],
+    "reward": {
+      "trigger": "first-military-capture",
+      "ducats": 5
+    },
+    "rewardText": "5 дукатов при первом военном захвате.",
+    "source": "А.2.1",
+    "iconKey": "island.agmor"
+  },
+  {
+    "id": "asigoriy",
+    "name": "Асигорий",
+    "kind": "independent",
+    "area": 4,
+    "army": 10,
+    "factionId": null,
+    "resourceIds": [
+      "ore"
+    ],
+    "reward": {
+      "trigger": "first-military-capture",
+      "ducats": 25,
+      "legendary": 1
+    },
+    "rewardText": "25 дукатов и случайная легендарная карта при первом военном захвате.",
+    "source": "А.2.2",
+    "iconKey": "island.asigoriy"
+  },
+  {
+    "id": "harash",
+    "name": "Хараш",
+    "kind": "independent",
+    "area": 4,
+    "army": 5,
+    "factionId": null,
+    "resourceIds": [
+      "slaves"
+    ],
+    "reward": {
+      "trigger": "first-military-capture",
+      "ducats": 8
+    },
+    "rewardText": "8 дукатов при первом военном захвате.",
+    "source": "А.2.3",
+    "iconKey": "island.harash"
+  },
+  {
+    "id": "yukon",
+    "name": "Юкон",
+    "kind": "independent",
+    "area": 5,
+    "army": 6,
+    "factionId": null,
+    "resourceIds": [
+      "wood"
+    ],
+    "reward": {
+      "trigger": "first-military-capture",
+      "ducats": 10
+    },
+    "rewardText": "10 дукатов при первом военном захвате.",
+    "source": "А.2.4",
+    "iconKey": "island.yukon"
+  },
+  {
+    "id": "atlantia",
+    "name": "Атлантия",
+    "kind": "independent",
+    "area": 12,
+    "army": 8,
+    "factionId": null,
+    "resourceIds": [
+      "gold",
+      "wood",
+      "stone"
+    ],
+    "reward": {
+      "trigger": "first-military-capture",
+      "ducats": 15
+    },
+    "rewardText": "15 дукатов при первом военном захвате.",
+    "source": "А.2.5",
+    "iconKey": "island.atlantia"
+  },
+  {
+    "id": "adia",
+    "name": "Адия",
+    "kind": "independent",
+    "area": 14,
+    "army": 9,
+    "factionId": null,
+    "resourceIds": [
+      "diamonds",
+      "wood",
+      "ore"
+    ],
+    "reward": {
+      "trigger": "first-military-capture",
+      "ducats": 20,
+      "legendary": 1
+    },
+    "rewardText": "20 дуката и случайная легендарная карта при первом военном захвате.",
+    "source": "А.2.6",
+    "iconKey": "island.adia"
+  },
+  {
+    "id": "landin",
+    "name": "Ландин",
+    "kind": "state",
+    "area": 4,
+    "army": 13,
+    "factionId": "lionia",
+    "resourceIds": [
+      "ore"
+    ],
+    "reward": {
+      "trigger": "first-military-capture",
+      "ducats": 10
+    },
+    "rewardText": "10.",
+    "source": "А.3.1",
+    "iconKey": "island.landin"
+  },
+  {
+    "id": "frandia",
+    "name": "Франдия",
+    "kind": "state",
+    "area": 9,
+    "army": 15,
+    "factionId": "lionia",
+    "resourceIds": [
+      "wood",
+      "stone"
+    ],
+    "reward": {
+      "trigger": "first-military-capture",
+      "ducats": 20
+    },
+    "rewardText": "20 дукатов при военном захвате.",
+    "source": "А.3.2",
+    "iconKey": "island.frandia"
+  },
+  {
+    "id": "eidon",
+    "name": "Эйдон",
+    "kind": "state",
+    "area": 10,
+    "army": 17,
+    "factionId": "lionia",
+    "resourceIds": [
+      "stone",
+      "wood"
+    ],
+    "reward": {
+      "trigger": "first-military-capture",
+      "ducats": 30
+    },
+    "rewardText": "30.",
+    "source": "А.3.3",
+    "iconKey": "island.eidon"
+  },
+  {
+    "id": "kadingir",
+    "name": "Кадингир",
+    "kind": "state",
+    "area": 12,
+    "army": 14,
+    "factionId": "kadingir",
+    "resourceIds": [
+      "wood",
+      "stone",
+      "ore"
+    ],
+    "reward": {
+      "trigger": "first-military-capture",
+      "ducats": 30
+    },
+    "rewardText": "30 дукатов при военном захвате.",
+    "source": "А.3.4",
+    "iconKey": "island.kadingir"
+  },
+  {
+    "id": "mao",
+    "name": "Мао",
+    "kind": "state",
+    "area": 2,
+    "army": 3,
+    "factionId": "mayo",
+    "resourceIds": [
+      "ore"
+    ],
+    "reward": {
+      "trigger": "first-military-capture",
+      "ducats": 5
+    },
+    "rewardText": "5 дуката при военном захвате.",
+    "source": "А.3.5",
+    "iconKey": "island.mao"
+  },
+  {
+    "id": "maikan",
+    "name": "Майкан",
+    "kind": "state",
+    "area": 8,
+    "army": 6,
+    "factionId": "mayo",
+    "resourceIds": [
+      "slaves",
+      "stone"
+    ],
+    "reward": {
+      "trigger": "first-military-capture",
+      "ducats": 10
+    },
+    "rewardText": "10 дукатов при военном захвате.",
+    "source": "А.3.6",
+    "iconKey": "island.maikan"
+  },
+  {
+    "id": "miyosi",
+    "name": "Миёси",
+    "kind": "state",
+    "area": 5,
+    "army": 12,
+    "factionId": "mori",
+    "resourceIds": [
+      "stone"
+    ],
+    "reward": {
+      "trigger": "first-military-capture",
+      "ducats": 10
+    },
+    "rewardText": "10 дукатов при первом военном захвате.",
+    "source": "А.3.7",
+    "iconKey": "island.miyosi"
+  },
+  {
+    "id": "mori",
+    "name": "Мори",
+    "kind": "state",
+    "area": 8,
+    "army": 16,
+    "factionId": "mori",
+    "resourceIds": [
+      "wood",
+      "ore"
+    ],
+    "reward": {
+      "trigger": "first-military-capture",
+      "ducats": 20
+    },
+    "rewardText": "20 дукатов при первом военном захвате.",
+    "source": "А.3.8",
+    "iconKey": "island.mori"
+  },
+  {
+    "id": "suniksiya",
+    "name": "Суниксия",
+    "kind": "state",
+    "area": 7,
+    "army": 10,
+    "factionId": "suniksiya",
+    "resourceIds": [
+      "wood"
+    ],
+    "reward": {
+      "trigger": "first-military-capture",
+      "ducats": 20
+    },
+    "rewardText": "20.",
+    "source": "А.3.9",
+    "iconKey": "island.suniksiya"
+  },
+  {
+    "id": "skull",
+    "name": "Череп",
+    "kind": "state",
+    "area": 4,
+    "army": 7,
+    "factionId": "pirates",
+    "resourceIds": [
+      "ore"
+    ],
+    "reward": {
+      "trigger": "first-military-capture",
+      "ducats": 5
+    },
+    "rewardText": "5.",
+    "source": "А.3.10",
+    "iconKey": "island.skull"
+  },
+  {
+    "id": "chertonia",
+    "name": "Чертония",
+    "kind": "state",
+    "area": 6,
+    "army": 9,
+    "factionId": "pirates",
+    "resourceIds": [
+      "stone"
+    ],
+    "reward": {
+      "trigger": "first-military-capture",
+      "ducats": 10
+    },
+    "rewardText": "10 дукатов при военном захвате.",
+    "source": "А.3.11",
+    "iconKey": "island.chertonia"
+  }
+]

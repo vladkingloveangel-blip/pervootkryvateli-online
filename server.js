@@ -1,3 +1,4 @@
+const { BALANCE, RULESET, RUNTIME_PROFILE } = require('./game-data');
 const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
@@ -599,11 +600,18 @@ function publicRoom(room, viewerId = null) {
       resource: b.resource || null,
       produces: b.produces || null,
     }])),
+    ruleset: RULESET,
+    runtimeProfile: RUNTIME_PROFILE,
+    balanceCatalog: { session: BALANCE.session, maxShipLevel: BALANCE.maxShipLevel,
+      garrisons: BALANCE.garrisons, bastion: { price: BUILDINGS.bastion.price, defense: BUILDINGS.bastion.defense },
+      assignmentReplacementPrice: BALANCE.assignmentReplacementPrice, maxEscorts: BALANCE.maxEscorts, contractBonusRatio: BALANCE.contractBonusRatio,
+      landCompany: BALANCE.landCompany, legendaryEffects: BALANCE.legendaryEffects },
+    shipCatalog: Object.fromEntries(Object.entries(SHIPS).map(([id, ship]) => [id, { ...ship }])),
     goodsCatalog: Object.fromEntries(Object.entries(GOODS).map(([id, g]) => [id, {
       id: g.id, name: g.name, price: g.price,
     }])),
-    shipLevelCatalog: Object.fromEntries(Object.entries(SHIP_LEVELS).map(([level, d]) => [level, { ...d }])),
-    shipUpgradeCatalog: Object.fromEntries(Object.entries(SHIP_UPGRADES).map(([id, u]) => [id, {
+    shipLevelCatalog: Object.fromEntries(Object.entries(SHIP_LEVELS).filter(([, d]) => !d.retired).map(([level, d]) => [level, { ...d }])),
+    shipUpgradeCatalog: Object.fromEntries(Object.entries(SHIP_UPGRADES).filter(([, u]) => !u.retired).map(([id, u]) => [id, {
       id: u.id, name: u.name, branch: u.branch, order: u.order, price: u.price, requires: u.requires || null,
       artillery: u.artillery || 0, army: u.army || 0, cargo: u.cargo || 0, movement: u.movement || 0,
     }])),
@@ -624,8 +632,8 @@ function publicRoom(room, viewerId = null) {
         cargo: e.cargo ? { ...e.cargo, value: cargoSaleValue(p, e.id) } : null,
       }));
       const cargoEscortCapacity = escorts.filter(e => e.active).reduce((sum, e) => sum + (Number(ESCORTS[e.type]?.cargo) || 0), 0);
-      const level = Math.max(1, Math.min(7, Number(p.level) || 1));
-      const nextLevel = level < 7 ? SHIP_LEVELS[level + 1] : null;
+      const level = Math.max(1, Math.min(BALANCE.maxReadableShipLevel, Number(p.level) || 1));
+      const nextLevel = level < BALANCE.maxShipLevel ? SHIP_LEVELS[level + 1] : null;
       return {
         id: p.id,
         name: p.name,
@@ -947,17 +955,17 @@ function activateNextFleetAdjustment(room) {
 
     if (item.stage === 'landin-replace') {
       if (!player.pendingLandinEscort) continue;
-      if ((player.escorts || []).length < 3) {
+      if ((player.escorts || []).length < BALANCE.maxEscorts) {
         const granted = replaceEscortWithLandin(player, null);
         if (granted.ok) {
           player.pendingLandinEscort = false;
-          log(room, `${player.name} получает особое сопровождение Ландина: +6 артиллерии и отдельный трюм 5.`);
+          log(room, `${player.name} получает особое сопровождение Ландина: +${ESCORTS.landin.artillery} артиллерии и отдельный трюм ${ESCORTS.landin.cargo}.`);
         }
         continue;
       }
       room.pendingFleetAdjustment = {
         id: crypto.randomUUID(), playerId: player.id, stage: 'landin-replace', required: 1,
-        reason: item.reason || 'Особое сопровождение Ландина должно заменить одно из трёх имеющихся судов сопровождения.',
+        reason: item.reason || `Особое сопровождение Ландина должно заменить одно из ${BALANCE.maxEscorts} имеющихся судов сопровождения.`,
         options: fleetAdjustmentOptions(room, player, 'landin-replace'),
       };
       log(room, `${player.name}: выберите одно судно сопровождения, которое заменит особое сопровождение Ландина.`);
@@ -1019,7 +1027,7 @@ function queueEscortCapacityDecisionsIfNeeded(room) {
   if (!room?.started) return false;
   let queued = false;
   for (const player of room.players || []) {
-    if (player.pendingLandinEscort) queued = queueLandinEscortReplacement(room, player, 'Награда Ландина заменяет одно из судов сопровождения и не увеличивает общий предел сверх трёх.') || queued;
+    if (player.pendingLandinEscort) queued = queueLandinEscortReplacement(room, player, `Награда Ландина заменяет одно из судов сопровождения и не увеличивает общий предел сверх ${BALANCE.maxEscorts}.`) || queued;
     if (ordinaryEscortExcess(room, player) > 0) queued = queueShipyardEscortRemoval(room, player, 'После потери места верфи выберите лишнее обычное сопровождение для удаления; его груз будет потерян.') || queued;
     if (fleetAdjustmentNeeds(player).needsChoice) queued = queueFleetAdjustment(room, player, 'Текущий уровень основного корабля допускает меньше активных элементов флотилии.') || queued;
   }
@@ -1209,7 +1217,7 @@ function normalizeOwnedGarrisonsWithLog(room) {
     if (before === after) continue;
     const owner = playerById(room, island.ownerId);
     if (before === 'permanent' && after === 'guard') {
-      log(room, `${owner?.name || 'Игрок'}: ${island.name} перестал быть крупным портом — постоянный гарнизон становится городской стражей (+5).`);
+      log(room, `${owner?.name || 'Игрок'}: ${island.name} перестал быть крупным портом — постоянный гарнизон становится городской стражей (+${BALANCE.garrisons.guard.defense}).`);
     } else if (before && !after) {
       log(room, `${owner?.name || 'Игрок'}: ${island.name} потерял статус города — городской отряд распущен без возврата платы.`);
     }
@@ -1417,13 +1425,13 @@ function resolvePendingLegendaryReaction(room, useVeil, cardRef = null) {
     consumeLegendaryCard(room, target, cardRef);
     if (pending.kind === 'sea-attack') {
       applySeaVeilToShip(target, { sourcePlayerId: target.id, ignoreCurrentTurn: false });
-      log(room, `${target.name} реакцией разыгрывает «Покров моря». Морская атака ${source.name} отменена; корабль защищён на три следующих личных хода ${target.name}.`);
+      log(room, `${target.name} реакцией разыгрывает «Покров моря». Морская атака ${source.name} отменена; корабль защищён на ${BALANCE.legendaryEffects['sea-veil'].durationPersonalTurns} следующих личных хода ${target.name}.`);
     } else {
       const island = room.islands.find(i => i.id === pending.islandId);
       if (!island) return { ok: false, error: 'Остров реакции не найден.' };
       applySeaVeilToIsland(island, target, { ignoreCurrentTurn: false });
       const what = pending.kind === 'hellfire' ? '«Пламя Ада»' : 'штурм';
-      log(room, `${target.name} реакцией разыгрывает «Покров моря». ${what} ${source.name} отменён; ${island.name} защищён на три следующих личных хода ${target.name}.`);
+      log(room, `${target.name} реакцией разыгрывает «Покров моря». ${what} ${source.name} отменён; ${island.name} защищён на ${BALANCE.legendaryEffects['sea-veil'].durationPersonalTurns} следующих личных хода ${target.name}.`);
     }
     room.pendingLegendaryReaction = null;
     return { ok: true, canceled: true };
@@ -1677,7 +1685,7 @@ function resolveSailingEventCard(room, player, card) {
     const before = Math.max(0, Math.floor(Number(player.ducats) || 0));
     const loss = Math.floor(before * (Number(card.percent) || 0) / 100);
     player.ducats = before - loss;
-    log(room, `${player.name}: «${card.name}». Потеряно ${loss} дукатов (30% казны).`);
+    log(room, `${player.name}: «${card.name}». Потеряно ${loss} дукатов (${card.percent}% казны).`);
     return resultBase;
   }
 
@@ -1708,7 +1716,7 @@ function applyVassalTaxes(room, snapshot) {
     const paid = Math.min(before, tax);
     player.ducats = before - paid;
     if (paid < tax) {
-      player.nextActionLimit = Math.min(Number(player.nextActionLimit) || 3, 2);
+      player.nextActionLimit = Math.min(Number(player.nextActionLimit) || BALANCE.session.actionsPerTurn, BALANCE.session.taxUnderpaymentActionLimit);
       log(room, `${player.name}: налог ${FACTIONS[suzerainId].name} — уплачено ${paid} из ${tax}. Долг не возникает; в ближайшем личном ходу максимум два действия.`);
     } else {
       log(room, `${player.name} платит налог ${FACTIONS[suzerainId].name}: ${tax} дуката.`);
@@ -1787,7 +1795,7 @@ function resolveFeudCard(room, player, factionId, card) {
     const originalIds = new Set(FACTIONS[factionId]?.originalIslandIds || []);
     const options = room.islands.filter(i => i.ownerId === player.id && originalIds.has(i.id)).map(i => ({ islandId: i.id, name: i.name }));
     if (!options.length) {
-      const loss = Math.min(Math.max(0, Number(player.ducats) || 0), 4);
+      const loss = Math.min(Math.max(0, Number(player.ducats) || 0), Number(card.fallbackDucats) || BALANCE.reclaimIslandFallback);
       player.ducats -= loss;
       log(room, `${player.name}: ${factionName} не может вернуть исходный остров; вместо этого потеряно ${loss} дукатов.`);
       return immediate;
@@ -1926,7 +1934,7 @@ function processEventPhase(room) {
         room.eventPhase.replacementQueue = buildAssignmentReplaceQueue(room);
         room.eventPhase.replacementIndex = 0;
         room.eventPhase.currentPlayerId = room.eventPhase.replacementQueue?.[0] || null;
-        log(room, 'Фаза событий: выдача поручений завершена. Вассалы могут по одному разу заменить активное поручение за 2 дуката.');
+        log(room, `Фаза событий: выдача поручений завершена. Вассалы могут по одному разу заменить активное поручение за ${BALANCE.assignmentReplacementPrice} дуката.`);
         continue;
       }
       const item = queue[index];
@@ -2158,19 +2166,19 @@ function beginTurn(room) {
   room.phase = 'navigation';
   room.roll = null;
   room.movePoints = null;
-  room.actionsLeft = 3;
+  room.actionsLeft = BALANCE.session.actionsPerTurn;
   const p = currentPlayer(room);
   if (!p) return;
 
   p.personalTurnNo = (Number(p.personalTurnNo) || 0) + 1;
   p.attackedThisTurn = [];
   p.brokenAlliesThisTurn = [];
-  const actionLimit = Math.max(0, Math.min(3, Number(p.nextActionLimit) || 3));
+  const actionLimit = Math.max(0, Math.min(BALANCE.session.actionsPerTurn, Number(p.nextActionLimit) || BALANCE.session.actionsPerTurn));
   room.actionsLeft = actionLimit;
   p.nextActionLimit = null;
   p.activeTurnEffects = { ...(p.nextTurnEffects || {}) };
   p.nextTurnEffects = {};
-  if (actionLimit < 3) log(room, `${p.name}: из-за недоплаченного налога в этом личном ходу доступно максимум ${actionLimit} действия.`);
+  if (actionLimit < BALANCE.session.actionsPerTurn) log(room, `${p.name}: из-за недоплаченного налога в этом личном ходу доступно максимум ${actionLimit} действия.`);
 
   if ((Number(p.skipTurns) || 0) > 0) {
     p.skipTurns -= 1;
@@ -2216,7 +2224,7 @@ function endTurnInternal(room) {
   room.turnIndex = (room.turnIndex + 1) % n;
   if (room.completedTurns % n === 0) {
     room.circle += 1;
-    if (room.circle > 5) {
+    if (room.circle > BALANCE.session.circlesPerRound) {
       startEventPhase(room);
       return;
     }
@@ -2226,15 +2234,20 @@ function endTurnInternal(room) {
 
 function applyFreeClaimReward(room, player, island) {
   if (island.rewardClaimed) return;
-  if (island.id === 'chertog') {
+  const rules = require('./rules');
+  const reward = rules.islands.find(def => def.id === island.id)?.reward;
+  if (!reward || reward.trigger !== 'first-acquisition') return;
+  if (reward.legendaryCardId) {
+    const card = rules.legends.legendary.find(def => def.id === reward.legendaryCardId);
     player.specialCards ||= [];
-    player.specialCards.push('Путь сквозь туман');
+    player.specialCards.push(card.name);
     island.rewardClaimed = true;
-    log(room, `${player.name} получает одноразовую карту «Путь сквозь туман» за Чертог.`);
-  } else if (island.id === 'kisalinia') {
-    island.buildings.push({ type: 'fort', level: 1, createdAt: Date.now(), reward: true });
+    log(room, `${player.name} получает одноразовую карту «${card.name}» за ${island.name}.`);
+  }
+  for (const spec of reward.buildings || []) {
+    island.buildings.push({ ...spec, createdAt: Date.now(), reward: true });
     island.rewardClaimed = true;
-    log(room, `${player.name} получает Форт I на Кисалинии.`);
+    log(room, `${player.name} получает ${buildingDisplayName(spec)} на острове ${island.name}.`);
   }
 }
 
@@ -2335,7 +2348,7 @@ function newPlayer(socket, data, color) {
     name: cleanName(data?.name || data?.accountUser?.displayName || data?.accountUser?.username),
     color,
     shipClass,
-    ducats: 14,
+    ducats: BALANCE.session.startingDucats,
     debt: 0,
     level: 1,
     row: 0,
@@ -2441,6 +2454,9 @@ io.on('connection', socket => {
     const player = newPlayer(socket, { ...data, accountUser }, COLORS[0]);
     const room = {
       code,
+      rulesDataVersion: RULESET.rulesetVersion,
+      rulesSchemaVersion: RULESET.schemaVersion,
+      runtimeProfile: RUNTIME_PROFILE,
       hostId: player.id,
       players: [player],
       islands: cloneIslands(),
@@ -2453,7 +2469,7 @@ io.on('connection', socket => {
       phase: 'lobby',
       roll: null,
       movePoints: null,
-      actionsLeft: 3,
+      actionsLeft: BALANCE.session.actionsPerTurn,
       alliances: [],
       pendingAlliance: null,
       pendingBattle: null,
@@ -2502,7 +2518,7 @@ io.on('connection', socket => {
     }
 
     if (room.started) return ackSafe(ack, { ok: false, error: 'Партия уже началась.' });
-    if (room.players.length >= 5) return ackSafe(ack, { ok: false, error: 'В комнате уже 5 игроков.' });
+    if (room.players.length >= BALANCE.session.players.max) return ackSafe(ack, { ok: false, error: `В комнате уже ${BALANCE.session.players.max} игроков.` });
 
     const availableColor = COLORS.find(color => !room.players.some(p => p.color === color)) || COLORS[room.players.length % COLORS.length];
     const player = newPlayer(socket, { ...data, accountUser }, availableColor);
@@ -2605,7 +2621,7 @@ io.on('connection', socket => {
     if (!room) return ackSafe(ack, { ok: false, error: 'Комната не найдена.' });
     if (room.hostId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Начать игру может только создатель комнаты.' });
     if (room.started) return ackSafe(ack, { ok: false, error: 'Игра уже началась.' });
-    if (room.players.length < 2 || room.players.length > 5) return ackSafe(ack, { ok: false, error: 'Для старта нужно 2–5 игроков.' });
+    if (room.players.length < BALANCE.session.players.min || room.players.length > BALANCE.session.players.max) return ackSafe(ack, { ok: false, error: `Для старта нужно ${BALANCE.session.players.min}–${BALANCE.session.players.max} игроков.` });
     if (!room.players.every(p => p.connected)) return ackSafe(ack, { ok: false, error: 'Перед стартом все игроки должны быть онлайн.' });
     if (!room.players.every(p => p.ready)) return ackSafe(ack, { ok: false, error: 'Перед стартом все игроки должны нажать «Готов».' });
 
@@ -2637,7 +2653,7 @@ io.on('connection', socket => {
     room.legendaryPlacesExplored = {};
     room.factionState = {};
     room.players.forEach(p => {
-      p.row = 0; p.col = 0; p.ducats = 14; p.debt = 0; p.level = 1; p.specialCards = []; p.cargo = null; p.upgrades = []; p.disabledUpgradeIds = []; p.escorts = []; p.levelInactiveEscortIds = []; p.nextEscortId = 0;
+      p.row = 0; p.col = 0; p.ducats = BALANCE.session.startingDucats; p.debt = 0; p.level = 1; p.specialCards = []; p.cargo = null; p.upgrades = []; p.disabledUpgradeIds = []; p.escorts = []; p.levelInactiveEscortIds = []; p.nextEscortId = 0;
       p.glory = 0; p.skipTurns = 0; p.personalTurnNo = 0; p.attackedThisTurn = []; p.attackHistory = {}; p.brokenAlliesThisTurn = []; p.pendingLegendary = 0; p.pendingLandinEscort = false; p.legendaryCards = []; p.legendaryEffects = { seaCurses: [] }; p.savedEventCards = []; p.nextTurnEffects = {}; p.activeTurnEffects = {}; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignment = null; p.replacedAssignmentConditions = []; p.landCompany = null; p.bastionPriority = [];
     });
     refreshFactionExistence(room);
@@ -2696,7 +2712,7 @@ io.on('connection', socket => {
 
     const row = Number(data?.row);
     const col = Number(data?.col);
-    if (!Number.isInteger(row) || !Number.isInteger(col) || row < 0 || row > 27 || col < 0 || col > 27) {
+    if (!Number.isInteger(row) || !Number.isInteger(col) || row < 0 || row >= MAP_META.rows || col < 0 || col >= MAP_META.cols) {
       return ackSafe(ack, { ok: false, error: 'Недопустимая клетка.' });
     }
 
@@ -2757,7 +2773,7 @@ io.on('connection', socket => {
     const result = buildBastion(room, p, String(data?.islandId || ''));
     if (!result.ok) return ackSafe(ack, result);
     room.actionsLeft -= 1;
-    log(room, `${p.name} строит бастион на острове ${result.island.name} за 10 дукатов. Поддержка каменотёсных дворов: ${result.support.supported.length}/${result.support.capacity}. Осталось действий: ${room.actionsLeft}.`);
+    log(room, `${p.name} строит бастион на острове ${result.island.name} за ${result.price} дукатов. Поддержка каменотёсных дворов: ${result.support.supported.length}/${result.support.capacity}. Осталось действий: ${room.actionsLeft}.`);
     ackSafe(ack, { ok: true });
     emitRoom(room);
   });
@@ -2815,7 +2831,7 @@ io.on('connection', socket => {
     const result = buyCityGuard(room, p, String(data?.islandId || ''));
     if (!result.ok) return ackSafe(ack, result);
     room.actionsLeft -= 1;
-    log(room, `${p.name} покупает городскую стражу для ${result.island.name}: +5 войска к защите за 6 дукатов. Осталось действий: ${room.actionsLeft}.`);
+    log(room, `${p.name} покупает городскую стражу для ${result.island.name}: +${result.defense} войска к защите за ${result.price} дукатов. Осталось действий: ${room.actionsLeft}.`);
     ackSafe(ack, { ok: true });
     emitRoom(room);
   });
@@ -2831,7 +2847,7 @@ io.on('connection', socket => {
     const result = buyPermanentGarrison(room, p, String(data?.islandId || ''));
     if (!result.ok) return ackSafe(ack, result);
     room.actionsLeft -= 1;
-    log(room, `${p.name} заменяет городскую стражу на постоянный гарнизон ${result.island.name}: +10 войска к защите за 12 дукатов. Осталось действий: ${room.actionsLeft}.`);
+    log(room, `${p.name} заменяет городскую стражу на постоянный гарнизон ${result.island.name}: +${result.defense} войска к защите за ${result.price} дукатов. Осталось действий: ${room.actionsLeft}.`);
     ackSafe(ack, { ok: true });
     emitRoom(room);
   });
@@ -2934,7 +2950,7 @@ io.on('connection', socket => {
     let contractBonus = 0;
     let contractCredit = null;
     if (isContract) {
-      contractBonus = Math.floor(result.revenue / 2);
+      contractBonus = Math.floor(result.revenue * BALANCE.contractBonusRatio);
       contractCredit = creditDucats(p, contractBonus);
     }
     const debtText = result.credit?.debtPaid ? ` Из обычной выручки ${result.credit.debtPaid} уходит в погашение долга; в казну ${result.credit.net}.` : '';
@@ -3050,7 +3066,7 @@ io.on('connection', socket => {
         consumeLegendaryCard(room, p, ref);
         room.actionsLeft -= 1;
         applySeaVeilToShip(p, { sourcePlayerId: p.id, ignoreCurrentTurn: true });
-        log(room, `${p.name} разыгрывает «Покров моря» на свою флотилию. Защита действует до конца трёх следующих личных ходов. Осталось действий: ${room.actionsLeft}.`);
+        log(room, `${p.name} разыгрывает «Покров моря» на свою флотилию. Защита действует до конца ${BALANCE.legendaryEffects['sea-veil'].durationPersonalTurns} следующих личных ходов. Осталось действий: ${room.actionsLeft}.`);
         ackSafe(ack, { ok: true });
         emitRoom(room);
         return;
@@ -3060,7 +3076,7 @@ io.on('connection', socket => {
       consumeLegendaryCard(room, p, ref);
       room.actionsLeft -= 1;
       applySeaVeilToIsland(island, p, { ignoreCurrentTurn: true });
-      log(room, `${p.name} разыгрывает «Покров моря» на ${island.name}. Защита действует до конца трёх следующих личных ходов. Осталось действий: ${room.actionsLeft}.`);
+      log(room, `${p.name} разыгрывает «Покров моря» на ${island.name}. Защита действует до конца ${BALANCE.legendaryEffects['sea-veil'].durationPersonalTurns} следующих личных ходов. Осталось действий: ${room.actionsLeft}.`);
       ackSafe(ack, { ok: true });
       emitRoom(room);
       return;
@@ -3068,7 +3084,7 @@ io.on('connection', socket => {
 
     if (found.kind === 'mist-path') {
       const row = Number(data?.row), col = Number(data?.col);
-      if (!Number.isInteger(row) || !Number.isInteger(col) || row < 0 || row > 27 || col < 0 || col > 27) return ackSafe(ack, { ok: false, error: 'Выберите допустимую клетку для «Пути сквозь туман».' });
+      if (!Number.isInteger(row) || !Number.isInteger(col) || row < 0 || row >= MAP_META.rows || col < 0 || col >= MAP_META.cols) return ackSafe(ack, { ok: false, error: 'Выберите допустимую клетку для «Пути сквозь туман».' });
       const allowed = mistPathReachableCells(p).some(c => c.row === row && c.col === col);
       if (!allowed) return ackSafe(ack, { ok: false, error: 'К этой клетке ваш корабль не может проложить путь без запрещённых препятствий.' });
       consumeLegendaryCard(room, p, ref);
@@ -3095,7 +3111,7 @@ io.on('connection', socket => {
         log(room, `${p.name} разыгрывает «Морское проклятие» против ${target.name}, но действующий «Покров моря» отменяет карту. Осталось действий: ${room.actionsLeft}.`);
       } else {
         applySeaCurse(target, p.id);
-        log(room, `${p.name} накладывает «Морское проклятие» на ${target.name}: обычная дальность движения −3 в каждом из трёх следующих личных ходов цели. Осталось действий: ${room.actionsLeft}.`);
+        log(room, `${p.name} накладывает «Морское проклятие» на ${target.name}: обычная дальность движения −${BALANCE.legendaryEffects['sea-curse'].amount} в каждом из ${BALANCE.legendaryEffects['sea-curse'].durationPersonalTurns} следующих личных ходов цели. Осталось действий: ${room.actionsLeft}.`);
       }
       ackSafe(ack, { ok: true });
       emitRoom(room);
@@ -3263,7 +3279,7 @@ io.on('connection', socket => {
       player.pendingLandinEscort = false;
       const oldName = ESCORTS[result.replaced?.type]?.name || result.replaced?.type || 'судно сопровождения';
       const cargoText = result.cargoDiscarded ? ` Груз заменённого судна потерян: ${GOODS[result.cargoDiscarded.goodId]?.name || result.cargoDiscarded.goodId} ×${result.cargoDiscarded.quantity}.` : '';
-      log(room, `${player.name} заменяет ${oldName} на особое сопровождение Ландина (+6 артиллерии, трюм 5).${cargoText}`);
+      log(room, `${player.name} заменяет ${oldName} на особое сопровождение Ландина (+${ESCORTS.landin.artillery} артиллерии, трюм ${ESCORTS.landin.cargo}).${cargoText}`);
     } else {
       return ackSafe(ack, { ok: false, error: 'Неизвестный этап настройки флотилии.' });
     }
@@ -3285,7 +3301,7 @@ io.on('connection', socket => {
     pending.removed.push(result.name);
     log(room, `${player.name} удаляет ${result.name} с острова ${result.island.name} без компенсации для восстановления допустимых ограничений.`);
     if (result.garrisonChanged) {
-      if (result.oldGarrison === 'permanent' && result.newGarrison === 'guard') log(room, `${result.island.name}: постоянный гарнизон становится городской стражей (+5).`);
+      if (result.oldGarrison === 'permanent' && result.newGarrison === 'guard') log(room, `${result.island.name}: постоянный гарнизон становится городской стражей (+${BALANCE.garrisons.guard.defense}).`);
       else if (result.oldGarrison && !result.newGarrison) log(room, `${result.island.name}: городской отряд распущен из-за потери статуса города.`);
     }
     const stillPending = refreshPendingIslandCorrection(room);
@@ -3366,10 +3382,10 @@ io.on('connection', socket => {
       const result = replaceAssignment(room, player);
       if (!result.ok) return ackSafe(ack, result);
       if (result.next) {
-        log(room, `${player.name} платит 2 дуката и заменяет поручение «${result.previous.card.text}» на «${result.next.card.text}».`);
+        log(room, `${player.name} платит ${BALANCE.assignmentReplacementPrice} дуката и заменяет поручение «${result.previous.card.text}» на «${result.next.card.text}».`);
         room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: result.next.card.text, factionId: player.suzerainId, factionName: FACTIONS[player.suzerainId]?.name, pending: false, source: 'assignment-replace' };
       } else {
-        log(room, `${player.name} платит 2 дуката и сбрасывает поручение «${result.previous.card.text}», но подходящей замены сейчас нет.`);
+        log(room, `${player.name} платит ${BALANCE.assignmentReplacementPrice} дуката и сбрасывает поручение «${result.previous.card.text}», но подходящей замены сейчас нет.`);
         room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: 'Подходящей замены нет', factionId: player.suzerainId, factionName: FACTIONS[player.suzerainId]?.name, pending: false, source: 'assignment-replace' };
       }
     } else {
@@ -3538,6 +3554,7 @@ io.on('connection', socket => {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
+app.get('/api/rules', (_req, res) => res.json(require('./rules')));
 app.get('/health', (_req, res) => res.json({ ok: true, version: '0.33.0', rooms: rooms.size, accountsEnabled: Boolean(db), databaseReady: dbReady, roomPersistence: { enabled: Boolean(db), restored: roomStore.restored, pending: roomStore.pending.size, healthy: !roomStore.lastError } }));
 
 async function startServer() {

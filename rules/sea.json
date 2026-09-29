@@ -1,0 +1,242 @@
+{
+  "blue": [
+    {
+      "id": "merchant-convoy-a",
+      "name": "Купеческий конвой A",
+      "quantity": 1,
+      "artillery": 4,
+      "reward": 8,
+      "iconKey": "card.sea.blue"
+    },
+    {
+      "id": "merchant-convoy-b",
+      "name": "Купеческий конвой Б",
+      "quantity": 1,
+      "artillery": 4,
+      "reward": 8,
+      "iconKey": "card.sea.blue"
+    },
+    {
+      "id": "trade-flotilla-a",
+      "name": "Торговая флотилия А",
+      "quantity": 1,
+      "artillery": 4,
+      "reward": 8,
+      "iconKey": "card.sea.blue"
+    },
+    {
+      "id": "trade-flotilla-b",
+      "name": "Торговая флотилия Б",
+      "quantity": 1,
+      "artillery": 5,
+      "reward": 10,
+      "iconKey": "card.sea.blue"
+    },
+    {
+      "id": "smugglers",
+      "name": "Контрабандисты",
+      "quantity": 2,
+      "artillery": 5,
+      "reward": 10,
+      "iconKey": "card.sea.blue"
+    },
+    {
+      "id": "pirates-a",
+      "name": "Пираты A",
+      "quantity": 1,
+      "artillery": 6,
+      "reward": 12,
+      "iconKey": "card.sea.blue"
+    },
+    {
+      "id": "pirates-b",
+      "name": "Пираты Б",
+      "quantity": 1,
+      "artillery": 6,
+      "reward": 12,
+      "iconKey": "card.sea.blue"
+    },
+    {
+      "id": "pirates-c",
+      "name": "Пираты В",
+      "quantity": 1,
+      "artillery": 7,
+      "reward": 16,
+      "iconKey": "card.sea.blue"
+    },
+    {
+      "id": "calm-sea",
+      "name": "На море тихо",
+      "quantity": 1,
+      "artillery": null,
+      "reward": 0,
+      "quiet": true,
+      "iconKey": "card.sea.blue"
+    }
+  ],
+  "yellow": [
+    {
+      "id": "pirate-frigate-a",
+      "name": "Пиратский фрегат А",
+      "quantity": 1,
+      "artillery": 8,
+      "reward": 18,
+      "iconKey": "card.sea.yellow"
+    },
+    {
+      "id": "pirate-frigate-b",
+      "name": "Пиратский фрегат Б",
+      "quantity": 1,
+      "artillery": 8,
+      "reward": 18,
+      "iconKey": "card.sea.yellow"
+    },
+    {
+      "id": "sea-patrol-a",
+      "name": "Морской патруль А",
+      "quantity": 1,
+      "artillery": 9,
+      "reward": 20,
+      "iconKey": "card.sea.yellow"
+    },
+    {
+      "id": "sea-patrol-b",
+      "name": "Морской патруль Б",
+      "quantity": 1,
+      "artillery": 9,
+      "reward": 20,
+      "iconKey": "card.sea.yellow"
+    },
+    {
+      "id": "corsair-frigate-a",
+      "name": "Корсарский фрегат А",
+      "quantity": 1,
+      "artillery": 10,
+      "reward": 22,
+      "iconKey": "card.sea.yellow"
+    },
+    {
+      "id": "corsair-frigate-b",
+      "name": "Корсарский фрегат Б",
+      "quantity": 1,
+      "artillery": 11,
+      "reward": 24,
+      "iconKey": "card.sea.yellow"
+    },
+    {
+      "id": "rebel-frigate-a",
+      "name": "Мятежный фрегат А",
+      "quantity": 1,
+      "artillery": 12,
+      "reward": 26,
+      "iconKey": "card.sea.yellow"
+    },
+    {
+      "id": "rebel-frigate-b",
+      "name": "Мятежный фрегат Б",
+      "quantity": 1,
+      "artillery": 13,
+      "reward": 28,
+      "iconKey": "card.sea.yellow"
+    },
+    {
+      "id": "corsair-escort",
+      "name": "Корсарское сопровождение",
+      "quantity": 1,
+      "artillery": 14,
+      "reward": 30,
+      "iconKey": "card.sea.yellow"
+    },
+    {
+      "id": "calm-sea",
+      "name": "На море тихо",
+      "quantity": 1,
+      "artillery": null,
+      "reward": 0,
+      "quiet": true,
+      "iconKey": "card.sea.yellow"
+    }
+  ],
+  "red": [
+    {
+      "id": "abyss-armada",
+      "name": "Армада Бездны",
+      "quantity": 1,
+      "artillery": 15,
+      "reward": 38,
+      "iconKey": "card.sea.red"
+    },
+    {
+      "id": "ghost-ship",
+      "name": "Корабль-призрак",
+      "quantity": 1,
+      "artillery": 17,
+      "reward": 40,
+      "iconKey": "card.sea.red"
+    },
+    {
+      "id": "crimson-flagship",
+      "name": "Багровый флагман",
+      "quantity": 1,
+      "artillery": 19,
+      "reward": 42,
+      "iconKey": "card.sea.red"
+    },
+    {
+      "id": "black-galleon",
+      "name": "Чёрный галеон",
+      "quantity": 1,
+      "artillery": 21,
+      "reward": 46,
+      "iconKey": "card.sea.red"
+    },
+    {
+      "id": "mayo-hunters",
+      "name": "Охотники Майо",
+      "quantity": 1,
+      "artillery": 21,
+      "reward": 46,
+      "iconKey": "card.sea.red"
+    },
+    {
+      "id": "leviathan",
+      "name": "Левиафан",
+      "quantity": 1,
+      "artillery": 22,
+      "reward": 48,
+      "iconKey": "card.sea.red"
+    },
+    {
+      "id": "corsair-squadron",
+      "name": "Корсарская эскадра",
+      "quantity": 1,
+      "artillery": 22,
+      "reward": 48,
+      "iconKey": "card.sea.red"
+    },
+    {
+      "id": "gun-squadron",
+      "name": "Пушечная эскадра",
+      "quantity": 1,
+      "artillery": 24,
+      "reward": 50,
+      "iconKey": "card.sea.red"
+    },
+    {
+      "id": "lord-of-storms",
+      "name": "Властелин штормов",
+      "quantity": 1,
+      "artillery": 26,
+      "reward": 52,
+      "iconKey": "card.sea.red"
+    },
+    {
+      "id": "last-expedition",
+      "name": "Последняя экспедиция",
+      "quantity": 1,
+      "artillery": 28,
+      "reward": 54,
+      "iconKey": "card.sea.red"
+    }
+  ]
+}

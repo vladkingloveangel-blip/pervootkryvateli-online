@@ -1,0 +1,699 @@
+{
+  "factions": {
+    "lionia": {
+      "id": "lionia",
+      "name": "Королевство Лиония",
+      "originalIslandIds": [
+        "landin",
+        "frandia",
+        "eidon"
+      ],
+      "canHaveVassal": true,
+      "giftIslandId": "frandia",
+      "tax": 2,
+      "fullConquestPrize": {
+        "ducats": 60,
+        "trigger": "last-state-owned-island-military-capture",
+        "excludesIslandDucats": true
+      },
+      "rewardShare": 0,
+      "iconKey": "faction.lionia"
+    },
+    "kadingir": {
+      "id": "kadingir",
+      "name": "Царство Кадингир",
+      "originalIslandIds": [
+        "kadingir"
+      ],
+      "canHaveVassal": true,
+      "giftIslandId": "kadingir",
+      "tax": 2,
+      "fullConquestPrize": {
+        "ducats": 50,
+        "trigger": "last-state-owned-island-military-capture",
+        "excludesIslandDucats": true
+      },
+      "rewardShare": 0,
+      "iconKey": "faction.kadingir"
+    },
+    "mayo": {
+      "id": "mayo",
+      "name": "Майо",
+      "originalIslandIds": [
+        "mao",
+        "maikan"
+      ],
+      "canHaveVassal": false,
+      "giftIslandId": null,
+      "tax": 0,
+      "fullConquestPrize": {
+        "ducats": 10,
+        "trigger": "last-state-owned-island-military-capture",
+        "excludesIslandDucats": true
+      },
+      "rewardShare": 0,
+      "iconKey": "faction.mayo"
+    },
+    "suniksiya": {
+      "id": "suniksiya",
+      "name": "Вольная Суниксия",
+      "originalIslandIds": [
+        "suniksiya"
+      ],
+      "canHaveVassal": true,
+      "giftIslandId": "suniksiya",
+      "tax": 0,
+      "rewardShare": 0.5,
+      "fullConquestPrize": {
+        "ducats": 30,
+        "trigger": "last-state-owned-island-military-capture",
+        "excludesIslandDucats": true
+      },
+      "iconKey": "faction.suniksiya"
+    },
+    "pirates": {
+      "id": "pirates",
+      "name": "Пираты",
+      "originalIslandIds": [
+        "skull",
+        "chertonia"
+      ],
+      "canHaveVassal": true,
+      "giftIslandId": "chertonia",
+      "tax": 0,
+      "rewardShare": 0.5,
+      "fullConquestPrize": {
+        "ducats": 20,
+        "trigger": "last-state-owned-island-military-capture",
+        "excludesIslandDucats": true
+      },
+      "iconKey": "faction.pirates"
+    },
+    "mori": {
+      "id": "mori",
+      "name": "Сёгунат Мори",
+      "originalIslandIds": [
+        "miyosi",
+        "mori"
+      ],
+      "giftIslandId": "miyosi",
+      "canHaveVassal": true,
+      "tax": 0,
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 5
+      },
+      "fullConquestPrize": {
+        "ducats": 40,
+        "trigger": "last-state-owned-island-military-capture",
+        "excludesIslandDucats": true
+      },
+      "rewardShare": 0,
+      "iconKey": "faction.mori"
+    }
+  },
+  "order": [
+    "lionia",
+    "kadingir",
+    "mori",
+    "mayo",
+    "suniksiya",
+    "pirates"
+  ],
+  "assignments": {
+    "lionia": [
+      {
+        "id": "lionia-asigoriy",
+        "conditionKey": "capture:asigoriy",
+        "text": "Захватить Асигорий",
+        "reward": 12,
+        "type": "capture-island",
+        "islandId": "asigoriy",
+        "factionId": "lionia",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "lionia-chertonia",
+        "conditionKey": "capture:chertonia",
+        "text": "Захватить Чертонию",
+        "reward": 9,
+        "type": "capture-island",
+        "islandId": "chertonia",
+        "factionId": "lionia",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "lionia-skull",
+        "conditionKey": "capture:skull",
+        "text": "Захватить Череп",
+        "reward": 7,
+        "type": "capture-island",
+        "islandId": "skull",
+        "factionId": "lionia",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "lionia-frandia-fort",
+        "conditionKey": "build:frandia:fort",
+        "text": "Построить форт на Франдии или улучшить его",
+        "reward": 5,
+        "type": "build-branch",
+        "islandId": "frandia",
+        "branch": "fort",
+        "factionId": "lionia",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "lionia-shipyard-forest",
+        "conditionKey": "build:forest:shipyard",
+        "text": "Построить верфь на любом своём острове с лесом или улучшить её",
+        "reward": 9,
+        "type": "build-type",
+        "buildingType": "shipyard",
+        "resource": "Лес",
+        "resourceId": "wood",
+        "factionId": "lionia",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "lionia-frandia-market",
+        "conditionKey": "build:frandia:money",
+        "text": "Построить рынок на Франдии или улучшить его",
+        "reward": 5,
+        "type": "build-branch",
+        "islandId": "frandia",
+        "branch": "money",
+        "factionId": "lionia",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "lionia-ship-level",
+        "conditionKey": "ship-level",
+        "text": "Повысить общий уровень основного корабля",
+        "reward": 5,
+        "type": "ship-level",
+        "factionId": "lionia",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "lionia-yellow-a",
+        "conditionKey": "anchor:yellow",
+        "text": "Победить на жёлтом морском якоре, экземпляр А",
+        "reward": 6,
+        "type": "anchor-win",
+        "colors": [
+          "yellow"
+        ],
+        "factionId": "lionia",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "lionia-yellow-b",
+        "conditionKey": "anchor:yellow",
+        "text": "Победить на жёлтом морском якоре, экземпляр Б",
+        "reward": 6,
+        "type": "anchor-win",
+        "colors": [
+          "yellow"
+        ],
+        "factionId": "lionia",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "lionia-yellow-c",
+        "conditionKey": "anchor:yellow",
+        "text": "Победить на жёлтом морском якоре, экземпляр В",
+        "reward": 6,
+        "type": "anchor-win",
+        "colors": [
+          "yellow"
+        ],
+        "factionId": "lionia",
+        "iconKey": "card.assignment"
+      }
+    ],
+    "kadingir": [
+      {
+        "id": "kadingir-harash",
+        "conditionKey": "capture:harash",
+        "text": "Захватить Хараш",
+        "reward": 7,
+        "type": "capture-island",
+        "islandId": "harash",
+        "factionId": "kadingir",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "kadingir-abyss",
+        "conditionKey": "visit:abyss",
+        "text": "Посетить Бездну",
+        "reward": 5,
+        "type": "visit-place",
+        "placeId": "abyss",
+        "factionId": "kadingir",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "kadingir-fort",
+        "conditionKey": "build:kadingir:fort",
+        "text": "Построить форт на Кадингире или улучшить его",
+        "reward": 5,
+        "type": "build-branch",
+        "islandId": "kadingir",
+        "branch": "fort",
+        "factionId": "kadingir",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "kadingir-farm",
+        "conditionKey": "build:kadingir:food",
+        "text": "Построить ферму на Кадингире или улучшить её",
+        "reward": 4,
+        "type": "build-branch",
+        "islandId": "kadingir",
+        "branch": "food",
+        "factionId": "kadingir",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "kadingir-market",
+        "conditionKey": "build:kadingir:money",
+        "text": "Построить рынок на Кадингире или улучшить его",
+        "reward": 4,
+        "type": "build-branch",
+        "islandId": "kadingir",
+        "branch": "money",
+        "factionId": "kadingir",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "kadingir-quarry",
+        "conditionKey": "build:kadingir:stone",
+        "text": "Построить или улучшить каменоломню на Кадингире",
+        "reward": 5,
+        "type": "build-branch",
+        "islandId": "kadingir",
+        "branch": "stone",
+        "factionId": "kadingir",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "kadingir-ship-level",
+        "conditionKey": "ship-level",
+        "text": "Повысить общий уровень основного корабля",
+        "reward": 5,
+        "type": "ship-level",
+        "factionId": "kadingir",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "kadingir-cargo-upgrade",
+        "conditionKey": "upgrade:cargo",
+        "text": "Увеличить вместимость основного корабля улучшением",
+        "reward": 5,
+        "type": "stat-upgrade",
+        "branch": "cargo",
+        "factionId": "kadingir",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "kadingir-speed-upgrade",
+        "conditionKey": "upgrade:speed",
+        "text": "Увеличить скорость основного корабля улучшением",
+        "reward": 6,
+        "type": "stat-upgrade",
+        "branch": "speed",
+        "factionId": "kadingir",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "kadingir-delivery",
+        "conditionKey": "delivery:any",
+        "text": "Доставить и продать полный трюм любого товара в Цитадели",
+        "reward": 8,
+        "type": "delivery",
+        "goodIds": null,
+        "factionId": "kadingir",
+        "iconKey": "card.assignment"
+      }
+    ],
+    "pirates": [
+      {
+        "id": "pirates-kraken",
+        "conditionKey": "visit:kraken",
+        "text": "Посетить Кракена",
+        "reward": 8,
+        "type": "visit-place",
+        "placeId": "kraken",
+        "factionId": "pirates",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "pirates-abyss",
+        "conditionKey": "visit:abyss",
+        "text": "Посетить Бездну",
+        "reward": 8,
+        "type": "visit-place",
+        "placeId": "abyss",
+        "factionId": "pirates",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "pirates-pharaoh",
+        "conditionKey": "visit:pharaoh",
+        "text": "Посетить Фараона",
+        "reward": 8,
+        "type": "visit-place",
+        "placeId": "pharaoh",
+        "factionId": "pirates",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "pirates-pearl",
+        "conditionKey": "visit:pearl",
+        "text": "Посетить Жемчужину",
+        "reward": 8,
+        "type": "visit-place",
+        "placeId": "pearl",
+        "factionId": "pirates",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "pirates-attack-player-island",
+        "conditionKey": "attack:player-island",
+        "text": "Напасть на остров другого игрока",
+        "reward": 8,
+        "type": "attack-player-island",
+        "factionId": "pirates",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "pirates-mao",
+        "conditionKey": "capture:mao",
+        "text": "Захватить Мао",
+        "reward": 10,
+        "type": "capture-island",
+        "islandId": "mao",
+        "factionId": "pirates",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "pirates-anchor-a",
+        "conditionKey": "anchor:blue-yellow",
+        "text": "Победить на синем или жёлтом морском якоре, экземпляр А",
+        "reward": 6,
+        "type": "anchor-win",
+        "colors": [
+          "blue",
+          "yellow"
+        ],
+        "factionId": "pirates",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "pirates-anchor-b",
+        "conditionKey": "anchor:blue-yellow",
+        "text": "Победить на синем или жёлтом морском якоре, экземпляр Б",
+        "reward": 6,
+        "type": "anchor-win",
+        "colors": [
+          "blue",
+          "yellow"
+        ],
+        "factionId": "pirates",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "pirates-artillery-upgrade",
+        "conditionKey": "upgrade:artillery",
+        "text": "Увеличить артиллерию основного корабля улучшением",
+        "reward": 6,
+        "type": "stat-upgrade",
+        "branch": "artillery",
+        "factionId": "pirates",
+        "iconKey": "card.assignment"
+      }
+    ],
+    "suniksiya": [
+      {
+        "id": "suniksiya-kraken",
+        "conditionKey": "visit:kraken",
+        "text": "Посетить Кракена",
+        "reward": 8,
+        "type": "visit-place",
+        "placeId": "kraken",
+        "factionId": "suniksiya",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "suniksiya-farm",
+        "conditionKey": "build:suniksiya:food",
+        "text": "Построить ферму на Суниксии или улучшить её",
+        "reward": 6,
+        "type": "build-branch",
+        "islandId": "suniksiya",
+        "branch": "food",
+        "factionId": "suniksiya",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "suniksiya-market",
+        "conditionKey": "build:suniksiya:money",
+        "text": "Построить рынок на Суниксии или улучшить его",
+        "reward": 6,
+        "type": "build-branch",
+        "islandId": "suniksiya",
+        "branch": "money",
+        "factionId": "suniksiya",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "suniksiya-delivery-any",
+        "conditionKey": "delivery:any",
+        "text": "Доставить полный трюм любого товара в Цитадель",
+        "reward": 5,
+        "type": "delivery",
+        "goodIds": null,
+        "factionId": "suniksiya",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "suniksiya-delivery-provisions",
+        "conditionKey": "delivery:provisions",
+        "text": "Доставить полный трюм провианта в Цитадель",
+        "reward": 4,
+        "type": "delivery",
+        "goodIds": [
+          "provisions"
+        ],
+        "factionId": "suniksiya",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "suniksiya-delivery-wood-stone",
+        "conditionKey": "delivery:wood-stone",
+        "text": "Доставить полный трюм леса или камня в Цитадель",
+        "reward": 10,
+        "type": "delivery",
+        "goodIds": [
+          "wood",
+          "stone"
+        ],
+        "factionId": "suniksiya",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "suniksiya-delivery-ore",
+        "conditionKey": "delivery:ore",
+        "text": "Доставить полный трюм руды в Цитадель",
+        "reward": 6,
+        "type": "delivery",
+        "goodIds": [
+          "ore"
+        ],
+        "factionId": "suniksiya",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "suniksiya-cargo-upgrade",
+        "conditionKey": "upgrade:cargo",
+        "text": "Увеличить вместимость основного корабля улучшением",
+        "reward": 6,
+        "type": "stat-upgrade",
+        "branch": "cargo",
+        "factionId": "suniksiya",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "suniksiya-speed-upgrade",
+        "conditionKey": "upgrade:speed",
+        "text": "Увеличить скорость основного корабля улучшением",
+        "reward": 7,
+        "type": "stat-upgrade",
+        "branch": "speed",
+        "factionId": "suniksiya",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "suniksiya-treasure",
+        "conditionKey": "treasure:random",
+        "text": "Получить и разрешить случайную карту сокровища",
+        "reward": 7,
+        "type": "treasure-resolved",
+        "factionId": "suniksiya",
+        "iconKey": "card.assignment"
+      }
+    ],
+    "mori": [
+      {
+        "id": "mori-1",
+        "text": "Посетить Ренаику",
+        "reward": 8,
+        "type": "visit-island",
+        "islandId": "renaika",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        },
+        "factionId": "mori",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "mori-2",
+        "text": "Посетить Чертог",
+        "reward": 8,
+        "type": "visit-island",
+        "islandId": "chertog",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        },
+        "factionId": "mori",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "mori-3",
+        "text": "Посетить Кисалинию",
+        "reward": 8,
+        "type": "visit-island",
+        "islandId": "kisalinia",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        },
+        "factionId": "mori",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "mori-4",
+        "text": "Посетить Юкон",
+        "reward": 8,
+        "type": "visit-island",
+        "islandId": "yukon",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        },
+        "factionId": "mori",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "mori-5",
+        "text": "Посетить Эркалон",
+        "reward": 8,
+        "type": "visit-island",
+        "islandId": "erkalon",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        },
+        "factionId": "mori",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "mori-6",
+        "text": "Посетить Асигорий",
+        "reward": 10,
+        "type": "visit-island",
+        "islandId": "asigoriy",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        },
+        "factionId": "mori",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "mori-7",
+        "text": "Посетить Атлантию",
+        "reward": 12,
+        "type": "visit-island",
+        "islandId": "atlantia",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        },
+        "factionId": "mori",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "mori-8",
+        "text": "Посетить Адию",
+        "reward": 12,
+        "type": "visit-island",
+        "islandId": "adia",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        },
+        "factionId": "mori",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "mori-9",
+        "text": "Посетить сначала Ренаику, затем Мори",
+        "reward": 16,
+        "type": "visit-route",
+        "route": [
+          {
+            "islandId": "renaika"
+          },
+          {
+            "islandId": "mori"
+          }
+        ],
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        },
+        "factionId": "mori",
+        "iconKey": "card.assignment"
+      },
+      {
+        "id": "mori-10",
+        "text": "Посетить сначала Кисалинию, затем Цитадель",
+        "reward": 14,
+        "type": "visit-route",
+        "route": [
+          {
+            "islandId": "kisalinia"
+          },
+          {
+            "mapObjectId": "citadel"
+          }
+        ],
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        },
+        "factionId": "mori",
+        "iconKey": "card.assignment"
+      }
+    ]
+  },
+  "paidAssignmentReplacement": false,
+  "availability": {
+    "status": "data-ready",
+    "consumerStage": 5
+  }
+}

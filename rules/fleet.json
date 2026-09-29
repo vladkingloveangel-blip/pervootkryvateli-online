@@ -1,0 +1,239 @@
+{
+  "ships": {
+    "brigantine": {
+      "id": "brigantine",
+      "name": "Бригантина",
+      "artillery": 4,
+      "army": 3,
+      "cargo": 2,
+      "moveMod": 1,
+      "passability": "shoal",
+      "iconKey": "ship.brigantine"
+    },
+    "frigate": {
+      "id": "frigate",
+      "name": "Фрегат",
+      "artillery": 5,
+      "army": 3,
+      "cargo": 2,
+      "moveMod": 0,
+      "passability": "reef",
+      "iconKey": "ship.frigate"
+    },
+    "caravel": {
+      "id": "caravel",
+      "name": "Каравелла",
+      "artillery": 3,
+      "army": 5,
+      "cargo": 2,
+      "moveMod": 0,
+      "passability": "land1",
+      "iconKey": "ship.caravel"
+    },
+    "carrack": {
+      "id": "carrack",
+      "name": "Каракка",
+      "artillery": 3,
+      "army": 4,
+      "cargo": 5,
+      "moveMod": -1,
+      "passability": "ice",
+      "iconKey": "ship.carrack"
+    }
+  },
+  "levels": {
+    "1": {
+      "level": 1,
+      "price": 0,
+      "statBonus": 0,
+      "moveBonus": 0,
+      "upgradeSlots": 1,
+      "escortLimit": 1
+    },
+    "2": {
+      "level": 2,
+      "price": 10,
+      "statBonus": 1,
+      "moveBonus": 0,
+      "upgradeSlots": 2,
+      "escortLimit": 1
+    },
+    "3": {
+      "level": 3,
+      "price": 15,
+      "statBonus": 2,
+      "moveBonus": 0,
+      "upgradeSlots": 3,
+      "escortLimit": 2
+    },
+    "4": {
+      "level": 4,
+      "price": 20,
+      "statBonus": 3,
+      "moveBonus": 0,
+      "upgradeSlots": 4,
+      "escortLimit": 2
+    },
+    "5": {
+      "level": 5,
+      "price": 25,
+      "statBonus": 4,
+      "moveBonus": 0,
+      "upgradeSlots": 5,
+      "escortLimit": 3
+    },
+    "6": {
+      "level": 6,
+      "price": 30,
+      "statBonus": 5,
+      "moveBonus": 0,
+      "upgradeSlots": 6,
+      "escortLimit": 3
+    }
+  },
+  "upgrades": {
+    "falcons": {
+      "id": "falcons",
+      "name": "Фальконы",
+      "branch": "artillery",
+      "order": 1,
+      "price": 5,
+      "artillery": 1,
+      "iconKey": "upgrade.falcons"
+    },
+    "culverins": {
+      "id": "culverins",
+      "name": "Кулеврины",
+      "branch": "artillery",
+      "order": 2,
+      "price": 10,
+      "artillery": 2,
+      "requires": "falcons",
+      "iconKey": "upgrade.culverins"
+    },
+    "musketeers": {
+      "id": "musketeers",
+      "name": "Мушкетёры",
+      "branch": "army",
+      "order": 1,
+      "price": 5,
+      "army": 1,
+      "iconKey": "upgrade.musketeers"
+    },
+    "pikemen": {
+      "id": "pikemen",
+      "name": "Пикинёры",
+      "branch": "army",
+      "order": 2,
+      "price": 10,
+      "army": 2,
+      "requires": "musketeers",
+      "iconKey": "upgrade.pikemen"
+    },
+    "orlop": {
+      "id": "orlop",
+      "name": "Орлоп-палуба",
+      "branch": "cargo",
+      "order": 1,
+      "price": 5,
+      "cargo": 1,
+      "iconKey": "upgrade.orlop"
+    },
+    "sternStores": {
+      "id": "sternStores",
+      "name": "Кормовые кладовые",
+      "branch": "cargo",
+      "order": 2,
+      "price": 10,
+      "cargo": 2,
+      "requires": "orlop",
+      "iconKey": "upgrade.sternStores"
+    },
+    "foreStengha": {
+      "id": "foreStengha",
+      "name": "Фор-стеньга",
+      "branch": "speed",
+      "order": 1,
+      "price": 10,
+      "movement": 1,
+      "iconKey": "upgrade.foreStengha"
+    },
+    "leadLine": {
+      "id": "leadLine",
+      "name": "Свинцовый лот",
+      "branch": "leadLine",
+      "order": 1,
+      "price": 10,
+      "passability": "shoal",
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 3
+      },
+      "iconKey": "upgrade.leadLine"
+    },
+    "reefPilot": {
+      "id": "reefPilot",
+      "name": "Рифовый лоцман",
+      "branch": "reefPilot",
+      "order": 1,
+      "price": 10,
+      "passability": "reef",
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 3
+      },
+      "iconKey": "upgrade.reefPilot"
+    },
+    "iceStem": {
+      "id": "iceStem",
+      "name": "Ледовый форштевень",
+      "branch": "iceStem",
+      "order": 1,
+      "price": 10,
+      "passability": "ice",
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 3
+      },
+      "iconKey": "upgrade.iceStem"
+    },
+    "portageSleds": {
+      "id": "portageSleds",
+      "name": "Волоковые салазки",
+      "branch": "portageSleds",
+      "order": 1,
+      "price": 10,
+      "passability": "land1",
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 3
+      },
+      "iconKey": "upgrade.portageSleds"
+    }
+  },
+  "escorts": {
+    "cargo": {
+      "id": "cargo",
+      "name": "Грузовой эскорт",
+      "artillery": 0,
+      "army": 0,
+      "cargo": 5,
+      "iconKey": "escort.cargo"
+    },
+    "combat": {
+      "id": "combat",
+      "name": "Боевой эскорт",
+      "artillery": 5,
+      "army": 0,
+      "cargo": 0,
+      "iconKey": "escort.combat"
+    }
+  },
+  "escortPrices": [
+    10,
+    15,
+    20
+  ],
+  "maxLevel": 6,
+  "maxBranchUpgrades": 2
+}
