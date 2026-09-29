@@ -693,7 +693,10 @@
   $('hudDebtBtn').addEventListener('click', () => openMobileTab('ship'));
   $('hudTurnBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : openMobileTab('actions'));
 
-  $('startBtn').addEventListener('click', () => socket.emit('startGame', {}, handleGameAck));
+  $('startBtn').addEventListener('click', () => {
+    $('startBtn').disabled = true;
+    socket.emit('startGame', {}, res => { handleGameAck(res); if (!res?.ok) renderPlayers(); });
+  });
 
   $('leaveRoomBtn').addEventListener('click', () => {
     if (!state.room || state.room.started) return;
@@ -878,7 +881,7 @@
     $('entry').classList.add('hidden');
     $('game').classList.remove('hidden');
     $('roomCode').textContent = r.code;
-    $('roundLabel').textContent = !r.started ? 'Лобби' : r.eventPhase?.active ? `Раунд ${r.round} · общая Фаза событий` : `Раунд ${r.round} · круг ${r.circle}/${r.balanceCatalog.session.circlesPerRound}`;
+    $('roundLabel').textContent = !r.started ? 'Лобби' : `Раунд ${r.round} · круг ${r.circle}/${r.balanceCatalog.session.circlesPerRound}${r.eventPhase?.active ? ' · события' : ''}`;
     const a = active();
     const eventPlayer = r.eventPhase?.currentPlayerId ? r.players.find(p => p.id === r.eventPhase.currentPlayerId) : null;
     $('turnLabel').textContent = !r.started ? `Игроков: ${r.players.length}/${r.balanceCatalog.session.players.max}` : r.eventPhase?.active ? `Событие: ${eventPlayer?.name || '—'}` : (a ? `Ход: ${a.name}` : '—');
@@ -923,16 +926,61 @@
     $('players').innerHTML = '';
     const isHost = r.hostId === state.myId;
     const isSpectator = state.spectating;
-    r.players.forEach(p => {
-      const order = r.started ? r.order.indexOf(p.id) + 1 : null;
+    const seats = r.seatingOrder?.length === r.players.length ? r.seatingOrder : r.players.map(p => p.id);
+    const shown = r.started ? r.order : seats;
+    const sendLobbyChange = (button, event, payload) => {
+      button.disabled = true;
+      socket.emit(event, payload, res => { handleGameAck(res); if (!res?.ok) button.disabled = false; });
+    };
+    shown.map(id => r.players.find(p => p.id === id)).filter(Boolean).forEach(p => {
+      const order = r.started ? r.order.indexOf(p.id) + 1 : seats.indexOf(p.id) + 1;
       const el = document.createElement('div');
       el.className = 'player-card';
       const cargoLabel = p.landCompany ? ` · рота +${p.landCompany.army}` : (p.cargo ? ` · груз ${state.room.goodsCatalog?.[p.cargo.goodId]?.name || p.cargo.goodId} ×${p.cargo.quantity}` : '');
       const suzerainName = p.suzerainId ? state.room.factions?.find(f => f.id === p.suzerainId)?.name : null;
       const politicalLabel = suzerainName ? ` · вассал ${suzerainName}` : (p.enemyFactionIds?.length ? ` · вражда ${p.enemyFactionIds.length}` : '');
       const readyLabel = !r.started ? (p.ready ? ' · ✓ готов' : ' · не готов') : '';
-      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · слава ${p.glory || 0} · островов ${p.islandCount} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${order ? `#${order}` : ''}</span></div>`;
+      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${p.id === r.leaderId ? ' · ведущий' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · слава ${p.glory || 0} · островов ${p.islandCount} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
+      if (!isSpectator && isHost && !r.started) {
+        const actions = el.querySelector('.player-side-actions');
+        if (p.id !== r.leaderId) {
+          const leader = document.createElement('button'); leader.className = 'seat-btn'; leader.textContent = 'Ведущий';
+          leader.addEventListener('click', () => sendLobbyChange(leader, 'setLeader', { playerId: p.id }));
+          actions.appendChild(leader);
+        }
+        for (const [step, label] of [[-1, 'Раньше'], [1, 'Позже']]) {
+          const target = seats.indexOf(p.id) + step;
+          if (target < 0 || target >= seats.length) continue;
+          const button = document.createElement('button'); button.className = 'seat-btn'; button.textContent = label;
+          button.addEventListener('click', () => {
+            const ids = [...seats]; [ids[target], ids[target - step]] = [ids[target - step], ids[target]];
+            sendLobbyChange(button, 'setSeatingOrder', { playerIds: ids });
+          });
+          actions.appendChild(button);
+        }
+      }
       if (!isSpectator && !r.started && p.isYou) {
+        const label = document.createElement('label');
+        label.className = 'lobby-ship-label';
+        label.textContent = 'Класс корабля';
+        const shipSelect = document.createElement('select');
+        shipSelect.setAttribute('aria-label', 'Класс вашего корабля');
+        for (const [id, ship] of Object.entries(r.shipCatalog || {})) {
+          const option = document.createElement('option');
+          option.value = id; option.textContent = ship.name;
+          shipSelect.appendChild(option);
+        }
+        shipSelect.value = p.shipClass;
+        shipSelect.disabled = p.id === r.leaderId;
+        shipSelect.addEventListener('change', () => {
+          shipSelect.disabled = true;
+          socket.emit('changeShip', { shipClass: shipSelect.value }, res => {
+            handleGameAck(res);
+            if (!res?.ok) { shipSelect.value = p.shipClass; shipSelect.disabled = p.id === r.leaderId; }
+          });
+        });
+        label.appendChild(shipSelect);
+        el.querySelector('.player-meta').appendChild(label);
         const readyBtn = document.createElement('button');
         readyBtn.className = p.ready ? 'small danger-soft' : 'small primary';
         readyBtn.textContent = p.ready ? 'Снять готовность' : 'Готов';
@@ -954,8 +1002,8 @@
     const allReady = r.players.length >= r.balanceCatalog.session.players.min && r.players.every(p => p.ready && p.connected);
     const waitingReady = r.players.filter(p => !p.ready || !p.connected).length;
     $('startBtn').classList.toggle('hidden', isSpectator || r.started || !isHost);
-    $('startBtn').disabled = r.players.length < r.balanceCatalog.session.players.min || r.players.length > r.balanceCatalog.session.players.max || !allReady;
-    $('startBtn').textContent = r.players.length < r.balanceCatalog.session.players.min ? `Нужно ещё игроков: ${r.balanceCatalog.session.players.min - r.players.length}` : (!allReady ? `Ждём готовности: ${waitingReady}` : 'Начать игру');
+    $('startBtn').disabled = r.players.length < r.balanceCatalog.session.players.min || r.players.length > r.balanceCatalog.session.players.max || !r.leaderId || !allReady;
+    $('startBtn').textContent = r.players.length < r.balanceCatalog.session.players.min ? `Нужно ещё игроков: ${r.balanceCatalog.session.players.min - r.players.length}` : (!r.leaderId ? 'Выберите ведущего' : (!allReady ? `Ждём готовности: ${waitingReady}` : 'Начать игру'));
 
     $('closeRoomBtn').classList.toggle('hidden', isSpectator || !isHost);
     $('leaveRoomBtn').classList.toggle('hidden', isSpectator || isHost || r.started);
@@ -1172,8 +1220,8 @@
     $('dockSkipBtn').classList.add('hidden');
     $('dockEndTurnBtn').classList.toggle('hidden', !myTurn || phase !== 'actions' || blocked);
 
-    if (!r.started) $('moveResult').textContent = 'Выберите корабль, затем каждый игрок нажимает «Готов». Когда все онлайн и готовы, создатель запускает партию.';
-    else if (r.eventPhase?.active) $('moveResult').textContent = r.pendingIslandCorrection?.viewerCanRespond ? `Остров ${r.pendingIslandCorrection.islandName} нужно немедленно исправить перед продолжением Фазы событий.` : r.pendingIslandCorrection ? `Фаза событий приостановлена: ${playerName(r.pendingIslandCorrection.playerId)} исправляет остров ${r.pendingIslandCorrection.islandName}.` : r.pendingAssignmentChoice?.viewerCanRespond ? 'Нужно решить, оставить или заменить поручение сюзерена.' : r.pendingFeud?.viewerCanRespond ? 'Нужно разрешить вашу карту вражды.' : r.pendingEvent?.viewerCanRespond ? 'Нужно принять решение по вашей карте события.' : `Идёт общая Фаза событий: ${playerName(r.eventPhase.currentPlayerId)}.`;
+    if (!r.started) $('moveResult').textContent = 'Выберите корабль. Организатор назначает ведущего и порядок мест; затем все нажимают «Готов».';
+    else if (r.eventPhase?.active) $('moveResult').textContent = r.pendingIslandCorrection?.viewerCanRespond ? `Остров ${r.pendingIslandCorrection.islandName} нужно исправить перед продолжением.` : r.pendingIslandCorrection ? `${playerName(r.pendingIslandCorrection.playerId)} исправляет остров ${r.pendingIslandCorrection.islandName}.` : r.pendingAssignmentChoice?.viewerCanRespond ? 'Нужно решить, оставить или заменить поручение сюзерена.' : r.pendingFeud?.viewerCanRespond ? 'Нужно разрешить вашу карту вражды.' : r.pendingEvent?.viewerCanRespond ? 'Нужно принять решение по вашей карте события.' : `Карты получает ${playerName(r.eventPhase.currentPlayerId)}.`;
     else if (r.pendingStatePrize?.viewerCanRespond) $('moveResult').textContent = 'Разместите призовую постройку за полное подчинение государства.';
     else if (r.pendingStatePrize) $('moveResult').textContent = `Ожидается размещение итогового приза игроком ${playerName(r.pendingStatePrize.playerId)}.`;
     else if (r.pendingIslandCorrection?.viewerCanRespond) $('moveResult').textContent = `Остров ${r.pendingIslandCorrection.islandName} нужно немедленно привести к допустимым ограничениям.`;
@@ -1187,7 +1235,7 @@
   }
 
   function aText() {
-    if (state.room?.eventPhase?.active) return `Идёт общая Фаза событий: ${playerName(state.room.eventPhase.currentPlayerId)}.`;
+    if (state.room?.eventPhase?.active) return `Карты получает ${playerName(state.room.eventPhase.currentPlayerId)}.`;
     const a = active();
     return a ? `Сейчас ходит ${a.name}.` : 'Ожидание.';
   }
@@ -1229,10 +1277,10 @@
     let html = `<div class="event-decks">События: ${sailing.remaining} / сброс ${sailing.discard} · сокровища: ${treasure.remaining} / ${treasure.discard} · легендарные: ${legendary.remaining}</div>${feudCounts ? `<div class="event-decks">Вражда: ${escapeHtml(feudCounts)}</div>` : ''}`;
     if (phase?.active) {
       const currentName = playerName(phase.currentPlayerId);
-      html += `<div class="event-current"><strong>Общая Фаза событий · ${escapeHtml(stageLabel)}</strong><br>Текущий игрок: ${escapeHtml(currentName)}.</div>`;
+      html += `<div class="event-current"><strong>${phase.personalTurn ? 'Шестой круг' : 'Фаза событий'} · ${escapeHtml(stageLabel)}</strong><br>Текущий игрок: ${escapeHtml(currentName)}.</div>`;
       if (phase.lastCard) html += `<div class="event-card-line">Последняя карта: <strong>«${escapeHtml(phase.lastCard.cardName)}»</strong>${phase.lastCard.factionName ? ` · ${escapeHtml(phase.lastCard.factionName)}` : ''}${phase.lastCard.pending ? ' · ожидает выбора' : ''}.</div>`;
     } else {
-      html += '<div class="event-current">После пятого круга раунда каждый игрок получает одну карту события плавания в постоянном порядке.</div>';
+      html += '<div class="event-current">В шестом круге каждый игрок получает карты в начале своего хода, затем выполняет обычный ход.</div>';
     }
 
     const queued = effectLabels(nextEffects);
@@ -1410,7 +1458,7 @@
     const enemies = new Set(mine.enemyFactionIds || []);
     badge.textContent = suzerain ? 'вассал' : (enemies.size ? `вражда ${enemies.size}` : 'нейтрален');
     let html = '';
-    if (suzerain) html += `<div class="event-current"><strong>Сюзерен: ${escapeHtml(suzerain.name)}</strong>${suzerain.tax ? `<br>Налог: ${suzerain.tax} дуката в начале общей Фазы событий.` : '<br>Денежного налога за раунд нет.'}</div>`;
+    if (suzerain) html += `<div class="event-current"><strong>Сюзерен: ${escapeHtml(suzerain.name)}</strong>${suzerain.tax ? `<br>Налог: ${suzerain.tax} дуката в начале вашего хода шестого круга.` : '<br>Денежного налога за раунд нет.'}</div>`;
     if (enemies.size) html += `<div class="event-effect"><strong>Вражда:</strong> ${[...enemies].map(id => escapeHtml(r.factions?.find(f => f.id === id)?.name || id)).join(', ')}.</div>`;
     html += (r.factions || []).map(f => {
       const vassal = f.vassalPlayerId ? playerName(f.vassalPlayerId) : 'нет';

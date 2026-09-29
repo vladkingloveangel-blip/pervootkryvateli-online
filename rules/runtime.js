@@ -1,4 +1,4 @@
-// Stage-1 projection for the existing engine, NOT an alternative master ruleset.
+// Active rules projection with explicit compatibility for mechanics still awaiting later stages.
 const rules = require('./index');
 const legacy = require('./compatibility/legacy.json');
 const { validateCompatibility } = require('./validate');
@@ -40,9 +40,9 @@ const FEUD_CARDS = Object.fromEntries(Object.entries(legacy.feud).map(([id, card
   }),
 ]));
 module.exports = {
-  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-1-compatible',
+  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-2-party-clock',
   BALANCE: {
-    session: { ...rules.session, ...legacy.session },
+    session: rules.session,
     maxShipLevel: rules.fleet.maxLevel, maxReadableShipLevel: legacy.shipLevel7.level,
     escortPrices: rules.fleet.escortPrices, maxBranchUpgrades: rules.fleet.maxBranchUpgrades,
     maxEscorts: rules.fleet.escortPrices.length,

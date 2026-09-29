@@ -41,6 +41,25 @@ const root = path.join(__dirname, '..');
       await page.waitForFunction(()=>document.querySelector('#shipSelect option[value="brigantine"]')?.textContent.includes('арт. 4'));
       await page.waitForFunction(()=>window.__testState?.room?.balanceCatalog);
       await page.evaluate(()=>{
+        const state=window.__testState, room=structuredClone(state.room);
+        window.__lobbyOriginal=structuredClone(room);
+        const first=room.players[0];
+        room.players=[first,...[1,2,3].map(i=>({...first,id:`seat-${i}`,name:`Игрок ${i+1}`,isYou:false,color:['#1e88e5','#43a047','#8e24aa'][i-1]}))];
+        room.seatingOrder=[first.id,'seat-2','seat-1','seat-3'];
+        room.leaderId='seat-1';
+        window.__testSocket.listeners('roomState')[0](room);
+      });
+      if(width<900)await page.click('[data-mobile-nav="players"]');
+      assert.equal(await page.locator('#players .player-card').count(),4);
+      assert.match(await page.locator('#players').textContent(),/ведущий/);
+      assert.equal(await page.locator('#players select[aria-label="Класс вашего корабля"]').count(),1);
+      assert.equal(await page.locator('#players select[aria-label="Класс вашего корабля"]').isEnabled(),true);
+      for(const button of await page.locator('#players .seat-btn').all()){
+        const box=await button.boundingBox();assert.ok(box.height>=44 && box.width>=44);
+      }
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+      await page.evaluate(()=>window.__testSocket.listeners('roomState')[0](window.__lobbyOriginal));
+      await page.evaluate(()=>{
         const state=window.__testState,room=structuredClone(state.room),mine=room.players.find(p=>p.id===state.myId);
         Object.assign(room,{started:true,phase:'actions',activePlayerId:mine.id,actionsLeft:3});
         Object.assign(mine,{phase:'actions',actionsLeft:3,atCitadel:true,row:13,col:13,ducats:999,upgradeSlots:6,nextLevel:{level:2,price:room.shipLevelCatalog[2].price},shipyardSlots:3,escortUseLimit:3});
