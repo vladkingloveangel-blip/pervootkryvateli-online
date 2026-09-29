@@ -29,6 +29,20 @@ function validateRules(rules, map) {
   const branches = new Set(economy.buildingBranches.map(b => b.id));
   const upgradeBranches = new Set(Object.values(fleet.upgrades).map(u => u.branch));
   const ref = (id, set, path) => check(set.has(id), path, `unknown reference ${id}`);
+  const required = (value, keys, path) => {
+    for (const key of keys) check(value[key] !== undefined && value[key] !== null, `${path}.${key}`, 'missing required field');
+  };
+  const only = (value, keys, path) => {
+    for (const key of Object.keys(value)) check(keys.includes(key), `${path}.${key}`, 'unexpected field');
+  };
+  const positive = (value, path) => integer(value, path, 1);
+  const boolean = (value, path) => check(typeof value === 'boolean', path, 'expected boolean');
+  const nonemptyIds = (value, set, path) => {
+    check(Array.isArray(value) && value.length > 0, path, 'expected nonempty list');
+    if (!Array.isArray(value)) return;
+    unique(value, path);
+    for (const id of value) ref(id, set, path);
+  };
   const effectTypes = new Set(['movement-penalty','skip-income','reclaim-island','ship-level-loss',
     'treasury-percent','treasury-flat','remove-upgrade','remove-cargo','discard-random-held','none',
     'remove-building','downgrade-building','departure-movement','replace-event','choose-assignment',
@@ -37,24 +51,50 @@ function validateRules(rules, map) {
     'peek-sea-deck','choose-treasure','extra-action','prevent-battle-level-loss']);
   function effect(e, path) {
     check(e && effectTypes.has(e.type), path, `unknown effect ${e?.type}`);
-    if (!e) return;
-    for (const key of ['amount','count','steps','levels','percent','durationPersonalTurns','range','draw','keep','minimum','multiplier','usesPerGame','holds','fallbackDucats']) {
-      if (key in e) integer(e[key], `${path}.${key}`);
-    }
-    if (e.goodId) ref(e.goodId, goods, path);
-    if (e.factionId) ref(e.factionId, factions, path);
-    if (e.branch) ref(e.branch, upgradeBranches, path);
-    for (const type of e.buildingTypes || []) ref(type, buildings, path);
-    const required = {
-      'movement-penalty':['amount'], 'treasury-percent':['percent'], 'treasury-flat':['amount'],
-      'reclaim-island':['factionId','fallbackDucats'], 'ship-level-loss':['levels'],
-      'remove-upgrade':['count'], 'remove-cargo':['holds'], 'discard-random-held':['count'],
-      'remove-building':['count','buildingTypes'], 'downgrade-building':['count','steps'],
-      'income-multiple':['minimum','multiplier'], 'fill-hold':['goodId'], 'protect':['durationPersonalTurns'],
-      'departure-movement':['amount'], 'choose-assignment':['draw','keep'],
-      'inspect-hidden-cards':['range'], 'peek-sea-deck':['range','count'],
-    }[e.type] || [];
-    for (const key of required) check(e[key] !== undefined && e[key] !== null, path, `missing ${key}`);
+    if (!e || !effectTypes.has(e.type)) return;
+    // Each effect stays a plain data object. Closed field lists catch silent typos in deferred mechanics.
+    const shapes = {
+      'movement-penalty': [['amount'], ['timing','durationPersonalTurns']],
+      'skip-income': [['timing','buildingTypes']],
+      'reclaim-island': [['factionId','fallbackDucats','keepBuildings']],
+      'ship-level-loss': [['levels']],
+      'treasury-percent': [['percent']], 'treasury-flat': [['amount']],
+      'remove-upgrade': [['count'], ['branch']], 'remove-cargo': [['holds']],
+      'discard-random-held': [['count','targetZone','unresolved']], 'none': [[]],
+      'remove-building': [['count','buildingTypes']],
+      'downgrade-building': [['count','steps'], ['buildingTypes']],
+      'departure-movement': [['amount']], 'replace-event': [['limit']],
+      'choose-assignment': [['draw','keep']], 'end-enmity': [['usesPerGame']],
+      'expedition-access': [[]], 'character-access': [[]],
+      'protect': [['durationPersonalTurns','hostileCardReactionExpiry','reactionActionCost']],
+      'downgrade-all-buildings': [['steps']], 'relocate-reachable': [[]],
+      'income-multiple': [['minimum','multiplier']], 'fill-hold': [['goodId']],
+      'reroll-navigation': [['rerolls','secondResultMandatory']],
+      'inspect-hidden-cards': [['range','distance','assignmentVisibility','unresolved']],
+      'peek-sea-deck': [['range','distance','count']],
+      'choose-treasure': [['draw','keep']], 'extra-action': [['count']],
+      'prevent-battle-level-loss': [['levels','anchorPenaltyExcluded']],
+    };
+    const [needed, optional = []] = shapes[e.type];
+    required(e, needed.filter(key => !['targetZone','assignmentVisibility'].includes(key)), path);
+    for (const key of needed.filter(key => ['targetZone','assignmentVisibility'].includes(key))) check(Object.hasOwn(e,key), `${path}.${key}`, 'missing required field');
+    only(e, ['type',...needed,...optional], path);
+    for (const key of ['amount','count','steps','levels','durationPersonalTurns','range','draw','keep','minimum','multiplier','usesPerGame','holds','rerolls','limit']) if (key in e) positive(e[key], `${path}.${key}`);
+    for (const key of ['fallbackDucats','reactionActionCost']) if (key in e) integer(e[key], `${path}.${key}`);
+    if ('percent' in e) check(Number.isInteger(e.percent) && e.percent >= 0 && e.percent <= 100, `${path}.percent`, 'expected percentage 0..100');
+    for (const key of ['keepBuildings','secondResultMandatory','anchorPenaltyExcluded']) if (key in e) boolean(e[key], `${path}.${key}`);
+    if ('draw' in e && 'keep' in e) check(e.keep <= e.draw, path, 'keep exceeds draw');
+    if (e.goodId !== undefined) ref(e.goodId, goods, path);
+    if (e.factionId !== undefined) ref(e.factionId, factions, path);
+    if (e.branch !== undefined) ref(e.branch, upgradeBranches, path);
+    if (e.buildingTypes !== undefined) nonemptyIds(e.buildingTypes, buildings, `${path}.buildingTypes`);
+    if (e.timing !== undefined) check(e.timing === 'current-personal-turn', path, 'invalid timing');
+    if (e.distance !== undefined) check(e.distance === 'manhattan', path, 'invalid distance');
+    if (e.type === 'movement-penalty') check((e.timing === 'current-personal-turn') !== Number.isInteger(e.durationPersonalTurns), path, 'expected exactly one duration');
+    if (e.type === 'reclaim-island') check(rules.islands.some(i => i.factionId === e.factionId), path, 'faction has no original island');
+    if (e.type === 'discard-random-held') check(e.targetZone === null && e.unresolved === 'R29', path, 'unresolved target must stay neutral');
+    if (e.type === 'inspect-hidden-cards') check(e.assignmentVisibility === null && e.unresolved === 'R29', path, 'unresolved visibility must stay neutral');
+    if (e.type === 'protect') check(e.hostileCardReactionExpiry === 'end-of-current-turn', path, 'invalid reaction expiry');
   }
   integer(rules.metadata.schemaVersion, 'metadata.schemaVersion', 1);
   check(Boolean(rules.metadata.rulesetVersion), 'metadata', 'missing rulesetVersion');
@@ -107,6 +147,7 @@ function validateRules(rules, map) {
   }
   for (const b of Object.values(economy.buildings)) {
     integer(b.price, b.id); check(b.area === 1, b.id, 'building must occupy one area');
+    check(b.price === b.levels?.[1]?.price, b.id, 'price differs from level I');
     if (b.produces) ref(b.produces, goods, b.id);
     if (b.resourceId) ref(b.resourceId, resources, b.id);
     check(Object.keys(b.levels || {}).length > 0, b.id, 'missing levels');
@@ -138,15 +179,36 @@ function validateRules(rules, map) {
   for (const [factionId, cards] of Object.entries(politics.assignments)) for (const c of cards) {
     ref(factionId, factions, c.id); check(c.factionId === factionId, c.id, 'faction mismatch');
     integer(c.reward, c.id); check(assignmentTypes.has(c.type), c.id, 'unknown condition');
+    const assignmentFields = {
+      'capture-island':['islandId'], 'build-branch':['islandId','branch'],
+      'build-type':['buildingType','resourceId'], 'ship-level':[],
+      'anchor-win':['colors'], 'visit-place':['placeId'], 'stat-upgrade':['branch'],
+      'delivery':['goodIds'], 'attack-player-island':[], 'treasure-resolved':[],
+      'visit-island':['islandId'], 'visit-route':['route'],
+    };
+    if (assignmentFields[c.type]) {
+      only(c, ['id','conditionKey','text','reward','type','factionId','iconKey','availability',
+        ...assignmentFields[c.type],...(c.type === 'build-type' ? ['resource'] : [])], c.id);
+      for (const key of assignmentFields[c.type]) {
+        if (key === 'goodIds') check(Object.hasOwn(c,key), `${c.id}.${key}`, 'missing required field');
+        else required(c,[key],c.id);
+      }
+    }
     if (c.islandId) ref(c.islandId, islands, c.id);
     if (c.placeId) ref(c.placeId, places, c.id);
     if (c.buildingType) ref(c.buildingType, buildings, c.id);
+    if (c.resourceId) ref(c.resourceId, resources, c.id);
+    if (c.resource && c.resourceId) check(economy.resources[c.resourceId]?.name === c.resource, c.id, 'resource label/id mismatch');
     if (c.branch) ref(c.branch, new Set([...branches,...upgradeBranches]), c.id);
-    for (const id of c.goodIds || []) ref(id, goods, c.id);
-    for (const id of c.colors || []) ref(id, new Set(Object.keys(rules.sea)), c.id);
-    if (c.type === 'visit-route') check(c.route?.length > 1, c.id, 'missing route');
-    if (['visit-island','capture-island'].includes(c.type)) ref(c.islandId, islands, c.id);
-    for (const stop of c.route || []) {
+    if (c.goodIds !== null && c.goodIds !== undefined) nonemptyIds(c.goodIds, goods, `${c.id}.goodIds`);
+    if (c.colors !== undefined) nonemptyIds(c.colors, new Set(Object.keys(rules.sea)), `${c.id}.colors`);
+    if (c.type === 'visit-route') check(Array.isArray(c.route) && c.route.length === 2, c.id, 'expected two ordered stops');
+    if (c.type === 'build-branch') check(economy.buildingBranches.some(b => b.id === c.branch), c.id, 'unknown building branch');
+    if (c.type === 'stat-upgrade') check(upgradeBranches.has(c.branch), c.id, 'unknown upgrade branch');
+    if (c.type === 'build-type') check(c.resourceId && rules.islands.some(i => i.resourceIds.includes(c.resourceId)), c.id, 'resource has no island');
+    for (const stop of Array.isArray(c.route) ? c.route : []) {
+      if (!stop || typeof stop !== 'object' || Array.isArray(stop)) { check(false, c.id, 'invalid route stop'); continue; }
+      check(Object.keys(stop).length === 1, c.id, 'route stop must have one reference');
       if (stop.islandId) ref(stop.islandId, islands, c.id);
       else check(stop.mapObjectId === map.CITADEL.id, c.id, 'unknown route stop');
     }
@@ -164,20 +226,52 @@ function validateRules(rules, map) {
   const eventTypes = new Set(['treasure','legendary','found-cargo','save-card','special-card','turn-effect','raid','boarding','storm','treasury-loss']);
   for (const c of rules.events.sailing) {
     check(eventTypes.has(c.type), c.id, 'unknown event type');
+    const eventFields = {treasure:[],legendary:[],'found-cargo':['goodId'],
+      'save-card':['savedKind'],'special-card':['legendaryCardId'],
+      'turn-effect':['effect','value','timing'],raid:[],boarding:[],storm:['islandId'],
+      'treasury-loss':['percent']};
+    if (eventFields[c.type]) {
+      only(c, ['id','name','rulesText','source','quantity','iconKey','availability','type',
+        ...eventFields[c.type],...(c.type === 'save-card' ? ['buildingType'] : []),
+        ...(c.type === 'special-card' ? ['cardName'] : [])], c.id);
+      for (const key of eventFields[c.type]) required(c,[key],c.id);
+    }
     if (c.goodId) ref(c.goodId, goods, c.id);
     if (c.islandId) ref(c.islandId, islands, c.id);
     if (c.buildingType) ref(c.buildingType, buildings, c.id);
     if (c.legendaryCardId) ref(c.legendaryCardId, new Set(legends.legendary.map(x=>x.id)), c.id);
-    if (c.type === 'turn-effect') check(['moveBonus','movePenalty','bestOfTwo','noNavigation','noIncome'].includes(c.effect), c.id, 'unknown turn effect');
+    if (c.type === 'turn-effect') {
+      check(['moveBonus','movePenalty','bestOfTwo','noNavigation','noIncome'].includes(c.effect), c.id, 'unknown turn effect');
+      check(c.timing === 'current-personal-turn', c.id, 'invalid timing');
+      if (['moveBonus','movePenalty'].includes(c.effect)) positive(c.value, `${c.id}.value`);
+      else check(c.value === true, `${c.id}.value`, 'expected true');
+    }
+    if (c.type === 'treasury-loss') check(Number.isInteger(c.percent) && c.percent >= 0 && c.percent <= 100, c.id, 'invalid percentage');
+    if (c.type === 'special-card') check(legends.legendary.find(x => x.id === c.legendaryCardId)?.name === c.cardName, c.id, 'card name/reference mismatch');
+    if (c.type === 'save-card') {
+      check(['ship-master','market-blueprint','farm-blueprint'].includes(c.savedKind), c.id, 'unknown saved card');
+      if (c.savedKind === 'ship-master') check(c.buildingType === undefined, c.id, 'ship master is not a building blueprint');
+      else check(c.buildingType && c.savedKind === `${c.buildingType}-blueprint`, c.id, 'blueprint/reference mismatch');
+    }
   }
   for (const id of politics.order) {
     deck(rules.events.feud[id], 10, `feud.${id}`);
-    for (const c of rules.events.feud[id]) { check(c.factionId === id, c.id, 'faction mismatch'); effect(c.effect, c.id); }
+    for (const c of rules.events.feud[id]) {
+      check(c.factionId === id, c.id, 'faction mismatch'); effect(c.effect, c.id);
+      if (c.effect?.type === 'reclaim-island') check(c.effect.factionId === id, c.id, 'reclaim faction/card mismatch');
+    }
   }
   records(legends.places, 'places'); check(legends.places.length === 10, 'places', 'expected ten places');
   for (const p of legends.places) {
-    if (p.kind === 'island') ref(p.islandId, islands, p.id);
-    else ref(p.mapPlaceId, new Set(Object.keys(map.LEGENDARY_PLACES)), p.id);
+    check(['island','sea'].includes(p.kind), p.id, 'invalid place kind');
+    if (p.kind === 'island') {
+      ref(p.islandId, islands, p.id);
+      check(p.reward?.type === 'island-reward' && p.reward.islandId === p.islandId, p.id, 'island reward/reference mismatch');
+    } else {
+      ref(p.mapPlaceId, new Set(Object.keys(map.LEGENDARY_PLACES)), p.id);
+      check(['treasure','legendary'].includes(p.reward?.type), p.id, 'invalid sea reward');
+      positive(p.reward?.count, `${p.id}.reward.count`);
+    }
   }
   for (const key of ['namedCards','expeditions']) {
     deck(legends[key], 10, key); unique(legends[key].map(c=>c.placeId), key);

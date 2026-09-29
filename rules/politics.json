@@ -171,6 +171,7 @@
         "type": "build-type",
         "buildingType": "shipyard",
         "resource": "Лес",
+        "resourceId": "wood",
         "factionId": "lionia",
         "iconKey": "card.assignment"
       },
