@@ -7,6 +7,7 @@ const {
   MILITARY_REWARDS,
   BUILDINGS,
   BUILDING_UPGRADES,
+  CHARACTERS,
   GOODS,
   ISLAND_DEFS,
   ISLAND_BY_CELL,
@@ -40,6 +41,8 @@ function cloneIslands() {
     loadedRound: null,
     legendaryVeil: null,
     garrisonType: null,
+    garrisonDefense: null,
+    garrisonOrigin: null,
   }));
 }
 
@@ -260,10 +263,9 @@ function ensureAssignmentPlayer(player) {
   return player;
 }
 
-function issueAssignment(room, player, factionId, rng = Math.random) {
+function assignAssignmentCard(room, player, factionId, card, rng = Math.random) {
   ensureAssignmentPlayer(player);
   if (player.activeAssignment) return { ok: false, error: 'У игрока уже есть активное поручение.' };
-  const card = drawAssignmentCard(room, player, factionId, rng);
   if (!card) return { ok: false, empty: true, error: 'Подходящего поручения сейчас нет.' };
   player.activeAssignment = {
     instanceId: `${factionId}:${card.id}:${Date.now()}:${Math.floor((Number(rng()) || 0) * 1e9)}`,
@@ -272,6 +274,37 @@ function issueAssignment(room, player, factionId, rng = Math.random) {
     issuedRound: Number(room.round) || 1,
   };
   return { ok: true, assignment: player.activeAssignment };
+}
+
+function issueAssignment(room, player, factionId, rng = Math.random) {
+  ensureAssignmentPlayer(player);
+  if (player.activeAssignment) return { ok: false, error: 'У игрока уже есть активное поручение.' };
+  const card = drawAssignmentCard(room, player, factionId, rng);
+  return assignAssignmentCard(room, player, factionId, card, rng);
+}
+
+function offerAssignmentCards(room, player, factionId, count = 2, rng = Math.random) {
+  ensureAssignmentPlayer(player);
+  if (player.activeAssignment) return { ok: false, error: 'У игрока уже есть активное поручение.', cards: [] };
+  const cards = [];
+  for (let i = 0; i < Math.max(1, Number(count) || 1); i++) {
+    const card = drawAssignmentCard(room, player, factionId, rng);
+    if (!card) break;
+    cards.push(card);
+  }
+  return { ok: true, cards };
+}
+
+function chooseAssignmentOffer(room, player, factionId, offeredCards, cardId, rng = Math.random) {
+  const cards = (offeredCards || []).map(card => ({ ...card }));
+  const chosen = cards.find(card => card.id === cardId);
+  if (!chosen) return { ok: false, error: 'Выберите одно из предложенных поручений.' };
+  room.assignmentDecks ||= createAssignmentDecks(rng);
+  const deck = room.assignmentDecks[factionId];
+  if (!deck) return { ok: false, error: 'Колода поручений не найдена.' };
+  const returned = cards.filter(card => card.id !== chosen.id);
+  if (returned.length) deck.drawPile = shuffleCards([...(deck.drawPile || []), ...returned], rng);
+  return assignAssignmentCard(room, player, factionId, chosen, rng);
 }
 
 function canReplaceAssignment(player) {
@@ -965,7 +998,7 @@ function roman(level) {
 function buildingDisplayName(building) {
   const def = BUILDINGS[building?.type];
   if (!def) return building?.type || 'Постройка';
-  if (def.fixedName) return def.name;
+  if (def.fixedName || (def.category === 'public' && def.id !== 'admiralty')) return def.name;
   return `${def.name} ${roman(building.level || 1)}`;
 }
 
@@ -977,11 +1010,141 @@ function branchCount(island, branch) {
   return island.buildings.filter(b => BUILDINGS[b.type]?.branch === branch).length;
 }
 
+function hasOwnedBuilding(room, playerId, type) {
+  return (room?.islands || []).some(island =>
+    island.ownerId === playerId && (island.buildings || []).some(building => building.type === type));
+}
+
+function ownedIslandAtPlayer(room, player) {
+  return (room?.islands || []).find(island => island.ownerId === player?.id && playerOnIsland(player, island)) || null;
+}
+
+function lighthouseDepartureBonus(room, player) {
+  const island = ownedIslandAtPlayer(room, player);
+  return island && (island.buildings || []).some(building => building.type === 'lighthouse')
+    ? Math.max(0, Number(BUILDINGS.lighthouse?.effect?.amount) || 0)
+    : 0;
+}
+
+function bestAdmiraltyLevelAtPlayer(room, player) {
+  let best = 0;
+  for (const island of room?.islands || []) {
+    if (island.ownerId !== player?.id || !playerOnIsland(player, island)) continue;
+    for (const building of island.buildings || []) {
+      if (building.type === 'admiralty') best = Math.max(best, Number(building.level) || 1);
+    }
+  }
+  return best;
+}
+
+function heldCharacterId(player) {
+  return typeof player?.character === 'string' ? player.character : player?.character?.id || null;
+}
+
+function characterOptionsAtAdmiralty(room, player, { replacing = false } = {}) {
+  const admiraltyLevel = bestAdmiraltyLevelAtPlayer(room, player);
+  if (!admiraltyLevel) return [];
+  const currentId = heldCharacterId(player);
+  const unavailable = new Set((room?.players || [])
+    .filter(other => other.id !== player.id)
+    .map(heldCharacterId)
+    .filter(Boolean));
+  return Object.values(CHARACTERS)
+    .filter(character => character.admiraltyLevel <= admiraltyLevel)
+    .filter(character => !unavailable.has(character.id))
+    .filter(character => !replacing || character.id !== currentId)
+    .map(character => ({ ...character }));
+}
+
+function canTakeCharacter(room, player, characterId) {
+  if (!room || !player) return { ok: false, error: 'Игрок не найден.' };
+  if (heldCharacterId(player)) return { ok: false, error: 'На основном корабле уже есть персонаж.' };
+  const character = characterOptionsAtAdmiralty(room, player).find(item => item.id === characterId);
+  if (!character) return { ok: false, error: 'Этот персонаж недоступен в текущем Адмиралтействе.' };
+  return { ok: true, character };
+}
+
+function takeCharacter(room, player, characterId) {
+  const allowed = canTakeCharacter(room, player, characterId);
+  if (!allowed.ok) return allowed;
+  player.character = { id: allowed.character.id };
+  return { ok: true, character: allowed.character };
+}
+
+function canReplaceCharacter(room, player, characterId) {
+  if (!heldCharacterId(player)) return { ok: false, error: 'На основном корабле нет персонажа для замены.' };
+  if (Number(player.characterReplacedRound) === Number(room?.round)) {
+    return { ok: false, error: 'Неиспользованного персонажа уже заменяли в этом раунде.' };
+  }
+  const character = characterOptionsAtAdmiralty(room, player, { replacing: true }).find(item => item.id === characterId);
+  if (!character) return { ok: false, error: 'Этот персонаж недоступен для замены в текущем Адмиралтействе.' };
+  return { ok: true, character };
+}
+
+function replaceCharacter(room, player, characterId) {
+  const allowed = canReplaceCharacter(room, player, characterId);
+  if (!allowed.ok) return allowed;
+  const previousId = heldCharacterId(player);
+  player.character = { id: allowed.character.id };
+  player.characterReplacedRound = Number(room.round) || 1;
+  return { ok: true, previousId, character: allowed.character };
+}
+
+function consumeCharacter(player, expectedId) {
+  const id = heldCharacterId(player);
+  if (!id || (expectedId && id !== expectedId)) return { ok: false, error: 'Нужный персонаж не находится на основном корабле.' };
+  const character = CHARACTERS[id];
+  player.character = null;
+  return { ok: true, character };
+}
+
+function cartographerAnchorOptions(player) {
+  const range = Math.max(0, Number(CHARACTERS.cartographer?.effect?.range) || 0);
+  const out = [];
+  for (const [color, anchor] of Object.entries(ANCHORS)) {
+    let distance = Infinity;
+    for (const [row, col] of anchor.cells || []) {
+      distance = Math.min(distance, Math.abs(Number(player?.row) - row) + Math.abs(Number(player?.col) - col));
+    }
+    if (distance <= range) out.push({ id: color, color, name: anchor.name, distance });
+  }
+  return out.sort((a, b) => a.distance - b.distance || a.color.localeCompare(b.color));
+}
+
+function tradeBuildingIndices(island) {
+  const out = [];
+  for (const [index, building] of (island?.buildings || []).entries()) {
+    if (BUILDINGS[building.type]?.branch === 'money') out.push(index);
+  }
+  return out;
+}
+
+function strongestFortificationStage(room, island) {
+  let stage = 0;
+  const supportedBastions = island?.ownerId ? new Set(supportedBastionIslandIds(room, island.ownerId)) : new Set();
+  for (const building of island?.buildings || []) {
+    if (BUILDINGS[building.type]?.branch !== 'fort') continue;
+    if (building.type === 'bastion' && !supportedBastions.has(island.id)) continue;
+    stage = Math.max(stage, buildingStage(building));
+  }
+  return stage;
+}
+
+function additionalTradeFortificationError(room, island, buildingIndex, target) {
+  if (BUILDINGS[target?.type]?.branch !== 'money') return null;
+  const tradeIndices = tradeBuildingIndices(island);
+  const additional = buildingIndex == null ? tradeIndices.length > 0 : tradeIndices[0] !== buildingIndex;
+  if (!additional) return null;
+  const requiredStage = buildingStage(target);
+  const availableStage = strongestFortificationStage(room, island);
+  if (availableStage >= requiredStage) return null;
+  return `Для дополнительного здания ветви рынка нужно действующее укрепление строительной ступени ${requiredStage} или выше.`;
+}
+
 function buildingStage(building) {
   const level = Math.max(1, Math.min(3, Number(building?.level) || 1));
-  if (['farm', 'lumbermill', 'quarry', 'mine', 'fort', 'market'].includes(building?.type)) return level;
-  if (['manor', 'shipyard', 'stoneworks', 'arsenal', 'fortress', 'bank'].includes(building?.type)) return 3 + level;
-  return level;
+  const stage = BUILDINGS[building?.type]?.levels?.[level]?.foodStage;
+  return Math.max(1, Number(stage) || level);
 }
 
 function foodStage(island) {
@@ -992,18 +1155,29 @@ function foodStage(island) {
   return max;
 }
 
+function buildingArea(building) {
+  const level = Math.max(1, Math.min(3, Number(building?.level) || 1));
+  const def = BUILDINGS[building?.type];
+  return Math.max(0, Number(def?.levels?.[level]?.area ?? def?.area) || 0);
+}
+
 function usedArea(island) {
-  return island.buildings.reduce((sum, b) => sum + (BUILDINGS[b.type]?.area || 0), 0);
+  return island.buildings.reduce((sum, b) => sum + buildingArea(b), 0);
+}
+
+function countsAsAdvancedForStatus(building) {
+  const def = BUILDINGS[building?.type];
+  return Boolean(def?.advanced || def?.countsAsAdvanced);
 }
 
 function islandStatus(island) {
   const manors = island.buildings.filter(b => b.type === 'manor');
   const bestManor = manors.reduce((m, b) => Math.max(m, Number(b.level) || 1), 0);
   const nonFood = island.buildings.filter(b => BUILDINGS[b.type]?.branch !== 'food');
-  const advancedNonFood = nonFood.filter(b => BUILDINGS[b.type]?.advanced).length;
+  const advancedNonFood = nonFood.filter(countsAsAdvancedForStatus).length;
 
   if (bestManor >= BALANCE.ranks.port.manorLevel && nonFood.length >= BALANCE.ranks.port.otherBuildings && advancedNonFood >= BALANCE.ranks.port.advancedOtherBuildings) return 'Крупный порт';
-  if (bestManor >= BALANCE.ranks.city.manorLevel && island.buildings.length - 1 >= BALANCE.ranks.city.otherBuildings) return 'Город';
+  if (bestManor >= BALANCE.ranks.city.manorLevel && nonFood.length >= BALANCE.ranks.city.otherBuildings) return 'Город';
   if (island.buildings.some(b => BUILDINGS[b.type]?.branch === 'food')) return 'Поселение';
   return 'Без поселения';
 }
@@ -1064,7 +1238,7 @@ function islandCorrectionOptions(island) {
     name: buildingDisplayName(building),
     type: building.type,
     level: Number(building.level) || 1,
-    area: BUILDINGS[building.type]?.area || 0,
+    area: buildingArea(building),
     branch: BUILDINGS[building.type]?.branch || null,
     branchName: BUILDING_BRANCH_NAMES[BUILDINGS[building.type]?.branch] || null,
   }));
@@ -1111,89 +1285,173 @@ function ownedBastionIslandIds(room, playerId) {
     .map(island => island.id);
 }
 
-function normalizeBastionPriority(room, player) {
+function normalizeInactiveBastionIds(room, player) {
   if (!player) return [];
-  const valid = ownedBastionIslandIds(room, player.id);
-  const validSet = new Set(valid);
-  const existing = (player.bastionPriority || []).filter(id => validSet.has(id));
-  for (const id of valid) if (!existing.includes(id)) existing.push(id);
-  player.bastionPriority = existing;
-  return existing;
+  const owned = ownedBastionIslandIds(room, player.id);
+  const valid = new Set(owned);
+  const inactive = [];
+  for (const id of player.inactiveBastionIslandIds || []) {
+    const value = String(id);
+    if (valid.has(value) && !inactive.includes(value)) inactive.push(value);
+  }
+  if (owned.length <= stoneworksSupportCapacity(room, player.id)) inactive.length = 0;
+  player.inactiveBastionIslandIds = inactive;
+  return inactive;
+}
+
+function bastionSupportChoiceNeeds(room, player) {
+  if (!room || !player) return { capacity: 0, count: 0, owned: [], requiredInactive: 0, selectedInactive: [], needsChoice: false };
+  const owned = ownedBastionIslandIds(room, player.id);
+  const capacity = stoneworksSupportCapacity(room, player.id);
+  const requiredInactive = Math.max(0, owned.length - capacity);
+  const selectedInactive = normalizeInactiveBastionIds(room, player);
+  return {
+    capacity,
+    count: owned.length,
+    owned,
+    requiredInactive,
+    selectedInactive: [...selectedInactive],
+    needsChoice: selectedInactive.length !== requiredInactive,
+  };
 }
 
 function supportedBastionIslandIds(room, playerId) {
   const player = room?.players?.find(p => p.id === playerId);
   if (!player) return [];
-  const priority = normalizeBastionPriority(room, player);
-  return priority.slice(0, stoneworksSupportCapacity(room, playerId));
+  const needs = bastionSupportChoiceNeeds(room, player);
+  if (needs.needsChoice) return [];
+  const inactive = new Set(needs.selectedInactive);
+  return needs.owned.filter(id => !inactive.has(id));
 }
 
 function bastionSupportSummary(room, playerId) {
-  const owned = ownedBastionIslandIds(room, playerId);
-  const supported = supportedBastionIslandIds(room, playerId);
+  const player = room?.players?.find(p => p.id === playerId);
+  if (!player) return { capacity: 0, count: 0, supported: [], unsupported: [], requiredInactive: 0, selectedInactive: [], choiceRequired: false };
+  const needs = bastionSupportChoiceNeeds(room, player);
+  const supported = needs.needsChoice ? [] : needs.owned.filter(id => !needs.selectedInactive.includes(id));
   return {
-    capacity: stoneworksSupportCapacity(room, playerId),
-    count: owned.length,
+    capacity: needs.capacity,
+    count: needs.count,
     supported,
-    unsupported: owned.filter(id => !supported.includes(id)),
+    unsupported: needs.needsChoice ? [...needs.owned] : [...needs.selectedInactive],
+    requiredInactive: needs.requiredInactive,
+    selectedInactive: [...needs.selectedInactive],
+    choiceRequired: needs.needsChoice,
   };
 }
 
-function canBuildBastion(room, player, island) {
-  if (!room || !player || !island) return { ok: false, error: 'Остров не найден.' };
-  if (island.ownerId !== player.id) return { ok: false, error: 'Бастион можно строить только на своём острове.' };
-  if (!playerOnIsland(player, island)) return { ok: false, error: 'Основной корабль должен находиться на клетке этого острова.' };
-  if ((Number(player.ducats) || 0) < BUILDINGS.bastion.price) return { ok: false, error: `Для бастиона нужно ${BUILDINGS.bastion.price} дукатов.` };
-  if (foodStage(island) < 1) return { ok: false, error: 'Для бастиона нужна ферма или поместье I или выше.' };
-  if ((island.buildings || []).some(b => b.type === 'bastion')) return { ok: false, error: 'На одном острове может быть только один бастион.' };
-  const support = bastionSupportSummary(room, player.id);
-  if (support.count >= support.capacity) return { ok: false, error: 'Нет свободного места поддержки каменотёсного двора.' };
-  const candidate = cloneIslandWithBuildings(island, [...island.buildings, { type: 'bastion', level: 1 }]);
-  if (usedArea(candidate) > effectiveArea(candidate)) return { ok: false, error: 'На острове не хватает свободной площади.' };
-  if (branchCount(candidate, 'fort') > branchLimitFor(candidate)) return { ok: false, error: `Для статуса «${islandStatus(candidate)}» превышен предел защитной ветви.` };
-  return { ok: true, support };
-}
-
-function buildBastion(room, player, islandId) {
-  const island = room?.islands?.find(i => i.id === islandId);
-  const allowed = canBuildBastion(room, player, island);
-  if (!allowed.ok) return allowed;
-  player.ducats -= BUILDINGS.bastion.price;
-  const building = { type: 'bastion', level: 1, createdAt: Date.now() };
-  island.buildings.push(building);
-  player.bastionPriority ||= [];
-  if (!player.bastionPriority.includes(island.id)) player.bastionPriority.push(island.id);
-  const support = bastionSupportSummary(room, player.id);
-  return { ok: true, island, building, price: BUILDINGS.bastion.price, support, name: 'Бастион' };
-}
-
-function prioritizeBastionSupport(room, player, islandId) {
+function setInactiveBastions(room, player, islandIds) {
   if (!room || !player) return { ok: false, error: 'Игрок не найден.' };
-  const island = room.islands?.find(i => i.id === islandId);
-  if (!island || island.ownerId !== player.id || !(island.buildings || []).some(b => b.type === 'bastion')) {
-    return { ok: false, error: 'На выбранном своём острове нет бастиона.' };
+  const needs = bastionSupportChoiceNeeds(room, player);
+  const unique = [];
+  for (const id of islandIds || []) {
+    const value = String(id);
+    if (!unique.includes(value)) unique.push(value);
   }
-  const priority = normalizeBastionPriority(room, player).filter(id => id !== islandId);
-  player.bastionPriority = [islandId, ...priority];
+  if (unique.length !== needs.requiredInactive) {
+    return { ok: false, error: `Нужно выбрать ровно ${needs.requiredInactive} временно неактивных бастионов.` };
+  }
+  const owned = new Set(needs.owned);
+  if (unique.some(id => !owned.has(id))) return { ok: false, error: 'Выбранный бастион больше не принадлежит игроку.' };
+  player.inactiveBastionIslandIds = unique;
   return { ok: true, support: bastionSupportSummary(room, player.id) };
 }
 
-function normalizeIslandGarrison(island) {
-  if (!island?.garrisonType) return null;
-  const status = islandStatus(island);
-  if (island.garrisonType === 'permanent' && status !== 'Крупный порт') {
-    island.garrisonType = status === 'Город' ? 'guard' : null;
-  } else if (island.garrisonType === 'guard' && status !== 'Город' && status !== 'Крупный порт') {
-    island.garrisonType = null;
+function fortressThreeIndices(island) {
+  const indices = [];
+  for (const [index, building] of (island?.buildings || []).entries()) {
+    if (building.type === 'fortress' && Number(building.level) === 3) indices.push(index);
   }
-  return island.garrisonType;
+  return indices;
+}
+
+function canBuildBastion(room, player, island, buildingIndex = null) {
+  if (!room || !player || !island) return { ok: false, error: 'Остров не найден.' };
+  if (island.ownerId !== player.id) return { ok: false, error: 'Бастион можно создать только на своём острове.' };
+  if (!playerOnIsland(player, island)) return { ok: false, error: 'Основной корабль должен находиться на клетке этого острова.' };
+  if ((Number(player.ducats) || 0) < BUILDINGS.bastion.price) return { ok: false, error: `Для бастиона нужно ${BUILDINGS.bastion.price} дукатов.` };
+  if ((island.buildings || []).some(b => b.type === 'bastion')) return { ok: false, error: 'На одном острове может быть только один бастион.' };
+  if (foodStage(island) < BUILDINGS.fortress.levels[3].foodStage) return { ok: false, error: 'Для превращения крепости III нужна пищевая ветвь строительной ступени 6.' };
+
+  const options = fortressThreeIndices(island);
+  let index = Number(buildingIndex);
+  if (!Number.isInteger(index) || !options.includes(index)) {
+    if (buildingIndex == null && options.length === 1) index = options[0];
+    else if (!options.length) return { ok: false, error: 'Для бастиона нужна крепость III на этом острове.' };
+    else return { ok: false, error: 'Выберите крепость III, которая превращается в бастион.' };
+  }
+
+  const support = bastionSupportSummary(room, player.id);
+  if (support.count >= support.capacity) return { ok: false, error: 'Нет свободного места поддержки каменотёсного двора.' };
+
+  const current = island.buildings[index];
+  const target = { ...current, type: 'bastion', level: 1 };
+  const buildings = island.buildings.map((b, i) => i === index ? target : { ...b });
+  const candidate = cloneIslandWithBuildings(island, buildings);
+  if (usedArea(candidate) > effectiveArea(candidate)) return { ok: false, error: 'После превращения превышена площадь острова.' };
+  if (branchCount(candidate, 'fort') > branchLimitFor(candidate)) return { ok: false, error: `Для статуса «${islandStatus(candidate)}» превышен предел защитной ветви.` };
+  return { ok: true, support, index, current, target };
+}
+
+function buildBastion(room, player, islandId, buildingIndex = null) {
+  const island = room?.islands?.find(i => i.id === islandId);
+  const allowed = canBuildBastion(room, player, island, buildingIndex);
+  if (!allowed.ok) return allowed;
+  player.ducats -= BUILDINGS.bastion.price;
+  island.buildings[allowed.index] = { ...allowed.target, upgradedAt: Date.now() };
+  normalizeInactiveBastionIds(room, player);
+  const building = island.buildings[allowed.index];
+  const support = bastionSupportSummary(room, player.id);
+  return { ok: true, island, building, buildingIndex: allowed.index, price: BUILDINGS.bastion.price, support, name: 'Бастион' };
+}
+
+function prioritizeBastionSupport() {
+  return { ok: false, error: 'Поддержка бастионов выбирается только при обязательном решении после изменения числа мест каменотёсных дворов.' };
+}
+
+function clearIslandGarrison(island) {
+  if (!island) return null;
+  island.garrisonType = null;
+  island.garrisonDefense = null;
+  island.garrisonOrigin = null;
+  return null;
+}
+
+function normalizeIslandGarrison(island) {
+  if (!island?.garrisonType) return clearIslandGarrison(island);
+  const status = islandStatus(island);
+  const storedDefense = Math.max(0, Number(island.garrisonDefense) || 0);
+
+  if (island.garrisonType === 'permanent') {
+    if (status === 'Крупный порт') {
+      island.garrisonDefense = [BALANCE.garrisons.permanentDirect.defense, BALANCE.garrisons.permanentUpgrade.defense].includes(storedDefense)
+        ? storedDefense
+        : BALANCE.garrisons.permanentUpgrade.defense;
+      island.garrisonOrigin ||= 'legacy-permanent';
+      return island.garrisonType;
+    }
+    if (status === 'Город') {
+      island.garrisonType = 'guard';
+      island.garrisonDefense = BALANCE.garrisons.downgradedGuard.defense;
+      island.garrisonOrigin = 'downgraded-permanent';
+      return island.garrisonType;
+    }
+    return clearIslandGarrison(island);
+  }
+
+  if (island.garrisonType === 'guard') {
+    if (!['Город', 'Крупный порт'].includes(status)) return clearIslandGarrison(island);
+    island.garrisonDefense = storedDefense > 0 ? storedDefense : BALANCE.garrisons.guard.defense;
+    island.garrisonOrigin ||= 'guard';
+    return island.garrisonType;
+  }
+
+  return clearIslandGarrison(island);
 }
 
 function garrisonDefenseValue(island) {
   const kind = normalizeIslandGarrison(island);
-  if (kind === 'permanent') return BALANCE.garrisons.permanentUpgrade.defense;
-  if (kind === 'guard') return BALANCE.garrisons.guard.defense;
-  return 0;
+  return kind ? Math.max(0, Number(island.garrisonDefense) || 0) : 0;
 }
 
 function garrisonDisplayName(island) {
@@ -1206,20 +1464,22 @@ function canBuyCityGuard(room, player, island) {
   if (!isCitadelCell(player.row, player.col)) return { ok: false, error: 'Городскую стражу покупают только в Цитадели.' };
   if (island.ownerId !== player.id) return { ok: false, error: 'Стражу можно назначить только своему острову.' };
   const status = islandStatus(island);
-  if (!['Город', 'Крупный порт'].includes(status)) return { ok: false, error: 'Городскую стражу можно назначить только городу или крупному порту.' };
+  if (status !== 'Город') return { ok: false, error: 'Городскую стражу можно назначить только своему городу.' };
   normalizeIslandGarrison(island);
   if (island.garrisonType) return { ok: false, error: 'На острове уже есть городской отряд.' };
   if ((Number(player.ducats) || 0) < BALANCE.garrisons.guard.price) return { ok: false, error: `Для городской стражи нужно ${BALANCE.garrisons.guard.price} дукатов.` };
-  return { ok: true, status };
+  return { ok: true, status, ...BALANCE.garrisons.guard };
 }
 
 function buyCityGuard(room, player, islandId) {
   const island = room?.islands?.find(i => i.id === islandId);
   const allowed = canBuyCityGuard(room, player, island);
   if (!allowed.ok) return allowed;
-  player.ducats -= BALANCE.garrisons.guard.price;
+  player.ducats -= allowed.price;
   island.garrisonType = 'guard';
-  return { ok: true, island, ...BALANCE.garrisons.guard };
+  island.garrisonDefense = allowed.defense;
+  island.garrisonOrigin = 'guard';
+  return { ok: true, island, price: allowed.price, defense: allowed.defense, mode: 'guard' };
 }
 
 function canBuyPermanentGarrison(room, player, island) {
@@ -1228,18 +1488,23 @@ function canBuyPermanentGarrison(room, player, island) {
   if (island.ownerId !== player.id) return { ok: false, error: 'Гарнизон можно назначить только своему острову.' };
   if (islandStatus(island) !== 'Крупный порт') return { ok: false, error: 'Постоянный гарнизон можно назначить только крупному порту.' };
   normalizeIslandGarrison(island);
-  if (island.garrisonType !== 'guard') return { ok: false, error: 'Постоянный гарнизон заменяет уже имеющуюся городскую стражу.' };
-  if ((Number(player.ducats) || 0) < BALANCE.garrisons.permanentUpgrade.price) return { ok: false, error: `Для постоянного гарнизона нужно ${BALANCE.garrisons.permanentUpgrade.price} дукатов.` };
-  return { ok: true };
+  if (island.garrisonType === 'permanent') return { ok: false, error: 'На острове уже есть постоянный гарнизон.' };
+  if (island.garrisonType && island.garrisonType !== 'guard') return { ok: false, error: 'На острове уже есть другой городской отряд.' };
+  const mode = island.garrisonType === 'guard' ? 'upgrade' : 'direct';
+  const spec = mode === 'upgrade' ? BALANCE.garrisons.permanentUpgrade : BALANCE.garrisons.permanentDirect;
+  if ((Number(player.ducats) || 0) < spec.price) return { ok: false, error: `Для постоянного гарнизона нужно ${spec.price} дукатов.` };
+  return { ok: true, mode, price: spec.price, defense: spec.defense };
 }
 
 function buyPermanentGarrison(room, player, islandId) {
   const island = room?.islands?.find(i => i.id === islandId);
   const allowed = canBuyPermanentGarrison(room, player, island);
   if (!allowed.ok) return allowed;
-  player.ducats -= BALANCE.garrisons.permanentUpgrade.price;
+  player.ducats -= allowed.price;
   island.garrisonType = 'permanent';
-  return { ok: true, island, ...BALANCE.garrisons.permanentUpgrade };
+  island.garrisonDefense = allowed.defense;
+  island.garrisonOrigin = allowed.mode === 'upgrade' ? 'guard-upgrade' : 'direct';
+  return { ok: true, island, price: allowed.price, defense: allowed.defense, mode: allowed.mode };
 }
 
 function arsenalLevelOnIsland(island) {
@@ -1255,28 +1520,43 @@ function canFormLandCompany(room, player, island) {
   const arsenalLevel = arsenalLevelOnIsland(island);
   if (!arsenalLevel) return { ok: false, error: 'На острове нужен арсенал.' };
   if (player.landCompany) return { ok: false, error: 'У игрока уже есть рота ландскнехтов.' };
-  if (player.cargo) return { ok: false, error: 'Основной трюм занят грузом. Рота занимает весь основной трюм.' };
-  return { ok: true, arsenalLevel, army: BALANCE.landCompany.armyByArsenalLevel[arsenalLevel] };
+  return {
+    ok: true,
+    arsenalLevel,
+    army: BALANCE.landCompany.armyByArsenalLevel[arsenalLevel],
+    discardedCargo: player.cargo ? { ...player.cargo } : null,
+  };
 }
 
 function formLandCompany(room, player, islandId) {
   const island = room?.islands?.find(i => i.id === islandId);
   const allowed = canFormLandCompany(room, player, island);
   if (!allowed.ok) return allowed;
+  const discardedCargo = allowed.discardedCargo ? { ...allowed.discardedCargo } : null;
+  player.cargo = null;
   player.landCompany = {
     army: allowed.army,
     arsenalLevel: allowed.arsenalLevel,
     sourceIslandId: island.id,
     formedAt: Date.now(),
   };
-  return { ok: true, island, company: { ...player.landCompany } };
+  return { ok: true, island, company: { ...player.landCompany }, discardedCargo };
 }
 
-function dismissLandCompany(player) {
-  if (!player?.landCompany) return { ok: false, error: 'Роты ландскнехтов нет.' };
+function canDismissLandCompany(room, player) {
+  if (!room || !player?.landCompany) return { ok: false, error: 'Роты ландскнехтов нет.' };
+  const island = (room.islands || []).find(candidate =>
+    candidate.ownerId === player.id && playerOnIsland(player, candidate) && arsenalLevelOnIsland(candidate) > 0);
+  if (!island) return { ok: false, error: 'Вернуть роту можно только у своего острова с арсеналом.' };
+  return { ok: true, island };
+}
+
+function dismissLandCompany(room, player) {
+  const allowed = canDismissLandCompany(room, player);
+  if (!allowed.ok) return allowed;
   const company = { ...player.landCompany };
   player.landCompany = null;
-  return { ok: true, company };
+  return { ok: true, company, island: allowed.island };
 }
 
 function landCompanyAssaultArmy(player) {
@@ -1351,7 +1631,10 @@ function canBuild(room, player, island, type) {
   const hasFood = foodStage(island) >= 1;
   if (type !== 'farm' && !hasFood) return { ok: false, error: 'Сначала нужна ферма или поместье.' };
   if (def.resource && !island.resources.includes(def.resource)) return { ok: false, error: `На острове нет ресурса «${def.resource}».` };
-  if (def.unique && buildingCount(island, type) >= 1) return { ok: false, error: 'Такой редкий промысел на острове уже есть.' };
+  if (def.unique && buildingCount(island, type) >= 1) return { ok: false, error: 'Такое здание на острове уже есть.' };
+  if (type === 'palace' && !['Город', 'Крупный порт'].includes(islandStatus(island))) {
+    return { ok: false, error: 'Дворец можно строить только в уже существующем городе или крупном порту.' };
+  }
 
   const candidate = cloneIslandWithBuildings(island, [...island.buildings, { type, level: 1 }]);
   if (usedArea(candidate) > effectiveArea(candidate)) return { ok: false, error: 'На острове не хватает свободной площади.' };
@@ -1360,9 +1643,8 @@ function canBuild(room, player, island, type) {
     return { ok: false, error: `Для статуса «${islandStatus(candidate)}» превышен предел построек этой ветви.` };
   }
 
-  if (type === 'market' && branchCount(island, 'money') >= 1 && branchCount(island, 'fort') < 1) {
-    return { ok: false, error: 'Для второго рынка нужен действующий форт I или крепость.' };
-  }
+  const fortificationError = additionalTradeFortificationError(room, island, null, { type, level: 1 });
+  if (fortificationError) return { ok: false, error: fortificationError };
 
   return { ok: true };
 }
@@ -1401,6 +1683,9 @@ function canUpgradeBuilding(room, player, island, buildingIndex) {
   if (targetBranch !== 'food' && foodStage(island) < targetStage) {
     return { ok: false, error: `Пищевая ветвь должна быть не ниже ступени ${targetStage}.` };
   }
+
+  const fortificationError = additionalTradeFortificationError(room, island, index, target);
+  if (fortificationError) return { ok: false, error: fortificationError };
 
   const buildings = island.buildings.map((b, i) => i === index ? target : { ...b });
   const candidate = cloneIslandWithBuildings(island, buildings);
@@ -1832,6 +2117,10 @@ function holdFor(room, player, holdId = 'main') {
   return { id: escort.id, name: def.name, capacity: def.cargo, cargo: escort.cargo || null, setCargo: cargo => { escort.cargo = cargo; } };
 }
 
+function islandLoadingLimit() {
+  return Math.max(1, Math.floor(Number(BALANCE.loadingLimitPerIslandPerRound) || 1));
+}
+
 function canLoadCargo(room, player, island, goodId, holdId = 'main') {
   const good = GOODS[goodId];
   if (!good) return { ok: false, error: 'Неизвестный товар.' };
@@ -1839,7 +2128,7 @@ function canLoadCargo(room, player, island, goodId, holdId = 'main') {
   if (island.ownerId !== player.id) return { ok: false, error: 'Загружать товар можно только на своём острове.' };
   const here = island.cells.some(([r, c]) => r === player.row && c === player.col);
   if (!here) return { ok: false, error: 'Основной корабль должен находиться на клетке этого острова.' };
-  if (island.loadedRound === room.round) return { ok: false, error: 'С этого острова уже выполнялась погрузка в текущем раунде.' };
+  if (islandLoadingLimit() === 1 && island.loadedRound === room.round) return { ok: false, error: 'С этого острова уже выполнялась погрузка в текущем раунде.' };
   if (!availableGoodsOnIsland(island).includes(goodId)) return { ok: false, error: `На острове нет действующего источника товара «${good.name}».` };
   const hold = holdFor(room, player, holdId);
   if (!hold) return { ok: false, error: 'Выбранный трюм недоступен.' };
@@ -1871,6 +2160,11 @@ function cargoSaleValue(player, holdId = 'main') {
   const good = GOODS[cargo.goodId];
   if (!good) return 0;
   return good.price * cargo.quantity;
+}
+
+function contractBonusForRevenue(revenue) {
+  const base = Math.max(0, Math.floor(Number(revenue) || 0));
+  return Math.floor(base * Math.max(0, Number(BALANCE.contractBonusRatio) || 0));
 }
 
 function canSellCargo(room, player, holdId = 'main') {
@@ -1991,6 +2285,7 @@ function downgradeBuildingOneStep(building) {
     stoneworks: { type: 'quarry', level: 3 },
     arsenal: { type: 'mine', level: 3 },
     fortress: { type: 'fort', level: 3 },
+    bastion: { type: 'fortress', level: 3 },
     bank: { type: 'market', level: 3 },
   }[building?.type];
   return back ? { ...building, ...back } : { ...building };
@@ -2335,6 +2630,7 @@ function publicIsland(island, room = null) {
     legendaryVeil: island.legendaryVeil ? { remaining: Number(island.legendaryVeil.remaining) || 0, sourcePlayerId: island.legendaryVeil.sourcePlayerId || null } : null,
     garrisonType: island.garrisonType || null,
     garrisonName: garrisonDisplayName(island),
+    garrisonDefense: garrisonDefenseValue(island),
     availableGoods: availableGoodsOnIsland(island),
     buildings: island.buildings.map((b, index) => {
       const next = upgradeForBuilding(b);
@@ -2377,6 +2673,8 @@ module.exports = {
   placePrizeBuilding,
   stoneworksSupportCapacity,
   bastionSupportSummary,
+  bastionSupportChoiceNeeds,
+  setInactiveBastions,
   supportedBastionIslandIds,
   canBuildBastion,
   buildBastion,
@@ -2390,9 +2688,20 @@ module.exports = {
   buyPermanentGarrison,
   canFormLandCompany,
   formLandCompany,
+  canDismissLandCompany,
   dismissLandCompany,
   landCompanyAssaultArmy,
   marketIncomeForPlayer,
+  hasOwnedBuilding,
+  lighthouseDepartureBonus,
+  bestAdmiraltyLevelAtPlayer,
+  characterOptionsAtAdmiralty,
+  canTakeCharacter,
+  takeCharacter,
+  canReplaceCharacter,
+  replaceCharacter,
+  consumeCharacter,
+  cartographerAnchorOptions,
   claimFreeIslandsAt,
   publicIsland,
   usedArea,
@@ -2434,6 +2743,7 @@ module.exports = {
   canLoadCargo,
   loadCargo,
   cargoSaleValue,
+  contractBonusForRevenue,
   canSellCargo,
   sellCargo,
   isCitadelPeaceCell,
@@ -2451,6 +2761,8 @@ module.exports = {
   createAssignmentDecks,
   drawAssignmentCard,
   issueAssignment,
+  offerAssignmentCards,
+  chooseAssignmentOffer,
   canReplaceAssignment,
   replaceAssignment,
   assignmentEventMatches,

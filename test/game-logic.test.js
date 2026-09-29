@@ -17,6 +17,14 @@ const {
   build,
   upgradeBuilding,
   marketIncomeForPlayer,
+  hasOwnedBuilding,
+  lighthouseDepartureBonus,
+  bestAdmiraltyLevelAtPlayer,
+  characterOptionsAtAdmiralty,
+  takeCharacter,
+  replaceCharacter,
+  consumeCharacter,
+  cartographerAnchorOptions,
   claimFreeIslandsAt,
   shipStats,
   shipUpgradeStatuses,
@@ -37,7 +45,10 @@ const {
   loadCargo,
   sellCargo,
   canLoadCargo,
+  availableGoodsOnIsland,
+  canUpgradeBuilding,
   cargoSaleValue,
+  contractBonusForRevenue,
   isCitadelCell,
   isCitadelPeaceCell,
   fleetArtillery,
@@ -81,20 +92,23 @@ const {
   prizeBuildingPlacementOptions,
   placePrizeBuilding,
   islandConstraintReport,
+  islandStatus,
   islandCorrectionOptions,
   removeIslandBuildingForCorrection,
   stoneworksSupportCapacity,
   bastionSupportSummary,
+  bastionSupportChoiceNeeds,
+  setInactiveBastions,
   supportedBastionIslandIds,
   canBuildBastion,
   buildBastion,
-  prioritizeBastionSupport,
   canBuyCityGuard,
   buyCityGuard,
   canBuyPermanentGarrison,
   buyPermanentGarrison,
   canFormLandCompany,
   formLandCompany,
+  canDismissLandCompany,
   dismissLandCompany,
   landCompanyAssaultArmy,
   addEnmity,
@@ -108,13 +122,15 @@ const {
   discardRandomHeldCard,
   createAssignmentDecks,
   issueAssignment,
+  offerAssignmentCards,
+  chooseAssignmentOffer,
   canReplaceAssignment,
   replaceAssignment,
   assignmentEventMatches,
   completeAssignment,
   legendaryPlaceAt,
 } = require('../game-logic');
-const { BALANCE, MAP_META, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS } = require('../game-data');
+const { BALANCE, MAP_META, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS, BUILDINGS, CHARACTERS, ANCHORS } = require('../game-data');
 
 function has(cells, row, col) { return cells.some(c => c.row === row && c.col === col); }
 
@@ -318,6 +334,245 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(shipyardSlotsForPlayer(room, 'p1'), 1);
 }
 
+// Обычная ветвь развивается только последовательно и не может обгонять пищевую ступень.
+{
+  const room = { islands: cloneIslands() };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1';
+  island.resources = ['Лес', 'Камень', 'Рудная жила'];
+  const [row, col] = island.cells[0];
+  const p = { id: 'p1', row, col, ducats: 2000 };
+  assert.equal(build(room, p, island.id, 'farm').ok, true);
+  assert.equal(build(room, p, island.id, 'lumbermill').ok, true);
+  assert.equal(upgradeBuilding(room, p, island.id, 1).ok, false);
+  assert.equal(upgradeBuilding(room, p, island.id, 0).afterName, 'Ферма II');
+  assert.equal(upgradeBuilding(room, p, island.id, 1).afterName, 'Лесопилка II');
+  assert.equal(build(room, p, island.id, 'shipyard').ok, false);
+}
+
+// Все шесть основных ветвей используют канонические последовательные цены.
+// Превращение заменяет то же здание в том же слоте; доход и защита берутся из rules/.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1';
+  island.resources = ['Лес', 'Камень', 'Рудная жила'];
+  const [row, col] = island.cells[0];
+  const p = { id: 'p1', row, col, ducats: 5000, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [] };
+  room.players.push(p);
+
+  assert.equal(build(room, p, island.id, 'farm').ok, true);
+  for (const target of [
+    ['farm', 2], ['farm', 3], ['manor', 1], ['manor', 2], ['manor', 3],
+  ]) {
+    const result = upgradeBuilding(room, p, island.id, 0);
+    assert.equal(result.ok, true);
+    assert.equal(result.price, BUILDINGS[target[0]].levels[target[1]].price);
+    assert.equal(result.building.type, target[0]);
+    assert.equal(result.building.level, target[1]);
+  }
+
+  const branches = [
+    ['lumbermill', [['lumbermill',2],['lumbermill',3],['shipyard',1],['shipyard',2],['shipyard',3]]],
+    ['quarry', [['quarry',2],['quarry',3],['stoneworks',1],['stoneworks',2],['stoneworks',3]]],
+    ['mine', [['mine',2],['mine',3],['arsenal',1],['arsenal',2],['arsenal',3]]],
+    ['fort', [['fort',2],['fort',3],['fortress',1],['fortress',2],['fortress',3]]],
+    ['market', [['market',2],['market',3],['bank',1],['bank',2],['bank',3]]],
+  ];
+  for (const [type, targets] of branches) {
+    const beforeLength = island.buildings.length;
+    const built = build(room, p, island.id, type);
+    assert.equal(built.ok, true);
+    const index = island.buildings.length - 1;
+    const createdAt = island.buildings[index].createdAt;
+    assert.equal(island.buildings.length, beforeLength + 1);
+    for (const [targetType, targetLevel] of targets) {
+      const result = upgradeBuilding(room, p, island.id, index);
+      assert.equal(result.ok, true);
+      assert.equal(result.price, BUILDINGS[targetType].levels[targetLevel].price);
+      assert.equal(island.buildings[index].type, targetType);
+      assert.equal(island.buildings[index].level, targetLevel);
+      assert.equal(island.buildings[index].createdAt, createdAt);
+      assert.equal(island.buildings.length, beforeLength + 1);
+    }
+  }
+  assert.equal(marketIncomeForPlayer(room, p.id), BUILDINGS.bank.levels[3].income);
+  assert.equal(islandDefenseArmy(room, island).fortifications, BUILDINGS.fortress.levels[3].defense);
+}
+
+// Первое торговое здание повышается только по пищевой ветви. Второе требует
+// укрепление той же строительной ступени; после удаления первого второе становится первым.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1';
+  island.buildings = [
+    { type: 'manor', level: 3 },
+    { type: 'market', level: 1 },
+    { type: 'lumbermill', level: 1 },
+    { type: 'quarry', level: 1 },
+    { type: 'mine', level: 1 },
+  ];
+  const [row, col] = island.cells[0];
+  const p = { id: 'p1', row, col, ducats: 5000, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [] };
+  room.players.push(p);
+
+  assert.equal(upgradeBuilding(room, p, island.id, 1).afterName, 'Рынок II');
+  assert.equal(upgradeBuilding(room, p, island.id, 1).afterName, 'Рынок III');
+  assert.equal(upgradeBuilding(room, p, island.id, 1).afterName, 'Банк I');
+
+  assert.equal(build(room, p, island.id, 'market').ok, false);
+  assert.equal(build(room, p, island.id, 'fort').ok, true);
+  assert.equal(build(room, p, island.id, 'market').ok, true);
+  const fortIndex = island.buildings.findIndex(b => b.type === 'fort');
+  const secondIndex = island.buildings.map((b, i) => BUILDINGS[b.type]?.branch === 'money' ? i : -1).filter(i => i >= 0)[1];
+
+  assert.equal(upgradeBuilding(room, p, island.id, secondIndex).ok, false);
+  assert.equal(upgradeBuilding(room, p, island.id, fortIndex).afterName, 'Форт II');
+  assert.equal(upgradeBuilding(room, p, island.id, secondIndex).afterName, 'Рынок II');
+  assert.equal(upgradeBuilding(room, p, island.id, secondIndex).ok, false);
+  assert.equal(upgradeBuilding(room, p, island.id, fortIndex).afterName, 'Форт III');
+  assert.equal(upgradeBuilding(room, p, island.id, secondIndex).afterName, 'Рынок III');
+  assert.equal(upgradeBuilding(room, p, island.id, secondIndex).ok, false);
+  assert.equal(upgradeBuilding(room, p, island.id, fortIndex).afterName, 'Крепость I');
+  assert.equal(upgradeBuilding(room, p, island.id, secondIndex).afterName, 'Банк I');
+  assert.equal(build(room, p, island.id, 'market').ok, false);
+  assert.equal(marketIncomeForPlayer(room, p.id), BUILDINGS.bank.levels[1].income * 2);
+
+  const firstIndex = island.buildings.findIndex(b => BUILDINGS[b.type]?.branch === 'money');
+  island.buildings.splice(firstIndex, 1);
+  const fortressIndex = island.buildings.findIndex(b => b.type === 'fortress');
+  island.buildings.splice(fortressIndex, 1);
+  const remainingTradeIndex = island.buildings.findIndex(b => BUILDINGS[b.type]?.branch === 'money');
+  assert.equal(upgradeBuilding(room, p, island.id, remainingTradeIndex).afterName, 'Банк II');
+  assert.equal(build(room, p, island.id, 'market').ok, false);
+}
+
+// Общественные здания не входят в обычные ветви, требуют пищевой источник,
+// уникальны по названию на острове и используют канонические цены.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1';
+  island.area = 20;
+  const [row, col] = island.cells[0];
+  const p = { id: 'p1', row, col, ducats: 500 };
+  room.players.push(p);
+  island.buildings = [{ type: 'farm', level: 1 }];
+  for (const type of ['lighthouse', 'observatory', 'embassy', 'cartography', 'admiralty']) {
+    const before = p.ducats;
+    const result = build(room, p, island.id, type);
+    assert.equal(result.ok, true, type);
+    assert.equal(before - p.ducats, BUILDINGS[type].price);
+  }
+  assert.equal(build(room, p, island.id, 'lighthouse').ok, false);
+  assert.equal(hasOwnedBuilding(room, p.id, 'observatory'), true);
+  assert.equal(islandConstraintReport(island).branchViolations.length, 0);
+}
+
+// Дворец строится только в уже существующем городе/крупном порту.
+// Сам Дворец не может быть зданием, которое создаёт требуемый городской статус.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1'; island.area = 20;
+  const [row, col] = island.cells[0];
+  const p = { id: 'p1', row, col, ducats: 500 };
+  room.players.push(p);
+  island.buildings = [{ type: 'manor', level: 1 }, { type: 'market', level: 1 }, { type: 'fort', level: 1 }, { type: 'lumbermill', level: 1 }];
+  assert.equal(build(room, p, island.id, 'palace').ok, false);
+  island.buildings.push({ type: 'quarry', level: 1 });
+  assert.equal(islandStatus(island), 'Город');
+  assert.equal(build(room, p, island.id, 'palace').ok, true);
+}
+
+// Адмиралтейство I/II/III требует пищевую ступень I/II/III и повышается
+// последовательно без дополнительной клетки.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1'; island.area = 20;
+  const [row, col] = island.cells[0];
+  const p = { id: 'p1', row, col, ducats: 500 };
+  room.players.push(p);
+  island.buildings = [{ type: 'farm', level: 1 }];
+  assert.equal(build(room, p, island.id, 'admiralty').ok, true);
+  assert.equal(bestAdmiraltyLevelAtPlayer(room, p), 1);
+  assert.equal(upgradeBuilding(room, p, island.id, 1).ok, false);
+  island.buildings[0].level = 2;
+  assert.equal(upgradeBuilding(room, p, island.id, 1).afterName, 'Адмиралтейство II');
+  assert.equal(upgradeBuilding(room, p, island.id, 1).ok, false);
+  island.buildings[0].level = 3;
+  assert.equal(upgradeBuilding(room, p, island.id, 1).afterName, 'Адмиралтейство III');
+  assert.equal(island.buildings.length, 2);
+}
+
+// Маяк даёт ровно +1 только при начале навигации у своего острова с Маяком;
+// несколько маяков игрока не складываются.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const a = room.islands.find(i => i.id === 'maikan');
+  const b = room.islands.find(i => i.id === 'bogamia');
+  a.ownerId = b.ownerId = 'p1';
+  a.buildings = [{ type: 'lighthouse', level: 1 }];
+  b.buildings = [{ type: 'lighthouse', level: 1 }];
+  const p = { id: 'p1', row: a.cells[0][0], col: a.cells[0][1] };
+  room.players.push(p);
+  assert.equal(lighthouseDepartureBonus(room, p), 1);
+  p.row = 0; p.col = 0;
+  assert.equal(lighthouseDepartureBonus(room, p), 0);
+}
+
+// Персонаж берётся только у подходящего Адмиралтейства, один на основной корабль,
+// недоступен второму игроку, а замена неиспользованного персонажа ограничена одним разом за раунд.
+{
+  const room = { round: 3, islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1';
+  island.buildings = [{ type: 'admiralty', level: 3 }];
+  const [row, col] = island.cells[0];
+  const p1 = { id: 'p1', row, col, character: null, characterReplacedRound: null };
+  const p2 = { id: 'p2', row, col, character: null, characterReplacedRound: null };
+  room.players.push(p1, p2);
+  assert.equal(characterOptionsAtAdmiralty(room, p1).length, 6);
+  assert.equal(takeCharacter(room, p1, 'navigator').ok, true);
+  island.ownerId = 'p2';
+  assert.equal(characterOptionsAtAdmiralty(room, p2).some(c => c.id === 'navigator'), false);
+  island.ownerId = 'p1';
+  assert.equal(replaceCharacter(room, p1, 'cartographer').ok, true);
+  assert.equal(replaceCharacter(room, p1, 'firstMate').ok, false);
+  room.round = 4;
+  assert.equal(replaceCharacter(room, p1, 'firstMate').ok, true);
+  island.buildings = [];
+  assert.equal(p1.character.id, 'firstMate');
+  assert.equal(consumeCharacter(p1, 'firstMate').ok, true);
+  assert.equal(p1.character, null);
+}
+
+// Картограф использует манхэттенскую дальность до клеток якорей.
+{
+  const first = Object.entries(ANCHORS)[0];
+  const [color, anchor] = first;
+  const [row, col] = anchor.cells[0];
+  const options = cartographerAnchorOptions({ row, col });
+  assert.equal(options.some(o => o.color === color && o.distance === 0), true);
+}
+
+// Посольство может выдать две допустимые карты, выбранная становится активной,
+// а невыбранная возвращается в колоду и перемешивается.
+{
+  const room = { round: 2, islands: cloneIslands(), assignmentDecks: createAssignmentDecks(() => 0.25) };
+  const p = { id: 'p1', level: 1, upgrades: [], activeAssignment: null, replacedAssignmentConditions: [] };
+  const offered = offerAssignmentCards(room, p, 'lionia', 2, () => 0.25);
+  assert.equal(offered.ok, true);
+  assert.equal(offered.cards.length, 2);
+  const unchosen = offered.cards[1].id;
+  const result = chooseAssignmentOffer(room, p, 'lionia', offered.cards, offered.cards[0].id, () => 0.25);
+  assert.equal(result.ok, true);
+  assert.equal(p.activeAssignment.card.id, offered.cards[0].id);
+  assert.equal(room.assignmentDecks.lionia.drawPile.some(c => c.id === unchosen), true);
+}
+
 // Уровни II–VI: новые характеристики без бонуса движения; VII читается для старых комнат.
 {
   const p = { shipClass: 'frigate', level: 4, upgrades: [] };
@@ -425,8 +680,14 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(loadCargo(room, p, 'bogamia', 'provisions').ok, true);
   p.cargo = null;
   assert.equal(canLoadCargo(room, p, island, 'provisions').ok, false);
+
+  // Смена владельца не снимает общую отметку погрузки текущего раунда.
+  island.ownerId = 'p2';
+  const q = { id: 'p2', row: 5, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], cargo: null, ducats: 0 };
+  assert.equal(canLoadCargo(room, q, island, 'provisions').ok, false);
+
   room.round = 4;
-  assert.equal(canLoadCargo(room, p, island, 'provisions').ok, true);
+  assert.equal(canLoadCargo(room, q, island, 'provisions').ok, true);
 }
 
 // Продажа основного груза возможна только в Цитадели.
@@ -790,18 +1051,35 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(room.eventDeck.discard.length, 1);
 }
 
-// Сокровища: четыре карты, денежная карта учитывает текущий доход и сначала гасит долг.
+// Пока число физических копий сокровищ не разрешено источником, runtime не придумывает
+// дополнительные экземпляры: по одному каноническому виду. Грузовое сокровище — алмазы.
 {
   const room = { islands: cloneIslands(), treasureDeck: createTreasureDeck(() => 0.5) };
+  assert.equal(room.treasureDeck.drawPile.length, 4);
+  assert.deepEqual(room.treasureDeck.drawPile.map(c => c.id).sort(),
+    ['full-diamonds-hold', 'income-x1', 'income-x2', 'income-x3']);
+  const diamonds = room.treasureDeck.drawPile.find(c => c.id === 'full-diamonds-hold');
+  assert.equal(diamonds.cargoGoodId, 'diamonds');
+
   const island = room.islands.find(i => i.id === 'bogamia');
   island.ownerId = 'p1';
   island.buildings = [{ type: 'farm', level: 1 }, { type: 'market', level: 1 }];
-  const p = { id: 'p1', ducats: 0, debt: 1 };
+  const p = { id: 'p1', shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], cargo: null, ducats: 0, debt: 1 };
   const result = resolveMoneyTreasure(room, p, { id: 'income-x2', name: 'Доход ×2', multiplier: 2, minimum: 4 });
   assert.equal(result.amount, 4);
   assert.equal(p.debt, 0);
   assert.equal(p.ducats, 3);
-  assert.equal(room.treasureDeck.drawPile.length, 4);
+
+  const loaded = fillCargoDirect(room, p, diamonds.cargoGoodId, 'main');
+  assert.equal(loaded.ok, true);
+  assert.equal(p.cargo.goodId, 'diamonds');
+  assert.equal(p.cargo.quantity, 2);
+}
+
+// Контрактная премия равна половине обычной выручки с округлением вниз.
+{
+  assert.equal(contractBonusForRevenue(6), 3);
+  assert.equal(contractBonusForRevenue(5), 2);
 }
 
 // Легендарная колода содержит восемь карт: по две каждого из четырёх видов.
@@ -1167,10 +1445,10 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.deepEqual(result.statePrize.deduplicatedBuildings.map(b => b.type), ['bank']);
   assert.deepEqual(result.statePrize.buildings.map(b => b.type), ['market']);
   const options = prizeBuildingPlacementOptions(room, p, result.statePrize.buildings[0]);
-  assert.ok(options.some(o => o.islandId === 'kadingir'));
+  assert.equal(options.some(o => o.islandId === 'kadingir'), false);
   const placed = placePrizeBuilding(room, p, 'kadingir', result.statePrize.buildings[0], { factionId: 'kadingir' });
-  assert.equal(placed.ok, true);
-  assert.equal(island.buildings.filter(b => b.type === 'market').length, 1);
+  assert.equal(placed.ok, false);
+  assert.equal(island.buildings.filter(b => b.type === 'market').length, 0);
 }
 
 // Кадингир: при разорении последнего острова итоговые 50 дукатов являются общей денежной
@@ -1202,8 +1480,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 }
 
 
-// Каменотёсный двор поддерживает бастионы: уровень I даёт одно место,
-// бастион стоит 10 дукатов, занимает площадь и даёт +8 только при поддержке.
+// Крепость III превращается в бастион на той же клетке и требует свободное место
+// поддержки каменотёсного двора. Бастион даёт канонические +10 защиты.
 {
   const room = { islands: cloneIslands(), players: [] };
   const supportIsland = room.islands.find(i => i.id === 'raisk');
@@ -1211,19 +1489,27 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   supportIsland.ownerId = 'p1';
   supportIsland.buildings = [{ type: 'stoneworks', level: 1 }];
   target.ownerId = 'p1';
-  target.buildings = [{ type: 'farm', level: 1 }];
-  const p = { id: 'p1', row: target.cells[0][0], col: target.cells[0][1], shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 20, bastionPriority: [] };
+  target.buildings = [{ type: 'manor', level: 3 }, { type: 'fortress', level: 3, createdAt: 123 }];
+  const p = { id: 'p1', row: target.cells[0][0], col: target.cells[0][1], shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 20, inactiveBastionIslandIds: [] };
   room.players.push(p);
   assert.equal(stoneworksSupportCapacity(room, p.id), 1);
-  assert.equal(canBuildBastion(room, p, target).ok, true);
-  const built = buildBastion(room, p, target.id);
+  assert.equal(canBuildBastion(room, p, target, 1).ok, true);
+  const beforeArea = islandConstraintReport(target).usedArea;
+  const built = buildBastion(room, p, target.id, 1);
   assert.equal(built.ok, true);
   assert.equal(p.ducats, 10);
-  assert.equal(bastionSupportSummary(room, p.id).supported.includes(target.id), true);
-  assert.equal(islandDefenseArmy(room, target).bastions, 10);
+  assert.equal(target.buildings.length, 2);
+  assert.equal(target.buildings[1].type, 'bastion');
+  assert.equal(target.buildings[1].createdAt, 123);
+  assert.equal(islandConstraintReport(target).usedArea, beforeArea);
+  assert.deepEqual(supportedBastionIslandIds(room, p.id), [target.id]);
+  assert.equal(islandDefenseArmy(room, target).fortifications, 0);
+  assert.equal(islandDefenseArmy(room, target).bastions, BUILDINGS.bastion.defense);
+  assert.equal(canBuildBastion(room, p, target, 1).ok, false);
 }
 
-// При нехватке поддержки игрок может выбрать, какой бастион остаётся действующим.
+// После потери поддержки движок не выбирает бастион сам: владелец обязан указать
+// временно неактивный. При восстановлении достаточной поддержки бастион включается снова.
 {
   const room = { islands: cloneIslands(), players: [] };
   const a = room.islands.find(i => i.id === 'bogamia');
@@ -1232,20 +1518,133 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   for (const island of [a, b, support]) island.ownerId = 'p1';
   a.buildings = [{ type: 'farm', level: 1 }, { type: 'bastion', level: 1 }];
   b.buildings = [{ type: 'farm', level: 1 }, { type: 'bastion', level: 1 }];
-  support.buildings = [{ type: 'stoneworks', level: 1 }];
-  const p = { id: 'p1', row: a.cells[0][0], col: a.cells[0][1], shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, bastionPriority: [a.id, b.id] };
+  support.buildings = [{ type: 'stoneworks', level: 2 }];
+  const p = { id: 'p1', row: a.cells[0][0], col: a.cells[0][1], shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, inactiveBastionIslandIds: [] };
   room.players.push(p);
+  assert.deepEqual(new Set(supportedBastionIslandIds(room, p.id)), new Set([a.id, b.id]));
+  support.buildings[0].level = 1;
+  const needs = bastionSupportChoiceNeeds(room, p);
+  assert.equal(needs.requiredInactive, 1);
+  assert.equal(needs.needsChoice, true);
+  assert.deepEqual(supportedBastionIslandIds(room, p.id), []);
+  assert.equal(setInactiveBastions(room, p, [b.id]).ok, true);
   assert.deepEqual(supportedBastionIslandIds(room, p.id), [a.id]);
   assert.equal(islandDefenseArmy(room, a).bastions, 10);
   assert.equal(islandDefenseArmy(room, b).bastions, 0);
-  assert.equal(prioritizeBastionSupport(room, p, b.id).ok, true);
-  assert.deepEqual(supportedBastionIslandIds(room, p.id), [b.id]);
-  assert.equal(islandDefenseArmy(room, a).bastions, 0);
-  assert.equal(islandDefenseArmy(room, b).bastions, 10);
+  support.buildings[0].level = 2;
+  assert.deepEqual(new Set(supportedBastionIslandIds(room, p.id)), new Set([a.id, b.id]));
+  assert.deepEqual(p.inactiveBastionIslandIds, []);
 }
 
-// Арсенал снаряжает одну роту, которая занимает основной трюм и добавляет войско
-// только к штурму. После проигранного штурма рота сбрасывается.
+// Понижение бастиона возвращает крепость III, а не оставляет бастион неизменным.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'bogamia');
+  island.ownerId = 'p1';
+  island.buildings = [{ type: 'manor', level: 3 }, { type: 'bastion', level: 1 }];
+  const p = { id: 'p1' };
+  room.players.push(p);
+  const result = applyRaidDowngrade(room, p, island.id, 1);
+  assert.equal(result.ok, true);
+  assert.equal(result.afterName, 'Крепость III');
+  assert.deepEqual([island.buildings[1].type, island.buildings[1].level], ['fortress', 3]);
+}
+
+// После превращения базовой добывающей постройки её исходный товар больше не производится.
+// Верфь, каменотёсный двор и арсенал используют те же данные уровней, что и остальные ветви.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1';
+  island.resources = ['Лес', 'Камень', 'Рудная жила'];
+  const [row, col] = island.cells[0];
+  const p = { id: 'p1', row, col, ducats: 1000 };
+  room.players.push(p);
+  for (const [baseType, advancedType, goodId] of [
+    ['lumbermill', 'shipyard', 'wood'],
+    ['quarry', 'stoneworks', 'stone'],
+    ['mine', 'arsenal', 'ore'],
+  ]) {
+    island.buildings = [{ type: 'manor', level: 3 }, { type: baseType, level: 3 }];
+    assert.equal(availableGoodsOnIsland(island).includes(goodId), true);
+    const result = upgradeBuilding(room, p, island.id, 1);
+    assert.equal(result.ok, true);
+    assert.equal(result.building.type, advancedType);
+    assert.equal(availableGoodsOnIsland(island).includes(goodId), false);
+    if (advancedType === 'shipyard') assert.equal(shipyardSlotsForPlayer(room, p.id), BUILDINGS.shipyard.levels[1].escortSlots);
+  }
+}
+
+// Четыре редких промысла доступны только на I уровне, требуют свой ресурс и ферму/
+// поместье, стоят по данным rules/ и не получают выдуманные уровни II–III при открытом R07.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1';
+  const [row, col] = island.cells[0];
+  const p = { id: 'p1', row, col, ducats: 1000 };
+  room.players.push(p);
+  const rare = [
+    ['exotic', 'Экзотические звери'],
+    ['slaves', 'Невольники'],
+    ['gold', 'Самородное золото'],
+    ['diamonds', 'Алмазы'],
+  ];
+  for (const [type, resource] of rare) {
+    island.resources = [resource];
+    island.buildings = [{ type: 'farm', level: 1 }];
+    const before = p.ducats;
+    const built = build(room, p, island.id, type);
+    assert.equal(built.ok, true);
+    assert.equal(before - p.ducats, BUILDINGS[type].price);
+    const index = island.buildings.findIndex(b => b.type === type);
+    assert.equal(canUpgradeBuilding(room, p, island, index).ok, false);
+    assert.equal(build(room, p, island.id, type).ok, false);
+    island.buildings = [{ type: 'farm', level: 1 }];
+    island.resources = [];
+    assert.equal(build(room, p, island.id, type).ok, false);
+  }
+}
+
+// Арсенал снаряжает одну роту бесплатно за действие. Рота занимает весь основной
+// трюм: существующий груз автоматически сбрасывается без выручки, а сила фиксируется
+// по уровню арсенала в момент снаряжения.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const home = room.islands.find(i => i.id === 'bogamia');
+  home.ownerId = 'p1';
+  home.buildings = [{ type: 'arsenal', level: 2 }];
+  const p = {
+    id: 'p1', row: home.cells[0][0], col: home.cells[0][1],
+    shipClass: 'brigantine', level: 2, upgrades: [], escorts: [], ducats: 0,
+    cargo: { goodId: 'wood', quantity: 2 },
+  };
+  room.players.push(p);
+  assert.equal(canFormLandCompany(room, p, home).ok, true);
+  const formed = formLandCompany(room, p, home.id);
+  assert.equal(formed.company.army, 4);
+  assert.deepEqual(formed.discardedCargo, { goodId: 'wood', quantity: 2 });
+  assert.equal(p.cargo, null);
+  assert.equal(landCompanyAssaultArmy(p), 4);
+  assert.equal(canLoadCargo(room, p, home, 'provisions', 'main').ok, false);
+
+  // Понижение арсенала/уровня корабля не пересчитывает уже подготовленную силу.
+  home.buildings[0].level = 1;
+  p.level = 1;
+  assert.equal(landCompanyAssaultArmy(p), 4);
+
+  // Добровольный возврат возможен только у собственного острова с арсеналом.
+  p.row = 13; p.col = 13;
+  assert.equal(canDismissLandCompany(room, p).ok, false);
+  assert.equal(dismissLandCompany(room, p).ok, false);
+  p.row = home.cells[0][0]; p.col = home.cells[0][1];
+  assert.equal(canDismissLandCompany(room, p).ok, true);
+  assert.equal(dismissLandCompany(room, p).ok, true);
+  assert.equal(p.landCompany, null);
+}
+
+// Рота участвует только в штурме: после проигранного штурма она сбрасывается,
+// при победе или ничьей сохраняется.
 {
   const room = { islands: cloneIslands(), players: [] };
   const home = room.islands.find(i => i.id === 'bogamia');
@@ -1253,85 +1652,87 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   home.buildings = [{ type: 'arsenal', level: 2 }];
   const p = { id: 'p1', row: home.cells[0][0], col: home.cells[0][1], shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, cargo: null };
   room.players.push(p);
-  assert.equal(canFormLandCompany(room, p, home).ok, true);
-  assert.equal(formLandCompany(room, p, home.id).company.army, 4);
-  assert.equal(landCompanyAssaultArmy(p), 4);
-  assert.equal(canLoadCargo(room, p, home, 'provisions', 'main').ok, false);
-
+  formLandCompany(room, p, home.id);
   const enemy = room.islands.find(i => i.id === 'adia');
   p.row = enemy.cells[0][0]; p.col = enemy.cells[0][1];
   const loss = assaultIsland(room, p, enemy, 'preserve');
   assert.equal(loss.ok, true);
   assert.equal(loss.outcome, 'defender');
   assert.equal(p.landCompany, null);
-}
 
-// При победе или ничьей штурма рота сохраняется, а потеря уровня корабля сама по себе
-// не меняет заранее зафиксированную силу роты.
-{
-  const room = { islands: cloneIslands(), players: [] };
-  const enemy = room.islands.find(i => i.id === 'agmor');
-  const p = { id: 'p1', row: enemy.cells[0][0], col: enemy.cells[0][1], shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, cargo: null, landCompany: { army: 3, arsenalLevel: 1 } };
-  room.players.push(p);
-  const win = assaultIsland(room, p, enemy, 'preserve');
+  const room2 = { islands: cloneIslands(), players: [] };
+  const weak = room2.islands.find(i => i.id === 'agmor');
+  const p2 = { id: 'p2', row: weak.cells[0][0], col: weak.cells[0][1], shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, cargo: null, landCompany: { army: 3, arsenalLevel: 1 } };
+  room2.players.push(p2);
+  const win = assaultIsland(room2, p2, weak, 'preserve');
   assert.equal(win.outcome, 'attacker');
-  assert.equal(p.landCompany.army, 3);
+  assert.equal(p2.landCompany.army, 3);
 }
 
-// Городская стража и постоянный гарнизон покупаются в Цитадели и участвуют в защите.
+// Городская стража и постоянный гарнизон используют канонические три варианта
+// покупки: стража города 5/+1, замена стражи в крупном порту 10/+3,
+// прямая покупка в крупном порту 15/+2.
 {
   const room = { islands: cloneIslands(), players: [] };
   const island = room.islands.find(i => i.id === 'raisk');
   island.ownerId = 'p1';
-  // Поместье I + ещё четыре здания = город.
   island.buildings = [
     { type: 'manor', level: 1 }, { type: 'farm', level: 1 }, { type: 'fort', level: 1 },
-    { type: 'market', level: 1 }, { type: 'lumbermill', level: 1 },
+    { type: 'market', level: 1 }, { type: 'lumbermill', level: 1 }, { type: 'quarry', level: 1 },
   ];
-  const p = { id: 'p1', row: 13, col: 13, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 40 };
+  const p = { id: 'p1', row: 13, col: 13, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 100 };
   room.players.push(p);
-  assert.equal(canBuyCityGuard(room, p, island).ok, true);
-  assert.equal(buyCityGuard(room, p, island.id).ok, true);
-  assert.equal(island.garrisonType, 'guard');
-  assert.equal(islandDefenseArmy(room, island).hiredGarrison, 5);
+  assert.equal(islandStatus(island), 'Город');
+  const guard = buyCityGuard(room, p, island.id);
+  assert.equal(guard.ok, true);
+  assert.equal(guard.price, 5);
+  assert.equal(islandDefenseArmy(room, island).hiredGarrison, 1);
 
-  // Превращаем остров в крупный порт, сохраняя стражу, затем заменяем её гарнизоном.
   island.buildings = [
     { type: 'manor', level: 2 },
     { type: 'shipyard', level: 1 }, { type: 'stoneworks', level: 1 },
     { type: 'arsenal', level: 1 }, { type: 'fortress', level: 1 },
     { type: 'bank', level: 1 }, { type: 'lumbermill', level: 1 },
   ];
-  assert.equal(canBuyPermanentGarrison(room, p, island).ok, true);
-  assert.equal(buyPermanentGarrison(room, p, island.id).ok, true);
-  assert.equal(island.garrisonType, 'permanent');
-  assert.equal(islandDefenseArmy(room, island).hiredGarrison, 10);
+  assert.equal(islandStatus(island), 'Крупный порт');
+  const upgraded = buyPermanentGarrison(room, p, island.id);
+  assert.deepEqual([upgraded.mode, upgraded.price, upgraded.defense], ['upgrade', 10, 3]);
+  assert.equal(islandDefenseArmy(room, island).hiredGarrison, 3);
 
-  // Потеря крупного порта, но сохранение города автоматически переводит гарнизон в стражу.
   island.buildings = [
     { type: 'manor', level: 1 }, { type: 'farm', level: 1 }, { type: 'fort', level: 1 },
-    { type: 'market', level: 1 }, { type: 'lumbermill', level: 1 },
+    { type: 'market', level: 1 }, { type: 'lumbermill', level: 1 }, { type: 'quarry', level: 1 },
   ];
-  assert.equal(islandDefenseArmy(room, island).hiredGarrison, 5);
+  assert.equal(islandDefenseArmy(room, island).hiredGarrison, 3);
   assert.equal(island.garrisonType, 'guard');
 
-  // Потеря статуса города распускает стражу.
   island.buildings = [{ type: 'farm', level: 1 }];
   assert.equal(islandDefenseArmy(room, island).hiredGarrison, 0);
   assert.equal(island.garrisonType, null);
+
+  island.buildings = [
+    { type: 'manor', level: 2 },
+    { type: 'shipyard', level: 1 }, { type: 'stoneworks', level: 1 },
+    { type: 'arsenal', level: 1 }, { type: 'fortress', level: 1 },
+    { type: 'bank', level: 1 }, { type: 'lumbermill', level: 1 },
+  ];
+  assert.equal(canBuyCityGuard(room, p, island).ok, false);
+  const direct = buyPermanentGarrison(room, p, island.id);
+  assert.deepEqual([direct.mode, direct.price, direct.defense], ['direct', 15, 2]);
+  assert.equal(islandDefenseArmy(room, island).hiredGarrison, 2);
 }
 
 
-// Потеря статуса города снижает предел обычной ветви с 3 до 2. Если после понижения
-// поместья на острове остаются три рынка, остров требует немедленного исправления.
+// Потеря статуса города снижает предел обычной ветви с 2 до 1. Если после понижения
+// поместья на острове остаются два рынка, остров требует выбора владельца.
 {
   const room = { islands: cloneIslands(), players: [] };
   const island = room.islands.find(i => i.id === 'raisk');
   island.ownerId = 'p1';
   island.buildings = [
     { type: 'manor', level: 1 },
-    { type: 'market', level: 1 }, { type: 'market', level: 1 }, { type: 'market', level: 1 },
-    { type: 'fort', level: 1 },
+    { type: 'market', level: 1 }, { type: 'market', level: 1 },
+    { type: 'fort', level: 1 }, { type: 'lumbermill', level: 1 },
   ];
   const p = { id: 'p1' };
   room.players.push(p);
@@ -1342,7 +1743,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const report = islandConstraintReport(island);
   assert.equal(report.status, 'Поселение');
   assert.equal(report.legal, false);
-  assert.equal(report.branchViolations.some(v => v.branch === 'money' && v.count === 3 && v.limit === 2), true);
+  assert.equal(report.branchViolations.some(v => v.branch === 'money' && v.count === 2 && v.limit === 1), true);
   assert.equal(islandCorrectionOptions(island).length, 5);
   const marketIndex = island.buildings.findIndex(b => b.type === 'market');
   const fixed = removeIslandBuildingForCorrection(room, p, island.id, marketIndex);
@@ -1358,9 +1759,11 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   island.ownerId = 'p1';
   island.buildings = [
     { type: 'manor', level: 2 },
-    { type: 'shipyard', level: 1 }, { type: 'bank', level: 1 },
-    { type: 'fort', level: 1 }, { type: 'lumbermill', level: 1 },
-    { type: 'quarry', level: 1 }, { type: 'mine', level: 1 },
+    { type: 'shipyard', level: 1 }, { type: 'lumbermill', level: 1 },
+    { type: 'stoneworks', level: 1 }, { type: 'quarry', level: 1 },
+    { type: 'arsenal', level: 1 }, { type: 'mine', level: 1 },
+    { type: 'fortress', level: 1 }, { type: 'fort', level: 1 },
+    { type: 'market', level: 1 },
   ];
   const p = { id: 'p1' };
   room.players.push(p);
@@ -1388,17 +1791,53 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   island.garrisonType = 'guard';
   island.buildings = [
     { type: 'manor', level: 1 },
-    { type: 'market', level: 1 }, { type: 'market', level: 1 }, { type: 'market', level: 1 },
-    { type: 'fort', level: 1 },
+    { type: 'market', level: 1 }, { type: 'market', level: 1 },
+    { type: 'fort', level: 1 }, { type: 'lumbermill', level: 1 },
   ];
   const p = { id: 'p1' };
   room.players.push(p);
-  applyRaidDowngrade(room, p, island.id, 0); // город -> поселение, 3 рынка при лимите 2
+  applyRaidDowngrade(room, p, island.id, 0); // город -> поселение, 2 рынка при лимите 1
   const result = removeIslandBuildingForCorrection(room, p, island.id, island.buildings.findIndex(b => b.type === 'market'));
   assert.equal(result.ok, true);
   assert.equal(result.garrisonChanged, true);
   assert.equal(result.newGarrison, null);
   assert.equal(island.garrisonType, null);
+}
+
+
+// Исходный гарнизон действует только пока остров не принадлежит игроку;
+// после получения острова он равен нулю и возвращается вместе с исходным владельцем.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'asigoriy');
+  assert.equal(island.area, 4);
+  assert.deepEqual(island.resourceIds, ['ore']);
+  assert.equal(islandDefenseArmy(room, island).garrison, 10);
+  const p = { id: 'p1', row: 0, col: 0, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [] };
+  room.players.push(p);
+  island.ownerId = p.id;
+  assert.equal(islandDefenseArmy(room, island).garrison, 0);
+  island.ownerId = null;
+  assert.equal(islandDefenseArmy(room, island).garrison, 10);
+}
+
+// Бастион уже в модели состояния считается продвинутой формой ветви укреплений
+// для статуса крупного порта; строительство бастиона остаётся блоком 4.3.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1';
+  island.buildings = [
+    { type: 'manor', level: 2 },
+    { type: 'bastion', level: 1 },
+    { type: 'shipyard', level: 1 }, { type: 'lumbermill', level: 1 },
+    { type: 'quarry', level: 1 }, { type: 'mine', level: 1 }, { type: 'market', level: 1 },
+  ];
+  const report = islandConstraintReport(island);
+  assert.equal(report.status, 'Крупный порт');
+  assert.equal(report.usedArea, 7);
+  assert.equal(report.effectiveArea, 10);
+  assert.equal(report.legal, true);
 }
 
 

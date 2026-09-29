@@ -1,7 +1,7 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '' };
+  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '' };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
   const shipName = id => state.room?.shipCatalog?.[id]?.name || state.shipCatalog?.[id]?.name || $('shipSelect').querySelector(`option[value="${id}"]`)?.textContent || 'Корабль';
   fetch('/api/rules').then(response => response.ok ? response.json() : null).then(rules => {
@@ -791,9 +791,13 @@
   function cargoSummary(player, room) {
     if (!player) return { quantity: 0, capacity: 0 };
     const escortCatalog = room?.escortCatalog || {};
-    const cargoEscorts = (player.escorts || []).filter(e => e.active && (escortCatalog[e.type]?.cargo || 0) > 0);
+    // Временно неактивное из-за уровня грузовое сопровождение сохраняет уже
+    // погруженный груз. HUD поэтому показывает его груз и физический трюм,
+    // хотя грузить/продавать через это судно до восстановления уровня нельзя.
+    const cargoEscorts = (player.escorts || []).filter(e => (escortCatalog[e.type]?.cargo || 0) > 0);
     const quantity = (player.cargo?.quantity || 0) + cargoEscorts.reduce((sum, e) => sum + (e.cargo?.quantity || 0), 0);
-    return { quantity, capacity: player.totalCargoCapacity || player.cargoCapacity || 0 };
+    const capacity = (player.cargoCapacity || 0) + cargoEscorts.reduce((sum, e) => sum + (escortCatalog[e.type]?.cargo || 0), 0);
+    return { quantity, capacity };
   }
 
   function renderMobileHud() {
@@ -1298,7 +1302,15 @@
       label.className = 'action-group-label';
       label.textContent = `Решение: «${pending.cardName}»`;
       actions.appendChild(label);
-      if (pending.kind === 'cargo') {
+      if (pending.kind === 'observatory') {
+        for (const option of pending.options || []) {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = option.id === 'replace' ? 'build-btn primary' : 'build-btn';
+          b.textContent = option.name;
+          b.addEventListener('click', () => socket.emit('respondEvent', { eventId: pending.id, choice: option.id }, handleGameAck));
+          actions.appendChild(b);
+        }
+      } else if (pending.kind === 'cargo') {
         for (const option of pending.options || []) {
           const b = document.createElement('button');
           b.type = 'button'; b.className = 'build-btn primary';
@@ -1389,7 +1401,7 @@
     const myTurn = r.started && r.activePlayerId === state.myId;
     const canUse = myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending();
     const emptyHolds = [];
-    if (!mine.cargo) emptyHolds.push({ id: 'main', name: `Основной трюм (${mine.cargoCapacity})` });
+    if (!mine.cargo && !mine.landCompany) emptyHolds.push({ id: 'main', name: `Основной трюм (${mine.cargoCapacity})` });
     for (const e of mine.escorts || []) {
       const def = r.escortCatalog?.[e.type];
       if (e.active && (def?.cargo || 0) > 0 && !e.cargo) emptyHolds.push({ id: e.id, name: `${def.name || 'Сопровождение'} (${def.cargo})` });
@@ -1607,6 +1619,7 @@
       escorts: 'временно неактивные суда сопровождения',
       'shipyard-remove': 'суда сопровождения для удаления',
       'landin-replace': 'судно сопровождения для замены Ландином',
+      bastions: 'временно неактивные бастионы',
     };
     if (!pending.viewerCanRespond) {
       content.innerHTML = `<div class="event-current"><strong>${escapeHtml(playerName(pending.playerId))}</strong> выбирает ${escapeHtml(stageLabels[pending.stage] || 'состав флотилии')}.</div>`;
@@ -1621,7 +1634,10 @@
     const selected = state.fleetAdjustmentSelection || new Set();
     let instruction = `Выберите ровно <strong>${pending.required}</strong> элементов.`;
     let note = '';
-    if (pending.stage === 'upgrades' || pending.stage === 'escorts') {
+    if (pending.stage === 'bastions') {
+      instruction = `Выберите ровно <strong>${pending.required}</strong> бастионов, которые временно не будут давать защиту.`;
+      note = 'Бастионы остаются зданиями на своих клетках и снова дают +10 войска после восстановления достаточного числа мест поддержки.';
+    } else if (pending.stage === 'upgrades' || pending.stage === 'escorts') {
       instruction = `Выберите ровно <strong>${pending.required}</strong> ${pending.stage === 'upgrades' ? 'улучшений' : 'судов сопровождения'}, которые временно не будут действовать.`;
       note = pending.stage === 'escorts' ? 'Неактивное сопровождение продолжает следовать за флотилией; уже погруженный груз сохраняется, но судно не даёт артиллерию и его трюм нельзя загружать или продавать до восстановления уровня.' : 'Улучшения остаются установленными и снова включатся, когда мест станет достаточно.';
     } else if (pending.stage === 'shipyard-remove') {
@@ -1631,7 +1647,8 @@
       instruction = 'Выберите <strong>одно</strong> имеющееся судно, которое заменит особое сопровождение Ландина.';
       note = `Сопровождение Ландина: +${r.escortCatalog.landin.artillery} артиллерии, трюм ${r.escortCatalog.landin.cargo}. Груз заменённого судна пропадёт.`;
     }
-    content.innerHTML = `<div class="event-current"><strong>Обязательное решение по флотилии</strong><br>${escapeHtml(pending.reason || '')}</div><div class="event-effect">${instruction}</div>${note ? `<div class="cargo-meta">${escapeHtml(note)}</div>` : ''}`;
+    const decisionTitle = pending.stage === 'bastions' ? 'Обязательный выбор поддержки бастионов' : 'Обязательное решение по флотилии';
+    content.innerHTML = `<div class="event-current"><strong>${decisionTitle}</strong><br>${escapeHtml(pending.reason || '')}</div><div class="event-effect">${instruction}</div>${note ? `<div class="cargo-meta">${escapeHtml(note)}</div>` : ''}`;
 
     const redrawButtons = () => {
       actions.innerHTML = '';
@@ -1643,7 +1660,7 @@
         let suffix = '';
         if (pending.stage === 'upgrades') {
           if (option.missingRequirement) suffix = ' · без бонуса: нет первого улучшения ветви';
-        } else {
+        } else if (pending.stage !== 'bastions') {
           if (option.special && option.type !== 'landin') suffix += ' · особое';
           if (option.artillery) suffix += ` · арт. +${option.artillery}`;
           if (option.cargoCapacity) suffix += ` · трюм ${option.cargoCapacity}`;
@@ -1701,6 +1718,20 @@
 
     const pending = r.pendingAssignmentChoice;
     if (pending?.viewerCanRespond) {
+      if (pending.kind === 'embassy') {
+        const label = document.createElement('div');
+        label.className = 'action-group-label';
+        label.textContent = 'Посольство: выберите одно из двух допустимых поручений';
+        actions.appendChild(label);
+        for (const option of pending.options || []) {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = 'build-btn primary';
+          b.textContent = `«${option.text}» · ${option.reward} дук.`;
+          b.addEventListener('click', () => socket.emit('respondAssignmentChoice', { choiceId: pending.id, assignmentId: option.id }, handleGameAck));
+          actions.appendChild(b);
+        }
+        return;
+      }
       const label = document.createElement('div');
       label.className = 'action-group-label';
       label.textContent = `Оставить поручение «${pending.assignment?.text || 'текущее'}» или заменить за ${r.balanceCatalog.assignmentReplacementPrice} дуката?`;
@@ -1880,6 +1911,7 @@
         <span>Лимит сопровождения</span><strong>${escorts.length}/${mine.escortUseLimit}</strong>
         <span>Поддержка бастионов</span><strong>${mine.supportedBastionIslandIds?.length || 0}/${mine.bastionSupportCapacity || 0}</strong>
         <span>Рота ландскнехтов</span><strong>${mine.landCompany ? `+${mine.landCompany.army} при штурме` : 'нет'}</strong>
+        <span>Персонаж</span><strong>${escapeHtml(mine.character?.name || 'нет')}</strong>
       </div>
       <div class="building-line"><span class="muted">Улучшения:</span> ${escapeHtml(upgradeNames)}</div>
       <div class="building-line"><span class="muted">Сопровождение:</span> ${escapeHtml(escortNames)}</div>
@@ -1890,6 +1922,78 @@
     const canBuyHere = canAct && mine.atCitadel;
     const myTurnAnyPhase = myTurn && ['navigation', 'actions'].includes(mine.phase) && !isDecisionPending();
 
+    const characterCatalog = state.room.characterCatalog || {};
+    const character = mine.character;
+    const characterLabel = document.createElement('div');
+    characterLabel.className = 'action-group-label';
+    characterLabel.textContent = 'Персонаж Адмиралтейства';
+    actions.appendChild(characterLabel);
+
+    if (!character && (mine.characterAcquisitionOptions || []).length) {
+      for (const option of mine.characterAcquisitionOptions) {
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'build-btn';
+        button.textContent = `Взять «${option.name}» · 1 действие`;
+        button.disabled = !canAct;
+        button.addEventListener('click', () => socket.emit('takeCharacter', { characterId: option.id }, handleGameAck));
+        actions.appendChild(button);
+      }
+    } else if (!character && mine.admiraltyLevelHere) {
+      const note = document.createElement('div');
+      note.className = 'cargo-meta'; note.textContent = 'Все персонажи, доступные этому уровню Адмиралтейства, сейчас находятся у других игроков.';
+      actions.appendChild(note);
+    } else if (character) {
+      const effectNote = document.createElement('div');
+      effectNote.className = 'cargo-meta';
+      const deferred = {
+        scout: 'Разведчик сохранён на корабле, но просмотр закрытых карт не включён до решения Р29 о зонах видимости.',
+        treasureHunter: 'Искатель сокровищ сохранён на корабле; его выбор из двух сокровищ будет подключён вместе с синхронизацией колоды сокровищ.',
+        shipCarpenter: 'Корабельный плотник сохранён на корабле; предотвращение боевой потери уровня будет подключено в блоке боя.',
+      };
+      effectNote.textContent = deferred[character.id] || `«${character.name}» готов к одноразовому применению.`;
+      actions.appendChild(effectNote);
+
+      if (character.id === 'navigator') {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
+        b.textContent = 'Штурман: перебросить d6 · 1 действие';
+        b.disabled = !(myTurn && mine.phase === 'navigation' && mine.roll !== null && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending());
+        b.addEventListener('click', () => socket.emit('useNavigator', {}, handleGameAck)); actions.appendChild(b);
+      } else if (character.id === 'cartographer') {
+        for (const option of mine.cartographerAnchorOptions || []) {
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
+          b.textContent = `Картограф: посмотреть «${option.name}» · ${option.distance} кл. · 1 действие`;
+          b.disabled = !(myTurn && mine.phase === 'navigation' && mine.roll === null && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending());
+          b.addEventListener('click', () => socket.emit('useCartographer', { color: option.color }, res => {
+            if (res?.ok && res.card) state.characterPeek = `${res.anchorName}: «${res.card.name}» · арт. ${res.card.artillery ?? '—'} · награда ${res.card.reward}`;
+            handleGameAck(res); renderFleet();
+          }));
+          actions.appendChild(b);
+        }
+        if (state.characterPeek) {
+          const peek = document.createElement('div'); peek.className = 'event-effect'; peek.textContent = state.characterPeek; actions.appendChild(peek);
+        }
+      } else if (character.id === 'firstMate') {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
+        b.textContent = 'Первый помощник: +1 дополнительное действие · бесплатно';
+        b.disabled = !(myTurn && mine.phase === 'actions' && !isDecisionPending());
+        b.addEventListener('click', () => socket.emit('useFirstMate', {}, handleGameAck)); actions.appendChild(b);
+      }
+
+      if ((mine.characterReplacementOptions || []).length) {
+        const replaceLabel = document.createElement('div');
+        replaceLabel.className = 'cargo-meta';
+        replaceLabel.textContent = 'Неиспользованного персонажа можно заменить здесь один раз за раунд:';
+        actions.appendChild(replaceLabel);
+        for (const option of mine.characterReplacementOptions) {
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn';
+          b.textContent = `Заменить на «${option.name}» · 1 действие`;
+          b.disabled = !canAct;
+          b.addEventListener('click', () => socket.emit('replaceCharacter', { characterId: option.id }, handleGameAck));
+          actions.appendChild(b);
+        }
+      }
+    }
+
     if (mine.landCompany) {
       const companyLabel = document.createElement('div');
       companyLabel.className = 'action-group-label';
@@ -1898,8 +2002,9 @@
       const dismiss = document.createElement('button');
       dismiss.type = 'button';
       dismiss.className = 'build-btn danger-soft';
-      dismiss.textContent = `Распустить роту +${mine.landCompany.army} · бесплатно`;
-      dismiss.disabled = !myTurnAnyPhase;
+      dismiss.textContent = `Вернуть роту +${mine.landCompany.army} у своего Арсенала · бесплатно`;
+      dismiss.disabled = !myTurnAnyPhase || !mine.canDismissLandCompanyHere;
+      dismiss.title = mine.canDismissLandCompanyHere ? '' : 'Нужно находиться у своего острова с Арсеналом.';
       dismiss.addEventListener('click', () => socket.emit('dismissLandCompany', {}, handleGameAck));
       actions.appendChild(dismiss);
     }
@@ -1984,8 +2089,8 @@
     }
 
     const ownedSettlements = (state.room.islands || []).filter(i => i.ownerId === state.myId);
-    const guardTargets = ownedSettlements.filter(i => ['Город', 'Крупный порт'].includes(i.status) && !i.garrisonType);
-    const permanentTargets = ownedSettlements.filter(i => i.status === 'Крупный порт' && i.garrisonType === 'guard');
+    const guardTargets = ownedSettlements.filter(i => i.status === 'Город' && !i.garrisonType);
+    const permanentTargets = ownedSettlements.filter(i => i.status === 'Крупный порт' && i.garrisonType !== 'permanent');
     if (guardTargets.length || permanentTargets.length) {
       const defenseLabel = document.createElement('div');
       defenseLabel.className = 'action-group-label';
@@ -2000,10 +2105,12 @@
         actions.appendChild(b);
       }
       for (const island of permanentTargets) {
+        const upgrading = island.garrisonType === 'guard';
+        const spec = upgrading ? state.room.balanceCatalog.garrisons.permanentUpgrade : state.room.balanceCatalog.garrisons.permanentDirect;
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'build-btn';
-        b.textContent = `Постоянный гарнизон → ${island.name} · ${state.room.balanceCatalog.garrisons.permanentUpgrade.price} дук. · +${state.room.balanceCatalog.garrisons.permanentUpgrade.defense} защиты`;
-        b.disabled = !canBuyHere || mine.ducats < state.room.balanceCatalog.garrisons.permanentUpgrade.price;
+        b.textContent = `${upgrading ? 'Постоянный гарнизон вместо стражи' : 'Постоянный гарнизон напрямую'} → ${island.name} · ${spec.price} дук. · +${spec.defense} защиты`;
+        b.disabled = !canBuyHere || mine.ducats < spec.price;
         b.addEventListener('click', () => emitDataAction(b, 'buyPermanentGarrison', { islandId: island.id }));
         actions.appendChild(b);
       }
@@ -2162,7 +2269,7 @@
         <span>Текущая защита</span><strong>${defense}</strong>
         <span>Исходный / нанятый / укрепления / бастион / корабль</span><strong>${defenseParts.garrison || 0} / ${defenseParts.hiredGarrison || 0} / ${defenseParts.fortifications || 0} / ${defenseParts.bastions || 0} / ${defenseParts.ownerShip || 0}</strong>
       </div>
-      <div class="building-line"><span class="muted">Городской отряд:</span> ${escapeHtml(island.garrisonName || 'нет')}</div>
+      <div class="building-line"><span class="muted">Городской отряд:</span> ${escapeHtml(island.garrisonName ? `${island.garrisonName} (+${island.garrisonDefense || 0})` : 'нет')}</div>
       <div class="building-line"><span class="muted">Постройки:</span> ${escapeHtml(buildings)}</div>
       <div class="building-line"><span class="muted">Погрузка в раунде ${state.room.round}:</span> ${island.loadedRound === state.room.round ? 'уже выполнена' : 'доступна'}</div>
       ${island.reward ? `<div class="reward-note"><span class="muted">Разовая награда:</span> ${escapeHtml(island.reward)}</div>` : ''}`;
@@ -2209,8 +2316,9 @@
     }
 
     const bastion = island.buildings.find(b => b.type === 'bastion');
+    const fortressThrees = island.buildings.filter(b => b.type === 'fortress' && Number(b.level) === 3);
     const arsenal = island.buildings.filter(b => b.type === 'arsenal').sort((a, b) => b.level - a.level)[0];
-    if (arsenal || bastion || (mine?.bastionSupportCapacity || 0) > (mine?.bastionCount || 0)) {
+    if (arsenal || bastion || fortressThrees.length) {
       const militaryLabel = document.createElement('div');
       militaryLabel.className = 'action-group-label';
       militaryLabel.textContent = 'Военная инфраструктура';
@@ -2218,25 +2326,39 @@
       if (arsenal) {
         const companyBtn = document.createElement('button');
         companyBtn.type = 'button'; companyBtn.className = 'build-btn';
-        companyBtn.textContent = mine?.landCompany ? `Рота уже снаряжена · +${mine.landCompany.army}` : `Снарядить роту · Арсенал ${ROMAN[arsenal.level] || arsenal.level} · +${r.balanceCatalog.landCompany.armyByArsenalLevel[arsenal.level]} войска`;
-        companyBtn.disabled = !canAct || Boolean(mine?.landCompany) || Boolean(mine?.cargo);
+        const cargoWarning = mine?.cargo ? ' · текущий груз будет сброшен' : '';
+        companyBtn.textContent = mine?.landCompany ? `Рота уже снаряжена · +${mine.landCompany.army}` : `Снарядить роту · Арсенал ${ROMAN[arsenal.level] || arsenal.level} · +${r.balanceCatalog.landCompany.armyByArsenalLevel[arsenal.level]} войска${cargoWarning}`;
+        companyBtn.disabled = !canAct || Boolean(mine?.landCompany);
         companyBtn.addEventListener('click', () => socket.emit('formLandCompany', { islandId: island.id }, handleGameAck));
         actions.appendChild(companyBtn);
       }
       if (!bastion) {
-        const bastionBtn = document.createElement('button');
-        bastionBtn.type = 'button'; bastionBtn.className = 'build-btn';
-        bastionBtn.textContent = `Бастион · ${state.room.balanceCatalog.bastion.price} дук. · +${state.room.balanceCatalog.bastion.defense} защиты`;
-        bastionBtn.disabled = !canAct || mine.ducats < state.room.balanceCatalog.bastion.price || (mine.bastionCount || 0) >= (mine.bastionSupportCapacity || 0);
-        bastionBtn.addEventListener('click', () => emitDataAction(bastionBtn, 'buildBastion', { islandId: island.id }));
-        actions.appendChild(bastionBtn);
-      } else if (!bastion.supported && (mine?.bastionSupportCapacity || 0) > 0) {
-        const supportBtn = document.createElement('button');
-        supportBtn.type = 'button'; supportBtn.className = 'build-btn primary';
-        supportBtn.textContent = 'Перенести поддержку на этот бастион · бесплатно';
-        supportBtn.disabled = !(myTurn && ['navigation', 'actions'].includes(mine?.phase) && !isDecisionPending());
-        supportBtn.addEventListener('click', () => socket.emit('prioritizeBastionSupport', { islandId: island.id }, handleGameAck));
-        actions.appendChild(supportBtn);
+        for (const fortress of fortressThrees) {
+          const bastionBtn = document.createElement('button');
+          bastionBtn.type = 'button'; bastionBtn.className = 'build-btn';
+          bastionBtn.textContent = `Крепость III → Бастион · ${state.room.balanceCatalog.bastion.price} дук. · +${state.room.balanceCatalog.bastion.defense} защиты`;
+          bastionBtn.disabled = !canAct || mine.ducats < state.room.balanceCatalog.bastion.price || (mine.bastionCount || 0) >= (mine.bastionSupportCapacity || 0);
+          bastionBtn.addEventListener('click', () => emitDataAction(bastionBtn, 'buildBastion', { islandId: island.id, buildingIndex: fortress.index }));
+          actions.appendChild(bastionBtn);
+        }
+      }
+    }
+
+    const palace = island.buildings.find(b => b.type === 'palace');
+    if (palace && (mine?.enemyFactionIds || []).length) {
+      const palaceLabel = document.createElement('div');
+      palaceLabel.className = 'action-group-label';
+      palaceLabel.textContent = 'Дворец';
+      actions.appendChild(palaceLabel);
+      for (const factionId of mine.enemyFactionIds || []) {
+        const faction = (r.factions || []).find(f => f.id === factionId && f.exists);
+        if (!faction) continue;
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'build-btn';
+        button.textContent = mine.palaceUsed ? 'Дворец уже использован в этой партии' : `Прекратить вражду: ${faction.name} · 1 действие`;
+        button.disabled = !canAct || Boolean(mine.palaceUsed);
+        button.addEventListener('click', () => socket.emit('usePalace', { islandId: island.id, factionId }, handleGameAck));
+        actions.appendChild(button);
       }
     }
 
@@ -2245,7 +2367,7 @@
     buildLabel.className = 'action-group-label';
     buildLabel.textContent = 'Строительство';
     actions.appendChild(buildLabel);
-    const ordered = ['farm', 'lumbermill', 'quarry', 'mine', 'fort', 'market', 'exotic', 'slaves', 'gold', 'diamonds'];
+    const ordered = ['farm', 'lumbermill', 'quarry', 'mine', 'fort', 'market', 'exotic', 'slaves', 'gold', 'diamonds', 'lighthouse', 'observatory', 'embassy', 'palace', 'cartography', 'admiralty'];
     for (const id of ordered) {
       const def = catalog[id];
       if (!def) continue;
@@ -2578,7 +2700,8 @@
     if (kind === 'island') {
       const owner = data.ownerId ? playerName(data.ownerId) : (data.faction || (data.kind === 'free' ? 'Свободный остров' : data.kind === 'independent' ? 'Независимый остров' : 'Нет владельца'));
       const resources = data.resources?.length ? data.resources.join(', ') : 'нет';
-      meta.innerHTML = `<span>Владелец: <strong>${escapeHtml(owner)}</strong></span><span>Площадь: <strong>${data.area}</strong></span><span>Гарнизон: <strong>${data.army ?? 0}</strong></span><span>Ресурс: <strong>${escapeHtml(resources)}</strong></span>`;
+      const defense = data.defenseArmy ?? data.army ?? 0;
+      meta.innerHTML = `<span>Владелец: <strong>${escapeHtml(owner)}</strong></span><span>Площадь: <strong>${data.area}</strong></span><span>Исходный гарнизон: <strong>${data.army ?? 0}</strong></span><span>Текущая защита: <strong>${defense}</strong></span><span>Ресурс: <strong>${escapeHtml(resources)}</strong></span>`;
       const here = currentIslands().some(i => i.id === data.id);
       if (here) {
         state.selectedIslandId = data.id;

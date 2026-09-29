@@ -1,15 +1,7 @@
 {
-  "activeProfile": "stage-2-party-clock",
-  "note": "Read rules/ as master data. Deferred runtime exceptions remain explicit in compatibility/legacy.json and runtime.js.",
+  "activeProfile": "stage-4-islands-economy-4.7",
+  "note": "Read rules/ as master data. Stage 3 fleet/navigation and stage 4 islands/economy consumers are active; later-stage consumers remain explicit below.",
   "pendingConsumers": [
-    { "path": "fleet.upgrades.*.passability", "consumerStage": 3, "status": "data-ready" },
-    { "path": "economy.buildings.*.area", "consumerStage": 4, "status": "data-ready" },
-    { "path": "economy.ranks.*.branchLimit", "consumerStage": 4, "status": "data-ready" },
-    { "path": "economy.garrisons", "consumerStage": 4, "status": "data-ready" },
-    { "path": "economy.buildings.fortress.levels.3.next", "consumerStage": 4, "status": "data-ready" },
-    { "path": "economy.buildings.*.effect", "consumerStage": 4, "status": "data-ready" },
-    { "path": "characters", "consumerStage": 4, "status": "data-ready" },
-    { "path": "legends.treasures", "consumerStage": 4, "status": "data-ready" },
     { "path": "politics.factions.mori", "consumerStage": 5, "status": "data-ready" },
     { "path": "politics.factions.*.fullConquestPrize.trigger", "consumerStage": 5, "status": "data-ready" },
     { "path": "politics.assignments.mori", "consumerStage": 5, "status": "data-ready" },

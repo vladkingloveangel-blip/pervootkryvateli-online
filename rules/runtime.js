@@ -6,16 +6,25 @@ const compatibilityErrors = validateCompatibility(rules, legacy);
 if (compatibilityErrors.length) throw new Error(`Invalid legacy rules profile:\n${compatibilityErrors.join('\n')}`);
 const copy = value => JSON.parse(JSON.stringify(value));
 const BUILDINGS = copy(rules.economy.buildings);
-for (const [id, area] of Object.entries(legacy.buildingAreas)) BUILDINGS[id].area = area;
+for (const building of Object.values(BUILDINGS)) {
+  if (building.category === 'public' && building.availability?.status === 'data-ready' && building.availability.consumerStage <= 4) {
+    building.buildable = true;
+  }
+}
+const BRANCH_LIMITS = Object.fromEntries(Object.entries(rules.economy.ranks)
+  .map(([id, rank]) => [id, rank.branchLimit]));
 const BUILDING_UPGRADES = {};
 for (const [id, building] of Object.entries(BUILDINGS)) {
-  if (building.category === 'public') continue;
+  if (building.category === 'public' && id !== 'admiralty') continue;
   for (const [level, data] of Object.entries(building.levels)) {
     if (!data.next || data.next.type === 'bastion') continue;
     const next = data.next;
     (BUILDING_UPGRADES[id] ||= {})[level] = { ...next, price: BUILDINGS[next.type].levels[next.level].price };
   }
 }
+const CHARACTERS = Object.fromEntries(rules.characters.characters
+  .filter(c => c.availability?.status === 'data-ready' && c.availability.consumerStage <= 4)
+  .map(c => [c.id, copy(c)]));
 const SHIP_UPGRADES = Object.fromEntries(Object.entries(rules.fleet.upgrades)
   .filter(([, u]) => !u.availability || (u.availability.status === 'data-ready' && u.availability.consumerStage <= 3)));
 // Read retired content from old saves, but do not sell it again.
@@ -41,15 +50,16 @@ const FEUD_CARDS = Object.fromEntries(Object.entries(legacy.feud).map(([id, card
   }),
 ]));
 module.exports = {
-  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-3-fleet-navigation-final',
+  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-4-islands-economy-4.7',
   BALANCE: {
     session: rules.session,
     maxShipLevel: rules.fleet.maxLevel, maxReadableShipLevel: legacy.shipLevel7.level,
     escortPrices: rules.fleet.escortPrices, maxBranchUpgrades: rules.fleet.maxBranchUpgrades,
     maxEscorts: rules.fleet.escortPrices.length,
-    garrisons: legacy.garrisons, branchLimits: legacy.branchLimits, ranks: rules.economy.ranks,
+    garrisons: rules.economy.garrisons, branchLimits: BRANCH_LIMITS, ranks: rules.economy.ranks,
     landCompany: rules.economy.landCompany, combat: rules.scoring.combat,
     contractBonusRatio: rules.economy.contractBonusRatio,
+    loadingLimitPerIslandPerRound: rules.economy.loadingLimitPerIslandPerRound,
     assignmentReplacementPrice: legacy.assignmentReplacementPrice,
     gloryCapture: legacy.gloryCapture, treasuryLossRatio: legacy.treasuryLossRatio,
     attackHistoryWindow: legacy.attackHistoryWindow, attackRebellionThreshold: legacy.attackRebellionThreshold,
@@ -58,7 +68,7 @@ module.exports = {
   },
   SHIPS: rules.fleet.ships, SHIP_LEVELS, SHIP_UPGRADES,
   ESCORTS: { ...rules.fleet.escorts, [legacy.removedEscort.id]: { ...legacy.removedEscort, retired: true } },
-  GOODS: rules.economy.goods, BUILDINGS, BUILDING_UPGRADES, MILITARY_REWARDS, FACTIONS,
+  GOODS: rules.economy.goods, BUILDINGS, BUILDING_UPGRADES, CHARACTERS, MILITARY_REWARDS, FACTIONS,
   POLITICAL_FACTION_ORDER: rules.politics.order.filter(id => id in FACTIONS),
   ASSIGNMENT_CARDS: Object.fromEntries(Object.entries(rules.politics.assignments).filter(([id]) => id in FACTIONS)),
   ANCHOR_CARDS: rules.sea,
@@ -66,6 +76,8 @@ module.exports = {
     ? { ...card, type: 'next-turn', timing: 'next-personal-turn' } : card),
   FEUD_CARDS,
   LEGENDARY_CARDS: rules.legends.legendary.map(card => ({ ...card, quantity: legacy.legendaryQuantities[card.id] })),
-  TREASURE_CARDS: [...rules.legends.treasures.filter(card => card.effect.type === 'income-multiple'), legacy.treasure],
+  // Physical treasure copy counts are unresolved in the source. Runtime keeps one
+  // instance of each canonical treasure kind without inventing additional copies.
+  TREASURE_CARDS: rules.legends.treasures.map(card => copy(card)),
   ANCHOR_GLORY: legacy.anchorGlory,
 };
