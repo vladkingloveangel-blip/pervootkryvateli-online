@@ -51,15 +51,20 @@ const FACTIONS = Object.fromEntries(Object.entries(rules.politics.factions)
       amountUnresolved: id === 'kadingir',
     },
   }]));
-const FEUD_CARDS = Object.fromEntries(Object.entries(legacy.feud).map(([id, cards]) => [id,
-  cards.map(card => {
-    const master = rules.events.feud[id].find(c => c.id === card.masterCardId);
-    const { percent, amount, count, fallbackDucats } = master.effect;
-    return { ...card, quantity: master.quantity, percent, amount, count, fallbackDucats };
-  }),
+const FEUD_CARDS = Object.fromEntries(Object.entries(rules.events.feud).map(([factionId, cards]) => [
+  factionId,
+  cards.map(card => ({
+    id: card.id,
+    masterCardId: card.id,
+    factionId,
+    name: card.name,
+    quantity: card.quantity,
+    source: card.source,
+    ...copy(card.effect),
+  })),
 ]));
 module.exports = {
-  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-5-combat-politics-5.6',
+  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-5-combat-politics-5.7',
   BALANCE: {
     session: rules.session,
     maxShipLevel: rules.fleet.maxLevel, maxReadableShipLevel: legacy.shipLevel7.level,

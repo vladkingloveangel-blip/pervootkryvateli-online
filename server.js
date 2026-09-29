@@ -6,7 +6,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { Pool } = require('pg');
 const { RoomStore, isUnfinished } = require('./room-store');
-const { MAP_META, CITADEL, HAZARDS, SHIPS, SHIP_LEVELS, SHIP_UPGRADES, ESCORTS, COLORS, BUILDINGS, CHARACTERS, GOODS, CITADEL_CELLS, ANCHORS, FACTIONS, POLITICAL_FACTION_ORDER, ASSIGNMENT_CARDS, LEGENDARY_PLACES } = require('./game-data');
+const { MAP_META, CITADEL, HAZARDS, SHIPS, SHIP_LEVELS, SHIP_UPGRADES, ESCORTS, COLORS, BUILDINGS, CHARACTERS, GOODS, CITADEL_CELLS, ANCHORS, FACTIONS, POLITICAL_FACTION_ORDER, ASSIGNMENT_CARDS, FEUD_CARDS, LEGENDARY_PLACES } = require('./game-data');
 const {
   cloneIslands,
   reachableCells,
@@ -132,6 +132,7 @@ const {
   buildFree,
   raidBuildingOptions,
   applyRaidDowngrade,
+  applyFeudBuildingDowngrade,
   boardingUpgradeOptions,
   applyBoardingLoss,
   stormCellOptions,
@@ -1894,7 +1895,28 @@ function removeCargoByHold(player, holdId) {
   const cargo = escort.cargo; escort.cargo = null; return cargo;
 }
 
-function resolveFeudCard(room, player, factionId, card) {
+function canonicalFeudCard(factionId, rawCard) {
+  if (!rawCard) return null;
+  const canonical = (FEUD_CARDS[factionId] || []).find(card =>
+    card.id === rawCard.masterCardId || card.id === rawCard.id
+  );
+  return canonical ? { ...rawCard, ...canonical, masterCardId: canonical.id } : rawCard;
+}
+
+function feudBuildingOptions(room, player, card, excludedOptions = []) {
+  const excluded = new Set(excludedOptions || []);
+  return politicalBuildingOptions(room, player, { buildingTypes: card?.buildingTypes || null })
+    .filter(option => !excluded.has(`${option.islandId}:${option.buildingIndex}`));
+}
+
+function feudDowngradeText(result) {
+  return result.removed
+    ? `${result.beforeName} на ${result.island.name} удалено как исходная форма I`
+    : `${result.beforeName} на ${result.island.name} понижено до ${result.afterName}`;
+}
+
+function resolveFeudCard(room, player, factionId, rawCard) {
+  const card = canonicalFeudCard(factionId, rawCard);
   const factionName = FACTIONS[factionId]?.name || factionId;
   const immediate = { pending: false };
   if (!card) return immediate;
@@ -1922,12 +1944,21 @@ function resolveFeudCard(room, player, factionId, card) {
     log(room, `${player.name}: карта вражды ${factionName} — в этом личном ходу доход рынков и банков пропускается.`);
     return immediate;
   }
+  if (card.type === 'movement-penalty') {
+    applyNextTurnEffect(room, player, 'movePenalty', Math.max(0, Number(card.amount) || 0));
+    log(room, `${player.name}: карта вражды ${factionName} — максимум обычной навигации в этом личном ходу уменьшается на ${Math.max(0, Number(card.amount) || 0)}.`);
+    return immediate;
+  }
   if (card.type === 'ship-level-loss') {
     const loss = loseShipLevel(room, player);
     log(room, `${player.name}: карта вражды ${factionName} — ${describeLevelLoss(room, { playerId: player.id, ...loss })}.`);
     return immediate;
   }
   if (card.type === 'discard-random-held') {
+    if (card.unresolved === 'R29' || card.targetZone == null) {
+      log(room, `${player.name}: карта вражды ${factionName} требует случайного сброса удерживаемой карты, но состав закрытой руки остаётся нерешённым вопросом Р29; автоматический сброс не выполняется.`);
+      return immediate;
+    }
     const result = discardRandomHeldCard(room, player);
     log(room, result.discarded ? `${player.name}: карта вражды ${factionName} — случайно сброшена удерживаемая карта «${result.discarded.name}».` : `${player.name}: карта вражды ${factionName} — удерживаемых карт нет.`);
     return immediate;
@@ -1950,6 +1981,34 @@ function resolveFeudCard(room, player, factionId, card) {
     }
     queueFeudDecision(room, player, factionId, card, 'reclaim-island', options);
     log(room, `${player.name}: ${factionName} возвращает один исходный остров. Нужно выбрать остров.`);
+    return { pending: true };
+  }
+  if (card.type === 'downgrade-building') {
+    const options = feudBuildingOptions(room, player, card);
+    if (!options.length) { log(room, `${player.name}: карта вражды ${factionName} — подходящих построек нет.`); return immediate; }
+    const count = Math.min(Math.max(1, Number(card.count) || 1), options.length);
+    if (options.length <= count) {
+      const results = [];
+      const ordered = [...options].sort((a, b) => a.islandId.localeCompare(b.islandId) || b.buildingIndex - a.buildingIndex);
+      for (const option of ordered) {
+        const result = applyFeudBuildingDowngrade(room, player, option.islandId, option.buildingIndex);
+        if (result.ok) results.push(feudDowngradeText(result));
+      }
+      log(room, `${player.name}: карта вражды ${factionName} — ${results.join('; ') || 'эффект не применён'}.`);
+      return immediate;
+    }
+    queueFeudDecision(room, player, factionId, card, 'downgrade-building', options, { remaining: count, excludedOptions: [] });
+    return { pending: true };
+  }
+  if (card.type === 'remove-building') {
+    const options = politicalBuildingOptions(room, player, { buildingTypes: card.buildingTypes || null });
+    if (!options.length) { log(room, `${player.name}: карта вражды ${factionName} — подходящих построек нет.`); return immediate; }
+    if (options.length === 1) {
+      const result = removePlayerBuilding(room, player, options[0].islandId, options[0].buildingIndex);
+      log(room, `${player.name}: карта вражды ${factionName} удаляет ${result.name} на ${result.island.name}.`);
+      return immediate;
+    }
+    queueFeudDecision(room, player, factionId, card, 'remove-building', options);
     return { pending: true };
   }
   if (card.type === 'building-downgrade') {
@@ -2066,8 +2125,9 @@ function processEventPhase(room) {
       const player = playerById(room, item.playerId);
       room.eventPhase.currentPlayerId = item.playerId;
       if (!player || !stateExists(room, item.factionId)) { room.eventPhase.feudIndex += 1; continue; }
-      const card = drawFeudCard(room, item.factionId);
-      if (!card) { room.eventPhase.feudIndex += 1; continue; }
+      const drawn = drawFeudCard(room, item.factionId);
+      if (!drawn) { room.eventPhase.feudIndex += 1; continue; }
+      const card = canonicalFeudCard(item.factionId, drawn);
       room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: card.name, factionId: item.factionId, factionName: FACTIONS[item.factionId]?.name, pending: false, source: 'feud' };
       log(room, `Фаза событий: ${player.name} получает карту вражды от ${FACTIONS[item.factionId]?.name}: «${card.name}».`);
       const resolved = resolveFeudCard(room, player, item.factionId, card);
@@ -2216,17 +2276,41 @@ function advanceRound(room) {
 
 function finishPendingFeudCard(room, pending) {
   discardDeckCard(room.feudDecks[pending.factionId], pending.feudCard);
-  room.eventPhase.lastCard = { playerId: pending.playerId, playerName: playerById(room, pending.playerId)?.name || 'Игрок', cardName: pending.cardName, factionId: pending.factionId, factionName: FACTIONS[pending.factionId]?.name, pending: false, source: 'feud' };
+  const player = playerById(room, pending.playerId);
+  room.eventPhase.lastCard = { playerId: pending.playerId, playerName: player?.name || 'Игрок', cardName: pending.cardName, factionId: pending.factionId, factionName: FACTIONS[pending.factionId]?.name, pending: false, source: 'feud' };
   room.pendingFeud = null;
   room.eventPhase.feudIndex += 1;
-  if (!queueIslandCorrectionIfNeeded(room, null, `карта вражды ${FACTIONS[pending.factionId]?.name || pending.factionId}: «${pending.cardName}»`)) processEventPhase(room);
+  const reason = `карта вражды ${FACTIONS[pending.factionId]?.name || pending.factionId}: «${pending.cardName}»`;
+  if (player && queueFleetAdjustment(room, player, reason)) return;
+  if (!queueIslandCorrectionIfNeeded(room, null, reason)) processEventPhase(room);
 }
 
 function completePendingFeud(room, pending, choice) {
   const player = playerById(room, pending.playerId);
   if (!player) return { ok: false, error: 'Игрок карты вражды не найден.' };
   const factionName = FACTIONS[pending.factionId]?.name || pending.factionId;
-  if (pending.kind === 'reclaim-island') {
+  if (pending.kind === 'downgrade-building') {
+    const selected = (pending.options || []).find(o => o.islandId === choice?.islandId && o.buildingIndex === Number(choice?.buildingIndex));
+    if (!selected) return { ok: false, error: 'Недопустимая постройка.' };
+    const result = applyFeudBuildingDowngrade(room, player, selected.islandId, selected.buildingIndex);
+    if (!result.ok) return result;
+    log(room, `${player.name}: карта вражды ${factionName} — ${feudDowngradeText(result)}.`);
+    const remaining = Math.max(0, (Number(pending.remaining) || 1) - 1);
+    pending.excludedOptions ||= [];
+    if (!result.removed) pending.excludedOptions.push(`${selected.islandId}:${selected.buildingIndex}`);
+    const options = feudBuildingOptions(room, player, pending.feudCard, pending.excludedOptions);
+    if (remaining > 0 && options.length) {
+      pending.remaining = Math.min(remaining, options.length);
+      pending.options = options;
+      return { ok: true, pending: true };
+    }
+  } else if (pending.kind === 'remove-building') {
+    const selected = (pending.options || []).find(o => o.islandId === choice?.islandId && o.buildingIndex === Number(choice?.buildingIndex));
+    if (!selected) return { ok: false, error: 'Недопустимая постройка.' };
+    const result = removePlayerBuilding(room, player, selected.islandId, selected.buildingIndex);
+    if (!result.ok) return result;
+    log(room, `${player.name}: карта вражды ${factionName} удаляет ${result.name} на ${result.island.name}.`);
+  } else if (pending.kind === 'reclaim-island') {
     const island = room.islands.find(i => i.id === choice?.islandId && i.ownerId === player.id && (FACTIONS[pending.factionId]?.originalIslandIds || []).includes(i.id));
     if (!island) return { ok: false, error: 'Недопустимый остров.' };
     island.ownerId = null; refreshFactionExistence(room);
@@ -2398,7 +2482,7 @@ function continueTurnAfterCards(room) {
   const noIncome = Boolean(p.activeTurnEffects?.noIncome);
   const income = marketIncomeForPlayer(room, p.id);
   if (noIncome) {
-    log(room, `${p.name}: действует «Голод» — доход рынков и банков в этом личном ходу не начисляется.`);
+    log(room, `${p.name}: эффект текущего хода отменяет доход рынков и банков.`);
   } else if (income > 0) {
     const credit = creditDucats(p, income);
     const debtText = credit.debtPaid ? ` (${credit.debtPaid} в погашение долга, ${credit.net} в казну)` : '';
@@ -2414,7 +2498,7 @@ function continueTurnAfterCards(room) {
 
   const effects = [];
   if (p.activeTurnEffects?.moveBonus) effects.push(`попутный ветер +${p.activeTurnEffects.moveBonus}`);
-  if (p.activeTurnEffects?.movePenalty) effects.push(`штиль −${p.activeTurnEffects.movePenalty}`);
+  if (p.activeTurnEffects?.movePenalty) effects.push(`штраф движения −${p.activeTurnEffects.movePenalty}`);
   if (p.activeTurnEffects?.bestOfTwo) effects.push('Удача Фортуны: два d6');
   log(room, `Ход: ${p.name}. Навигация.${effects.length ? ` Эффекты: ${effects.join(', ')}.` : ''}`);
 }

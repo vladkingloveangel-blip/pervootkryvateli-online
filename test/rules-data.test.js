@@ -166,8 +166,8 @@ test('complete known sea, assignment, feud and event decks match appendix rows',
   assert.deepEqual(rules.politics.assignments.mori.slice(0,8).map(c=>c.islandId),['renaika','chertog','kisalinia','yukon','erkalon','asigoriy','atlantia','adia']);
 });
 
-test('stage 5.6 activates six-state politics and canonical final-prize triggers without advancing feud or assignment consumers', () => {
-  assert.equal(rules.implementation.activeProfile,'stage-5-combat-politics-5.6');
+test('stage 5.7 activates all six canonical feud decks without advancing Mori assignments or service', () => {
+  assert.equal(rules.implementation.activeProfile,'stage-5-combat-politics-5.7');
   assert.equal(rules.implementation.pendingConsumers.every(item => item.consumerStage >= 5),true);
   assert.equal(rules.scoring.combat.attacksPerOpponentPerRound,1);
   assert.equal(data.BALANCE.combat.attacksPerOpponentPerRound,rules.scoring.combat.attacksPerOpponentPerRound);
@@ -191,6 +191,21 @@ test('stage 5.6 activates six-state politics and canonical final-prize triggers 
   assert.deepEqual(data.MILITARY_REWARDS.kadingir.preserveBuildings,[]);
   assert.deepEqual(data.MILITARY_REWARDS.kisalinia.preserveBuildings,[{type:'fort',level:1}]);
   assert.equal(data.ASSIGNMENT_CARDS.mori,undefined);
+  assert.deepEqual(Object.keys(data.FEUD_CARDS),rules.politics.order);
+  for (const factionId of rules.politics.order) {
+    assert.equal(data.FEUD_CARDS[factionId].reduce((sum,card)=>sum+card.quantity,0),10,factionId);
+    assert.deepEqual(
+      data.FEUD_CARDS[factionId].map(card=>card.id),
+      rules.events.feud[factionId].map(card=>card.id),
+      factionId
+    );
+  }
+  assert.equal(data.FEUD_CARDS.mori.filter(card=>card.type==='movement-penalty' && card.amount===2).reduce((sum,card)=>sum+card.quantity,0),2);
+  for (const factionId of ['mayo','suniksiya','pirates']) {
+    const card=data.FEUD_CARDS[factionId].find(c=>c.type==='discard-random-held');
+    assert.equal(card.unresolved,'R29');
+    assert.equal(card.targetZone,null);
+  }
   assert.equal(data.BALANCE.attackHistoryWindow,undefined);
   assert.equal(data.BALANCE.attackRebellionThreshold,undefined);
   for (const resolved of [
@@ -278,6 +293,6 @@ test('retired fleet content stays compatibility-only while stage 3 navigation up
   assert.equal(logic.buyShipUpgrade(buyer,'leadLine').ok,true);
   assert.equal(data.MILITARY_REWARDS.landin.specialLandinEscort,undefined);
   assert.equal(logic.buyEscort({islands:[]},buyer,'landin').ok,false);
-  assert.equal(data.FACTIONS.mori,undefined);
+  assert.equal(data.FACTIONS.mori.giftIslandId,'miyosi');
   assert.equal(rules.politics.factions.mori.giftIslandId,'miyosi');
 });

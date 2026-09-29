@@ -46,7 +46,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(canonical.metadata.schemaVersion, 1);
   assert.equal(canonical.politics.factions.kadingir.fullConquestPrize.ducats, 50);
   assert.equal(canonical.islands.length, 28);
-  assert.equal(canonical.implementation.activeProfile, 'stage-5-combat-politics-5.6');
+  assert.equal(canonical.implementation.activeProfile, 'stage-5-combat-politics-5.7');
   assert.equal(canonical.implementation.pendingConsumers.every(item => item.consumerStage >= 5), true);
   const a = (await api('/api/auth/register', null, { username: 'playerone', password: 'password1' })).data;
   const b = (await api('/api/auth/register', null, { username: 'playertwo', password: 'password2' })).data;
@@ -107,7 +107,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.ruleset.rulesetVersion, canonical.metadata.rulesetVersion);
   assert.equal(watch.room.balanceCatalog.bastion.price, canonical.economy.buildings.bastion.price);
   assert.equal(watch.room.balanceCatalog.bastion.defense, canonical.economy.buildings.bastion.defense);
-  assert.equal(watch.room.runtimeProfile, 'stage-5-combat-politics-5.6');
+  assert.equal(watch.room.runtimeProfile, 'stage-5-combat-politics-5.7');
   assert.equal(watch.room.shipCatalog.brigantine.artillery, canonical.fleet.ships.brigantine.artillery);
   assert.deepEqual(watch.room.balanceCatalog.landCompany, canonical.economy.landCompany);
   assert.deepEqual(watch.room.balanceCatalog.garrisons, canonical.economy.garrisons);
@@ -125,6 +125,11 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.factions.find(f=>f.id==='kadingir').fullConquestPrize.amountUnresolved,true);
   assert.equal(watch.room.factions.find(f=>f.id==='lionia').fullConquestPrize.ducats,60);
   assert.equal(Object.hasOwn(watch.room.factions.find(f=>f.id==='lionia').fullConquestPrize,'preserveBuildings'),false);
+  assert.deepEqual(Object.keys(watch.room.feudDecks),['lionia','kadingir','mori','mayo','suniksiya','pirates']);
+  for (const factionId of Object.keys(watch.room.feudDecks)) {
+    assert.equal(watch.room.feudDecks[factionId].remaining,10,factionId);
+    assert.equal(watch.room.feudDecks[factionId].discard,0,factionId);
+  }
   assert.equal(watch.room.balanceCatalog.legendaryEffects['sea-curse'].amount, canonical.legends.legendary.find(c => c.id === 'sea-curse').effect.amount);
   assert.equal(watch.room.shipLevelCatalog[7], undefined);
   assert.equal(watch.room.shipUpgradeCatalog.leadLine.price, canonical.fleet.upgrades.leadLine.price);

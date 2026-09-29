@@ -16,13 +16,19 @@ test('legacy profile references remain valid while canonical master data stays s
   assert.deepEqual(runtime.SHIP_UPGRADES[legacy.removedUpgrade.id],{...legacy.removedUpgrade,retired:true});
   assert.deepEqual(runtime.ESCORTS[legacy.removedEscort.id],{...legacy.removedEscort,retired:true});
   assert.equal(runtime.FACTIONS.mori.giftIslandId,'miyosi');
-  assert.equal(runtime.FEUD_CARDS.mori,undefined); // canonical Mori feud deck is activated in block 5.7
   assert.equal(runtime.ASSIGNMENT_CARDS.mori,undefined); // canonical Mori assignments are activated in block 5.8
-  for (const [id, cards] of Object.entries(runtime.FEUD_CARDS)) {
-    for (const card of cards) {
-      const master = rules.events.feud[id].find(c => c.id === card.masterCardId);
-      assert.equal(card.quantity,master.quantity,card.id);
-      for (const key of ['percent','amount','count','fallbackDucats']) if (master.effect[key] !== undefined) assert.equal(card[key],master.effect[key],card.id);
+  assert.deepEqual(Object.keys(runtime.FEUD_CARDS),rules.politics.order);
+  for (const [id, masterCards] of Object.entries(rules.events.feud)) {
+    const cards = runtime.FEUD_CARDS[id];
+    assert.equal(cards.reduce((sum,card)=>sum+card.quantity,0),10,id);
+    assert.equal(cards.length,masterCards.length,id);
+    for (const master of masterCards) {
+      const card = cards.find(c => c.id === master.id);
+      assert.ok(card,master.id);
+      assert.equal(card.masterCardId,master.id);
+      assert.equal(card.quantity,master.quantity,master.id);
+      assert.equal(card.name,master.name,master.id);
+      for (const [key,value] of Object.entries(master.effect)) assert.deepEqual(card[key],value,master.id + ':' + key);
     }
   }
   for (const id of Object.keys(legacy.factionPrizeBuildings)) {

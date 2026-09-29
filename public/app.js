@@ -1370,7 +1370,22 @@
       label.textContent = `Вражда: ${pendingFeud.factionName} — «${pendingFeud.cardName}»`;
       actions.appendChild(label);
       const emitChoice = payload => socket.emit('respondFeud', { feudId: pendingFeud.id, ...payload }, handleGameAck);
-      if (pendingFeud.kind === 'reclaim-island') {
+      if (pendingFeud.kind === 'downgrade-building') {
+        if ((pendingFeud.remaining || 1) > 1) {
+          const note = document.createElement('div'); note.className = 'cargo-meta'; note.textContent = `Осталось понизить: ${pendingFeud.remaining}`; actions.appendChild(note);
+        }
+        for (const option of pendingFeud.options || []) {
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn danger-soft';
+          b.textContent = `Понизить (I удаляется): ${option.islandName} · ${option.name}`;
+          b.addEventListener('click', () => emitChoice({ islandId: option.islandId, buildingIndex: option.buildingIndex })); actions.appendChild(b);
+        }
+      } else if (pendingFeud.kind === 'remove-building') {
+        for (const option of pendingFeud.options || []) {
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn danger-soft';
+          b.textContent = `Удалить: ${option.islandName} · ${option.name}`;
+          b.addEventListener('click', () => emitChoice({ islandId: option.islandId, buildingIndex: option.buildingIndex })); actions.appendChild(b);
+        }
+      } else if (pendingFeud.kind === 'reclaim-island') {
         for (const option of pendingFeud.options || []) {
           const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn danger-soft';
           b.textContent = `Вернуть государству: ${option.name}`;

@@ -527,13 +527,15 @@ function rebelFromSuzerain(room, player) {
   return { ok: true, faction, gift: returned ? gift : null, returned };
 }
 
-function politicalBuildingOptions(room, player, { aboveLevelOne = false, fortsOnly = false } = {}) {
+function politicalBuildingOptions(room, player, { aboveLevelOne = false, fortsOnly = false, buildingTypes = null } = {}) {
+  const allowedTypes = Array.isArray(buildingTypes) && buildingTypes.length ? new Set(buildingTypes) : null;
   const out = [];
   for (const island of room?.islands || []) {
     if (island.ownerId !== player?.id) continue;
     (island.buildings || []).forEach((building, buildingIndex) => {
       if (aboveLevelOne && buildingStage(building) <= 1) return;
       if (fortsOnly && !['fort', 'fortress'].includes(building.type)) return;
+      if (allowedTypes && !allowedTypes.has(building.type)) return;
       out.push({ islandId: island.id, islandName: island.name, buildingIndex, name: buildingDisplayName(building), canDowngrade: buildingStage(building) > 1 });
     });
   }
@@ -557,8 +559,9 @@ function politicalUpgradeOptions(player, branch = null) {
 function politicalCargoOptions(room, player) {
   const out = [];
   if (player?.cargo) out.push({ id: 'main', name: 'Основной трюм', goodId: player.cargo.goodId, quantity: player.cargo.quantity });
-  for (const escort of escortStatuses(room, player || {}).filter(e => e.active && (ESCORTS[e.type]?.cargo || 0) > 0 && e.cargo)) {
-    out.push({ id: escort.id, name: ESCORTS[e.type]?.name || 'Судно сопровождения', goodId: escort.cargo.goodId, quantity: escort.cargo.quantity });
+  for (const escort of player?.escorts || []) {
+    if ((ESCORTS[escort.type]?.cargo || 0) <= 0 || !escort.cargo) continue;
+    out.push({ id: escort.id, name: ESCORTS[escort.type]?.name || 'Судно сопровождения', goodId: escort.cargo.goodId, quantity: escort.cargo.quantity });
   }
   return out;
 }
@@ -678,6 +681,20 @@ function applyRaidDowngrade(room, player, islandId, buildingIndex) {
   if (buildingStage(before) <= 1) return { ok: false, error: 'Нужно выбрать постройку выше I уровня.' };
   island.buildings[index] = downgradeBuildingOneStep(before);
   return { ok: true, island, beforeName: buildingDisplayName(before), afterName: buildingDisplayName(island.buildings[index]) };
+}
+
+function applyFeudBuildingDowngrade(room, player, islandId, buildingIndex) {
+  const island = room?.islands?.find(i => i.id === islandId && i.ownerId === player?.id);
+  const index = Number(buildingIndex);
+  if (!island || !Number.isInteger(index) || !island.buildings?.[index]) return { ok: false, error: 'Постройка не найдена.' };
+  const before = island.buildings[index];
+  const beforeName = buildingDisplayName(before);
+  if (buildingStage(before) <= 1) {
+    island.buildings.splice(index, 1);
+    return { ok: true, island, beforeName, afterName: null, removed: true };
+  }
+  island.buildings[index] = downgradeBuildingOneStep(before);
+  return { ok: true, island, beforeName, afterName: buildingDisplayName(island.buildings[index]), removed: false };
 }
 
 function boardingUpgradeOptions(player) {
@@ -2920,6 +2937,7 @@ module.exports = {
   buildFree,
   raidBuildingOptions,
   applyRaidDowngrade,
+  applyFeudBuildingDowngrade,
   boardingUpgradeOptions,
   applyBoardingLoss,
   stormCellOptions,

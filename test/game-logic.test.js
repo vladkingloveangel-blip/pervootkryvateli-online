@@ -91,6 +91,7 @@ const {
   buildFree,
   raidBuildingOptions,
   applyRaidDowngrade,
+  applyFeudBuildingDowngrade,
   boardingUpgradeOptions,
   applyBoardingLoss,
   stormCellOptions,
@@ -1514,6 +1515,51 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(island.buildings.length, 1);
 }
 
+
+// Каноническое понижение по карте вражды удаляет исходную форму I,
+// а продвинутую форму I возвращает в исходную форму III.
+{
+  const room = { islands: cloneIslands() };
+  const island = room.islands.find(i => i.id === 'bogamia');
+  island.ownerId = 'p1';
+  island.buildings = [{ type: 'farm', level: 1 }, { type: 'bank', level: 1 }];
+  const p = { id: 'p1' };
+  const removed = applyFeudBuildingDowngrade(room, p, island.id, 0);
+  assert.equal(removed.ok, true);
+  assert.equal(removed.removed, true);
+  assert.deepEqual(island.buildings, [{ type: 'bank', level: 1 }]);
+  const lowered = applyFeudBuildingDowngrade(room, p, island.id, 0);
+  assert.equal(lowered.ok, true);
+  assert.equal(lowered.removed, false);
+  assert.equal(island.buildings[0].type, 'market');
+  assert.equal(island.buildings[0].level, 3);
+}
+
+// Карта вражды может уничтожить груз из любого собственного грузового трюма,
+// включая временно неактивное сопровождение: уже погруженный груз на нём сохраняется физически.
+{
+  const room = { islands: cloneIslands() };
+  const p = {
+    id: 'p1',
+    cargo: null,
+    shipClass: 'brigantine',
+    level: 1,
+    upgrades: [],
+    escorts: [{ id: 'cargo-old', type: 'cargo', cargo: { goodId: 'wood', quantity: 5 } }],
+    levelInactiveEscortIds: ['cargo-old'],
+  };
+  const options = politicalCargoOptions(room, p);
+  assert.deepEqual(options.map(o => o.id), ['cargo-old']);
+}
+
+// Приложение Д активирует шесть отдельных колод ровно по десять карт,
+// включая две карты штрафа движения Сёгуната Мори.
+{
+  const decks = createFeudDecks(() => 0.5);
+  assert.deepEqual(Object.keys(decks), ['lionia', 'kadingir', 'mori', 'mayo', 'suniksiya', 'pirates']);
+  for (const deck of Object.values(decks)) assert.equal(deck.drawPile.length, 10);
+  assert.equal(decks.mori.drawPile.filter(card => card.type === 'movement-penalty' && card.amount === 2).length, 2);
+}
 
 // Все четыре колоды поручений содержат ровно 39 карт: 10 + 10 + 9 + 10.
 {
