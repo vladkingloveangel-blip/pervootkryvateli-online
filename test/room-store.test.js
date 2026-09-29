@@ -6,6 +6,25 @@ const logger = { log() {}, error() {} };
 const room = () => ({ code: 'ABCDE', started: true, players: [{ id: 'p1', accountId: 'a1', socketId: 'stale', connected: true, token: 'private', ducats: 42 }], islands: [{ ownerId: 'p1' }], order: ['p1'], phase: 'action', pendingBattle: { invites: [{ response: null }] }, legendaryDeck: ['secret'], round: 3 });
 function pool() { const { Pool } = newDb({ noAstCoverageCheck: true }).adapters.createPg(); return new Pool(); }
 
+test('unversioned rooms retain retired content, old deck copies, islands and pending decisions', async () => {
+  const original = room();
+  Object.assign(original.players[0], { level: 7, shipClass: 'carrack', upgrades: ['foreMarsel'],
+    escorts: [{ id: 'landin-old', type: 'landin', special: true, cargo: { goodId: 'ore', quantity: 5 } }],
+    pendingLandinEscort: true, replacedAssignmentConditions: ['ship-level'] });
+  original.islands = [{ id: 'asigoriy', army: 12, area: 4, resources: ['Рудная жила'], ownerId: null, buildings: [] }];
+  original.anchorDecks = { red: { drawPile: [{ id: 'abyss-armada', artillery: 23, reward: 34 }], discard: [] } };
+  original.pendingAssignmentChoice = { playerId: 'p1', id: 'old-choice' };
+  const db = pool(); const store = new RoomStore(db, { logger });
+  await store.init(new Map()); await store.save(original);
+  const restored = new Map(); await new RoomStore(db, { logger }).init(restored);
+  const saved = restored.get(original.code);
+  assert.deepEqual(saved, { ...original, players: [{ ...original.players[0], connected: false, socketId: null }] });
+  assert.equal(saved.rulesDataVersion, undefined);
+  const { shipStats } = require('../game-logic');
+  assert.doesNotThrow(() => shipStats(saved.players[0]));
+  assert.equal(saved.players[0].level, 7);
+});
+
 test('JSONB round trip preserves full state, clears connections and skips finished games', async () => {
   const db = pool();
   const store = new RoomStore(db, { logger });

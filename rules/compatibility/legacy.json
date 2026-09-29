@@ -1,0 +1,450 @@
+{
+  "note": "Explicit temporary runtime exceptions. Not canonical master rules. See docs/rules-data-foundation.md.",
+  "session": {
+    "players": {
+      "min": 2,
+      "max": 5
+    },
+    "startingDucats": 14,
+    "circlesPerRound": 5
+  },
+  "shipLevel7": {
+    "level": 7,
+    "price": 23,
+    "statBonus": 6,
+    "moveBonus": 2
+  },
+  "removedUpgrade": {
+    "id": "foreMarsel",
+    "name": "Фор-марсель",
+    "branch": "speed",
+    "order": 2,
+    "price": 11,
+    "movement": 1,
+    "requires": "foreStengha"
+  },
+  "removedEscort": {
+    "id": "landin",
+    "name": "Особое сопровождение Ландина",
+    "artillery": 6,
+    "army": 0,
+    "cargo": 5,
+    "special": true
+  },
+  "buildingAreas": {
+    "manor": 2,
+    "shipyard": 2,
+    "stoneworks": 2,
+    "arsenal": 2,
+    "fortress": 2,
+    "bank": 2
+  },
+  "branchLimits": {
+    "settlement": 2,
+    "city": 3,
+    "port": 4
+  },
+  "garrisons": {
+    "guard": {
+      "price": 6,
+      "defense": 5
+    },
+    "permanentUpgrade": {
+      "price": 12,
+      "defense": 10
+    }
+  },
+  "feud": {
+    "lionia": [
+      {
+        "id": "building-choice",
+        "name": "Удалить здание или понизить его на уровень",
+        "type": "building-choice",
+        "masterCardId": "lionia-feud-1"
+      },
+      {
+        "id": "reclaim-island",
+        "name": "Лиония возвращает свой исходный остров",
+        "type": "reclaim-island",
+        "masterCardId": "lionia-feud-2"
+      },
+      {
+        "id": "ship-level-loss",
+        "name": "Основной корабль теряет один общий уровень",
+        "type": "ship-level-loss",
+        "masterCardId": "lionia-feud-3"
+      },
+      {
+        "id": "treasury-50",
+        "name": "Потеря 50% дукатов",
+        "type": "treasury-percent",
+        "masterCardId": "lionia-feud-4"
+      },
+      {
+        "id": "skip-income",
+        "name": "Пропуск дохода в ближайшем личном ходу",
+        "type": "skip-income",
+        "masterCardId": "lionia-feud-5"
+      },
+      {
+        "id": "treasury-30",
+        "name": "Потеря 30% дукатов",
+        "type": "treasury-percent",
+        "masterCardId": "lionia-feud-6"
+      },
+      {
+        "id": "remove-forts",
+        "name": "Удалить до двух фортов или крепостей",
+        "type": "remove-forts",
+        "masterCardId": "lionia-feud-7"
+      }
+    ],
+    "kadingir": [
+      {
+        "id": "building-downgrade",
+        "name": "Одно своё здание теряет уровень",
+        "type": "building-downgrade",
+        "masterCardId": "kadingir-feud-1"
+      },
+      {
+        "id": "skip-income",
+        "name": "Пропуск дохода в ближайшем личном ходу",
+        "type": "skip-income",
+        "masterCardId": "kadingir-feud-2"
+      },
+      {
+        "id": "ship-level-loss",
+        "name": "Основной корабль теряет один общий уровень",
+        "type": "ship-level-loss",
+        "masterCardId": "kadingir-feud-3"
+      },
+      {
+        "id": "treasury-10",
+        "name": "Потеря 10% дукатов",
+        "type": "treasury-percent",
+        "masterCardId": "kadingir-feud-4"
+      },
+      {
+        "id": "building-choice",
+        "name": "Удалить здание или понизить его на уровень",
+        "type": "building-choice",
+        "masterCardId": "kadingir-feud-5"
+      },
+      {
+        "id": "treasury-20",
+        "name": "Потеря 20% дукатов",
+        "type": "treasury-percent",
+        "masterCardId": "kadingir-feud-6"
+      },
+      {
+        "id": "remove-army-upgrade",
+        "name": "Снять одно улучшение войска",
+        "type": "remove-upgrade",
+        "branch": "army",
+        "masterCardId": "kadingir-feud-7"
+      },
+      {
+        "id": "remove-fort",
+        "name": "Удалить один форт или крепость",
+        "type": "remove-forts",
+        "masterCardId": "kadingir-feud-8"
+      }
+    ],
+    "pirates": [
+      {
+        "id": "building-choice",
+        "name": "Удалить здание или понизить его на уровень",
+        "type": "building-choice",
+        "masterCardId": "pirates-feud-1"
+      },
+      {
+        "id": "skip-income",
+        "name": "Пропуск дохода в ближайшем личном ходу",
+        "type": "skip-income",
+        "masterCardId": "pirates-feud-2"
+      },
+      {
+        "id": "treasury-20",
+        "name": "Потеря 20% дукатов",
+        "type": "treasury-percent",
+        "masterCardId": "pirates-feud-3"
+      },
+      {
+        "id": "remove-army-upgrade",
+        "name": "Снять одно улучшение войска",
+        "type": "remove-upgrade",
+        "branch": "army",
+        "masterCardId": "pirates-feud-4"
+      },
+      {
+        "id": "remove-any-upgrade",
+        "name": "Снять любое улучшение корабля",
+        "type": "remove-upgrade",
+        "masterCardId": "pirates-feud-5"
+      },
+      {
+        "id": "treasury-10",
+        "name": "Потеря 10% дукатов",
+        "type": "treasury-percent",
+        "masterCardId": "pirates-feud-6"
+      },
+      {
+        "id": "discard-held",
+        "name": "Сбросить случайную удерживаемую карту",
+        "type": "discard-random-held",
+        "masterCardId": "pirates-feud-7"
+      },
+      {
+        "id": "remove-artillery-upgrade",
+        "name": "Снять одно улучшение артиллерии",
+        "type": "remove-upgrade",
+        "branch": "artillery",
+        "masterCardId": "pirates-feud-8"
+      },
+      {
+        "id": "none",
+        "name": "Нет события",
+        "type": "none",
+        "masterCardId": "pirates-feud-9"
+      }
+    ],
+    "mayo": [
+      {
+        "id": "treasury-10",
+        "name": "Потеря 10% дукатов",
+        "type": "treasury-percent",
+        "masterCardId": "mayo-feud-1"
+      },
+      {
+        "id": "skip-income",
+        "name": "Пропуск дохода в ближайшем личном ходу",
+        "type": "skip-income",
+        "masterCardId": "mayo-feud-2"
+      },
+      {
+        "id": "building-downgrade",
+        "name": "Одно своё здание теряет уровень",
+        "type": "building-downgrade",
+        "masterCardId": "mayo-feud-3"
+      },
+      {
+        "id": "remove-any-upgrade",
+        "name": "Снять любое улучшение корабля",
+        "type": "remove-upgrade",
+        "masterCardId": "mayo-feud-4"
+      },
+      {
+        "id": "discard-held",
+        "name": "Сбросить случайную удерживаемую карту",
+        "type": "discard-random-held",
+        "masterCardId": "mayo-feud-5"
+      },
+      {
+        "id": "treasury-2",
+        "name": "Потеря 2 дуката",
+        "type": "treasury-flat",
+        "masterCardId": "mayo-feud-6"
+      },
+      {
+        "id": "none",
+        "name": "Нет события",
+        "type": "none",
+        "masterCardId": "mayo-feud-7"
+      }
+    ],
+    "suniksiya": [
+      {
+        "id": "treasury-20",
+        "name": "Потеря 20% дукатов",
+        "type": "treasury-percent",
+        "masterCardId": "suniksiya-feud-1"
+      },
+      {
+        "id": "skip-income",
+        "name": "Пропуск дохода в ближайшем личном ходу",
+        "type": "skip-income",
+        "masterCardId": "suniksiya-feud-2"
+      },
+      {
+        "id": "treasury-3",
+        "name": "Потеря 3 дуката",
+        "type": "treasury-flat",
+        "masterCardId": "suniksiya-feud-3"
+      },
+      {
+        "id": "discard-held",
+        "name": "Сбросить случайную удерживаемую карту",
+        "type": "discard-random-held",
+        "masterCardId": "suniksiya-feud-4"
+      },
+      {
+        "id": "remove-cargo",
+        "name": "Снять один груз из своего трюма",
+        "type": "remove-cargo",
+        "masterCardId": "suniksiya-feud-5"
+      },
+      {
+        "id": "building-downgrade",
+        "name": "Одно своё здание теряет уровень",
+        "type": "building-downgrade",
+        "masterCardId": "suniksiya-feud-6"
+      },
+      {
+        "id": "none",
+        "name": "Нет события",
+        "type": "none",
+        "masterCardId": "suniksiya-feud-7"
+      }
+    ]
+  },
+  "militaryRewardBuildings": {
+    "landin": [
+      {
+        "type": "fortress",
+        "level": 1
+      }
+    ],
+    "frandia": [
+      {
+        "type": "manor",
+        "level": 1
+      }
+    ],
+    "eidon": [
+      {
+        "type": "fortress",
+        "level": 1
+      },
+      {
+        "type": "manor",
+        "level": 1
+      },
+      {
+        "type": "bank",
+        "level": 1
+      }
+    ],
+    "kadingir": [
+      {
+        "type": "bank",
+        "level": 1
+      }
+    ],
+    "suniksiya": [
+      {
+        "type": "farm",
+        "level": 1
+      },
+      {
+        "type": "market",
+        "level": 1
+      }
+    ],
+    "chertonia": [
+      {
+        "type": "fort",
+        "level": 1
+      }
+    ]
+  },
+  "legendaryQuantities": {
+    "sea-veil": 2,
+    "hellfire": 2,
+    "mist-path": 2,
+    "sea-curse": 2
+  },
+  "treasure": {
+    "id": "full-ore-hold",
+    "name": "Полный трюм руды",
+    "cargoGoodId": "ore"
+  },
+  "assignmentReplacementPrice": 2,
+  "gloryCapture": [
+    {
+      "min": 0,
+      "max": 0,
+      "points": 0
+    },
+    {
+      "min": 1,
+      "max": 4,
+      "points": 2
+    },
+    {
+      "min": 5,
+      "max": 8,
+      "points": 3
+    },
+    {
+      "min": 9,
+      "max": 12,
+      "points": 4
+    },
+    {
+      "min": 13,
+      "max": 16,
+      "points": 6
+    },
+    {
+      "min": 17,
+      "max": null,
+      "points": 8
+    }
+  ],
+  "anchorGlory": {
+    "blue": 1,
+    "yellow": 3,
+    "red": 6
+  },
+  "treasuryLossRatio": 0.3,
+  "attackHistoryWindow": 10,
+  "attackRebellionThreshold": 3,
+  "factionPrizeBuildings": {
+    "lionia": [
+      {
+        "type": "market",
+        "level": 1
+      },
+      {
+        "type": "market",
+        "level": 1
+      }
+    ],
+    "kadingir": [
+      {
+        "type": "bank",
+        "level": 1
+      },
+      {
+        "type": "market",
+        "level": 1
+      }
+    ],
+    "mayo": [
+      {
+        "type": "market",
+        "level": 1
+      }
+    ],
+    "suniksiya": [
+      {
+        "type": "market",
+        "level": 1
+      },
+      {
+        "type": "market",
+        "level": 1
+      }
+    ],
+    "pirates": [
+      {
+        "type": "market",
+        "level": 1
+      },
+      {
+        "type": "market",
+        "level": 1
+      }
+    ]
+  }
+}

@@ -1,0 +1,67 @@
+// Stage-1 projection for the existing engine, NOT an alternative master ruleset.
+const rules = require('./index');
+const legacy = require('./compatibility/legacy.json');
+const copy = value => JSON.parse(JSON.stringify(value));
+const BUILDINGS = copy(rules.economy.buildings);
+for (const [id, area] of Object.entries(legacy.buildingAreas)) BUILDINGS[id].area = area;
+const BUILDING_UPGRADES = {};
+for (const [id, building] of Object.entries(BUILDINGS)) {
+  if (building.category === 'public') continue;
+  for (const [level, data] of Object.entries(building.levels)) {
+    if (!data.next || data.next.type === 'bastion') continue;
+    const next = data.next;
+    (BUILDING_UPGRADES[id] ||= {})[level] = { ...next, price: BUILDINGS[next.type].levels[next.level].price };
+  }
+}
+const SHIP_UPGRADES = Object.fromEntries(Object.entries(rules.fleet.upgrades).filter(([, u]) => !u.availability));
+// Read retired content from old saves, but do not sell it again.
+SHIP_UPGRADES.foreMarsel = { ...legacy.removedUpgrade, retired: true };
+const SHIP_LEVELS = { ...rules.fleet.levels, 7: { ...legacy.shipLevel7, retired: true } };
+const MILITARY_REWARDS = {};
+for (const island of rules.islands.filter(i => i.kind !== 'free')) {
+  MILITARY_REWARDS[island.id] = { ...island.reward,
+    // Remaining prize buildings await author clarification. Never grant a Landin ship.
+    ...(legacy.militaryRewardBuildings[island.id] ? { preserveBuildings: legacy.militaryRewardBuildings[island.id] } : {}) };
+}
+const FACTIONS = Object.fromEntries(Object.entries(rules.politics.factions)
+  .filter(([, faction]) => !faction.availability)
+  .map(([id, faction]) => [id, { ...faction, fullConquestPrize: {
+    preserveBuildings: copy(legacy.factionPrizeBuildings[id]),
+    razeDucats: faction.fullConquestPrize.ducats,
+  } }]));
+const FEUD_CARDS = Object.fromEntries(Object.entries(legacy.feud).map(([id, cards]) => [id,
+  cards.map(card => {
+    const master = rules.events.feud[id].find(c => c.id === card.masterCardId);
+    const { percent, amount, count, fallbackDucats } = master.effect;
+    return { ...card, quantity: master.quantity, percent, amount, count, fallbackDucats };
+  }),
+]));
+module.exports = {
+  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-1-compatible',
+  BALANCE: {
+    session: { ...rules.session, ...legacy.session },
+    maxShipLevel: rules.fleet.maxLevel, maxReadableShipLevel: legacy.shipLevel7.level,
+    escortPrices: rules.fleet.escortPrices, maxBranchUpgrades: rules.fleet.maxBranchUpgrades,
+    maxEscorts: rules.fleet.escortPrices.length,
+    garrisons: legacy.garrisons, branchLimits: legacy.branchLimits, ranks: rules.economy.ranks,
+    landCompany: rules.economy.landCompany, combat: rules.scoring.combat,
+    contractBonusRatio: rules.economy.contractBonusRatio,
+    assignmentReplacementPrice: legacy.assignmentReplacementPrice,
+    gloryCapture: legacy.gloryCapture, treasuryLossRatio: legacy.treasuryLossRatio,
+    attackHistoryWindow: legacy.attackHistoryWindow, attackRebellionThreshold: legacy.attackRebellionThreshold,
+    reclaimIslandFallback: rules.events.feud.lionia.find(c => c.effect.type === 'reclaim-island').effect.fallbackDucats,
+    legendaryEffects: Object.fromEntries(rules.legends.legendary.map(c => [c.id, c.effect])),
+  },
+  SHIPS: rules.fleet.ships, SHIP_LEVELS, SHIP_UPGRADES,
+  ESCORTS: { ...rules.fleet.escorts, landin: { ...legacy.removedEscort, retired: true } },
+  GOODS: rules.economy.goods, BUILDINGS, BUILDING_UPGRADES, MILITARY_REWARDS, FACTIONS,
+  POLITICAL_FACTION_ORDER: rules.politics.order.filter(id => id in FACTIONS),
+  ASSIGNMENT_CARDS: Object.fromEntries(Object.entries(rules.politics.assignments).filter(([id]) => id in FACTIONS)),
+  ANCHOR_CARDS: rules.sea,
+  SAILING_EVENT_CARDS: rules.events.sailing.map(card => card.type === 'turn-effect'
+    ? { ...card, type: 'next-turn', timing: 'next-personal-turn' } : card),
+  FEUD_CARDS,
+  LEGENDARY_CARDS: rules.legends.legendary.map(card => ({ ...card, quantity: legacy.legendaryQuantities[card.id] })),
+  TREASURE_CARDS: [...rules.legends.treasures.slice(0, 3), legacy.treasure],
+  ANCHOR_GLORY: legacy.anchorGlory,
+};

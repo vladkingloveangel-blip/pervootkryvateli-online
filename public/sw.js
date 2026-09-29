@@ -1,4 +1,4 @@
-const CACHE = 'pervootkryvateli-v0.33.0-static';
+const CACHE = 'pervootkryvateli-v0.33.0-rules-data-v1-static';
 const ASSETS = [
   '/', '/styles.css', '/app.js', '/manifest.webmanifest',
   '/assets/map-base-4096.webp', '/assets/map.png', '/assets/icon-192.png', '/assets/icon-512.png'

@@ -42,6 +42,10 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   const rows = () => JSON.parse(fs.readFileSync(file, 'utf8')).game_rooms;
   t.after(async () => { sockets.forEach(s => s.disconnect()); if (child?.exitCode === null) await stop(); fs.rmSync(dir, { recursive: true, force: true }); });
   await start();
+  const canonical = await (await fetch(base + '/api/rules')).json();
+  assert.equal(canonical.metadata.schemaVersion, 1);
+  assert.equal(canonical.politics.factions.kadingir.fullConquestPrize.ducats, 50);
+  assert.equal(canonical.islands.length, 28);
   const a = (await api('/api/auth/register', null, { username: 'playerone', password: 'password1' })).data;
   const b = (await api('/api/auth/register', null, { username: 'playertwo', password: 'password2' })).data;
   const stranger = (await api('/api/auth/register', null, { username: 'stranger', password: 'password3' })).data;
@@ -80,6 +84,13 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal((await emit(watcher, 'adminWatchRoom', { accountToken: stranger.token, code })).ok, false);
   const watch = await emit(watcher, 'adminWatchRoom', { accountToken: admin.token, code });
   assert.equal(watch.room.adminSpectator, true); assert.equal(watch.room.players.length, 2);
+  assert.equal(watch.room.ruleset.rulesetVersion, canonical.metadata.rulesetVersion);
+  assert.equal(watch.room.balanceCatalog.bastion.price, canonical.economy.buildings.bastion.price);
+  assert.equal(watch.room.balanceCatalog.bastion.defense, canonical.economy.buildings.bastion.defense);
+  assert.equal(watch.room.shipLevelCatalog[7], undefined);
+  assert.equal(watch.room.shipUpgradeCatalog.leadLine, undefined);
+  assert.equal(watch.room.shipUpgradeCatalog.foreMarsel, undefined);
+  assert.equal(watch.room.buildingCatalog.admiralty, undefined);
   await stop(); // Abrupt restart: pending state must survive without disconnect handlers.
   await start();
   assert.match(output, /Restored 1 unfinished rooms/);

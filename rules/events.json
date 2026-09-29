@@ -1,0 +1,1090 @@
+{
+  "sailing": [
+    {
+      "id": "found-treasure",
+      "name": "Найдено сокровище",
+      "quantity": 2,
+      "type": "treasure",
+      "source": "В.1",
+      "rulesText": "Немедленно возьмите и разрешите одну карту сокровища.",
+      "iconKey": "card.sailing"
+    },
+    {
+      "id": "found-legendary",
+      "name": "Найдена легендарная карта",
+      "quantity": 1,
+      "type": "legendary",
+      "source": "В.2",
+      "rulesText": "Возьмите одну легендарную карту и сохраните её до применения.",
+      "iconKey": "card.sailing"
+    },
+    {
+      "id": "found-ore",
+      "name": "Найден груз руды",
+      "quantity": 1,
+      "type": "found-cargo",
+      "goodId": "ore",
+      "source": "В.3",
+      "rulesText": "Заполните один пустой трюм своей флотилии рудой. Если трюмы заняты, сохраните карту; позднее заполнение пустого трюма потребует одно действие. Источник руды для такой находки не нужен.",
+      "iconKey": "card.sailing"
+    },
+    {
+      "id": "found-wood",
+      "name": "Найден груз леса",
+      "quantity": 1,
+      "type": "found-cargo",
+      "goodId": "wood",
+      "source": "В.4",
+      "rulesText": "Заполните один пустой трюм своей флотилии лесом. Если трюмы заняты, сохраните карту; позднее заполнение пустого трюма потребует одно действие. Источник леса для такой находки не нужен.",
+      "iconKey": "card.sailing"
+    },
+    {
+      "id": "found-stone",
+      "name": "Найден груз камня",
+      "quantity": 1,
+      "type": "found-cargo",
+      "goodId": "stone",
+      "source": "В.5",
+      "rulesText": "Заполните один пустой трюм своей флотилии камнем. Если трюмы заняты, сохраните карту; позднее заполнение пустого трюма потребует одно действие. Источник камня для такой находки не нужен.",
+      "iconKey": "card.sailing"
+    },
+    {
+      "id": "ship-master",
+      "name": "Судовой мастер",
+      "quantity": 1,
+      "type": "save-card",
+      "savedKind": "ship-master",
+      "source": "В.6",
+      "rulesText": "Сохраните карту. Одно выбранное вами улучшение можно установить без оплаты его цены в допустимом месте; установка всё равно расходует действие, требует свободного места для улучшения, нужного уровня корабля и предыдущих улучшений этой ветви.",
+      "iconKey": "card.sailing"
+    },
+    {
+      "id": "mist-path",
+      "name": "Карта «Путь сквозь туман»",
+      "quantity": 1,
+      "type": "special-card",
+      "cardName": "Путь сквозь туман",
+      "source": "В.7",
+      "rulesText": "Получите одноразовую карту «Путь сквозь туман» с эффектом из раздела 10.5.",
+      "iconKey": "card.sailing",
+      "legendaryCardId": "mist-path"
+    },
+    {
+      "id": "sea-veil",
+      "name": "Карта «Покров моря»",
+      "quantity": 1,
+      "type": "special-card",
+      "cardName": "Покров моря",
+      "source": "В.8",
+      "rulesText": "Получите одноразовую карту полной защиты с эффектом из раздела 10.5.",
+      "iconKey": "card.sailing",
+      "legendaryCardId": "sea-veil"
+    },
+    {
+      "id": "market-blueprint",
+      "name": "Чертёж рынка",
+      "quantity": 1,
+      "type": "save-card",
+      "savedKind": "market-blueprint",
+      "source": "В.9",
+      "rulesText": "Сохраните карту. Постройте рынок I на своём острове без денежной платы; нужны одно действие, место и остальные условия строительства.",
+      "iconKey": "card.sailing",
+      "buildingType": "market"
+    },
+    {
+      "id": "farm-blueprint",
+      "name": "Чертёж фермы",
+      "quantity": 1,
+      "type": "save-card",
+      "savedKind": "farm-blueprint",
+      "source": "В.10",
+      "rulesText": "Сохраните карту. Постройте ферму I на своём острове без денежной платы; нужны одно действие, место и остальные условия строительства.",
+      "iconKey": "card.sailing",
+      "buildingType": "farm"
+    },
+    {
+      "id": "tailwind-1",
+      "name": "Попутный ветер +1",
+      "quantity": 1,
+      "type": "turn-effect",
+      "effect": "moveBonus",
+      "value": 1,
+      "source": "В.11",
+      "rulesText": "В текущем личном ходу прибавьте одну клетку к максимуму обычной навигации.",
+      "iconKey": "card.sailing",
+      "timing": "current-personal-turn",
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 6
+      }
+    },
+    {
+      "id": "tailwind-2",
+      "name": "Попутный ветер +2",
+      "quantity": 1,
+      "type": "turn-effect",
+      "effect": "moveBonus",
+      "value": 2,
+      "source": "В.12",
+      "rulesText": "В текущем личном ходу прибавьте две клетки к максимуму обычной навигации.",
+      "iconKey": "card.sailing",
+      "timing": "current-personal-turn",
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 6
+      }
+    },
+    {
+      "id": "tailwind-3",
+      "name": "Попутный ветер +3",
+      "quantity": 1,
+      "type": "turn-effect",
+      "effect": "moveBonus",
+      "value": 3,
+      "source": "В.13",
+      "rulesText": "В текущем личном ходу прибавьте три клетки к максимуму обычной навигации.",
+      "iconKey": "card.sailing",
+      "timing": "current-personal-turn",
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 6
+      }
+    },
+    {
+      "id": "fortune",
+      "name": "Удача Фортуны",
+      "quantity": 1,
+      "type": "turn-effect",
+      "effect": "bestOfTwo",
+      "value": true,
+      "source": "В.14",
+      "rulesText": "В текущем личном ходу при обычной навигации бросьте два d6 и используйте лучший результат.",
+      "iconKey": "card.sailing",
+      "timing": "current-personal-turn",
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 6
+      }
+    },
+    {
+      "id": "breakdown",
+      "name": "Поломка",
+      "quantity": 1,
+      "type": "turn-effect",
+      "effect": "noNavigation",
+      "value": true,
+      "source": "В.15",
+      "rulesText": "В текущем личном ходу нельзя использовать обычную навигацию. Доход и три действия остаются.",
+      "iconKey": "card.sailing",
+      "timing": "current-personal-turn",
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 6
+      }
+    },
+    {
+      "id": "calm-1",
+      "name": "Штиль −1",
+      "quantity": 1,
+      "type": "turn-effect",
+      "effect": "movePenalty",
+      "value": 1,
+      "source": "В.16",
+      "rulesText": "В текущем личном ходу уменьшите максимум обычной навигации на одну клетку, не ниже нуля.",
+      "iconKey": "card.sailing",
+      "timing": "current-personal-turn",
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 6
+      }
+    },
+    {
+      "id": "calm-2",
+      "name": "Штиль −2",
+      "quantity": 1,
+      "type": "turn-effect",
+      "effect": "movePenalty",
+      "value": 2,
+      "source": "В.17",
+      "rulesText": "В текущем личном ходу уменьшите максимум обычной навигации на две клетки, не ниже нуля.",
+      "iconKey": "card.sailing",
+      "timing": "current-personal-turn",
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 6
+      }
+    },
+    {
+      "id": "calm-3",
+      "name": "Штиль −3",
+      "quantity": 1,
+      "type": "turn-effect",
+      "effect": "movePenalty",
+      "value": 3,
+      "source": "В.18",
+      "rulesText": "В текущем личном ходу уменьшите максимум обычной навигации на три клетки, не ниже нуля.",
+      "iconKey": "card.sailing",
+      "timing": "current-personal-turn",
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 6
+      }
+    },
+    {
+      "id": "raid",
+      "name": "Набег",
+      "quantity": 1,
+      "type": "raid",
+      "source": "В.19",
+      "rulesText": "Выберите одно своё здание и понизьте его на одну строительную ступень по правилу 6.3.2. Продвинутая форма I становится исходной формой III, исходная форма I удаляется. Если зданий нет, карта не действует. После понижения пересчитайте площадь и статус острова.",
+      "iconKey": "card.sailing"
+    },
+    {
+      "id": "boarding",
+      "name": "Абордаж",
+      "quantity": 1,
+      "type": "boarding",
+      "source": "В.20",
+      "rulesText": "Снимите одно установленное улучшение своего основного корабля по выбору. Общий уровень корабля не меняется. Если улучшений нет, эффекта нет.",
+      "iconKey": "card.sailing"
+    },
+    {
+      "id": "storm-chertonia",
+      "name": "Шторм: Чертония",
+      "quantity": 1,
+      "type": "storm",
+      "islandId": "chertonia",
+      "source": "В.21",
+      "rulesText": "Немедленно переместите всю флотилию на выбранную вами допустимую клетку с берегом Чертонии.",
+      "iconKey": "card.sailing"
+    },
+    {
+      "id": "storm-kadingir",
+      "name": "Шторм: Кадингир",
+      "quantity": 1,
+      "type": "storm",
+      "islandId": "kadingir",
+      "source": "В.22",
+      "rulesText": "Немедленно переместите всю флотилию на выбранную вами допустимую клетку с берегом Кадингира.",
+      "iconKey": "card.sailing"
+    },
+    {
+      "id": "storm-landin",
+      "name": "Шторм: Ландин",
+      "quantity": 1,
+      "type": "storm",
+      "islandId": "landin",
+      "source": "В.23",
+      "rulesText": "Немедленно переместите всю флотилию на выбранную вами допустимую клетку с берегом Ландина.",
+      "iconKey": "card.sailing"
+    },
+    {
+      "id": "military-levy",
+      "name": "Военная подать",
+      "quantity": 1,
+      "type": "treasury-loss",
+      "percent": 30,
+      "source": "В.24",
+      "rulesText": "Потеряйте 30% дукатов в казне с округлением вниз. Карта сама по себе не создаёт вражду с государством.",
+      "iconKey": "card.sailing"
+    },
+    {
+      "id": "famine",
+      "name": "Голод",
+      "quantity": 1,
+      "type": "turn-effect",
+      "effect": "noIncome",
+      "value": true,
+      "source": "В.25",
+      "rulesText": "В текущем личном ходу не получите доход от рынков и банков. Иные разовые награды сохраняются.",
+      "iconKey": "card.sailing",
+      "timing": "current-personal-turn",
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 6
+      }
+    }
+  ],
+  "feud": {
+    "lionia": [
+      {
+        "id": "lionia-feud-1",
+        "factionId": "lionia",
+        "name": "Понизьте одно своё здание по выбору на одну строительную ступень; исходная форма I удаляется",
+        "quantity": 3,
+        "effect": {
+          "type": "downgrade-building",
+          "steps": 1,
+          "count": 1
+        },
+        "source": "Д.1:1",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "lionia-feud-2",
+        "factionId": "lionia",
+        "name": "Королевство Лиония возвращает себе один остров игрока, изначально принадлежавший ему вместе с его зданиями; если такого острова нет, игрок теряет 4 дуката",
+        "quantity": 1,
+        "effect": {
+          "type": "reclaim-island",
+          "factionId": "lionia",
+          "fallbackDucats": 4,
+          "keepBuildings": true
+        },
+        "source": "Д.1:2",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "lionia-feud-3",
+        "factionId": "lionia",
+        "name": "Основной корабль теряет один общий уровень",
+        "quantity": 1,
+        "effect": {
+          "type": "ship-level-loss",
+          "levels": 1
+        },
+        "source": "Д.1:3",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "lionia-feud-4",
+        "factionId": "lionia",
+        "name": "Потеря 50% дукатов",
+        "quantity": 1,
+        "effect": {
+          "type": "treasury-percent",
+          "percent": 50
+        },
+        "source": "Д.1:4",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "lionia-feud-5",
+        "factionId": "lionia",
+        "name": "Пропуск дохода в текущем личном ходу",
+        "quantity": 2,
+        "effect": {
+          "type": "skip-income",
+          "timing": "current-personal-turn",
+          "buildingTypes": [
+            "market",
+            "bank"
+          ]
+        },
+        "source": "Д.1:5",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "lionia-feud-6",
+        "factionId": "lionia",
+        "name": "Потеря 30% дукатов",
+        "quantity": 1,
+        "effect": {
+          "type": "treasury-percent",
+          "percent": 30
+        },
+        "source": "Д.1:6",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "lionia-feud-7",
+        "factionId": "lionia",
+        "name": "Понизьте два своих форта или две крепости на одну строительную ступень, выбрав их самостоятельно; если их меньше, понизьте имеющиеся",
+        "quantity": 1,
+        "effect": {
+          "type": "downgrade-building",
+          "steps": 1,
+          "count": 2,
+          "buildingTypes": [
+            "fort",
+            "fortress"
+          ]
+        },
+        "source": "Д.1:7",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      }
+    ],
+    "kadingir": [
+      {
+        "id": "kadingir-feud-1",
+        "factionId": "kadingir",
+        "name": "Одно своё здание теряет уровень",
+        "quantity": 2,
+        "effect": {
+          "type": "downgrade-building",
+          "steps": 1,
+          "count": 1
+        },
+        "source": "Д.2:1",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "kadingir-feud-2",
+        "factionId": "kadingir",
+        "name": "Пропуск дохода в текущем личном ходу",
+        "quantity": 2,
+        "effect": {
+          "type": "skip-income",
+          "timing": "current-personal-turn",
+          "buildingTypes": [
+            "market",
+            "bank"
+          ]
+        },
+        "source": "Д.2:2",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "kadingir-feud-3",
+        "factionId": "kadingir",
+        "name": "Основной корабль теряет один общий уровень",
+        "quantity": 1,
+        "effect": {
+          "type": "ship-level-loss",
+          "levels": 1
+        },
+        "source": "Д.2:3",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "kadingir-feud-4",
+        "factionId": "kadingir",
+        "name": "Потеря 10% дукатов",
+        "quantity": 1,
+        "effect": {
+          "type": "treasury-percent",
+          "percent": 10
+        },
+        "source": "Д.2:4",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "kadingir-feud-5",
+        "factionId": "kadingir",
+        "name": "Понизьте одно своё здание по выбору на одну строительную ступень; исходная форма I удаляется",
+        "quantity": 1,
+        "effect": {
+          "type": "downgrade-building",
+          "steps": 1,
+          "count": 1
+        },
+        "source": "Д.2:5",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "kadingir-feud-6",
+        "factionId": "kadingir",
+        "name": "Потеря 20% дукатов",
+        "quantity": 1,
+        "effect": {
+          "type": "treasury-percent",
+          "percent": 20
+        },
+        "source": "Д.2:6",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "kadingir-feud-7",
+        "factionId": "kadingir",
+        "name": "Снять одно установленное улучшение войска основного корабля",
+        "quantity": 1,
+        "effect": {
+          "type": "remove-upgrade",
+          "count": 1,
+          "branch": "army"
+        },
+        "source": "Д.2:7",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "kadingir-feud-8",
+        "factionId": "kadingir",
+        "name": "Удалить один свой форт или крепость",
+        "quantity": 1,
+        "effect": {
+          "type": "remove-building",
+          "count": 1,
+          "buildingTypes": [
+            "fort",
+            "fortress"
+          ]
+        },
+        "source": "Д.2:8",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      }
+    ],
+    "mori": [
+      {
+        "id": "mori-feud-1",
+        "factionId": "mori",
+        "name": "В текущем личном ходу дальность обычного движения −2 клетки, не ниже нуля",
+        "quantity": 2,
+        "effect": {
+          "type": "movement-penalty",
+          "amount": 2,
+          "timing": "current-personal-turn"
+        },
+        "source": "Д.3:1",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "mori-feud-2",
+        "factionId": "mori",
+        "name": "Пропуск дохода рынков и банков в текущем личном ходу",
+        "quantity": 2,
+        "effect": {
+          "type": "skip-income",
+          "timing": "current-personal-turn",
+          "buildingTypes": [
+            "market",
+            "bank"
+          ]
+        },
+        "source": "Д.3:2",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "mori-feud-3",
+        "factionId": "mori",
+        "name": "Потеря 20% дукатов",
+        "quantity": 2,
+        "effect": {
+          "type": "treasury-percent",
+          "percent": 20
+        },
+        "source": "Д.3:3",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "mori-feud-4",
+        "factionId": "mori",
+        "name": "Сбросьте весь груз из одного выбранного своего трюма без выручки",
+        "quantity": 1,
+        "effect": {
+          "type": "remove-cargo",
+          "holds": 1
+        },
+        "source": "Д.3:4",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "mori-feud-5",
+        "factionId": "mori",
+        "name": "Снять одно установленное улучшение основного корабля",
+        "quantity": 1,
+        "effect": {
+          "type": "remove-upgrade",
+          "count": 1
+        },
+        "source": "Д.3:5",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "mori-feud-6",
+        "factionId": "mori",
+        "name": "Одно своё здание по выбору теряет одну строительную ступень",
+        "quantity": 1,
+        "effect": {
+          "type": "downgrade-building",
+          "steps": 1,
+          "count": 1
+        },
+        "source": "Д.3:6",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "mori-feud-7",
+        "factionId": "mori",
+        "name": "Нет события",
+        "quantity": 1,
+        "effect": {
+          "type": "none"
+        },
+        "source": "Д.3:7",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      }
+    ],
+    "mayo": [
+      {
+        "id": "mayo-feud-1",
+        "factionId": "mayo",
+        "name": "Потеря 10% дукатов",
+        "quantity": 2,
+        "effect": {
+          "type": "treasury-percent",
+          "percent": 10
+        },
+        "source": "Д.4:1",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "mayo-feud-2",
+        "factionId": "mayo",
+        "name": "Пропуск дохода в текущем личном ходу",
+        "quantity": 2,
+        "effect": {
+          "type": "skip-income",
+          "timing": "current-personal-turn",
+          "buildingTypes": [
+            "market",
+            "bank"
+          ]
+        },
+        "source": "Д.4:2",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "mayo-feud-3",
+        "factionId": "mayo",
+        "name": "Одно своё здание теряет уровень",
+        "quantity": 1,
+        "effect": {
+          "type": "downgrade-building",
+          "steps": 1,
+          "count": 1
+        },
+        "source": "Д.4:3",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "mayo-feud-4",
+        "factionId": "mayo",
+        "name": "Снять любое установленное улучшение основного корабля",
+        "quantity": 1,
+        "effect": {
+          "type": "remove-upgrade",
+          "count": 1
+        },
+        "source": "Д.4:4",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "mayo-feud-5",
+        "factionId": "mayo",
+        "name": "Сбросить одну случайную удерживаемую карту",
+        "quantity": 1,
+        "effect": {
+          "type": "discard-random-held",
+          "count": 1,
+          "targetZone": null,
+          "unresolved": "R29"
+        },
+        "source": "Д.4:5",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "mayo-feud-6",
+        "factionId": "mayo",
+        "name": "Потеря 2 дуката",
+        "quantity": 1,
+        "effect": {
+          "type": "treasury-flat",
+          "amount": 2
+        },
+        "source": "Д.4:6",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "mayo-feud-7",
+        "factionId": "mayo",
+        "name": "Нет события",
+        "quantity": 2,
+        "effect": {
+          "type": "none"
+        },
+        "source": "Д.4:7",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      }
+    ],
+    "suniksiya": [
+      {
+        "id": "suniksiya-feud-1",
+        "factionId": "suniksiya",
+        "name": "Потеря 20% дукатов",
+        "quantity": 2,
+        "effect": {
+          "type": "treasury-percent",
+          "percent": 20
+        },
+        "source": "Д.5:1",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "suniksiya-feud-2",
+        "factionId": "suniksiya",
+        "name": "Пропуск дохода в текущем личном ходу",
+        "quantity": 2,
+        "effect": {
+          "type": "skip-income",
+          "timing": "current-personal-turn",
+          "buildingTypes": [
+            "market",
+            "bank"
+          ]
+        },
+        "source": "Д.5:2",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "suniksiya-feud-3",
+        "factionId": "suniksiya",
+        "name": "Потеря 3 дуката",
+        "quantity": 1,
+        "effect": {
+          "type": "treasury-flat",
+          "amount": 3
+        },
+        "source": "Д.5:3",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "suniksiya-feud-4",
+        "factionId": "suniksiya",
+        "name": "Сбросить одну случайную удерживаемую карту",
+        "quantity": 1,
+        "effect": {
+          "type": "discard-random-held",
+          "count": 1,
+          "targetZone": null,
+          "unresolved": "R29"
+        },
+        "source": "Д.5:4",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "suniksiya-feud-5",
+        "factionId": "suniksiya",
+        "name": "Сбросьте весь груз из одного выбранного своего трюма без выручки",
+        "quantity": 1,
+        "effect": {
+          "type": "remove-cargo",
+          "holds": 1
+        },
+        "source": "Д.5:5",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "suniksiya-feud-6",
+        "factionId": "suniksiya",
+        "name": "Одно своё здание теряет уровень",
+        "quantity": 1,
+        "effect": {
+          "type": "downgrade-building",
+          "steps": 1,
+          "count": 1
+        },
+        "source": "Д.5:6",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "suniksiya-feud-7",
+        "factionId": "suniksiya",
+        "name": "Нет события",
+        "quantity": 2,
+        "effect": {
+          "type": "none"
+        },
+        "source": "Д.5:7",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      }
+    ],
+    "pirates": [
+      {
+        "id": "pirates-feud-1",
+        "factionId": "pirates",
+        "name": "Понизьте одно своё здание по выбору на одну строительную ступень; исходная форма I удаляется",
+        "quantity": 1,
+        "effect": {
+          "type": "downgrade-building",
+          "steps": 1,
+          "count": 1
+        },
+        "source": "Д.6:1",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "pirates-feud-2",
+        "factionId": "pirates",
+        "name": "Пропуск дохода в текущем личном ходу",
+        "quantity": 2,
+        "effect": {
+          "type": "skip-income",
+          "timing": "current-personal-turn",
+          "buildingTypes": [
+            "market",
+            "bank"
+          ]
+        },
+        "source": "Д.6:2",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "pirates-feud-3",
+        "factionId": "pirates",
+        "name": "Потеря 20% дукатов",
+        "quantity": 1,
+        "effect": {
+          "type": "treasury-percent",
+          "percent": 20
+        },
+        "source": "Д.6:3",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "pirates-feud-4",
+        "factionId": "pirates",
+        "name": "Снять одно установленное улучшение войска основного корабля",
+        "quantity": 1,
+        "effect": {
+          "type": "remove-upgrade",
+          "count": 1,
+          "branch": "army"
+        },
+        "source": "Д.6:4",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "pirates-feud-5",
+        "factionId": "pirates",
+        "name": "Снять любое установленное улучшение основного корабля",
+        "quantity": 1,
+        "effect": {
+          "type": "remove-upgrade",
+          "count": 1
+        },
+        "source": "Д.6:5",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "pirates-feud-6",
+        "factionId": "pirates",
+        "name": "Потеря 10% дукатов",
+        "quantity": 1,
+        "effect": {
+          "type": "treasury-percent",
+          "percent": 10
+        },
+        "source": "Д.6:6",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "pirates-feud-7",
+        "factionId": "pirates",
+        "name": "Сбросить одну случайную удерживаемую карту",
+        "quantity": 1,
+        "effect": {
+          "type": "discard-random-held",
+          "count": 1,
+          "targetZone": null,
+          "unresolved": "R29"
+        },
+        "source": "Д.6:7",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "pirates-feud-8",
+        "factionId": "pirates",
+        "name": "Снять одно установленное улучшение артиллерии основного корабля",
+        "quantity": 1,
+        "effect": {
+          "type": "remove-upgrade",
+          "count": 1,
+          "branch": "artillery"
+        },
+        "source": "Д.6:8",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      },
+      {
+        "id": "pirates-feud-9",
+        "factionId": "pirates",
+        "name": "Нет события",
+        "quantity": 1,
+        "effect": {
+          "type": "none"
+        },
+        "source": "Д.6:9",
+        "iconKey": "card.feud",
+        "availability": {
+          "status": "data-ready",
+          "consumerStage": 5
+        }
+      }
+    ]
+  }
+}

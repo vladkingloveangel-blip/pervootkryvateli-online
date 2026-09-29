@@ -228,7 +228,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(build(room, p, 'bogamia', 'market').ok, false);
   assert.equal(build(room, p, 'bogamia', 'farm').ok, true);
   assert.equal(build(room, p, 'bogamia', 'market').ok, true);
-  assert.equal(p.ducats, 5);
+  assert.equal(p.ducats, 6);
   assert.equal(marketIncomeForPlayer(room, 'p1'), 1);
 }
 
@@ -249,14 +249,14 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(shipyardSlotsForPlayer(room, 'p1'), 1);
 }
 
-// Уровни II–VII изменяют все три характеристики и движение по таблице.
+// Уровни II–VI: новые характеристики без бонуса движения; VII читается для старых комнат.
 {
   const p = { shipClass: 'frigate', level: 4, upgrades: [] };
-  assert.deepEqual(shipStats(p), { artillery: 8, army: 6, cargo: 5, moveMod: 1 });
+  assert.deepEqual(shipStats(p), { artillery: 8, army: 6, cargo: 5, moveMod: 0 });
   p.shipClass = 'carrack';
   p.level = 7;
   p.upgrades = ['orlop', 'sternStores'];
-  assert.equal(shipCargoCapacity(p), 15);
+  assert.equal(shipCargoCapacity(p), 14);
   assert.equal(shipStats(p).moveMod, 1); // −1 класса +2 уровня VII
 }
 
@@ -267,9 +267,9 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   p.row = 13; p.col = 13;
   const result = buyShipLevel(p);
   assert.equal(result.ok, true);
-  assert.equal(result.price, 8);
+  assert.equal(result.price, 10);
   assert.equal(p.level, 2);
-  assert.equal(p.ducats, 22);
+  assert.equal(p.ducats, 20);
 }
 
 // Улучшения занимают места уровня; второе улучшение ветви требует первое.
@@ -278,7 +278,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(buyShipUpgrade(p, 'culverins').ok, false);
   assert.equal(buyShipUpgrade(p, 'falcons').ok, true);
   assert.equal(buyShipUpgrade(p, 'culverins').ok, true);
-  assert.equal(shipStats(p).artillery, 11); // 5 +1 за II уровень +2 +3
+  assert.equal(shipStats(p).artillery, 9); // 5 +1 за II уровень +1 +2
   assert.equal(buyShipUpgrade(p, 'musketeers').ok, false); // мест больше нет
   assert.equal(removeShipUpgrade(p, 'falcons').ok, false); // сначала второе
   assert.equal(removeShipUpgrade(p, 'culverins').ok, true);
@@ -295,18 +295,18 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(escortUseLimit(p), 2);
   const one = buyEscort(room, p, 'cargo');
   assert.equal(one.ok, true);
-  assert.equal(one.price, 8);
+  assert.equal(one.price, 10);
   assert.equal(buyEscort(room, p, 'combat').ok, false); // только одно место верфи
   island.buildings[0].level = 2;
   const two = buyEscort(room, p, 'combat');
   assert.equal(two.ok, true);
-  assert.equal(two.price, 12);
+  assert.equal(two.price, 15);
   assert.equal(buyEscort(room, p, 'combat').ok, false); // уровень III допускает два
   p.level = 5;
   island.buildings[0].level = 3;
   const three = buyEscort(room, p, 'combat');
   assert.equal(three.ok, true);
-  assert.equal(three.price, 16);
+  assert.equal(three.price, 20);
 }
 
 // Ферма загружает основной трюм полностью. Для бригантины I это 2 провианта.
@@ -341,8 +341,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   p.row = 13; p.col = 13;
   const sold = sellCargo(room, p, 'escort-1');
   assert.equal(sold.ok, true);
-  assert.equal(sold.revenue, 10);
-  assert.equal(p.ducats, 10);
+  assert.equal(sold.revenue, 5);
+  assert.equal(p.ducats, 5);
   assert.equal(p.escorts[0].cargo, null);
 }
 
@@ -364,14 +364,14 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 {
   const room = { islands: cloneIslands() };
   const p = { id: 'p1', row: 5, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], cargo: { goodId: 'wood', quantity: 2 }, ducats: 1 };
-  assert.equal(cargoSaleValue(p), 6);
+  assert.equal(cargoSaleValue(p), 4);
   assert.equal(sellCargo(room, p).ok, false);
   p.row = 13; p.col = 13;
   assert.equal(isCitadelCell(p.row, p.col), true);
   const sold = sellCargo(room, p);
   assert.equal(sold.ok, true);
-  assert.equal(sold.revenue, 6);
-  assert.equal(p.ducats, 7);
+  assert.equal(sold.revenue, 4);
+  assert.equal(p.ducats, 5);
   assert.equal(p.cargo, null);
 }
 
@@ -390,7 +390,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const a = { id: 'a', row: 5, col: 10, shipClass: 'frigate', level: 2, upgrades: ['falcons'], escorts: [], ducats: 10, personalTurnNo: 1, attackedThisTurn: [], attackHistory: {} };
   const b = { id: 'b', row: 5, col: 10, shipClass: 'brigantine', level: 2, upgrades: [], escorts: [], ducats: 2, personalTurnNo: 1, attackedThisTurn: [], attackHistory: {} };
   room.players = [a, b];
-  assert.equal(fleetArtillery(room, a), 8); // 5 +1 уровень +2 фальконы
+  assert.equal(fleetArtillery(room, a), 7); // 5 +1 уровень +1 фальконы
   const result = seaBattle(room, a, b);
   assert.equal(result.ok, true);
   assert.equal(result.outcome, 'attacker');
@@ -437,19 +437,19 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(seaBattle(room, a, b).ok, false);
 }
 
-// Штурм независимого Агмора: каравелла I (войско 5) побеждает гарнизон 4,
-// получает остров, 6 дукатов и 2 славы за первое военное покорение.
+// Штурм независимого Агмора: каравелла I (войско 5) побеждает гарнизон 3,
+// получает остров, 5 дукатов и 2 славы за первое военное покорение.
 {
   const room = { round: 1, islands: cloneIslands(), players: [] };
   const island = room.islands.find(i => i.id === 'agmor');
   const a = { id: 'a', row: 13, col: 7, shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, glory: 0 };
   room.players = [a];
-  assert.equal(islandDefenseArmy(room, island).total, 4);
+  assert.equal(islandDefenseArmy(room, island).total, 3);
   const result = assaultIsland(room, a, island, 'preserve');
   assert.equal(result.ok, true);
   assert.equal(result.outcome, 'attacker');
   assert.equal(island.ownerId, 'a');
-  assert.equal(a.ducats, 6);
+  assert.equal(a.ducats, 5);
   assert.equal(a.glory, 2);
   assert.equal(island.firstMilitaryConquered, true);
 }
@@ -463,7 +463,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const a = { id: 'a', row: 5, col: 1, shipClass: 'caravel', level: 7, upgrades: ['musketeers', 'pikemen'], escorts: [], ducats: 0, glory: 0 };
   const b = { id: 'b', row: 1, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0 };
   room.players = [a, b];
-  assert.equal(islandDefenseArmy(room, island).total, 5);
+  assert.equal(islandDefenseArmy(room, island).total, 4);
   const result = assaultIsland(room, a, island, 'raze');
   assert.equal(result.outcome, 'attacker');
   assert.equal(island.buildings.length, 0);
@@ -479,9 +479,9 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const b = { id: 'b', row: 5, col: 2, shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 10 };
   room.players = [b];
   const defense = islandDefenseArmy(room, island);
-  assert.equal(defense.fortifications, 5);
+  assert.equal(defense.fortifications, 4);
   assert.equal(defense.ownerShip, 5);
-  assert.equal(defense.total, 10);
+  assert.equal(defense.total, 9);
 }
 
 // Третья атака на один корабль в пределах десяти личных ходов вызывает бунт владений:
@@ -533,7 +533,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(result.ok, true);
   assert.equal(result.outcome, 'attacker');
   assert.equal(result.attackerPower, 11); // фрегат II = 6, союзный фрегат I = 5
-  assert.equal(result.defenderPower, 5); // бригантина III = 5
+  assert.equal(result.defenderPower, 6); // бригантина III = 6
   assert.equal(b.level, 2);
   assert.equal(result.loot, 3);
   assert.equal(a.ducats + c.ducats, 8); // было 5, добыча +3 поделена 2+1
@@ -576,15 +576,15 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 // Совместный штурм складывает войско союзников, но захваченный остров получает инициатор.
 {
   const room = { round: 2, islands: cloneIslands(), players: [], alliances: [] };
-  const island = room.islands.find(i => i.id === 'asigoriy'); // защита 12
-  const a = { id: 'a', name: 'A', row: 19, col: 24, shipClass: 'caravel', level: 2, upgrades: [], escorts: [], ducats: 0, glory: 0, brokenAlliesThisTurn: [] };
-  const c = { id: 'c', name: 'C', row: 20, col: 24, shipClass: 'caravel', level: 2, upgrades: [], escorts: [], ducats: 0, glory: 0 };
+  const island = room.islands.find(i => i.id === 'asigoriy'); // защита 10
+  const a = { id: 'a', name: 'A', row: 19, col: 24, shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, glory: 0, brokenAlliesThisTurn: [] };
+  const c = { id: 'c', name: 'C', row: 20, col: 24, shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, glory: 0 };
   room.players = [a, c];
   addAlliance(room, 'a', 'c');
   const result = jointAssaultIsland(room, a, island, 'preserve', ['c'], []);
   assert.equal(result.ok, true);
-  assert.equal(result.attackerPower, 12); // 6 + 6
-  assert.equal(result.defense.total, 12);
+  assert.equal(result.attackerPower, 10); // 5 + 5
+  assert.equal(result.defense.total, 10);
   assert.equal(result.outcome, 'tie');
   // Усиливаем инициатора на ступень, затем повторяем в новой копии острова.
   const room2 = { round: 2, islands: cloneIslands(), players: [], alliances: [] };
@@ -596,7 +596,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const win = jointAssaultIsland(room2, a2, island2, 'preserve', ['c2'], []);
   assert.equal(win.outcome, 'attacker');
   assert.equal(island2.ownerId, 'a2');
-  assert.equal(a2.glory, 4); // защита 12 => 4 славы инициатору
+  assert.equal(a2.glory, 4); // защита 10 => 4 славы инициатору
   assert.equal(c2.glory, 0);
 }
 
@@ -613,8 +613,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   addAlliance(room, 'a', 'c');
   addAlliance(room, 'b', 'd');
   // Атака: 3+3=6; защита: владелец 5 + союзник 3 = 8, значит не ничья.
-  // Даём инициатору мушкетёров (+2): 5+3=8.
-  a.upgrades = ['musketeers'];
+  // Даём инициатору мушкетёров (+1) и II уровень (+1): 5+3=8.
+  a.upgrades = ['musketeers']; a.level = 2;
   const result = jointAssaultIsland(room, a, island, 'preserve', ['c'], ['d']);
   assert.equal(result.outcome, 'tie');
   for (const p of [a, b, c, d]) assert.equal(p.ducats, 7);
@@ -797,7 +797,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 // «Абордаж» может принудительно снять первое улучшение ветви; второе остаётся в слоте, но перестаёт действовать.
 {
   const p = { shipClass: 'frigate', level: 2, upgrades: ['falcons', 'culverins'] };
-  assert.equal(shipStats(p).artillery, 11); // 5 + уровень 1 + 2 + 3
+  assert.equal(shipStats(p).artillery, 9); // 5 + уровень 1 + 2 + 3
   const opts = boardingUpgradeOptions(p);
   assert.equal(opts.length, 2);
   const result = applyBoardingLoss(p, 'falcons');
@@ -1059,10 +1059,10 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.deepEqual(FACTIONS.lionia.fullConquestPrize.preserveBuildings.map(x => x.type), ['market', 'market']);
   assert.equal(FACTIONS.lionia.fullConquestPrize.razeDucats, 60);
   assert.deepEqual(FACTIONS.kadingir.fullConquestPrize.preserveBuildings.map(x => x.type), ['bank', 'market']);
-  assert.equal(FACTIONS.kadingir.fullConquestPrize.razeDucats, 48);
-  assert.equal(FACTIONS.mayo.fullConquestPrize.razeDucats, 4);
-  assert.equal(FACTIONS.suniksiya.fullConquestPrize.razeDucats, 12);
-  assert.equal(FACTIONS.pirates.fullConquestPrize.razeDucats, 12);
+  assert.equal(FACTIONS.kadingir.fullConquestPrize.razeDucats, 50);
+  assert.equal(FACTIONS.mayo.fullConquestPrize.razeDucats, 10);
+  assert.equal(FACTIONS.suniksiya.fullConquestPrize.razeDucats, 30);
+  assert.equal(FACTIONS.pirates.fullConquestPrize.razeDucats, 20);
 }
 
 // Полное подчинение требует, чтобы все исходные острова фракции принадлежали одному игроку,
@@ -1092,7 +1092,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const result = assaultIsland(room, p, island, 'preserve');
   assert.equal(result.ok, true);
   assert.equal(result.outcome, 'attacker');
-  assert.equal(p.ducats, 36);
+  assert.equal(p.ducats, 30);
   assert.equal(island.buildings.filter(b => b.type === 'bank').length, 1);
   assert.equal(result.statePrize.triggered, true);
   assert.deepEqual(result.statePrize.deduplicatedBuildings.map(b => b.type), ['bank']);
@@ -1104,8 +1104,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(island.buildings.filter(b => b.type === 'market').length, 1);
 }
 
-// Кадингир: при разорении последнего острова итоговые 48 дукатов являются общей денежной
-// добычей финального захвата, а не складываются с 36 дукатами карточки острова.
+// Кадингир: при разорении последнего острова итоговые 50 дукатов являются общей денежной
+// добычей финального захвата, а не складываются с 30 дукатами карточки острова.
 {
   const room = { islands: cloneIslands(), players: [], factionState: {}, round: 2, legendaryDeck: createLegendaryDeck() };
   const island = room.islands.find(i => i.id === 'kadingir');
@@ -1115,8 +1115,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const result = assaultIsland(room, p, island, 'raze');
   assert.equal(result.ok, true);
   assert.equal(result.outcome, 'attacker');
-  assert.equal(result.statePrize.ducats, 48);
-  assert.equal(p.ducats, 48);
+  assert.equal(result.statePrize.ducats, 50);
+  assert.equal(p.ducats, 50);
 }
 
 // Призовая постройка игнорирует обычные требования фермы/форта и положения корабля,
@@ -1151,7 +1151,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(built.ok, true);
   assert.equal(p.ducats, 10);
   assert.equal(bastionSupportSummary(room, p.id).supported.includes(target.id), true);
-  assert.equal(islandDefenseArmy(room, target).bastions, 8);
+  assert.equal(islandDefenseArmy(room, target).bastions, 10);
 }
 
 // При нехватке поддержки игрок может выбрать, какой бастион остаётся действующим.
@@ -1167,12 +1167,12 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const p = { id: 'p1', row: a.cells[0][0], col: a.cells[0][1], shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, bastionPriority: [a.id, b.id] };
   room.players.push(p);
   assert.deepEqual(supportedBastionIslandIds(room, p.id), [a.id]);
-  assert.equal(islandDefenseArmy(room, a).bastions, 8);
+  assert.equal(islandDefenseArmy(room, a).bastions, 10);
   assert.equal(islandDefenseArmy(room, b).bastions, 0);
   assert.equal(prioritizeBastionSupport(room, p, b.id).ok, true);
   assert.deepEqual(supportedBastionIslandIds(room, p.id), [b.id]);
   assert.equal(islandDefenseArmy(room, a).bastions, 0);
-  assert.equal(islandDefenseArmy(room, b).bastions, 8);
+  assert.equal(islandDefenseArmy(room, b).bastions, 10);
 }
 
 // Арсенал снаряжает одну роту, которая занимает основной трюм и добавляет войско
@@ -1353,7 +1353,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.deepEqual(p.disabledUpgradeIds, ['culverins']);
   assert.equal(shipUpgradeStatuses(p).find(u => u.id === 'culverins').active, false);
   assert.equal(shipUpgradeStatuses(p).find(u => u.id === 'falcons').active, true);
-  assert.equal(shipStats(p).artillery, 9); // 5 базовых +2 уровень III +2 Фальконы
+  assert.equal(shipStats(p).artillery, 8); // 5 базовых +2 уровень III +1 Фальконы
 }
 
 // Если отключены грузовые улучшения, излишек основного груза сбрасывается только
@@ -1372,9 +1372,9 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(p.cargo.quantity, 10);
   const chosen = setDisabledUpgrades(p, ['sternStores']);
   assert.equal(chosen.ok, true);
-  assert.equal(shipStats(p).cargo, 8); // каракка 5 + бонус II уровня 1 + орлоп 2
-  assert.equal(chosen.cargoDiscarded, 2);
-  assert.equal(p.cargo.quantity, 8);
+  assert.equal(shipStats(p).cargo, 7); // каракка 5 + бонус II уровня 1 + орлоп 1
+  assert.equal(chosen.cargoDiscarded, 3);
+  assert.equal(p.cargo.quantity, 7);
 }
 
 // При снижении уровня лишнее сопровождение не уничтожается: владелец выбирает

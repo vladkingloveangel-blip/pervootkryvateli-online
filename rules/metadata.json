@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "rulesetVersion": "master-2026-09-28-data-v1",
+  "source": {
+    "title": "Первооткрыватели — мастер-версия книги правил",
+    "baseEdition": "0.10",
+    "authorDecisionsDate": "2026-09-28",
+    "sha256": "5274f5ecb03606c4fd4b20c9950edbd159222a223a00dabf438eba93b154f0e1"
+  },
+  "precedence": "Appendix numeric tables override examples and descriptive prose.",
+  "unresolved": [
+    "R05",
+    "R06",
+    "R07",
+    "R21",
+    "R29",
+    "remaining-prize-buildings",
+    "treasure-copies"
+  ],
+  "implementationStage": 1
+}

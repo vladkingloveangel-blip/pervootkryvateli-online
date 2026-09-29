@@ -1,0 +1,1050 @@
+{
+  "goods": {
+    "provisions": {
+      "id": "provisions",
+      "name": "Провиант",
+      "price": 1,
+      "iconKey": "goods.provisions"
+    },
+    "wood": {
+      "id": "wood",
+      "name": "Лес",
+      "price": 2,
+      "iconKey": "goods.wood"
+    },
+    "stone": {
+      "id": "stone",
+      "name": "Камень",
+      "price": 2,
+      "iconKey": "goods.stone"
+    },
+    "ore": {
+      "id": "ore",
+      "name": "Руда",
+      "price": 2,
+      "iconKey": "goods.ore"
+    },
+    "exotic": {
+      "id": "exotic",
+      "name": "Экзотические звери",
+      "price": 4,
+      "iconKey": "goods.exotic"
+    },
+    "slaves": {
+      "id": "slaves",
+      "name": "Невольники",
+      "price": 4,
+      "iconKey": "goods.slaves"
+    },
+    "gold": {
+      "id": "gold",
+      "name": "Самородное золото",
+      "price": 4,
+      "iconKey": "goods.gold"
+    },
+    "diamonds": {
+      "id": "diamonds",
+      "name": "Алмазы",
+      "price": 4,
+      "iconKey": "goods.diamonds"
+    }
+  },
+  "resources": {
+    "wood": {
+      "id": "wood",
+      "name": "Лес",
+      "goodId": "wood",
+      "iconKey": "resource.wood"
+    },
+    "stone": {
+      "id": "stone",
+      "name": "Камень",
+      "goodId": "stone",
+      "iconKey": "resource.stone"
+    },
+    "ore": {
+      "id": "ore",
+      "name": "Рудная жила",
+      "goodId": "ore",
+      "iconKey": "resource.ore"
+    },
+    "exotic": {
+      "id": "exotic",
+      "name": "Экзотические звери",
+      "goodId": "exotic",
+      "iconKey": "resource.exotic"
+    },
+    "slaves": {
+      "id": "slaves",
+      "name": "Невольники",
+      "goodId": "slaves",
+      "iconKey": "resource.slaves"
+    },
+    "gold": {
+      "id": "gold",
+      "name": "Самородное золото",
+      "goodId": "gold",
+      "iconKey": "resource.gold"
+    },
+    "diamonds": {
+      "id": "diamonds",
+      "name": "Алмазы",
+      "goodId": "diamonds",
+      "iconKey": "resource.diamonds"
+    }
+  },
+  "buildings": {
+    "farm": {
+      "id": "farm",
+      "name": "Ферма",
+      "branch": "food",
+      "price": 3,
+      "area": 1,
+      "produces": "provisions",
+      "buildable": true,
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 3,
+          "foodStage": 1,
+          "area": 1,
+          "next": {
+            "type": "farm",
+            "level": 2
+          }
+        },
+        "2": {
+          "level": 2,
+          "price": 6,
+          "foodStage": 2,
+          "area": 1,
+          "next": {
+            "type": "farm",
+            "level": 3
+          }
+        },
+        "3": {
+          "level": 3,
+          "price": 9,
+          "foodStage": 3,
+          "area": 1,
+          "next": {
+            "type": "manor",
+            "level": 1
+          }
+        }
+      },
+      "iconKey": "building.farm"
+    },
+    "manor": {
+      "id": "manor",
+      "name": "Поместье",
+      "branch": "food",
+      "area": 1,
+      "produces": "provisions",
+      "advanced": true,
+      "buildable": false,
+      "price": 12,
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 12,
+          "foodStage": 4,
+          "area": 1,
+          "next": {
+            "type": "manor",
+            "level": 2
+          }
+        },
+        "2": {
+          "level": 2,
+          "price": 15,
+          "foodStage": 5,
+          "area": 1,
+          "next": {
+            "type": "manor",
+            "level": 3
+          }
+        },
+        "3": {
+          "level": 3,
+          "price": 18,
+          "foodStage": 6,
+          "area": 1
+        }
+      },
+      "iconKey": "building.manor"
+    },
+    "lumbermill": {
+      "id": "lumbermill",
+      "name": "Лесопилка",
+      "branch": "wood",
+      "price": 4,
+      "area": 1,
+      "resource": "Лес",
+      "produces": "wood",
+      "buildable": true,
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 4,
+          "foodStage": 1,
+          "area": 1,
+          "next": {
+            "type": "lumbermill",
+            "level": 2
+          }
+        },
+        "2": {
+          "level": 2,
+          "price": 8,
+          "foodStage": 2,
+          "area": 1,
+          "next": {
+            "type": "lumbermill",
+            "level": 3
+          }
+        },
+        "3": {
+          "level": 3,
+          "price": 12,
+          "foodStage": 3,
+          "area": 1,
+          "next": {
+            "type": "shipyard",
+            "level": 1
+          }
+        }
+      },
+      "resourceId": "wood",
+      "iconKey": "building.lumbermill"
+    },
+    "shipyard": {
+      "id": "shipyard",
+      "name": "Верфь",
+      "branch": "wood",
+      "area": 1,
+      "advanced": true,
+      "buildable": false,
+      "price": 20,
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 20,
+          "foodStage": 4,
+          "area": 1,
+          "next": {
+            "type": "shipyard",
+            "level": 2
+          },
+          "escortSlots": 1
+        },
+        "2": {
+          "level": 2,
+          "price": 25,
+          "foodStage": 5,
+          "area": 1,
+          "next": {
+            "type": "shipyard",
+            "level": 3
+          },
+          "escortSlots": 2
+        },
+        "3": {
+          "level": 3,
+          "price": 30,
+          "foodStage": 6,
+          "area": 1,
+          "escortSlots": 3
+        }
+      },
+      "iconKey": "building.shipyard"
+    },
+    "quarry": {
+      "id": "quarry",
+      "name": "Каменоломня",
+      "branch": "stone",
+      "price": 4,
+      "area": 1,
+      "resource": "Камень",
+      "produces": "stone",
+      "buildable": true,
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 4,
+          "foodStage": 1,
+          "area": 1,
+          "next": {
+            "type": "quarry",
+            "level": 2
+          }
+        },
+        "2": {
+          "level": 2,
+          "price": 8,
+          "foodStage": 2,
+          "area": 1,
+          "next": {
+            "type": "quarry",
+            "level": 3
+          }
+        },
+        "3": {
+          "level": 3,
+          "price": 12,
+          "foodStage": 3,
+          "area": 1,
+          "next": {
+            "type": "stoneworks",
+            "level": 1
+          }
+        }
+      },
+      "resourceId": "stone",
+      "iconKey": "building.quarry"
+    },
+    "stoneworks": {
+      "id": "stoneworks",
+      "name": "Каменотёсный двор",
+      "branch": "stone",
+      "area": 1,
+      "advanced": true,
+      "buildable": false,
+      "price": 16,
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 16,
+          "foodStage": 4,
+          "area": 1,
+          "next": {
+            "type": "stoneworks",
+            "level": 2
+          },
+          "bastionSlots": 1
+        },
+        "2": {
+          "level": 2,
+          "price": 20,
+          "foodStage": 5,
+          "area": 1,
+          "next": {
+            "type": "stoneworks",
+            "level": 3
+          },
+          "bastionSlots": 2
+        },
+        "3": {
+          "level": 3,
+          "price": 24,
+          "foodStage": 6,
+          "area": 1,
+          "bastionSlots": 3
+        }
+      },
+      "iconKey": "building.stoneworks"
+    },
+    "mine": {
+      "id": "mine",
+      "name": "Рудник",
+      "branch": "ore",
+      "price": 4,
+      "area": 1,
+      "resource": "Рудная жила",
+      "produces": "ore",
+      "buildable": true,
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 4,
+          "foodStage": 1,
+          "area": 1,
+          "next": {
+            "type": "mine",
+            "level": 2
+          }
+        },
+        "2": {
+          "level": 2,
+          "price": 8,
+          "foodStage": 2,
+          "area": 1,
+          "next": {
+            "type": "mine",
+            "level": 3
+          }
+        },
+        "3": {
+          "level": 3,
+          "price": 12,
+          "foodStage": 3,
+          "area": 1,
+          "next": {
+            "type": "arsenal",
+            "level": 1
+          }
+        }
+      },
+      "resourceId": "ore",
+      "iconKey": "building.mine"
+    },
+    "arsenal": {
+      "id": "arsenal",
+      "name": "Арсенал",
+      "branch": "ore",
+      "area": 1,
+      "advanced": true,
+      "buildable": false,
+      "price": 16,
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 16,
+          "foodStage": 4,
+          "area": 1,
+          "next": {
+            "type": "arsenal",
+            "level": 2
+          }
+        },
+        "2": {
+          "level": 2,
+          "price": 20,
+          "foodStage": 5,
+          "area": 1,
+          "next": {
+            "type": "arsenal",
+            "level": 3
+          }
+        },
+        "3": {
+          "level": 3,
+          "price": 24,
+          "foodStage": 6,
+          "area": 1
+        }
+      },
+      "iconKey": "building.arsenal"
+    },
+    "fort": {
+      "id": "fort",
+      "name": "Форт",
+      "branch": "fort",
+      "price": 4,
+      "area": 1,
+      "defense": 4,
+      "buildable": true,
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 4,
+          "foodStage": 1,
+          "area": 1,
+          "next": {
+            "type": "fort",
+            "level": 2
+          },
+          "defense": 4
+        },
+        "2": {
+          "level": 2,
+          "price": 8,
+          "foodStage": 2,
+          "area": 1,
+          "next": {
+            "type": "fort",
+            "level": 3
+          },
+          "defense": 5
+        },
+        "3": {
+          "level": 3,
+          "price": 12,
+          "foodStage": 3,
+          "area": 1,
+          "next": {
+            "type": "fortress",
+            "level": 1
+          },
+          "defense": 6
+        }
+      },
+      "iconKey": "building.fort"
+    },
+    "fortress": {
+      "id": "fortress",
+      "name": "Крепость",
+      "branch": "fort",
+      "area": 1,
+      "defense": 7,
+      "advanced": true,
+      "buildable": false,
+      "price": 16,
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 16,
+          "foodStage": 4,
+          "area": 1,
+          "next": {
+            "type": "fortress",
+            "level": 2
+          },
+          "defense": 7
+        },
+        "2": {
+          "level": 2,
+          "price": 20,
+          "foodStage": 5,
+          "area": 1,
+          "next": {
+            "type": "fortress",
+            "level": 3
+          },
+          "defense": 8
+        },
+        "3": {
+          "level": 3,
+          "price": 24,
+          "foodStage": 6,
+          "area": 1,
+          "defense": 9,
+          "next": {
+            "type": "bastion",
+            "level": 1
+          }
+        }
+      },
+      "iconKey": "building.fortress"
+    },
+    "market": {
+      "id": "market",
+      "name": "Рынок",
+      "branch": "money",
+      "price": 5,
+      "area": 1,
+      "income": 1,
+      "buildable": true,
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 5,
+          "foodStage": 1,
+          "area": 1,
+          "next": {
+            "type": "market",
+            "level": 2
+          },
+          "income": 1
+        },
+        "2": {
+          "level": 2,
+          "price": 10,
+          "foodStage": 2,
+          "area": 1,
+          "next": {
+            "type": "market",
+            "level": 3
+          },
+          "income": 2
+        },
+        "3": {
+          "level": 3,
+          "price": 20,
+          "foodStage": 3,
+          "area": 1,
+          "next": {
+            "type": "bank",
+            "level": 1
+          },
+          "income": 3
+        }
+      },
+      "iconKey": "building.market"
+    },
+    "bank": {
+      "id": "bank",
+      "name": "Банк",
+      "branch": "money",
+      "area": 1,
+      "income": 4,
+      "advanced": true,
+      "buildable": false,
+      "price": 40,
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 40,
+          "foodStage": 4,
+          "area": 1,
+          "next": {
+            "type": "bank",
+            "level": 2
+          },
+          "income": 4
+        },
+        "2": {
+          "level": 2,
+          "price": 80,
+          "foodStage": 5,
+          "area": 1,
+          "next": {
+            "type": "bank",
+            "level": 3
+          },
+          "income": 5
+        },
+        "3": {
+          "level": 3,
+          "price": 160,
+          "foodStage": 6,
+          "area": 1,
+          "income": 6
+        }
+      },
+      "iconKey": "building.bank"
+    },
+    "bastion": {
+      "id": "bastion",
+      "name": "Бастион",
+      "branch": "fort",
+      "price": 10,
+      "area": 1,
+      "defense": 10,
+      "buildable": false,
+      "fixedName": true,
+      "limitPerIsland": 1,
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 10,
+          "defense": 10,
+          "area": 1,
+          "foodStage": 6
+        }
+      },
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 4
+      },
+      "iconKey": "building.bastion"
+    },
+    "exotic": {
+      "id": "exotic",
+      "name": "Звероловный промысел",
+      "branch": "rare-exotic",
+      "price": 20,
+      "area": 1,
+      "resource": "Экзотические звери",
+      "unique": true,
+      "produces": "exotic",
+      "buildable": true,
+      "fixedName": true,
+      "resourceId": "exotic",
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 20,
+          "area": 1,
+          "foodStage": 1
+        }
+      },
+      "futureLevels": {
+        "2": null,
+        "3": null
+      },
+      "futureLevelsPurchasable": false,
+      "iconKey": "building.exotic"
+    },
+    "slaves": {
+      "id": "slaves",
+      "name": "Невольничий рынок",
+      "branch": "rare-slaves",
+      "price": 20,
+      "area": 1,
+      "resource": "Невольники",
+      "unique": true,
+      "produces": "slaves",
+      "buildable": true,
+      "fixedName": true,
+      "resourceId": "slaves",
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 20,
+          "area": 1,
+          "foodStage": 1
+        }
+      },
+      "futureLevels": {
+        "2": null,
+        "3": null
+      },
+      "futureLevelsPurchasable": false,
+      "iconKey": "building.slaves"
+    },
+    "gold": {
+      "id": "gold",
+      "name": "Золотой прииск",
+      "branch": "rare-gold",
+      "price": 20,
+      "area": 1,
+      "resource": "Самородное золото",
+      "unique": true,
+      "produces": "gold",
+      "buildable": true,
+      "fixedName": true,
+      "resourceId": "gold",
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 20,
+          "area": 1,
+          "foodStage": 1
+        }
+      },
+      "futureLevels": {
+        "2": null,
+        "3": null
+      },
+      "futureLevelsPurchasable": false,
+      "iconKey": "building.gold"
+    },
+    "diamonds": {
+      "id": "diamonds",
+      "name": "Алмазный прииск",
+      "branch": "rare-diamonds",
+      "price": 20,
+      "area": 1,
+      "resource": "Алмазы",
+      "unique": true,
+      "produces": "diamonds",
+      "buildable": true,
+      "fixedName": true,
+      "resourceId": "diamonds",
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 20,
+          "area": 1,
+          "foodStage": 1
+        }
+      },
+      "futureLevels": {
+        "2": null,
+        "3": null
+      },
+      "futureLevelsPurchasable": false,
+      "iconKey": "building.diamonds"
+    },
+    "lighthouse": {
+      "id": "lighthouse",
+      "name": "Маяк",
+      "category": "public",
+      "area": 1,
+      "price": 10,
+      "unique": true,
+      "prestige": 1,
+      "buildable": false,
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 4
+      },
+      "effect": {
+        "type": "departure-movement",
+        "amount": 1
+      },
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 10,
+          "foodStage": 1,
+          "area": 1
+        }
+      },
+      "iconKey": "building.lighthouse",
+      "effectsStack": false,
+      "countsAsAdvanced": false,
+      "requiresFoodSource": true,
+      "limitPerIsland": 1
+    },
+    "observatory": {
+      "id": "observatory",
+      "name": "Обсерватория",
+      "category": "public",
+      "area": 1,
+      "price": 10,
+      "unique": true,
+      "prestige": 1,
+      "buildable": false,
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 4
+      },
+      "effect": {
+        "type": "replace-event",
+        "limit": 1
+      },
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 10,
+          "foodStage": 1,
+          "area": 1
+        }
+      },
+      "iconKey": "building.observatory",
+      "effectsStack": false,
+      "countsAsAdvanced": false,
+      "requiresFoodSource": true,
+      "limitPerIsland": 1
+    },
+    "embassy": {
+      "id": "embassy",
+      "name": "Посольство",
+      "category": "public",
+      "area": 1,
+      "price": 10,
+      "unique": true,
+      "prestige": 1,
+      "buildable": false,
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 4
+      },
+      "effect": {
+        "type": "choose-assignment",
+        "draw": 2,
+        "keep": 1
+      },
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 10,
+          "foodStage": 1,
+          "area": 1
+        }
+      },
+      "iconKey": "building.embassy",
+      "effectsStack": false,
+      "countsAsAdvanced": false,
+      "requiresFoodSource": true,
+      "limitPerIsland": 1
+    },
+    "palace": {
+      "id": "palace",
+      "name": "Дворец",
+      "category": "public",
+      "area": 1,
+      "price": 20,
+      "unique": true,
+      "prestige": 2,
+      "buildable": false,
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 4
+      },
+      "effect": {
+        "type": "end-enmity",
+        "usesPerGame": 1
+      },
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 20,
+          "foodStage": 1,
+          "area": 1
+        }
+      },
+      "requiredRanks": [
+        "city",
+        "port"
+      ],
+      "iconKey": "building.palace",
+      "effectsStack": false,
+      "countsAsAdvanced": false,
+      "requiresFoodSource": true,
+      "limitPerIsland": 1
+    },
+    "cartography": {
+      "id": "cartography",
+      "name": "Картографическая палата",
+      "category": "public",
+      "area": 1,
+      "price": 20,
+      "unique": true,
+      "prestige": 1,
+      "buildable": false,
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 4
+      },
+      "effect": {
+        "type": "expedition-access"
+      },
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 20,
+          "foodStage": 1,
+          "area": 1
+        }
+      },
+      "iconKey": "building.cartography",
+      "effectsStack": false,
+      "countsAsAdvanced": false,
+      "requiresFoodSource": true,
+      "limitPerIsland": 1
+    },
+    "admiralty": {
+      "id": "admiralty",
+      "name": "Адмиралтейство",
+      "category": "public",
+      "area": 1,
+      "price": 10,
+      "unique": true,
+      "prestige": 1,
+      "buildable": false,
+      "availability": {
+        "status": "data-ready",
+        "consumerStage": 4
+      },
+      "effect": {
+        "type": "character-access"
+      },
+      "levels": {
+        "1": {
+          "level": 1,
+          "price": 10,
+          "foodStage": 1,
+          "area": 1,
+          "next": {
+            "type": "admiralty",
+            "level": 2
+          }
+        },
+        "2": {
+          "level": 2,
+          "price": 15,
+          "foodStage": 2,
+          "area": 1,
+          "next": {
+            "type": "admiralty",
+            "level": 3
+          }
+        },
+        "3": {
+          "level": 3,
+          "price": 20,
+          "foodStage": 3,
+          "area": 1
+        }
+      },
+      "iconKey": "building.admiralty",
+      "effectsStack": false,
+      "countsAsAdvanced": false,
+      "requiresFoodSource": true,
+      "limitPerIsland": 1
+    }
+  },
+  "ranks": {
+    "settlement": {
+      "name": "Поселение",
+      "areaBonus": 0,
+      "branchLimit": 1,
+      "prestige": 0
+    },
+    "city": {
+      "name": "Город",
+      "areaBonus": 1,
+      "branchLimit": 2,
+      "prestige": 2,
+      "manorLevel": 1,
+      "otherBuildings": 4
+    },
+    "port": {
+      "name": "Крупный порт",
+      "areaBonus": 2,
+      "branchLimit": 2,
+      "prestige": 5,
+      "manorLevel": 2,
+      "otherBuildings": 6,
+      "advancedOtherBuildings": 2
+    }
+  },
+  "garrisons": {
+    "guard": {
+      "price": 5,
+      "defense": 1
+    },
+    "permanentUpgrade": {
+      "price": 10,
+      "defense": 3
+    },
+    "permanentDirect": {
+      "price": 15,
+      "defense": 2
+    },
+    "downgradedGuard": {
+      "defense": 3
+    }
+  },
+  "contractBonusRatio": 0.5,
+  "loadingLimitPerIslandPerRound": 1,
+  "landCompany": {
+    "limit": 1,
+    "price": 0,
+    "armyByArsenalLevel": [
+      0,
+      3,
+      4,
+      5
+    ]
+  },
+  "buildingBranches": [
+    {
+      "id": "food",
+      "types": [
+        "farm",
+        "manor"
+      ]
+    },
+    {
+      "id": "wood",
+      "types": [
+        "lumbermill",
+        "shipyard"
+      ]
+    },
+    {
+      "id": "stone",
+      "types": [
+        "quarry",
+        "stoneworks"
+      ]
+    },
+    {
+      "id": "ore",
+      "types": [
+        "mine",
+        "arsenal"
+      ]
+    },
+    {
+      "id": "fort",
+      "types": [
+        "fort",
+        "fortress",
+        "bastion"
+      ]
+    },
+    {
+      "id": "money",
+      "types": [
+        "market",
+        "bank"
+      ]
+    }
+  ]
+}
