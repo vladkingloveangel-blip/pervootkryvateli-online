@@ -894,6 +894,22 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.deepEqual(result.armyPointAwards, [{ playerId: 'a', opponentId: null, points: 1 }]);
 }
 
+// Повторный военный захват уже покорённого ранее острова не приносит новые очки армии.
+{
+  const room = { round: 2, islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'bogamia');
+  island.ownerId = 'b';
+  island.firstMilitaryConquered = true;
+  island.buildings = [{ type: 'fort', level: 1 }];
+  const a = { id: 'a', row: 5, col: 1, shipClass: 'caravel', level: 2, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
+  const b = { id: 'b', row: 1, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
+  room.players = [a, b];
+  const result = assaultIsland(room, a, island, 'preserve');
+  assert.equal(result.outcome, 'attacker');
+  assert.deepEqual(result.armyPointAwards, []);
+  assert.equal(a.armyPoints, 0);
+}
+
 // После захвата сохраняется половина существовавшей инфраструктуры; новый владелец выбирает потери.
 {
   const room = { round: 2, islands: cloneIslands(), players: [] };
@@ -965,15 +981,19 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 }
 
 
-// Союз хранится попарно и не зависит от порядка ID.
+// Союз хранится попарно, не зависит от порядка ID и не образует цепочки из трёх игроков.
 {
   const room = { alliances: [] };
   assert.equal(addAlliance(room, 'a', 'b'), true);
   assert.equal(areAllies(room, 'a', 'b'), true);
   assert.equal(areAllies(room, 'b', 'a'), true);
   assert.equal(addAlliance(room, 'b', 'a'), false);
+  assert.equal(addAlliance(room, 'a', 'c'), false);
+  assert.equal(addAlliance(room, 'c', 'b'), false);
+  assert.deepEqual(room.alliances, [['a', 'b']]);
   assert.equal(removeAlliance(room, 'b', 'a'), true);
   assert.equal(areAllies(room, 'a', 'b'), false);
+  assert.equal(addAlliance(room, 'c', 'b'), true);
 }
 
 // Совместный морской бой складывает артиллерию союзников. При поражении каждый
@@ -981,7 +1001,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 {
   const room = { round: 2, islands: cloneIslands(), players: [], alliances: [] };
   const a = { id: 'a', name: 'A', row: 10, col: 10, shipClass: 'frigate', level: 2, upgrades: [], escorts: [], ducats: 5, personalTurnNo: 1, attackedThisTurn: [], attackHistory: {}, brokenAlliesThisTurn: [] };
-  const c = { id: 'c', name: 'C', row: 10, col: 10, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 0 };
+  const c = { id: 'c', name: 'C', row: 9, col: 10, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 0 };
   const b = { id: 'b', name: 'B', row: 10, col: 10, shipClass: 'brigantine', level: 3, upgrades: [], escorts: [], ducats: 3 };
   room.players = [a, b, c];
   addAlliance(room, 'a', 'c');
@@ -994,6 +1014,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(result.loot, 3);
   assert.equal(a.ducats + c.ducats, 8); // было 5, добыча +3 поделена 2+1
   assert.equal(Object.values(result.lootShares).reduce((x, y) => x + y, 0), 3);
+  assert.equal(a.fleetPoints, 2);
+  assert.equal(c.fleetPoints, 2);
 }
 
 // Если побеждает совместная защита, уровни теряют все участвовавшие нападающие,
@@ -1001,9 +1023,9 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 {
   const room = { round: 2, islands: cloneIslands(), players: [], alliances: [] };
   const a = { id: 'a', name: 'A', row: 11, col: 11, shipClass: 'brigantine', level: 2, upgrades: [], escorts: [], ducats: 3, personalTurnNo: 1, attackedThisTurn: [], attackHistory: {}, brokenAlliesThisTurn: [] };
-  const c = { id: 'c', name: 'C', row: 11, col: 11, shipClass: 'brigantine', level: 2, upgrades: [], escorts: [], ducats: 0 };
+  const c = { id: 'c', name: 'C', row: 10, col: 11, shipClass: 'brigantine', level: 2, upgrades: [], escorts: [], ducats: 0 };
   const b = { id: 'b', name: 'B', row: 11, col: 11, shipClass: 'frigate', level: 3, upgrades: [], escorts: [], ducats: 0 };
-  const d = { id: 'd', name: 'D', row: 11, col: 11, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 0 };
+  const d = { id: 'd', name: 'D', row: 10, col: 10, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 0 };
   room.players = [a, b, c, d];
   addAlliance(room, 'a', 'c');
   addAlliance(room, 'b', 'd');
@@ -1013,6 +1035,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(c.level, 1);
   assert.equal(a.ducats, 0);
   assert.equal(b.ducats + d.ducats, 3);
+  assert.equal(b.fleetPoints, 2);
+  assert.equal(d.fleetPoints, 2);
 }
 
 // Союзники не могут атаковать друг друга, а игрок, разорвавший союз, не может
@@ -1054,11 +1078,30 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(island2.ownerId, 'a2');
   assert.equal(a2.armyPoints, 3); // защита 10 => 3 очка армии инициатору
   assert.equal(a2.glory, 0);
-  assert.equal(c2.armyPoints || 0, 0); // распределение союзных очков — блок 5.4
+  assert.equal(c2.armyPoints || 0, 0); // при совместном захвате очки армии получает только инициатор
   assert.equal(c2.glory, 0);
 }
 
-// При ничьей совместного штурма 30% казны теряет каждый реально участвовавший игрок обеих сторон.
+// При успешной совместной защите острова 3 очка армии получает владелец острова, а не союзник защиты.
+{
+  const room = { round: 2, islands: cloneIslands(), players: [], alliances: [] };
+  const island = room.islands.find(i => i.id === 'bogamia');
+  island.ownerId = 'b';
+  island.buildings = [{ type: 'fort', level: 1 }];
+  const a = { id: 'a', name: 'A', row: 5, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
+  const c = { id: 'c', name: 'C', row: 5, col: 2, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
+  const b = { id: 'b', name: 'B', row: 5, col: 2, shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
+  const d = { id: 'd', name: 'D', row: 6, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, armyPoints: 0 };
+  room.players = [a, b, c, d];
+  addAlliance(room, 'a', 'c');
+  addAlliance(room, 'b', 'd');
+  const result = jointAssaultIsland(room, a, island, 'preserve', ['c'], ['d']);
+  assert.equal(result.outcome, 'defender');
+  assert.equal(b.armyPoints, 3);
+  assert.equal(d.armyPoints, 0);
+}
+
+// При ничьей совместного штурма контроль не меняется и участвовавшие игроки ничего не теряют.
 {
   const room = { round: 2, islands: cloneIslands(), players: [], alliances: [] };
   const island = room.islands.find(i => i.id === 'bogamia');
@@ -1075,7 +1118,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   a.upgrades = ['musketeers']; a.level = 2;
   const result = jointAssaultIsland(room, a, island, 'preserve', ['c'], ['d']);
   assert.equal(result.outcome, 'tie');
-  for (const p of [a, b, c, d]) assert.equal(p.ducats, 7);
+  for (const p of [a, b, c, d]) assert.equal(p.ducats, 10);
 }
 
 

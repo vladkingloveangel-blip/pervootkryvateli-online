@@ -2364,10 +2364,21 @@ function areAllies(room, a, b) {
   return (room?.alliances || []).some(pair => allianceKey(pair[0], pair[1]) === key);
 }
 
+function alliancePartnerId(room, playerId) {
+  const id = String(typeof playerId === 'string' ? playerId : playerId?.id || '');
+  if (!id) return null;
+  for (const pair of room?.alliances || []) {
+    if (String(pair?.[0] || '') === id) return String(pair?.[1] || '') || null;
+    if (String(pair?.[1] || '') === id) return String(pair?.[0] || '') || null;
+  }
+  return null;
+}
+
 function addAlliance(room, aId, bId) {
   if (!room || !aId || !bId || aId === bId) return false;
   room.alliances ||= [];
   if (areAllies(room, aId, bId)) return false;
+  if (alliancePartnerId(room, aId) || alliancePartnerId(room, bId)) return false;
   room.alliances.push([String(aId), String(bId)]);
   return true;
 }
@@ -2519,6 +2530,7 @@ function jointSeaBattle(room, attacker, defender, attackerAllyIds = [], defender
 
   const attackingAllies = uniquePlayersByIds(room, attackerAllyIds).filter(p => p.id !== attacker.id && p.id !== defender.id);
   const defendingAllies = uniquePlayersByIds(room, defenderAllyIds).filter(p => p.id !== attacker.id && p.id !== defender.id);
+  if (attackingAllies.length > 1 || defendingAllies.length > 1) return { ok: false, error: 'В совместном бою у каждой стороны может участвовать только один союзник.' };
   const used = new Set([attacker.id, defender.id]);
 
   for (const p of attackingAllies) {
@@ -2531,7 +2543,7 @@ function jointSeaBattle(room, attacker, defender, attackerAllyIds = [], defender
   for (const p of defendingAllies) {
     if (used.has(p.id)) return { ok: false, error: 'Один корабль не может участвовать за обе стороны.' };
     if (!areAllies(room, defender, p)) return { ok: false, error: `${p.name || 'Игрок'} не является союзником защитника.` };
-    if (areAllies(room, attacker, p) || isFormerAllyBlocked(attacker, p.id)) return { ok: false, error: `${p.name || 'Игрок'} не может участвовать против инициатора в этом бою.` };
+    if (areAllies(room, attacker, p)) return { ok: false, error: `${p.name || 'Игрок'} не может участвовать против своего союзника.` };
     if (!seaAttackPositionAllowed(p, defender)) return { ok: false, error: `${p.name || 'Союзник'} должен находиться на клетке цели или на одной из восьми соседних клеток.` };
     used.add(p.id);
   }
@@ -2648,6 +2660,7 @@ function jointAssaultIsland(room, attacker, island, captureMode = 'preserve', at
 
   const attackingAllies = uniquePlayersByIds(room, attackerAllyIds).filter(p => p.id !== attacker.id && p.id !== defender?.id);
   const defendingAllies = uniquePlayersByIds(room, defenderAllyIds).filter(p => p.id !== attacker.id && p.id !== defender?.id);
+  if (attackingAllies.length > 1 || defendingAllies.length > 1) return { ok: false, error: 'В совместном штурме у каждой стороны может участвовать только один союзник.' };
   const used = new Set([attacker.id]);
   if (defender) used.add(defender.id);
 
@@ -2662,7 +2675,7 @@ function jointAssaultIsland(room, attacker, island, captureMode = 'preserve', at
     if (!defender) return { ok: false, error: 'У нейтрального или государственного острова нет союзников-игроков.' };
     if (used.has(p.id)) return { ok: false, error: 'Один корабль не может участвовать за обе стороны.' };
     if (!areAllies(room, defender, p)) return { ok: false, error: `${p.name || 'Игрок'} не является союзником владельца острова.` };
-    if (areAllies(room, attacker, p) || isFormerAllyBlocked(attacker, p.id)) return { ok: false, error: `${p.name || 'Игрок'} не может участвовать против инициатора в этом штурме.` };
+    if (areAllies(room, attacker, p)) return { ok: false, error: `${p.name || 'Игрок'} не может участвовать против своего союзника.` };
     if (!playerOnIsland(p, island)) return { ok: false, error: `${p.name || 'Союзник'} должен находиться на клетке этого острова.` };
     used.add(p.id);
   }
@@ -2713,8 +2726,9 @@ function jointAssaultIsland(room, attacker, island, captureMode = 'preserve', at
     result.previousOwnerId = island.ownerId || null;
     result.captureRetention = captureRetentionPlan(island);
     island.ownerId = attacker.id;
-    if (!island.firstMilitaryConquered) island.firstMilitaryConquered = true;
-    result.armyPointAwards = awardArmyVictoryPoints(room, [attacker], result.previousOwnerId, armyCapturePoints(defense.total));
+    const firstMilitaryConquest = !island.firstMilitaryConquered;
+    if (firstMilitaryConquest) island.firstMilitaryConquered = true;
+    if (firstMilitaryConquest) result.armyPointAwards = awardArmyVictoryPoints(room, [attacker], result.previousOwnerId, armyCapturePoints(defense.total));
 
     const islandRewardWasClaimable = !island.rewardClaimed;
     const factionId = factionIdForIsland(island);
@@ -2751,9 +2765,7 @@ function jointAssaultIsland(room, attacker, island, captureMode = 'preserve', at
     }
     if (result.levelLosses.length === 1) result.levelLoss = result.levelLosses[0];
   } else {
-    for (const p of [...attackers, ...defenders]) result.treasuryLosses[p.id] = treasuryLoss30(p);
-    result.attackerTreasuryLoss = result.treasuryLosses[attacker.id] || 0;
-    result.defenderTreasuryLoss = defender ? (result.treasuryLosses[defender.id] || 0) : 0;
+    // Каноническая ничья штурма не меняет контроль и не накладывает потерь.
   }
   return result;
 }
@@ -2965,6 +2977,7 @@ module.exports = {
   finalizeCapturedBuildingRetention,
   gloryForDefense,
   areAllies,
+  alliancePartnerId,
   addAlliance,
   removeAlliance,
   playerOnIsland,

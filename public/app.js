@@ -2475,7 +2475,7 @@
 
     const myTurn = r.activePlayerId === state.myId;
     const canPropose = myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 && !r.pendingBattle;
-    const sameCellPlayers = r.players.filter(p => p.id !== state.myId && p.row === mine.row && p.col === mine.col && !areAlliesClient(state.myId, p.id));
+    const sameCellPlayers = allies.length ? [] : r.players.filter(p => p.id !== state.myId && p.row === mine.row && p.col === mine.col && !areAlliesClient(state.myId, p.id) && !(p.allyIds || []).length);
     if (sameCellPlayers.length) {
       const label = document.createElement('div');
       label.className = 'action-group-label';
@@ -2566,7 +2566,7 @@
     if (mine.inPeaceZone) notes.push('Зона мира Цитадели: морские бои и штурмы запрещены.');
     if (firstRound) notes.push('В первом раунде нельзя атаковать других игроков и их острова; нейтральные и государственные острова остаются целями.');
     if (!seaTargets.length && !islandTargets.length) notes.push('На текущей клетке нет допустимых целей.');
-    content.innerHTML = notes.length ? notes.map(n => `<div class="combat-note">${escapeHtml(n)}</div>`).join('') : '<div class="combat-note">Можно атаковать одному или пригласить союзников. Союзники защиты также получают право присоединиться, если находятся в нужной позиции.</div>';
+    content.innerHTML = notes.length ? notes.map(n => `<div class="combat-note">${escapeHtml(n)}</div>`).join('') : '<div class="combat-note">Можно атаковать одному или пригласить своего союзника. Союзник защиты также получает право присоединиться, если находится в нужной позиции.</div>';
 
     if (seaTargets.length) {
       const label = document.createElement('div');
@@ -2601,7 +2601,7 @@
         solo.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
         const together = document.createElement('button');
         together.type = 'button';
-        together.textContent = `Позвать союзников (${attackAllies.length})`;
+        together.textContent = `Позвать союзника (${attackAllies.length})`;
         together.disabled = solo.disabled || attackAllies.length === 0;
         together.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
         row.appendChild(solo); row.appendChild(together);

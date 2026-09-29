@@ -84,6 +84,7 @@ const {
   islandDefenseArmy,
   loseShipLevel,
   areAllies,
+  alliancePartnerId,
   addAlliance,
   removeAlliance,
   playerOnIsland,
@@ -1233,7 +1234,7 @@ function eligibleSeaBattleInvites(room, attacker, defender, inviteAttackers = tr
       attackerInvites.push(p.id);
       continue;
     }
-    if (areAllies(room, defender, p) && !areAllies(room, attacker, p) && !(attacker.brokenAlliesThisTurn || []).includes(p.id)) {
+    if (areAllies(room, defender, p) && !areAllies(room, attacker, p)) {
       defenderInvites.push(p.id);
     }
   }
@@ -1251,7 +1252,7 @@ function eligibleAssaultInvites(room, attacker, island, inviteAttackers = true) 
       attackerInvites.push(p.id);
       continue;
     }
-    if (defender && areAllies(room, defender, p) && !areAllies(room, attacker, p) && !(attacker.brokenAlliesThisTurn || []).includes(p.id)) {
+    if (defender && areAllies(room, defender, p) && !areAllies(room, attacker, p)) {
       defenderInvites.push(p.id);
     }
   }
@@ -1489,8 +1490,7 @@ function logAssaultResult(room, attacker, island, result) {
     const armyText = (result.armyPointAwards || []).map(a => `${playerById(room, a.playerId)?.name || 'Игрок'} +${a.points}`).join(', ');
     log(room, `Штурм ${island.name}: ${result.attackerPower}:${result.defense.total}. Защита устояла${defenseNames ? ` [${defenseNames}]` : ''}. Очки армии: ${armyText || 'без начисления'}. Потери нападающих: ${[losses, companies].filter(Boolean).join('; ') || 'нет'}.`);
   } else {
-    const losses = Object.entries(result.treasuryLosses || {}).map(([id, amount]) => `${playerById(room, id)?.name || 'Игрок'} −${amount}`).join(', ');
-    log(room, `Штурм ${island.name}: ${result.attackerPower}:${result.defense.total}. Ничья, контроль не меняется. Потери казны участников: ${losses || 'нет'}.`);
+    log(room, `Штурм ${island.name}: ${result.attackerPower}:${result.defense.total}. Ничья, контроль не меняется; уровни, роты и дукаты участников сохраняются.`);
   }
 }
 
@@ -3572,6 +3572,8 @@ io.on('connection', socket => {
     if (!target.connected) return ackSafe(ack, { ok: false, error: 'Этот игрок сейчас не подключён.' });
     if (!sameCell(p, target)) return ackSafe(ack, { ok: false, error: 'Для заключения союза основные корабли должны стоять на одной клетке.' });
     if (areAllies(room, p, target)) return ackSafe(ack, { ok: false, error: 'Вы уже союзники.' });
+    if (alliancePartnerId(room, p.id)) return ackSafe(ack, { ok: false, error: 'У вас уже есть союзник. Одновременно разрешён только один союз.' });
+    if (alliancePartnerId(room, target.id)) return ackSafe(ack, { ok: false, error: 'У этого игрока уже есть союзник.' });
     room.pendingAlliance = { id: crypto.randomUUID(), fromId: p.id, toId: target.id };
     log(room, `${p.name} предлагает союз игроку ${target.name}. Действие будет потрачено только при согласии.`);
     ackSafe(ack, { ok: true, pending: true });
@@ -3589,13 +3591,18 @@ io.on('connection', socket => {
     const accept = Boolean(data?.accept);
     if (accept) {
       const active = currentPlayer(room);
-      if (!active || active.id !== from.id || room.phase !== 'actions' || room.actionsLeft <= 0 || !sameCell(from, to)) {
+      if (!active || active.id !== from.id || room.phase !== 'actions' || room.actionsLeft <= 0 || !sameCell(from, to) || alliancePartnerId(room, from.id) || alliancePartnerId(room, to.id)) {
         room.pendingAlliance = null;
-        ackSafe(ack, { ok: false, error: 'Условия заключения союза изменились.' });
+        ackSafe(ack, { ok: false, error: 'Условия заключения союза изменились или у одного из игроков уже появился союзник.' });
         emitRoom(room);
         return;
       }
-      addAlliance(room, from.id, to.id);
+      if (!addAlliance(room, from.id, to.id)) {
+        room.pendingAlliance = null;
+        ackSafe(ack, { ok: false, error: 'Заключить союз не удалось: одновременно разрешён только один союзник.' });
+        emitRoom(room);
+        return;
+      }
       room.actionsLeft -= 1;
       log(room, `${from.name} и ${to.name} заключают союз. ${from.name} тратит одно действие; осталось ${room.actionsLeft}.`);
     } else {
