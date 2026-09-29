@@ -166,8 +166,8 @@ test('complete known sea, assignment, feud and event decks match appendix rows',
   assert.deepEqual(rules.politics.assignments.mori.slice(0,8).map(c=>c.islandId),['renaika','chertog','kisalinia','yukon','erkalon','asigoriy','atlantia','adia']);
 });
 
-test('stage 5.7 activates all six canonical feud decks without advancing Mori assignments or service', () => {
-  assert.equal(rules.implementation.activeProfile,'stage-5-combat-politics-5.8.1');
+test('stage 5.8.2 keeps canonical politics data active while assignment execution advances separately from Mori service', () => {
+  assert.equal(rules.implementation.activeProfile,'stage-5-combat-politics-5.8.2');
   assert.equal(rules.implementation.pendingConsumers.every(item => item.consumerStage >= 5),true);
   assert.equal(rules.scoring.combat.attacksPerOpponentPerRound,1);
   assert.equal(data.BALANCE.combat.attacksPerOpponentPerRound,rules.scoring.combat.attacksPerOpponentPerRound);

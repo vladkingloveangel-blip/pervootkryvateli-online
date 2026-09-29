@@ -138,6 +138,7 @@ const {
   offerAssignmentCards,
   chooseAssignmentOffer,
   assignmentEventMatches,
+  assignmentRequiredAction,
   completeAssignment,
   legendaryPlaceAt,
 } = require('../game-logic');
@@ -1602,15 +1603,131 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(p.ducats, 4);
 }
 
-// Доставка засчитывается только грузом, полученным после выдачи именно текущего поручения.
+// Доставка засчитывается только полным трюмом, полученным после выдачи именно текущего поручения.
 {
   const card = ASSIGNMENT_CARDS.suniksiya.find(c => c.id === 'suniksiya-delivery-ore');
   const p = { activeAssignment: { instanceId: 'delivery-1', factionId: 'suniksiya', card: { ...card } } };
-  assert.equal(assignmentEventMatches(p, { type: 'delivery', goodId: 'ore', assignmentInstanceId: null }), false);
-  assert.equal(assignmentEventMatches(p, { type: 'delivery', goodId: 'wood', assignmentInstanceId: 'delivery-1' }), false);
-  assert.equal(assignmentEventMatches(p, { type: 'delivery', goodId: 'ore', assignmentInstanceId: 'delivery-1' }), true);
+  assert.equal(assignmentEventMatches(p, { type: 'delivery', goodId: 'ore', assignmentInstanceId: null, fullHold: true }), false);
+  assert.equal(assignmentEventMatches(p, { type: 'delivery', goodId: 'wood', assignmentInstanceId: 'delivery-1', fullHold: true }), false);
+  assert.equal(assignmentEventMatches(p, { type: 'delivery', goodId: 'ore', assignmentInstanceId: 'delivery-1', fullHold: false }), false);
+  assert.equal(assignmentEventMatches(p, { type: 'delivery', goodId: 'ore', assignmentInstanceId: 'delivery-1', fullHold: true }), true);
 }
 
+// Продажа сохраняет размер трюма и метку текущего поручения для проверки доставки.
+{
+  const room = { islands: cloneIslands() };
+  const p = {
+    id: 'p1', row: 13, col: 13, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0,
+    cargo: { goodId: 'ore', quantity: 2, assignmentInstanceId: 'delivery-sale' },
+  };
+  const sold = sellCargo(room, p);
+  assert.equal(sold.ok, true);
+  assert.equal(sold.quantity, 2);
+  assert.equal(sold.capacity, 2);
+  assert.equal(sold.assignmentInstanceId, 'delivery-sale');
+}
+// Сокровище не засчитывается задним числом: получение и разрешение относятся к текущему поручению.
+{
+  const card = ASSIGNMENT_CARDS.suniksiya.find(c => c.id === 'suniksiya-treasure');
+  const p = { activeAssignment: { instanceId: 'treasure-1', factionId: 'suniksiya', card: { ...card } } };
+  assert.equal(assignmentEventMatches(p, { type: 'treasure-resolved', assignmentInstanceId: null }), false);
+  assert.equal(assignmentEventMatches(p, { type: 'treasure-resolved', assignmentInstanceId: 'old-assignment' }), false);
+  assert.equal(assignmentEventMatches(p, { type: 'treasure-resolved', assignmentInstanceId: 'treasure-1' }), true);
+}
+
+// Переход к верфи и дальнейшее улучшение верфи считаются действием по тому же поручению.
+{
+  const card = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-shipyard-forest');
+  const p = { activeAssignment: { instanceId: 'yard-1', factionId: 'lionia', card: { ...card } } };
+  const base = { type: 'building-action', islandId: 'test', islandResources: ['Лес'], branch: 'wood' };
+  assert.equal(assignmentEventMatches(p, { ...base, buildingType: 'sawmill', previousBuildingType: null }), false);
+  assert.equal(assignmentEventMatches(p, { ...base, buildingType: 'shipyard', previousBuildingType: 'lumbermill' }), true);
+  assert.equal(assignmentEventMatches(p, { ...base, buildingType: 'shipyard', previousBuildingType: 'shipyard' }), true);
+}
+
+// Переход крепости III в бастион остаётся улучшением защитной ветви поручения.
+{
+  const card = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-frandia-fort');
+  const p = { activeAssignment: { instanceId: 'fort-1', factionId: 'lionia', card: { ...card } } };
+  assert.equal(assignmentEventMatches(p, {
+    type: 'building-action', islandId: 'frandia', islandResources: [], buildingType: 'bastion', previousBuildingType: 'fortress', branch: 'fort',
+  }), true);
+}
+
+// Приоритет появляется только когда поручение реально можно выполнить на текущей клетке и есть действие.
+{
+  const card = ASSIGNMENT_CARDS.kadingir.find(c => c.id === 'kadingir-market');
+  const islands = cloneIslands();
+  const island = islands.find(i => i.id === 'kadingir');
+  island.ownerId = 'p1';
+  island.buildings = [{ type: 'farm', level: 1 }];
+  const [row, col] = island.cells[0];
+  const p = {
+    id: 'p1', row, col, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 100,
+    savedEventCards: [], activeAssignment: { instanceId: 'priority-build', factionId: 'kadingir', card: { ...card } },
+  };
+  const room = { round: 2, islands, players: [p], alliances: [] };
+  const required = assignmentRequiredAction(room, p, 2);
+  assert.equal(required.kind, 'building');
+  assert.equal(required.buildOptions.some(option => option.islandId === 'kadingir' && option.buildingType === 'market'), true);
+  assert.equal(assignmentRequiredAction(room, p, 0), null);
+  p.row = 13; p.col = 13;
+  assert.equal(assignmentRequiredAction(room, p, 2), null);
+}
+
+// Захват, якорь и доставка создают обязательное следующее действие только при доступной цели.
+{
+  const islands = cloneIslands();
+  const asigoriy = islands.find(i => i.id === 'asigoriy');
+  const captureCard = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-asigoriy');
+  const p = {
+    id: 'p1', row: asigoriy.cells[0][0], col: asigoriy.cells[0][1],
+    shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 20, cargo: null,
+    savedEventCards: [], visitedAnchors: [], activeAssignment: { instanceId: 'capture-1', factionId: 'lionia', card: { ...captureCard } },
+  };
+  const room = { round: 2, islands, players: [p], alliances: [] };
+  assert.deepEqual(assignmentRequiredAction(room, p, 1).islandIds, ['asigoriy']);
+
+  const anchorCard = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-yellow-a');
+  const [ar, ac] = ANCHORS.yellow.cells[0];
+  p.row = ar; p.col = ac;
+  p.activeAssignment = { instanceId: 'anchor-1', factionId: 'lionia', card: { ...anchorCard } };
+  assert.equal(assignmentRequiredAction(room, p, 1).kind, 'anchor');
+  p.visitedAnchors = [ar + ',' + ac];
+  assert.equal(assignmentRequiredAction(room, p, 1), null);
+
+  const deliveryCard = ASSIGNMENT_CARDS.suniksiya.find(c => c.id === 'suniksiya-delivery-ore');
+  p.row = 13; p.col = 13; p.visitedAnchors = [];
+  p.activeAssignment = { instanceId: 'delivery-current', factionId: 'suniksiya', card: { ...deliveryCard } };
+  p.cargo = { goodId: 'ore', quantity: 2, assignmentInstanceId: 'delivery-current' };
+  const delivery = assignmentRequiredAction(room, p, 1);
+  assert.equal(delivery.kind, 'delivery');
+  assert.deepEqual(delivery.holdIds, ['main']);
+  p.cargo.assignmentInstanceId = 'old';
+  assert.equal(assignmentRequiredAction(room, p, 1), null);
+}
+
+// Отложенное сокровище имеет приоритет только если было получено уже при текущем поручении.
+{
+  const card = ASSIGNMENT_CARDS.suniksiya.find(c => c.id === 'suniksiya-treasure');
+  const p = {
+    id: 'p1', row: 13, col: 13, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], cargo: null,
+    savedEventCards: [{ id: 'treasure-new', kind: 'treasure-cargo', assignmentInstanceId: 'treasure-current' }],
+    activeAssignment: { instanceId: 'treasure-current', factionId: 'suniksiya', card: { ...card } },
+  };
+  const room = { round: 2, islands: cloneIslands(), players: [p], alliances: [] };
+  assert.deepEqual(assignmentRequiredAction(room, p, 1).savedCardIds, ['treasure-new']);
+  p.savedEventCards[0].assignmentInstanceId = 'old';
+  assert.equal(assignmentRequiredAction(room, p, 1), null);
+}
+
+// Специальный прогресс посещений и маршрутов Мори намеренно остаётся блоком 5.8.4.
+{
+  const card = ASSIGNMENT_CARDS.mori.find(c => c.type === 'visit-island');
+  const p = { id: 'p1', activeAssignment: { instanceId: 'mori-next', factionId: 'mori', card: { ...card } } };
+  const room = { islands: cloneIslands(), players: [p], alliances: [] };
+  assert.equal(assignmentRequiredAction(room, p, 3), null);
+}
 // Платная замена поручения удалена из активного runtime.
 {
   assert.equal(BALANCE.assignmentReplacementPrice, undefined);

@@ -107,6 +107,7 @@ const {
   offerAssignmentCards,
   chooseAssignmentOffer,
   assignmentEventMatches,
+  assignmentRequiredAction,
   completeAssignment,
   legendaryPlaceAt,
   factionIdForIsland,
@@ -382,6 +383,8 @@ function onSocketEvent(socket, event, handler) {
     if (event !== 'disconnect' && (shuttingDown || roomStore.lastError)) {
       return ackSafe(ack, { ok: false, error: 'Сохранение игры временно недоступно. Повторите позже.' });
     }
+    const priorityError = assignmentPriorityError(socket, event, args[0]);
+    if (priorityError) return ackSafe(ack, { ok: false, error: priorityError });
     const writes = [];
     const responses = [];
     eventWrites = writes;
@@ -858,13 +861,14 @@ function trackAssignment(room, player, event) {
   return result;
 }
 
-function assignmentBuildingEvent(island, building) {
+function assignmentBuildingEvent(island, building, previousBuilding = null) {
   const def = BUILDINGS[building?.type];
   return {
     type: 'building-action',
     islandId: island?.id || null,
     islandResources: [...(island?.resources || [])],
     buildingType: building?.type || null,
+    previousBuildingType: previousBuilding?.type || null,
     branch: def?.branch || null,
   };
 }
@@ -875,7 +879,87 @@ function deliveryAssignmentMatch(player, result) {
     type: 'delivery',
     goodId: result.good?.id,
     assignmentInstanceId: result.assignmentInstanceId || null,
+    fullHold: Number(result.quantity) === Number(result.capacity),
   });
+}
+
+const ASSIGNMENT_PRIORITY_EVENTS = new Set([
+  'fightAnchor', 'takeCharacter', 'replaceCharacter', 'usePalace',
+  'build', 'upgradeBuilding', 'buildBastion', 'formLandCompany',
+  'buyCityGuard', 'buyPermanentGarrison', 'buyShipLevel', 'buyShipUpgrade',
+  'removeShipUpgrade', 'buyEscort', 'loadCargo', 'sellCargo',
+  'useSavedCargo', 'useShipMaster', 'useBlueprint', 'playLegendary',
+  'requestAlliance', 'enterVassalage', 'rebelVassalage',
+  'attackShip', 'assaultIsland', 'endTurn',
+]);
+
+function sameAssignmentOption(option, data, fields) {
+  return fields.every(field => String(option?.[field] ?? '') === String(data?.[field] ?? ''));
+}
+
+function assignmentPriorityAllows(requirement, event, data = {}) {
+  if (!requirement) return true;
+
+  if (requirement.kind === 'building') {
+    if (event === 'build') {
+      return (requirement.buildOptions || []).some(option =>
+        sameAssignmentOption(option, { islandId: data?.islandId, buildingType: data?.buildingType }, ['islandId', 'buildingType']));
+    }
+    if (event === 'upgradeBuilding') {
+      return (requirement.upgradeOptions || []).some(option =>
+        option.islandId === String(data?.islandId || '') && option.buildingIndex === Number(data?.buildingIndex));
+    }
+    if (event === 'buildBastion') {
+      const islandId = String(data?.islandId || '');
+      const rawIndex = data?.buildingIndex;
+      return (requirement.bastionOptions || []).some(option =>
+        option.islandId === islandId && (rawIndex == null || rawIndex === '' || option.buildingIndex === Number(rawIndex)));
+    }
+    if (event === 'useBlueprint') {
+      return (requirement.blueprintOptions || []).some(option =>
+        option.islandId === String(data?.islandId || '') && option.savedCardId === String(data?.savedCardId || ''));
+    }
+    return false;
+  }
+
+  if (requirement.kind === 'ship-level') return event === 'buyShipLevel';
+
+  if (requirement.kind === 'ship-upgrade') {
+    if (event === 'buyShipUpgrade') return (requirement.upgradeIds || []).includes(String(data?.upgradeId || ''));
+    if (event === 'useShipMaster') {
+      return (requirement.shipMasterIds || []).includes(String(data?.savedCardId || ''))
+        && (requirement.freeUpgradeIds || []).includes(String(data?.upgradeId || ''));
+    }
+    return false;
+  }
+
+  if (requirement.kind === 'anchor') return event === 'fightAnchor';
+
+  if (requirement.kind === 'delivery') {
+    const holdId = String(data?.holdId || 'main');
+    return event === 'sellCargo' && (requirement.holdIds || []).includes(holdId);
+  }
+
+  if (requirement.kind === 'assault') {
+    return event === 'assaultIsland' && (requirement.islandIds || []).includes(String(data?.islandId || ''));
+  }
+
+  if (requirement.kind === 'treasure') {
+    return event === 'useSavedCargo' && (requirement.savedCardIds || []).includes(String(data?.savedCardId || ''));
+  }
+
+  return true;
+}
+
+function assignmentPriorityError(socket, event, data) {
+  if (!ASSIGNMENT_PRIORITY_EVENTS.has(event)) return null;
+  const room = getRoom(socket.data.roomCode);
+  const player = currentPlayer(room);
+  if (!room || !player || player.id !== socket.data.playerId || room.phase !== 'actions') return null;
+  if (hasPendingDecision(room)) return null;
+  const requirement = assignmentRequiredAction(room, player, room.actionsLeft);
+  if (!requirement || assignmentPriorityAllows(requirement, event, data)) return null;
+  return 'Сначала выполните доступное активное поручение «' + requirement.text + '». По правилам поручение имеет приоритет перед другими добровольными действиями.';
 }
 
 function buildAssignmentQueue(room, snapshot) {
@@ -1653,6 +1737,7 @@ function saveHeldEventCard(player, card, kind, extra = {}) {
     name: card?.name || 'Сохранённая карта',
     sourceDeck: 'event',
     sourceCard: card ? { ...card } : null,
+    assignmentInstanceId: kind === 'treasure-cargo' ? (player.activeAssignment?.instanceId || null) : undefined,
     ...extra,
   };
   player.savedEventCards.push(saved);
@@ -1689,6 +1774,7 @@ function resolveSailingEventCard(room, player, card) {
 
   if (card.type === 'treasure') {
     const treasure = drawTreasureCard(room);
+    const treasureAssignmentInstanceId = player.activeAssignment?.instanceId || null;
     if (!treasure) {
       log(room, `${player.name}: «${card.name}», но колода сокровищ пуста.`);
       return resultBase;
@@ -1696,7 +1782,7 @@ function resolveSailingEventCard(room, player, card) {
     if (treasure.multiplier) {
       const result = resolveMoneyTreasure(room, player, treasure);
       discardDeckCard(room.treasureDeck, treasure);
-      trackAssignment(room, player, { type: 'treasure-resolved' });
+      trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: treasureAssignmentInstanceId });
       const debtText = result.credit.debtPaid ? `; ${result.credit.debtPaid} ушло в погашение долга` : '';
       log(room, `${player.name}: «${card.name}» → сокровище «${treasure.name}». Доход рынков/банков ${result.income}; получено ${result.amount} дукатов${debtText}.`);
       return resultBase;
@@ -1704,18 +1790,18 @@ function resolveSailingEventCard(room, player, card) {
     const holds = emptyCargoHolds(room, player);
     if (!holds.length) {
       discardDeckCard(room.treasureDeck, treasure);
-      trackAssignment(room, player, { type: 'treasure-resolved' });
+      trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: treasureAssignmentInstanceId });
       log(room, `${player.name}: «${card.name}» → «${treasure.name}». Все трюмы заняты; карта сокровища сброшена без эффекта.`);
       return resultBase;
     }
     if (holds.length === 1) {
       const loaded = fillCargoDirect(room, player, treasure.cargoGoodId, holds[0].id);
       discardDeckCard(room.treasureDeck, treasure);
-      trackAssignment(room, player, { type: 'treasure-resolved' });
+      trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: treasureAssignmentInstanceId });
       log(room, `${player.name}: «${card.name}» → «${treasure.name}». ${loaded.holdName} заполнен товаром «${loaded.good.name}» ×${loaded.quantity}.`);
       return resultBase;
     }
-    queueEventDecision(room, player, card, 'cargo', holds, { goodId: treasure.cargoGoodId, treasureCard: { ...treasure } });
+    queueEventDecision(room, player, card, 'cargo', holds, { goodId: treasure.cargoGoodId, treasureCard: { ...treasure }, treasureAssignmentInstanceId });
     log(room, `${player.name}: «${card.name}» → «${treasure.name}». Нужно выбрать один пустой трюм.`);
     return { pending: true, holdEventCard: false };
   }
@@ -2368,7 +2454,7 @@ function completePendingEvent(room, pending) {
     if (!result.ok) return result;
     if (pending.treasureCard) {
       discardDeckCard(room.treasureDeck, pending.treasureCard);
-      trackAssignment(room, player, { type: 'treasure-resolved' });
+      trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: pending.treasureAssignmentInstanceId || null });
     }
     log(room, `${player.name}: «${pending.cardName}». ${result.holdName} заполнен товаром «${result.good.name}» ×${result.quantity}.`);
   } else if (pending.kind === 'raid') {
@@ -2528,27 +2614,28 @@ function handleLegendaryPlaceStop(room, player) {
     }
   } else if (place.reward === 'treasure') {
     const treasure = drawTreasureCard(room);
+    const treasureAssignmentInstanceId = player.activeAssignment?.instanceId || null;
     if (!treasure) return { place, first: true };
     if (treasure.multiplier) {
       const result = resolveMoneyTreasure(room, player, treasure);
       discardDeckCard(room.treasureDeck, treasure);
-      trackAssignment(room, player, { type: 'treasure-resolved' });
+      trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: treasureAssignmentInstanceId });
       log(room, `${player.name}: награда «${place.name}» — сокровище «${treasure.name}», получено ${result.amount} дукатов.`);
     } else {
       const holds = emptyCargoHolds(room, player);
       if (!holds.length) {
         discardDeckCard(room.treasureDeck, treasure);
-        trackAssignment(room, player, { type: 'treasure-resolved' });
+        trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: treasureAssignmentInstanceId });
         log(room, `${player.name}: награда «${place.name}» — «${treasure.name}». Все трюмы заняты; карта сокровища сброшена без эффекта.`);
       } else if (holds.length === 1) {
         const loaded = fillCargoDirect(room, player, treasure.cargoGoodId, holds[0].id);
         discardDeckCard(room.treasureDeck, treasure);
-        trackAssignment(room, player, { type: 'treasure-resolved' });
+        trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: treasureAssignmentInstanceId });
         log(room, `${player.name}: награда «${place.name}» — «${treasure.name}». ${loaded.holdName} заполнен товаром «${loaded.good.name}» ×${loaded.quantity}.`);
       } else {
         room.pendingEvent = {
           id: crypto.randomUUID(), playerId: player.id, kind: 'cargo', cardName: `${place.name}: ${treasure.name}`,
-          options: holds.map(o => ({ ...o })), goodId: treasure.cargoGoodId, treasureCard: { ...treasure }, origin: 'legendary-place',
+          options: holds.map(o => ({ ...o })), goodId: treasure.cargoGoodId, treasureCard: { ...treasure }, treasureAssignmentInstanceId, origin: 'legendary-place',
         };
         log(room, `${player.name}: награда «${place.name}» — «${treasure.name}». Нужно выбрать пустой трюм.`);
       }
@@ -3192,7 +3279,7 @@ io.on('connection', socket => {
     if (!result.ok) return ackSafe(ack, result);
     room.actionsLeft -= 1;
     log(room, `${p.name} улучшает ${result.beforeName} → ${result.afterName} на острове ${result.island.name} за ${result.price} дукатов. Осталось действий: ${room.actionsLeft}.`);
-    trackAssignment(room, p, assignmentBuildingEvent(result.island, result.building));
+    trackAssignment(room, p, assignmentBuildingEvent(result.island, result.building, result.previousBuilding));
     ackSafe(ack, { ok: true });
     emitRoom(room);
   });
@@ -3208,6 +3295,7 @@ io.on('connection', socket => {
     if (!result.ok) return ackSafe(ack, result);
     room.actionsLeft -= 1;
     log(room, `${p.name} превращает крепость III в бастион на острове ${result.island.name} за ${result.price} дукатов. Поддержка каменотёсных дворов: ${result.support.supported.length}/${result.support.capacity}. Осталось действий: ${room.actionsLeft}.`);
+    trackAssignment(room, p, assignmentBuildingEvent(result.island, result.building));
     ackSafe(ack, { ok: true });
     emitRoom(room);
   });
@@ -3378,7 +3466,7 @@ io.on('connection', socket => {
     const debtText = result.credit?.debtPaid ? ` Из обычной выручки ${result.credit.debtPaid} уходит в погашение долга; в казну ${result.credit.net}.` : '';
     const contractText = isContract ? ` Контракт сюзерена: премия +${contractBonus} дукатов${contractCredit?.debtPaid ? ` (${contractCredit.debtPaid} в погашение долга)` : ''}.` : '';
     log(room, `${p.name} продаёт в Цитадели из ${result.holdName.toLowerCase()}: ${result.good.name} × ${result.quantity} за ${result.revenue} дукатов.${debtText}${contractText} Осталось действий: ${room.actionsLeft}.`);
-    if (isContract) trackAssignment(room, p, { type: 'delivery', goodId: result.good.id, assignmentInstanceId: result.assignmentInstanceId });
+    if (isContract) trackAssignment(room, p, { type: 'delivery', goodId: result.good.id, assignmentInstanceId: result.assignmentInstanceId, fullHold: true });
     ackSafe(ack, { ok: true, revenue: result.revenue, contractBonus });
     emitRoom(room);
   });
@@ -3449,7 +3537,7 @@ io.on('connection', socket => {
     discardSavedCardToDeck(room, found.card);
     room.actionsLeft -= 1;
     log(room, `${p.name} применяет сохранённую карту «${found.card.name}»: ${result.holdName} заполнен товаром «${result.good.name}» ×${result.quantity}. Осталось действий: ${room.actionsLeft}.`);
-    if (found.card.kind === 'treasure-cargo') trackAssignment(room, p, { type: 'treasure-resolved' });
+    if (found.card.kind === 'treasure-cargo') trackAssignment(room, p, { type: 'treasure-resolved', assignmentInstanceId: found.card.assignmentInstanceId || null });
     ackSafe(ack, { ok: true, result });
     emitRoom(room);
   });

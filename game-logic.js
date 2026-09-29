@@ -394,21 +394,221 @@ function chooseAssignmentOffer(room, player, factionId, offeredCards, cardId, rn
   return assignAssignmentCard(room, player, factionId, chosen, rng);
 }
 
+
+function assignmentBuildingRequirement(room, player, assignment) {
+  const card = assignment?.card;
+  if (!card || !['build-branch', 'build-type'].includes(card.type)) return null;
+
+  const targetBranch = card.type === 'build-branch'
+    ? card.branch
+    : BUILDINGS[card.buildingType]?.branch;
+  if (!targetBranch) return null;
+
+  const islands = (room?.islands || []).filter(island => {
+    if (island.ownerId !== player.id || !playerOnIsland(player, island)) return false;
+    if (card.type === 'build-branch') return island.id === card.islandId;
+    return !card.resource || (island.resources || []).includes(card.resource);
+  });
+
+  const buildOptions = [];
+  const upgradeOptions = [];
+  const bastionOptions = [];
+  const blueprintOptions = [];
+  const saved = player.savedEventCards || [];
+
+  for (const island of islands) {
+    if (card.type === 'build-branch') {
+      for (const [buildingType, def] of Object.entries(BUILDINGS)) {
+        if (def.branch !== targetBranch) continue;
+        if (canBuild(room, player, island, buildingType).ok) {
+          buildOptions.push({ islandId: island.id, buildingType });
+        }
+      }
+    } else if (canBuild(room, player, island, card.buildingType).ok) {
+      buildOptions.push({ islandId: island.id, buildingType: card.buildingType });
+    }
+
+    for (const [buildingIndex, building] of (island.buildings || []).entries()) {
+      const allowed = canUpgradeBuilding(room, player, island, buildingIndex);
+      if (!allowed.ok) continue;
+      if (card.type === 'build-branch') {
+        if (BUILDINGS[building.type]?.branch === targetBranch) {
+          upgradeOptions.push({ islandId: island.id, buildingIndex });
+        }
+      } else if (building.type === card.buildingType || allowed.target?.type === card.buildingType) {
+        upgradeOptions.push({ islandId: island.id, buildingIndex });
+      }
+    }
+
+    if (card.type === 'build-branch' && targetBranch === 'fort') {
+      for (const buildingIndex of fortressThreeIndices(island)) {
+        if (canBuildBastion(room, player, island, buildingIndex).ok) {
+          bastionOptions.push({ islandId: island.id, buildingIndex });
+        }
+      }
+    }
+
+    for (const held of saved) {
+      const buildingType = held.kind === 'market-blueprint' ? 'market'
+        : held.kind === 'farm-blueprint' ? 'farm'
+          : null;
+      if (!buildingType) continue;
+      const def = BUILDINGS[buildingType];
+      const matches = card.type === 'build-branch'
+        ? def?.branch === targetBranch
+        : buildingType === card.buildingType;
+      if (!matches || !canBuildFree(room, player, island, buildingType).ok) continue;
+      blueprintOptions.push({ islandId: island.id, savedCardId: held.id, buildingType });
+    }
+  }
+
+  if (!buildOptions.length && !upgradeOptions.length && !bastionOptions.length && !blueprintOptions.length) return null;
+  return {
+    kind: 'building',
+    assignmentInstanceId: assignment.instanceId,
+    text: card.text,
+    buildOptions,
+    upgradeOptions,
+    bastionOptions,
+    blueprintOptions,
+  };
+}
+
+function assignmentAssaultAvailable(room, player, island, playerOwnedOnly = false) {
+  if (!room || !player || !island || !playerOnIsland(player, island)) return false;
+  if (island.ownerId === player.id) return false;
+  if (!island.ownerId && island.kind === 'free') return false;
+  if (isIslandProtected(island) || isCitadelPeaceCell(player.row, player.col)) return false;
+
+  if (island.ownerId) {
+    const owner = (room.players || []).find(p => p.id === island.ownerId);
+    if (!owner || owner.id === player.id) return false;
+    if (areAllies(room, player, owner) || isFormerAllyBlocked(player, owner.id)) return false;
+    if (!canAttackPlayerThisRound(room, player, owner.id).ok) return false;
+  } else if (playerOwnedOnly) {
+    return false;
+  }
+
+  return true;
+}
+
+function assignmentDeliveryHoldIds(room, player, assignment) {
+  const card = assignment?.card;
+  if (!card || card.type !== 'delivery') return [];
+  const ids = ['main', ...(player.escorts || []).map(escort => escort.id)];
+  const out = [];
+  for (const holdId of ids) {
+    const allowed = canSellCargo(room, player, holdId);
+    if (!allowed.ok) continue;
+    const cargo = allowed.hold?.cargo;
+    if (!cargo || cargo.assignmentInstanceId !== assignment.instanceId) continue;
+    if ((Number(cargo.quantity) || 0) !== (Number(allowed.hold.capacity) || 0)) continue;
+    if (card.goodIds && !card.goodIds.includes(cargo.goodId)) continue;
+    out.push(allowed.hold.id);
+  }
+  return out;
+}
+
+function assignmentRequiredAction(room, player, actionsLeft = 0) {
+  const assignment = player?.activeAssignment;
+  const card = assignment?.card;
+  if (!room || !player || !assignment || !card || (Number(actionsLeft) || 0) <= 0) return null;
+
+  if (card.type === 'build-branch' || card.type === 'build-type') {
+    return assignmentBuildingRequirement(room, player, assignment);
+  }
+
+  if (card.type === 'ship-level') {
+    if (!canBuyShipLevel(player).ok) return null;
+    return { kind: 'ship-level', assignmentInstanceId: assignment.instanceId, text: card.text };
+  }
+
+  if (card.type === 'stat-upgrade') {
+    const upgradeIds = Object.entries(SHIP_UPGRADES)
+      .filter(([, upgrade]) => upgrade.branch === card.branch && !upgrade.retired)
+      .filter(([upgradeId]) => canBuyShipUpgrade(player, upgradeId).ok)
+      .map(([upgradeId]) => upgradeId);
+    const shipMasterIds = (player.savedEventCards || []).filter(saved => saved.kind === 'ship-master').map(saved => saved.id);
+    const freeUpgradeIds = Object.entries(SHIP_UPGRADES)
+      .filter(([, upgrade]) => upgrade.branch === card.branch && !upgrade.retired)
+      .filter(([upgradeId]) => canInstallShipUpgradeFree(player, upgradeId).ok)
+      .map(([upgradeId]) => upgradeId);
+    if (!upgradeIds.length && !(shipMasterIds.length && freeUpgradeIds.length)) return null;
+    return {
+      kind: 'ship-upgrade',
+      assignmentInstanceId: assignment.instanceId,
+      text: card.text,
+      upgradeIds,
+      shipMasterIds,
+      freeUpgradeIds,
+    };
+  }
+
+  if (card.type === 'anchor-win') {
+    const anchor = anchorAt(player.row, player.col);
+    const colors = card.colors?.length ? card.colors : ['blue', 'yellow'];
+    const visitKey = cellKey(player.row, player.col);
+    if (!anchor || !colors.includes(anchor.color) || (player.visitedAnchors || []).includes(visitKey)) return null;
+    return { kind: 'anchor', assignmentInstanceId: assignment.instanceId, text: card.text, color: anchor.color };
+  }
+
+  if (card.type === 'delivery') {
+    const holdIds = assignmentDeliveryHoldIds(room, player, assignment);
+    if (!holdIds.length) return null;
+    return { kind: 'delivery', assignmentInstanceId: assignment.instanceId, text: card.text, holdIds };
+  }
+
+  if (card.type === 'attack-player-island') {
+    const islandIds = (room.islands || [])
+      .filter(island => assignmentAssaultAvailable(room, player, island, true))
+      .map(island => island.id);
+    if (!islandIds.length) return null;
+    return { kind: 'assault', assignmentInstanceId: assignment.instanceId, text: card.text, islandIds };
+  }
+
+  if (card.type === 'capture-island') {
+    const island = (room.islands || []).find(item => item.id === card.islandId);
+    if (!assignmentAssaultAvailable(room, player, island, false)) return null;
+    return { kind: 'assault', assignmentInstanceId: assignment.instanceId, text: card.text, islandIds: [card.islandId] };
+  }
+
+  if (card.type === 'treasure-resolved') {
+    if (!emptyCargoHolds(room, player).length) return null;
+    const savedCardIds = (player.savedEventCards || [])
+      .filter(saved => saved.kind === 'treasure-cargo' && saved.assignmentInstanceId === assignment.instanceId)
+      .map(saved => saved.id);
+    if (!savedCardIds.length) return null;
+    return { kind: 'treasure', assignmentInstanceId: assignment.instanceId, text: card.text, savedCardIds };
+  }
+
+  // Visits are resolved on arrival. Mori island/route progress is activated separately in 5.8.4.
+  return null;
+}
+
 function assignmentEventMatches(player, event) {
   const assignment = player?.activeAssignment;
   const card = assignment?.card;
   if (!assignment || !card || !event) return false;
   if (card.type === 'capture-island') return event.type === 'capture-island' && event.islandId === card.islandId;
   if (card.type === 'build-branch') return event.type === 'building-action' && event.branch === card.branch && (!card.islandId || event.islandId === card.islandId);
-  if (card.type === 'build-type') return event.type === 'building-action' && event.buildingType === card.buildingType && (!card.resource || (event.islandResources || []).includes(card.resource));
+  if (card.type === 'build-type') {
+    if (event.type !== 'building-action') return false;
+    const matchesType = event.buildingType === card.buildingType || event.previousBuildingType === card.buildingType;
+    return matchesType && (!card.resource || (event.islandResources || []).includes(card.resource));
+  }
   if (card.type === 'ship-level') return event.type === 'ship-level';
   if (card.type === 'stat-upgrade') return event.type === 'ship-upgrade' && event.branch === card.branch;
-  if (card.type === 'anchor-win') return event.type === 'anchor-win' && (card.colors || []).includes(event.color);
+  if (card.type === 'anchor-win') {
+    const colors = card.colors?.length ? card.colors : ['blue', 'yellow'];
+    return event.type === 'anchor-win' && colors.includes(event.color);
+  }
   if (card.type === 'visit-place') return event.type === 'visit-place' && event.placeId === card.placeId;
   if (card.type === 'attack-player-island') return event.type === 'attack-player-island';
-  if (card.type === 'treasure-resolved') return event.type === 'treasure-resolved';
+  if (card.type === 'treasure-resolved') {
+    return event.type === 'treasure-resolved' && event.assignmentInstanceId === assignment.instanceId;
+  }
   if (card.type === 'delivery') {
-    if (event.type !== 'delivery') return false;
+    if (event.type !== 'delivery' || event.fullHold !== true) return false;
     if (event.assignmentInstanceId !== assignment.instanceId) return false;
     return !card.goodIds || card.goodIds.includes(event.goodId);
   }
@@ -1747,7 +1947,7 @@ function upgradeBuilding(room, player, islandId, buildingIndex) {
   player.ducats -= allowed.next.price;
   island.buildings[allowed.index] = { ...allowed.target, upgradedAt: Date.now() };
   const afterName = buildingDisplayName(island.buildings[allowed.index]);
-  return { ok: true, island, price: allowed.next.price, beforeName, afterName, building: island.buildings[allowed.index] };
+  return { ok: true, island, price: allowed.next.price, beforeName, afterName, previousBuilding: { ...allowed.current }, building: island.buildings[allowed.index] };
 }
 
 function marketIncomeForPlayer(room, playerId) {
@@ -2227,9 +2427,10 @@ function sellCargo(room, player, holdId = 'main') {
   const allowed = canSellCargo(room, player, holdId);
   if (!allowed.ok) return allowed;
   const assignmentInstanceId = allowed.hold.cargo?.assignmentInstanceId || null;
+  const capacity = Math.max(0, Number(allowed.hold.capacity) || 0);
   const credit = creditDucats(player, allowed.revenue);
   allowed.hold.setCargo(null);
-  return { ok: true, good: allowed.good, revenue: allowed.revenue, credit, quantity: allowed.quantity, holdId: allowed.hold.id, holdName: allowed.hold.name, assignmentInstanceId };
+  return { ok: true, good: allowed.good, revenue: allowed.revenue, credit, quantity: allowed.quantity, capacity, holdId: allowed.hold.id, holdName: allowed.hold.name, assignmentInstanceId };
 }
 
 
@@ -2973,6 +3174,7 @@ module.exports = {
   offerAssignmentCards,
   chooseAssignmentOffer,
   assignmentEventMatches,
+  assignmentRequiredAction,
   completeAssignment,
   legendaryPlaceAt,
   factionIdForIsland,
