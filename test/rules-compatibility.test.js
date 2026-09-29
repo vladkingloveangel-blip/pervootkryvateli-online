@@ -41,7 +41,8 @@ test('legacy profile references remain valid while canonical master data stays s
     assert.equal(runtime.FACTIONS[id].fullConquestPrize.razeDucats,undefined);
   }
   assert.equal(runtime.FACTIONS.lionia.fullConquestPrize.ducats,60);
-  assert.equal(runtime.FACTIONS.kadingir.fullConquestPrize.amountUnresolved,true);
+  assert.equal(runtime.FACTIONS.kadingir.fullConquestPrize.ducats,50);
+  assert.equal(runtime.FACTIONS.kadingir.fullConquestPrize.amountUnresolved,undefined);
   assert.deepEqual(runtime.MILITARY_REWARDS.kadingir.preserveBuildings,[]);
   assert.deepEqual(runtime.MILITARY_REWARDS.kisalinia.preserveBuildings,[{type:'fort',level:1}]);
   assert.deepEqual(runtime.TREASURE_CARDS.map(c => c.id),[

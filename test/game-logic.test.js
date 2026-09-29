@@ -2042,17 +2042,17 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 
 
 // Все шесть государств присутствуют в политическом runtime. Итоговые призы — только денежные;
-// сумма Кадингира остаётся явно нерешённой из-за противоречия мастер-текста.
+// авторское решение фиксирует итоговый приз Кадингира в 50 дукатов.
 {
   assert.deepEqual(
     ['lionia','kadingir','mori','mayo','suniksiya','pirates'].filter(id => Boolean(FACTIONS[id])),
     ['lionia','kadingir','mori','mayo','suniksiya','pirates']
   );
   assert.deepEqual(
-    [FACTIONS.lionia.fullConquestPrize.ducats, FACTIONS.mori.fullConquestPrize.ducats, FACTIONS.mayo.fullConquestPrize.ducats, FACTIONS.suniksiya.fullConquestPrize.ducats, FACTIONS.pirates.fullConquestPrize.ducats],
-    [60,40,10,30,20]
+    [FACTIONS.lionia.fullConquestPrize.ducats, FACTIONS.kadingir.fullConquestPrize.ducats, FACTIONS.mori.fullConquestPrize.ducats, FACTIONS.mayo.fullConquestPrize.ducats, FACTIONS.suniksiya.fullConquestPrize.ducats, FACTIONS.pirates.fullConquestPrize.ducats],
+    [60,50,40,10,30,20]
   );
-  assert.equal(FACTIONS.kadingir.fullConquestPrize.amountUnresolved, true);
+  assert.equal(FACTIONS.kadingir.fullConquestPrize.amountUnresolved, undefined);
   assert.equal(FACTIONS.lionia.fullConquestPrize.preserveBuildings, undefined);
   assert.equal(FACTIONS.lionia.fullConquestPrize.razeDucats, undefined);
 }
@@ -2129,8 +2129,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(ASSIGNMENT_CARDS.mori.length, 10);
 }
 
-// Спорный приз Кадингира: триггер и получатель фиксируются, но runtime не придумывает сумму.
-// Подтверждённая островная награда 30 дукатов при этом сохраняется.
+// Авторское решение по Кадингиру: итоговый приз равен 50 дукатам.
+// Он заменяет денежную награду карточки последнего государственного острова и не складывается с её 30 дукатами.
 {
   const room = { islands: cloneIslands(), players: [], factionState: {}, round: 2, legendaryDeck: createLegendaryDeck() };
   const island = room.islands.find(i => i.id === 'kadingir');
@@ -2141,10 +2141,11 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(result.ok, true);
   assert.equal(result.outcome, 'attacker');
   assert.equal(result.statePrize.triggered, true);
-  assert.equal(result.statePrize.amountUnresolved, true);
-  assert.equal(result.statePrize.ducats, null);
+  assert.equal(result.statePrize.amountUnresolved, false);
+  assert.equal(result.statePrize.ducats, 50);
   assert.equal(result.statePrize.playerId, p.id);
-  assert.equal(p.ducats, 30);
+  assert.equal(p.ducats, 50);
+  assert.equal(result.rewardNotes.some(note => note.includes('итоговый приз Царство Кадингир: +50 дукатов')), true);
   assert.equal(island.buildings.length, 0); // legacy Банк I больше не подмешивается к карточке Кадингира
   assert.equal(stateExists(room, 'kadingir'), false);
 }

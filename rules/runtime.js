@@ -43,13 +43,8 @@ const FACTIONS = Object.fromEntries(Object.entries(rules.politics.factions)
     || (faction.availability.status === 'data-ready' && faction.availability.consumerStage <= 5))
   .map(([id, faction]) => [id, {
     ...copy(faction),
-    // §8.4.2/§9.6 now define only a monetary final prize. Kadingir's amount is
-    // internally contradictory in the master document, so runtime records the
-    // claimant but does not invent a payout until the author resolves it.
-    fullConquestPrize: {
-      ...copy(faction.fullConquestPrize),
-      amountUnresolved: id === 'kadingir',
-    },
+    // Author decision: Kadingir's final conquest prize follows §9.6 — 50 ducats.
+    fullConquestPrize: copy(faction.fullConquestPrize),
   }]));
 const FEUD_CARDS = Object.fromEntries(Object.entries(rules.events.feud).map(([factionId, cards]) => [
   factionId,

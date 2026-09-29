@@ -187,7 +187,8 @@ test('stage 5.8.5 finalizes canonical assignment data, rewards, taxes and Mori s
   assert.equal(data.FACTIONS.lionia.fullConquestPrize.ducats,60);
   assert.equal(data.FACTIONS.lionia.fullConquestPrize.preserveBuildings,undefined);
   assert.equal(data.FACTIONS.lionia.fullConquestPrize.razeDucats,undefined);
-  assert.equal(data.FACTIONS.kadingir.fullConquestPrize.amountUnresolved,true);
+  assert.equal(data.FACTIONS.kadingir.fullConquestPrize.ducats,50);
+  assert.equal(data.FACTIONS.kadingir.fullConquestPrize.amountUnresolved,undefined);
   assert.deepEqual(data.MILITARY_REWARDS.kadingir.preserveBuildings,[]);
   assert.deepEqual(data.MILITARY_REWARDS.kisalinia.preserveBuildings,[{type:'fort',level:1}]);
   assert.deepEqual(Object.keys(data.ASSIGNMENT_CARDS),['lionia','kadingir','mori','suniksiya','pirates']);

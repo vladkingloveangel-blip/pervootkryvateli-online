@@ -121,8 +121,8 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.factions.length,6);
   assert.equal(watch.room.factions.find(f=>f.id==='mori').giftIslandId,'miyosi');
   assert.equal(watch.room.factions.find(f=>f.id==='mori').fullConquestPrize.ducats,40);
-  assert.equal(watch.room.factions.find(f=>f.id==='kadingir').fullConquestPrize.ducats,null);
-  assert.equal(watch.room.factions.find(f=>f.id==='kadingir').fullConquestPrize.amountUnresolved,true);
+  assert.equal(watch.room.factions.find(f=>f.id==='kadingir').fullConquestPrize.ducats,50);
+  assert.equal(watch.room.factions.find(f=>f.id==='kadingir').fullConquestPrize.amountUnresolved,false);
   assert.equal(watch.room.factions.find(f=>f.id==='lionia').fullConquestPrize.ducats,60);
   assert.equal(Object.hasOwn(watch.room.factions.find(f=>f.id==='lionia').fullConquestPrize,'preserveBuildings'),false);
   assert.deepEqual(Object.keys(watch.room.feudDecks),['lionia','kadingir','mori','mayo','suniksiya','pirates']);
