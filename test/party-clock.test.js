@@ -44,12 +44,14 @@ test('leader, clockwise order and six complete personal circles', { timeout: 300
   await change(players[0],'setSeatingOrder',{playerIds:[ids[0],ids[2],ids[1],ids[3]]});
   await change(players[0],'setLeader',{playerId:ids[1]});
   assert.equal((await emit(players[1],'changeShip',{shipClass:'frigate'})).ok,false);
+  await change(players[0],'changeShip',{shipClass:'frigate'});
   for(const socket of players)await change(socket,'setReady',{ready:true});
   let room=await change(players[0],'startGame');
   const order=[ids[1],ids[3],ids[0],ids[2]];
   assert.deepEqual(room.order,order);
   assert.equal(room.leaderId,ids[1]);
   assert.equal(room.players.find(p=>p.id===ids[1]).shipClass,'carrack');
+  assert.equal(room.players.find(p=>p.id===ids[0]).shipClass,'frigate');
   assert.equal(room.players.every(p=>p.row===0 && p.col===0 && p.level===1),true);
   assert.equal((await emit(players[0],'setLeader',{playerId:ids[0]})).ok,false);
   assert.equal((await emit(players[0],'setSeatingOrder',{playerIds:ids})).ok,false);

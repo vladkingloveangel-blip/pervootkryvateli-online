@@ -960,6 +960,27 @@
         }
       }
       if (!isSpectator && !r.started && p.isYou) {
+        const label = document.createElement('label');
+        label.className = 'lobby-ship-label';
+        label.textContent = 'Класс корабля';
+        const shipSelect = document.createElement('select');
+        shipSelect.setAttribute('aria-label', 'Класс вашего корабля');
+        for (const [id, ship] of Object.entries(r.shipCatalog || {})) {
+          const option = document.createElement('option');
+          option.value = id; option.textContent = ship.name;
+          shipSelect.appendChild(option);
+        }
+        shipSelect.value = p.shipClass;
+        shipSelect.disabled = p.id === r.leaderId;
+        shipSelect.addEventListener('change', () => {
+          shipSelect.disabled = true;
+          socket.emit('changeShip', { shipClass: shipSelect.value }, res => {
+            handleGameAck(res);
+            if (!res?.ok) { shipSelect.value = p.shipClass; shipSelect.disabled = p.id === r.leaderId; }
+          });
+        });
+        label.appendChild(shipSelect);
+        el.querySelector('.player-meta').appendChild(label);
         const readyBtn = document.createElement('button');
         readyBtn.className = p.ready ? 'small danger-soft' : 'small primary';
         readyBtn.textContent = p.ready ? 'Снять готовность' : 'Готов';

@@ -52,6 +52,8 @@ const root = path.join(__dirname, '..');
       if(width<900)await page.click('[data-mobile-nav="players"]');
       assert.equal(await page.locator('#players .player-card').count(),4);
       assert.match(await page.locator('#players').textContent(),/ведущий/);
+      assert.equal(await page.locator('#players select[aria-label="Класс вашего корабля"]').count(),1);
+      assert.equal(await page.locator('#players select[aria-label="Класс вашего корабля"]').isEnabled(),true);
       for(const button of await page.locator('#players .seat-btn').all()){
         const box=await button.boundingBox();assert.ok(box.height>=44 && box.width>=44);
       }

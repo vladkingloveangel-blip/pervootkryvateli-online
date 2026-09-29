@@ -71,6 +71,7 @@ main { width: min(1480px, 100%); margin: 0 auto; padding: 14px; }
 .player-card:last-child { border-bottom: 0; }
 .player-dot { width: 15px; height: 15px; border-radius: 50%; }
 .player-meta { min-width: 0; }
+.lobby-ship-label { margin-top: 8px; }
 .player-name { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .player-sub { color: var(--muted); font-size: 12px; }
 .order-badge { color: var(--accent); font-size: 12px; }
