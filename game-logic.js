@@ -3503,6 +3503,12 @@ function jointAssaultIsland(room, attacker, island, attackerAllyIds = [], defend
       && result.statePrize.excludesIslandDucats
     );
     result.rewardNotes = grantMilitaryReward(room, attacker, island, { skipDucats: replaceIslandCash, rng: options.rng || Math.random });
+    if (firstMilitaryConquest) {
+      const legendaryPlace = legendaryPlaceForIsland(island.id);
+      if (legendaryPlace) {
+        result.legendaryDiscovery = claimLegendaryPlaceDiscovery(room, attacker, legendaryPlace.id, options.rng || Math.random);
+      }
+    }
     if (result.statePrize?.triggered) {
       if (result.statePrize.amountUnresolved) {
         result.rewardNotes.push(`итоговый приз ${result.statePrize.factionName}: сумма ожидает решения автора`);

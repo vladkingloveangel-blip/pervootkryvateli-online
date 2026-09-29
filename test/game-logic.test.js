@@ -1306,8 +1306,9 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(drawLegendaryCard(null,()=>0).id,'sea-veil'); // тот же тип может выпасть повторно
 }
 
-// Адия сохраняет собственную военную награду отдельно от новой награды первого
-// открытия: первый захват даёт 20 дукатов и две случайные легендарные карты.
+// Адия открывается как легендарное место только первым военным завоеванием.
+// Её собственная военная награда остаётся отдельной: первый захват даёт
+// 20 дукатов, легендарную карту острова и ещё одну карту за легендарное открытие.
 {
   const islands = cloneIslands();
   const adia = islands.find(island => island.id === 'adia');
@@ -1322,14 +1323,15 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
     round:2, islands, players:[player], alliances:[], factionState:{},
     legendaryPlacesExplored:{},
   };
-  const discovery = claimLegendaryPlaceDiscovery(room, player, 'adia', ()=>0);
-  assert.equal(discovery.first,true);
-  assert.equal(discovery.legendaryCard.id,'sea-veil');
   const result = jointAssaultIsland(room, player, adia, [], [], { rng:()=>0 });
   assert.equal(result.ok,true);
   assert.equal(result.outcome,'attacker');
   assert.equal(player.ducats,20);
-  assert.equal(result.legendaryDiscovery,undefined);
+  assert.equal(result.legendaryDiscovery.first,true);
+  assert.equal(result.legendaryDiscovery.namedCard.id,'place-adia');
+  assert.equal(result.legendaryDiscovery.legendaryCard.id,'sea-veil');
+  assert.equal(room.legendaryPlacesExplored.adia,'digital-legendary-player');
+  assert.deepEqual(player.namedPlaceCards.map(card=>card.id),['place-adia']);
   assert.deepEqual(player.legendaryCards.map(card=>card.id),['sea-veil','sea-veil']);
   assert.equal(Object.hasOwn(player,'pendingLegendary'),false);
 }
@@ -2208,7 +2210,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 }
 
 // Семь морских легендарных мест остаются координатными объектами карты, а три
-// легендарных острова связаны с островами и открываются первым посещением в 6.6.
+// легендарных острова связаны с островами и открываются первым военным завоеванием.
 {
   assert.equal(legendaryPlaceAt(24, 6)?.id, 'kraken');
   assert.equal(legendaryPlaceAt(12, 26)?.id, 'abyss');
@@ -2240,8 +2242,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.deepEqual(secondPlayer.legendaryCards, []);
 }
 
-// Легендарный остров теперь открывается первым посещением, а военная награда остаётся
-// отдельной. Последующий захват не создаёт вторую именную или легендарную награду места.
+// Легендарный остров открывается первым военным завоеванием. Обычная военная
+// награда острова остаётся отдельной; последующий захват не повторяет награду места.
 {
   const islands = cloneIslands();
   const atlantia = islands.find(island => island.id === 'atlantia');
@@ -2250,18 +2252,14 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const firstPlayer = { id:'p1', name:'One', row, col, shipClass:'brigantine', level:1, upgrades:[], escorts:[], ducats:0, debt:0, armyPoints:0, attackCountsThisRound:{}, namedPlaceCards:[], legendaryCards:[] };
   const room = { round:2, islands, players:[firstPlayer], alliances:[], factionState:{}, legendaryPlacesExplored:{} };
 
-  const discovery = claimLegendaryPlaceDiscovery(room, firstPlayer, 'atlantia', ()=>0.25);
-  assert.equal(discovery.first,true);
-  assert.equal(discovery.namedCard.id,'place-atlantia');
-  assert.equal(discovery.legendaryCard.id,'hellfire');
-  assert.deepEqual(firstPlayer.namedPlaceCards.map(card=>card.id), ['place-atlantia']);
-  assert.deepEqual(firstPlayer.legendaryCards.map(card=>card.id), ['hellfire']);
-
-  const first = jointAssaultIsland(room, firstPlayer, atlantia, [], [], { rng:()=>0 });
+  const first = jointAssaultIsland(room, firstPlayer, atlantia, [], [], { rng:()=>0.25 });
   assert.equal(first.ok, true);
   assert.equal(first.outcome, 'attacker');
-  assert.equal(first.legendaryDiscovery, undefined);
+  assert.equal(first.legendaryDiscovery.first, true);
+  assert.equal(first.legendaryDiscovery.namedCard.id, 'place-atlantia');
+  assert.equal(first.legendaryDiscovery.legendaryCard.id, 'hellfire');
   assert.equal(firstPlayer.ducats, 15);
+  assert.deepEqual(firstPlayer.namedPlaceCards.map(card=>card.id), ['place-atlantia']);
   assert.deepEqual(firstPlayer.legendaryCards.map(card=>card.id), ['hellfire']);
   assert.equal(atlantia.rewardClaimed, true);
 

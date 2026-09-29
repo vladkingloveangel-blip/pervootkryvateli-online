@@ -241,11 +241,15 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   assert.equal(protectedSourceView.legendaryCardCount, 0);
   assert.equal(Object.hasOwn(state.eventDecks,'legendary'), false);
   assert.equal(state.pendingLegendaryReaction, null);
-  assert.equal(protectedTargetView.legendaryStatus.shipVeilTurns, 3);
+  assert.equal(protectedTargetView.legendaryStatus.shipVeilTurns, 0);
   assert.equal(protectedTargetView.legendaryStatus.seaCursePenalty, 0);
-  assert.equal(state.log.some(entry => entry.text.includes('действующий «Покров моря» отменяет эффект') && entry.text.includes('Карта и действие потрачены')), true);
+  const protectedPersisted = readDb().game_rooms[0].state.players.find(player => player.id === targetId);
+  assert.equal(protectedPersisted.legendaryEffects.shipVeil, undefined);
+  assert.equal(protectedPersisted.legendaryEffects.shipVeilReaction.expiry, 'end-of-current-turn');
+  assert.equal(protectedPersisted.legendaryEffects.shipVeilReaction.expiresOnPlayerId, sourceId);
+  assert.equal(state.log.some(entry => entry.text.includes('действующий «Покров моря» отменяет эффект') && entry.text.includes('защита сохраняется только до конца текущего хода')), true);
 
-  // 6.6: легендарный остров открывается первым посещением, без военного захвата.
+  // 6.6: простое посещение легендарного острова не открывает его; нужна первая военная победа.
   await stop();
   protectedSourceSocket.disconnect();
   protectedTargetSocket.disconnect();
@@ -283,9 +287,9 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   changed = await change(visitSourceSocket, 'skipNavigation', {});
   state = changed.state;
   const visitSourceView = state.players.find(player => player.id === sourceId);
-  assert.equal(state.legendaryPlaces.find(place => place.id === 'atlantia').exploredBy, sourceId);
-  assert.equal(visitSourceView.namedPlaceCards.some(card => card.id === 'place-atlantia'), true);
-  assert.equal(visitSourceView.legendaryCardCount, 1);
+  assert.equal(state.legendaryPlaces.find(place => place.id === 'atlantia').exploredBy, null);
+  assert.equal(visitSourceView.namedPlaceCards.some(card => card.id === 'place-atlantia'), false);
+  assert.equal(visitSourceView.legendaryCardCount, 0);
   assert.equal(state.islands.find(island => island.id === 'atlantia').ownerId, null);
-  assert.equal(state.log.some(entry => entry.text.includes('первым открывает легендарный остров «Атлантия»') && entry.text.includes('случайная легендарная карта')), true);
+  assert.equal(state.log.some(entry => entry.text.includes('первым открывает легендарный остров «Атлантия»')), false);
 });

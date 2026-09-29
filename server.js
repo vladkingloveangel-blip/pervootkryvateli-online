@@ -2673,14 +2673,10 @@ function logLegendaryDiscovery(room, player, discovery) {
 
 function handleLegendaryPlaceStop(room, player) {
   const mapPlace = legendaryPlaceAt(player.row, player.col);
-  let place = mapPlace ? legendaryPlaceRule(mapPlace.id) : null;
-  if (!place) {
-    const island = (room.islands || []).find(item => playerOnIsland(player, item) && legendaryPlaceForIsland(item.id));
-    if (island) place = legendaryPlaceForIsland(island.id);
-  }
-  if (!place) return null;
+  const place = mapPlace ? legendaryPlaceRule(mapPlace.id) : null;
+  if (!place || place.kind !== 'sea') return null;
 
-  if (place.kind === 'sea') trackAssignment(room, player, { type: 'visit-place', placeId: place.id });
+  trackAssignment(room, player, { type: 'visit-place', placeId: place.id });
   const discovery = claimLegendaryPlaceDiscovery(room, player, place.id);
   if (!discovery?.first) return { place, first: false, discovery };
   logLegendaryDiscovery(room, player, discovery);
@@ -3793,7 +3789,12 @@ io.on('connection', socket => {
       consumeLegendaryCard(room, p, ref);
       room.actionsLeft -= 1;
       if (isShipProtected(target)) {
-        log(room, `${p.name} разыгрывает «Морское проклятие» против ${target.name}, но действующий «Покров моря» отменяет эффект. Карта и действие потрачены; защита цели сохраняется. Осталось действий: ${room.actionsLeft}.`);
+        const effects = target.legendaryEffects || {};
+        if (effects.shipVeil) {
+          delete effects.shipVeil;
+          applySeaVeilHostileReactionToShip(target, p.id);
+        }
+        log(room, `${p.name} разыгрывает «Морское проклятие» против ${target.name}, но действующий «Покров моря» отменяет эффект. Враждебная карта и «Покров моря» расходованы; защита сохраняется только до конца текущего хода ${p.name}. Осталось действий: ${room.actionsLeft}.`);
         ackSafe(ack, { ok: true, canceled: true, protected: true });
         emitRoom(room);
         return;
@@ -3832,7 +3833,12 @@ io.on('connection', socket => {
       consumeLegendaryCard(room, p, ref);
       room.actionsLeft -= 1;
       if (isIslandProtected(island)) {
-        log(room, `${p.name} разыгрывает «Пламя Ада» против ${island.name}, но действующий «Покров моря» отменяет эффект. Карта и действие потрачены; защита острова сохраняется. Осталось действий: ${room.actionsLeft}.`);
+        if (island.legendaryVeil) {
+          const veilSourceId = island.legendaryVeil.sourcePlayerId || owner?.id || '';
+          island.legendaryVeil = null;
+          applySeaVeilHostileReactionToIsland(island, { id: veilSourceId }, p.id);
+        }
+        log(room, `${p.name} разыгрывает «Пламя Ада» против ${island.name}, но действующий «Покров моря» отменяет эффект. Враждебная карта и «Покров моря» расходованы; защита острова сохраняется только до конца текущего хода ${p.name}. Осталось действий: ${room.actionsLeft}.`);
         ackSafe(ack, { ok: true, canceled: true, protected: true });
         emitRoom(room);
         return;

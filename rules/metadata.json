@@ -21,6 +21,6 @@
       "R05",
       "R06"
     ],
-    "summary": "Digital/mobile rule: legendary rewards are independent uniform random selections with replacement from the four legendary card types; the first visit to any legendary place grants one such card plus its named place card, while Cartographic Chamber expeditions grant one random treasure."
+    "summary": "Digital/mobile rule: legendary rewards are independent uniform random selections with replacement from the four legendary card types; sea legendary places grant one such card plus the named place card on first visit, while Atlantia, Adia and Skull do so only on first military conquest; Cartographic Chamber expeditions grant one random treasure."
   }
 }

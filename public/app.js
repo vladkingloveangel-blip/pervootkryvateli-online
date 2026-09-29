@@ -1773,7 +1773,7 @@
     const claimedCount = namedCards.filter(card => card.claimedBy).length;
     badge.textContent = `${claimedCount}/${namedCards.length || 10}`;
 
-    let html = '<div class="legendary-journey-summary"><strong>Первое посещение</strong><br>Первый посетитель каждого легендарного места получает его открытую именную карту и одну случайную легендарную карту. Повторное посещение награду места не повторяет.</div>';
+    let html = '<div class="legendary-journey-summary"><strong>Первое открытие</strong><br>Морское легендарное место открывается первым посещением. Атлантия, Адия и Череп открываются только первым военным завоеванием. Первое открытие даёт открытую именную карту и одну случайную легендарную карту.</div>';
 
     const openExpeditions = (r.players || []).filter(player => player.activeExpedition);
     if (openExpeditions.length) {
