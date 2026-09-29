@@ -461,6 +461,7 @@ function publicRoom(room, viewerId = null) {
       playerIndex: Number(room.eventPhase.playerIndex) || 0,
       totalPlayers: room.eventPhase.personalTurn ? 1 : room.order.length,
       stage: room.eventPhase.stage || 'sailing',
+      observatoryReplacementsUsed: Math.max(0, Number(room.eventPhase.observatoryReplacementsUsed) || 0),
       feudIndex: Number(room.eventPhase.feudIndex) || 0,
       feudTotal: room.eventPhase.feudQueue?.length || 0,
       assignmentIndex: Number(room.eventPhase.assignmentIndex) || 0,
@@ -2126,6 +2127,15 @@ function resolveFeudCard(room, player, factionId, rawCard) {
   return immediate;
 }
 
+function canUseObservatoryEventReplacement(room, player) {
+  const effect = BUILDINGS.observatory?.effect;
+  if (!room?.eventPhase?.active || !player || effect?.type !== 'replace-event') return false;
+  const limit = Math.max(0, Number(effect.limit) || 0);
+  const used = Math.max(0, Number(room.eventPhase.observatoryReplacementsUsed) || 0);
+  if (limit < 1 || used >= limit) return false;
+  return hasOwnedBuilding(room, player.id, 'observatory');
+}
+
 function processEventPhase(room) {
   if (!room.eventPhase?.active || room.pendingEvent || room.pendingFeud || room.pendingAssignmentChoice || room.pendingIslandCorrection || room.pendingFleetAdjustment) return;
   if (queueEscortCapacityDecisionsIfNeeded(room)) return;
@@ -2150,7 +2160,7 @@ function processEventPhase(room) {
       if (!card) { log(room, `Фаза событий: для ${player.name} не удалось взять карту события.`); room.eventPhase.playerIndex += 1; continue; }
       room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: card.name, pending: false, source: 'sailing' };
       log(room, `Фаза событий: ${player.name} открывает «${card.name}».`);
-      if (hasOwnedBuilding(room, player.id, 'observatory')) {
+      if (canUseObservatoryEventReplacement(room, player)) {
         room.pendingEvent = {
           id: crypto.randomUUID(), playerId: player.id, kind: 'observatory', cardName: card.name,
           eventCard: { ...card }, origin: 'event-phase',
@@ -2260,6 +2270,7 @@ function startEventPhase(room) {
   const snapshot = { [player.id]: eventPoliticalSnapshot(room)[player.id] };
   room.eventPhase = {
     active: true, personalTurn: true, turnPlayerId: player.id, stage: 'sailing', playerIndex: 0, currentPlayerId: player.id, lastCard: null,
+    observatoryReplacementsUsed: 0,
     politicalSnapshot: snapshot,
     feudQueue: buildFeudQueue(room, snapshot), feudIndex: 0,
     assignmentQueue: buildAssignmentQueue(room, snapshot), assignmentIndex: 0,
@@ -3468,6 +3479,7 @@ io.on('connection', socket => {
       const player = playerById(room, pending.playerId);
       if (!player) return ackSafe(ack, { ok: false, error: 'Игрок не найден.' });
       const first = pending.eventCard ? { ...pending.eventCard } : null;
+      room.eventPhase.observatoryReplacementsUsed = Math.max(0, Number(room.eventPhase.observatoryReplacementsUsed) || 0) + 1;
       room.pendingEvent = null;
       let card = first;
       if (choice === 'replace') {

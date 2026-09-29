@@ -171,8 +171,8 @@ test('complete known sea, assignment, feud and event decks match appendix rows',
   assert.deepEqual(rules.politics.assignments.mori.slice(0,8).map(c=>c.islandId),['renaika','chertog','kisalinia','yukon','erkalon','asigoriy','atlantia','adia']);
 });
 
-test('stage 5.9 finalizes combat and politics with no stage-5 pending consumers', () => {
-  assert.equal(rules.implementation.activeProfile,'stage-5-combat-politics-complete');
+test('stage 6.1 keeps stage 5 finalized while later stage 6-7 consumers remain pending', () => {
+  assert.equal(rules.implementation.activeProfile,'stage-6-events-legends-6.1');
   assert.equal(rules.implementation.pendingConsumers.some(item => item.consumerStage <= 5),false);
   assert.deepEqual(rules.implementation.pendingConsumers.map(item => item.consumerStage),[6,6,6,6,7,7]);
   assert.equal(rules.scoring.combat.attacksPerOpponentPerRound,1);

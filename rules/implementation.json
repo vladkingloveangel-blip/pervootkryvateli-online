@@ -1,6 +1,6 @@
 {
-  "activeProfile": "stage-5-combat-politics-complete",
-  "note": "Read rules/ as master data. Stage 5 combat/politics is finalized through block 5.9; only stage 6-7 consumers remain pending.",
+  "activeProfile": "stage-6-events-legends-6.1",
+  "note": "Read rules/ as master data. Stage 6.1 activates the sixth-circle card sequence and Observatory: the stage-5 tax snapshot is settled first, then sailing event -> feud -> assignment/Embassy -> ordinary turn. Later stage 6-7 consumers remain pending.",
   "pendingConsumers": [
     {
       "path": "events.sailing.*.timing",
