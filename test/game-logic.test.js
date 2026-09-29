@@ -114,7 +114,7 @@ const {
   completeAssignment,
   legendaryPlaceAt,
 } = require('../game-logic');
-const { BALANCE, MAP_META, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS } = require('../game-data');
+const { BALANCE, MAP_META, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS, BUILDINGS } = require('../game-data');
 
 function has(cells, row, col) { return cells.some(c => c.row === row && c.col === col); }
 
@@ -316,6 +316,120 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(upgradeBuilding(room, p, 'kisalinia', 1).afterName, 'Лесопилка III');
   assert.equal(upgradeBuilding(room, p, 'kisalinia', 1).afterName, 'Верфь I');
   assert.equal(shipyardSlotsForPlayer(room, 'p1'), 1);
+}
+
+// Обычная ветвь развивается только последовательно и не может обгонять пищевую ступень.
+{
+  const room = { islands: cloneIslands() };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1';
+  island.resources = ['Лес', 'Камень', 'Рудная жила'];
+  const [row, col] = island.cells[0];
+  const p = { id: 'p1', row, col, ducats: 2000 };
+  assert.equal(build(room, p, island.id, 'farm').ok, true);
+  assert.equal(build(room, p, island.id, 'lumbermill').ok, true);
+  assert.equal(upgradeBuilding(room, p, island.id, 1).ok, false);
+  assert.equal(upgradeBuilding(room, p, island.id, 0).afterName, 'Ферма II');
+  assert.equal(upgradeBuilding(room, p, island.id, 1).afterName, 'Лесопилка II');
+  assert.equal(build(room, p, island.id, 'shipyard').ok, false);
+}
+
+// Все шесть основных ветвей используют канонические последовательные цены.
+// Превращение заменяет то же здание в том же слоте; доход и защита берутся из rules/.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1';
+  island.resources = ['Лес', 'Камень', 'Рудная жила'];
+  const [row, col] = island.cells[0];
+  const p = { id: 'p1', row, col, ducats: 5000, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [] };
+  room.players.push(p);
+
+  assert.equal(build(room, p, island.id, 'farm').ok, true);
+  for (const target of [
+    ['farm', 2], ['farm', 3], ['manor', 1], ['manor', 2], ['manor', 3],
+  ]) {
+    const result = upgradeBuilding(room, p, island.id, 0);
+    assert.equal(result.ok, true);
+    assert.equal(result.price, BUILDINGS[target[0]].levels[target[1]].price);
+    assert.equal(result.building.type, target[0]);
+    assert.equal(result.building.level, target[1]);
+  }
+
+  const branches = [
+    ['lumbermill', [['lumbermill',2],['lumbermill',3],['shipyard',1],['shipyard',2],['shipyard',3]]],
+    ['quarry', [['quarry',2],['quarry',3],['stoneworks',1],['stoneworks',2],['stoneworks',3]]],
+    ['mine', [['mine',2],['mine',3],['arsenal',1],['arsenal',2],['arsenal',3]]],
+    ['fort', [['fort',2],['fort',3],['fortress',1],['fortress',2],['fortress',3]]],
+    ['market', [['market',2],['market',3],['bank',1],['bank',2],['bank',3]]],
+  ];
+  for (const [type, targets] of branches) {
+    const beforeLength = island.buildings.length;
+    const built = build(room, p, island.id, type);
+    assert.equal(built.ok, true);
+    const index = island.buildings.length - 1;
+    const createdAt = island.buildings[index].createdAt;
+    assert.equal(island.buildings.length, beforeLength + 1);
+    for (const [targetType, targetLevel] of targets) {
+      const result = upgradeBuilding(room, p, island.id, index);
+      assert.equal(result.ok, true);
+      assert.equal(result.price, BUILDINGS[targetType].levels[targetLevel].price);
+      assert.equal(island.buildings[index].type, targetType);
+      assert.equal(island.buildings[index].level, targetLevel);
+      assert.equal(island.buildings[index].createdAt, createdAt);
+      assert.equal(island.buildings.length, beforeLength + 1);
+    }
+  }
+  assert.equal(marketIncomeForPlayer(room, p.id), BUILDINGS.bank.levels[3].income);
+  assert.equal(islandDefenseArmy(room, island).fortifications, BUILDINGS.fortress.levels[3].defense);
+}
+
+// Первое торговое здание повышается только по пищевой ветви. Второе требует
+// укрепление той же строительной ступени; после удаления первого второе становится первым.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const island = room.islands.find(i => i.id === 'maikan');
+  island.ownerId = 'p1';
+  island.buildings = [
+    { type: 'manor', level: 3 },
+    { type: 'market', level: 1 },
+    { type: 'lumbermill', level: 1 },
+    { type: 'quarry', level: 1 },
+    { type: 'mine', level: 1 },
+  ];
+  const [row, col] = island.cells[0];
+  const p = { id: 'p1', row, col, ducats: 5000, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [] };
+  room.players.push(p);
+
+  assert.equal(upgradeBuilding(room, p, island.id, 1).afterName, 'Рынок II');
+  assert.equal(upgradeBuilding(room, p, island.id, 1).afterName, 'Рынок III');
+  assert.equal(upgradeBuilding(room, p, island.id, 1).afterName, 'Банк I');
+
+  assert.equal(build(room, p, island.id, 'market').ok, false);
+  assert.equal(build(room, p, island.id, 'fort').ok, true);
+  assert.equal(build(room, p, island.id, 'market').ok, true);
+  const fortIndex = island.buildings.findIndex(b => b.type === 'fort');
+  const secondIndex = island.buildings.map((b, i) => BUILDINGS[b.type]?.branch === 'money' ? i : -1).filter(i => i >= 0)[1];
+
+  assert.equal(upgradeBuilding(room, p, island.id, secondIndex).ok, false);
+  assert.equal(upgradeBuilding(room, p, island.id, fortIndex).afterName, 'Форт II');
+  assert.equal(upgradeBuilding(room, p, island.id, secondIndex).afterName, 'Рынок II');
+  assert.equal(upgradeBuilding(room, p, island.id, secondIndex).ok, false);
+  assert.equal(upgradeBuilding(room, p, island.id, fortIndex).afterName, 'Форт III');
+  assert.equal(upgradeBuilding(room, p, island.id, secondIndex).afterName, 'Рынок III');
+  assert.equal(upgradeBuilding(room, p, island.id, secondIndex).ok, false);
+  assert.equal(upgradeBuilding(room, p, island.id, fortIndex).afterName, 'Крепость I');
+  assert.equal(upgradeBuilding(room, p, island.id, secondIndex).afterName, 'Банк I');
+  assert.equal(build(room, p, island.id, 'market').ok, false);
+  assert.equal(marketIncomeForPlayer(room, p.id), BUILDINGS.bank.levels[1].income * 2);
+
+  const firstIndex = island.buildings.findIndex(b => BUILDINGS[b.type]?.branch === 'money');
+  island.buildings.splice(firstIndex, 1);
+  const fortressIndex = island.buildings.findIndex(b => b.type === 'fortress');
+  island.buildings.splice(fortressIndex, 1);
+  const remainingTradeIndex = island.buildings.findIndex(b => BUILDINGS[b.type]?.branch === 'money');
+  assert.equal(upgradeBuilding(room, p, island.id, remainingTradeIndex).afterName, 'Банк II');
+  assert.equal(build(room, p, island.id, 'market').ok, false);
 }
 
 // Уровни II–VI: новые характеристики без бонуса движения; VII читается для старых комнат.

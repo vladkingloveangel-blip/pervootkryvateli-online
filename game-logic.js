@@ -977,6 +977,33 @@ function branchCount(island, branch) {
   return island.buildings.filter(b => BUILDINGS[b.type]?.branch === branch).length;
 }
 
+function tradeBuildingIndices(island) {
+  const out = [];
+  for (const [index, building] of (island?.buildings || []).entries()) {
+    if (BUILDINGS[building.type]?.branch === 'money') out.push(index);
+  }
+  return out;
+}
+
+function strongestFortificationStage(island) {
+  let stage = 0;
+  for (const building of island?.buildings || []) {
+    if (BUILDINGS[building.type]?.branch === 'fort') stage = Math.max(stage, buildingStage(building));
+  }
+  return stage;
+}
+
+function additionalTradeFortificationError(island, buildingIndex, target) {
+  if (BUILDINGS[target?.type]?.branch !== 'money') return null;
+  const tradeIndices = tradeBuildingIndices(island);
+  const additional = buildingIndex == null ? tradeIndices.length > 0 : tradeIndices[0] !== buildingIndex;
+  if (!additional) return null;
+  const requiredStage = buildingStage(target);
+  const availableStage = strongestFortificationStage(island);
+  if (availableStage >= requiredStage) return null;
+  return `Для дополнительного здания ветви рынка нужно действующее укрепление строительной ступени ${requiredStage} или выше.`;
+}
+
 function buildingStage(building) {
   const level = Math.max(1, Math.min(3, Number(building?.level) || 1));
   const stage = BUILDINGS[building?.type]?.levels?.[level]?.foodStage;
@@ -1370,9 +1397,8 @@ function canBuild(room, player, island, type) {
     return { ok: false, error: `Для статуса «${islandStatus(candidate)}» превышен предел построек этой ветви.` };
   }
 
-  if (type === 'market' && branchCount(island, 'money') >= 1 && branchCount(island, 'fort') < 1) {
-    return { ok: false, error: 'Для второго рынка нужен действующий форт I или крепость.' };
-  }
+  const fortificationError = additionalTradeFortificationError(island, null, { type, level: 1 });
+  if (fortificationError) return { ok: false, error: fortificationError };
 
   return { ok: true };
 }
@@ -1411,6 +1437,9 @@ function canUpgradeBuilding(room, player, island, buildingIndex) {
   if (targetBranch !== 'food' && foodStage(island) < targetStage) {
     return { ok: false, error: `Пищевая ветвь должна быть не ниже ступени ${targetStage}.` };
   }
+
+  const fortificationError = additionalTradeFortificationError(island, index, target);
+  if (fortificationError) return { ok: false, error: fortificationError };
 
   const buildings = island.buildings.map((b, i) => i === index ? target : { ...b });
   const candidate = cloneIslandWithBuildings(island, buildings);

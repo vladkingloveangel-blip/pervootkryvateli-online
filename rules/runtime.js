@@ -42,7 +42,7 @@ const FEUD_CARDS = Object.fromEntries(Object.entries(legacy.feud).map(([id, card
   }),
 ]));
 module.exports = {
-  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-4-islands-economy-4.1',
+  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-4-islands-economy-4.2',
   BALANCE: {
     session: rules.session,
     maxShipLevel: rules.fleet.maxLevel, maxReadableShipLevel: legacy.shipLevel7.level,
