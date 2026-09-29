@@ -55,7 +55,7 @@ const FEUD_CARDS = Object.fromEntries(Object.entries(rules.events.feud).map(([fa
   })),
 ]));
 module.exports = {
-  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-6-events-legends-6.2',
+  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-6-events-legends-6.3',
   BALANCE: {
     session: rules.session,
     maxShipLevel: rules.fleet.maxLevel, maxReadableShipLevel: legacy.shipLevel7.level,
@@ -80,6 +80,8 @@ module.exports = {
   ANCHOR_CARDS: rules.sea,
   SAILING_EVENT_CARDS: rules.events.sailing.map(card => copy(card)),
   FEUD_CARDS,
+  LEGENDARY_PLACE_RULES: rules.legends.places.map(place => copy(place)),
+  NAMED_PLACE_CARDS: rules.legends.namedCards.map(card => copy(card)),
   LEGENDARY_CARDS: rules.legends.legendary.map(card => ({ ...card, quantity: legacy.legendaryQuantities[card.id] })),
   // Physical treasure copy counts are unresolved in the source. Runtime keeps one
   // instance of each canonical treasure kind without inventing additional copies.

@@ -19,6 +19,8 @@ const {
   TREASURE_CARDS,
   LEGENDARY_CARDS,
   LEGENDARY_PLACES,
+  LEGENDARY_PLACE_RULES,
+  NAMED_PLACE_CARDS,
   ASSIGNMENT_CARDS,
   FACTIONS,
   POLITICAL_FACTION_ORDER,
@@ -886,6 +888,36 @@ function settleVassalTax(player, factionId) {
 
 function legendaryPlaceAt(row, col) {
   return Object.values(LEGENDARY_PLACES).find(p => p.row === Number(row) && p.col === Number(col)) || null;
+}
+
+function legendaryPlaceRule(placeId) {
+  return LEGENDARY_PLACE_RULES.find(place => place.id === String(placeId || '')) || null;
+}
+
+function legendaryPlaceForIsland(islandId) {
+  return LEGENDARY_PLACE_RULES.find(place => place.kind === 'island' && place.islandId === String(islandId || '')) || null;
+}
+
+function namedPlaceCardFor(placeId) {
+  return NAMED_PLACE_CARDS.find(card => card.placeId === String(placeId || '')) || null;
+}
+
+function claimLegendaryPlaceDiscovery(room, player, placeId) {
+  const place = legendaryPlaceRule(placeId);
+  if (!room || !player || !place) return { ok: false, first: false, place: place || null, namedCard: null };
+  room.legendaryPlacesExplored ||= {};
+  const exploredBy = room.legendaryPlacesExplored[place.id] || null;
+  if (exploredBy) return { ok: true, first: false, place, exploredBy, namedCard: null };
+
+  room.legendaryPlacesExplored[place.id] = player.id;
+  const card = namedPlaceCardFor(place.id);
+  player.namedPlaceCards ||= [];
+  let namedCard = null;
+  if (card && !player.namedPlaceCards.some(item => item.id === card.id)) {
+    namedCard = JSON.parse(JSON.stringify(card));
+    player.namedPlaceCards.push(namedCard);
+  }
+  return { ok: true, first: true, place, exploredBy: player.id, namedCard };
 }
 
 function factionIdByName(name) {
@@ -3170,6 +3202,10 @@ function jointAssaultIsland(room, attacker, island, attackerAllyIds = [], defend
     const firstMilitaryConquest = !island.firstMilitaryConquered;
     if (firstMilitaryConquest) island.firstMilitaryConquered = true;
     if (firstMilitaryConquest) result.armyPointAwards = awardArmyVictoryPoints(room, [attacker], result.previousOwnerId, armyCapturePoints(defense.total));
+    if (firstMilitaryConquest) {
+      const legendaryIsland = legendaryPlaceForIsland(island.id);
+      if (legendaryIsland) result.legendaryDiscovery = claimLegendaryPlaceDiscovery(room, attacker, legendaryIsland.id);
+    }
 
     result.statePrize = resolveStateMilitaryCapture(room, attacker, island, result.previousOwnerId);
     const replaceIslandCash = Boolean(
@@ -3371,6 +3407,9 @@ module.exports = {
   completeAssignment,
   settleVassalTax,
   legendaryPlaceAt,
+  legendaryPlaceRule,
+  legendaryPlaceForIsland,
+  claimLegendaryPlaceDiscovery,
   factionIdForIsland,
   stateExists,
   refreshFactionExistence,

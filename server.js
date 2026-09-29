@@ -6,7 +6,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { Pool } = require('pg');
 const { RoomStore, isUnfinished } = require('./room-store');
-const { MAP_META, CITADEL, HAZARDS, SHIPS, SHIP_LEVELS, SHIP_UPGRADES, ESCORTS, COLORS, BUILDINGS, CHARACTERS, GOODS, CITADEL_CELLS, ANCHORS, FACTIONS, POLITICAL_FACTION_ORDER, ASSIGNMENT_CARDS, FEUD_CARDS, LEGENDARY_PLACES } = require('./game-data');
+const { MAP_META, CITADEL, HAZARDS, SHIPS, SHIP_LEVELS, SHIP_UPGRADES, ESCORTS, COLORS, BUILDINGS, CHARACTERS, GOODS, CITADEL_CELLS, ANCHORS, FACTIONS, POLITICAL_FACTION_ORDER, ASSIGNMENT_CARDS, FEUD_CARDS, LEGENDARY_PLACES, LEGENDARY_PLACE_RULES, NAMED_PLACE_CARDS } = require('./game-data');
 const {
   cloneIslands,
   reachableCells,
@@ -112,6 +112,8 @@ const {
   completeAssignment,
   settleVassalTax,
   legendaryPlaceAt,
+  legendaryPlaceRule,
+  claimLegendaryPlaceDiscovery,
   factionIdForIsland,
   stateExists,
   refreshFactionExistence,
@@ -567,7 +569,25 @@ function publicRoom(room, viewerId = null) {
     }),
     feudDecks: Object.fromEntries(POLITICAL_FACTION_ORDER.map(id => [id, { remaining: room.feudDecks?.[id]?.drawPile?.length || 0, discard: room.feudDecks?.[id]?.discard?.length || 0 }])),
     assignmentDecks: Object.fromEntries(Object.keys(ASSIGNMENT_CARDS).map(id => [id, { remaining: room.assignmentDecks?.[id]?.drawPile?.length || 0, discard: room.assignmentDecks?.[id]?.discard?.length || 0, removed: room.assignmentDecks?.[id]?.removed?.length || 0 }])),
-    legendaryPlaces: Object.values(LEGENDARY_PLACES).map(place => ({ ...place, exploredBy: room.legendaryPlacesExplored?.[place.id] || null })),
+    legendaryPlaces: LEGENDARY_PLACE_RULES.map(place => ({
+      id: place.id,
+      name: place.name,
+      kind: place.kind,
+      mapPlaceId: place.mapPlaceId || null,
+      islandId: place.islandId || null,
+      reward: place.unresolved ? null : (place.reward?.type || null),
+      rewardStatus: place.rewardStatus || null,
+      unresolved: place.unresolved || null,
+      exploredBy: room.legendaryPlacesExplored?.[place.id] || null,
+    })),
+    namedPlaceCards: NAMED_PLACE_CARDS.map(card => ({
+      id: card.id,
+      name: card.name,
+      placeId: card.placeId,
+      visibility: card.visibility,
+      iconKey: card.iconKey || null,
+      claimedBy: room.legendaryPlacesExplored?.[card.placeId] || null,
+    })),
     alliances: (room.alliances || []).map(pair => [...pair]),
     pendingAlliance: room.pendingAlliance && (room.pendingAlliance.fromId === viewerId || room.pendingAlliance.toId === viewerId)
       ? { ...room.pendingAlliance, viewerRole: room.pendingAlliance.fromId === viewerId ? 'sender' : 'recipient' }
@@ -698,6 +718,8 @@ function publicRoom(room, viewerId = null) {
         nextActionLimit: p.id === viewerId ? (p.nextActionLimit || null) : null,
         specialCards: p.id === viewerId ? [...(p.specialCards || [])] : [],
         specialCardCount: (p.specialCards || []).length,
+        namedPlaceCards: (p.namedPlaceCards || []).map(card => ({ id: card.id, name: card.name, placeId: card.placeId })),
+        namedPlaceCardCount: (p.namedPlaceCards || []).length,
         legendaryCards: p.id === viewerId ? (p.legendaryCards || []).map((c, handIndex) => ({ id: c.id, name: c.name, handIndex })) : [],
         legendaryCardCount: (p.legendaryCards || []).length,
         playableLegendaryCards: p.id === viewerId ? allLegendaryCardRefs(p) : [],
@@ -1530,6 +1552,7 @@ function logAssaultResult(room, attacker, island, result) {
     const rewardText = result.rewardNotes.length ? ` Награда: ${result.rewardNotes.join(', ')}.` : '';
     const armyText = (result.armyPointAwards || []).map(a => `${playerById(room, a.playerId)?.name || 'Игрок'} +${a.points}`).join(', ');
     log(room, `${attacker.name} и союзники [${attackNames}] штурмуют ${island.name}: войско ${result.attackerPower} против защиты ${result.defense.total}. Остров получает инициатор ${attacker.name}.${retentionText} Очки армии: ${armyText || 'без начисления'}.${rewardText}`);
+    if (result.legendaryDiscovery?.first) logLegendaryDiscovery(room, attacker, result.legendaryDiscovery);
     trackAssignment(room, attacker, { type: 'capture-island', islandId: island.id });
   } else if (result.outcome === 'defender') {
     const losses = (result.levelLosses || []).map(loss => describeLevelLoss(room, loss)).join('; ');
@@ -2595,26 +2618,38 @@ function applyFreeClaimReward(room, player, island) {
 }
 
 
-function handleLegendaryPlaceStop(room, player) {
-  const place = legendaryPlaceAt(player.row, player.col);
-  if (!place) return null;
-  trackAssignment(room, player, { type: 'visit-place', placeId: place.id });
-  room.legendaryPlacesExplored ||= {};
-  if (room.legendaryPlacesExplored[place.id]) return { place, first: false };
-  room.legendaryPlacesExplored[place.id] = player.id;
-  log(room, `${player.name} первым исследует легендарное место «${place.name}».`);
+function logLegendaryDiscovery(room, player, discovery) {
+  if (!discovery?.first) return;
+  const placeKind = discovery.place.kind === 'island' ? 'легендарный остров' : 'легендарное морское место';
+  const named = discovery.namedCard ? ` Именная карта «${discovery.namedCard.name}» остаётся у первооткрывателя ${player.name}.` : '';
+  log(room, `${player.name} первым открывает ${placeKind} «${discovery.place.name}».${named}`);
+}
 
-  if (place.reward === 'legendary') {
+function handleLegendaryPlaceStop(room, player) {
+  const mapPlace = legendaryPlaceAt(player.row, player.col);
+  if (!mapPlace) return null;
+  trackAssignment(room, player, { type: 'visit-place', placeId: mapPlace.id });
+  const place = legendaryPlaceRule(mapPlace.id);
+  const discovery = claimLegendaryPlaceDiscovery(room, player, mapPlace.id);
+  if (!discovery?.first) return { place: place || mapPlace, first: false, discovery };
+  logLegendaryDiscovery(room, player, discovery);
+
+  if (place?.unresolved) {
+    log(room, `${player.name}: разовая награда «${place.name}» не разыгрывается до авторского решения ${place.unresolved}.`);
+    return { place, first: true, discovery, rewardPending: true };
+  }
+
+  if (place?.reward?.type === 'legendary') {
     const card = drawLegendaryCard(room);
     if (card) {
       player.legendaryCards ||= [];
       player.legendaryCards.push(card);
       log(room, `${player.name}: награда «${place.name}» — случайная легендарная карта.`);
     }
-  } else if (place.reward === 'treasure') {
+  } else if (place?.reward?.type === 'treasure') {
     const treasure = drawTreasureCard(room);
     const treasureAssignmentInstanceId = player.activeAssignment?.instanceId || null;
-    if (!treasure) return { place, first: true };
+    if (!treasure) return { place, first: true, discovery };
     if (treasure.multiplier) {
       const result = resolveMoneyTreasure(room, player, treasure);
       discardDeckCard(room.treasureDeck, treasure);
@@ -2640,9 +2675,8 @@ function handleLegendaryPlaceStop(room, player) {
       }
     }
   }
-  return { place, first: true };
+  return { place, first: true, discovery };
 }
-
 function handleArrival(room, player) {
   noteMoriAssignmentDeparture(room, player);
   const claims = claimFreeIslandsAt(room, player);
@@ -2699,6 +2733,7 @@ function newPlayer(socket, data, color) {
     row: MAP_META.startCell[0],
     col: MAP_META.startCell[1],
     specialCards: [],
+    namedPlaceCards: [],
     cargo: null,
     upgrades: [],
     disabledUpgradeIds: [],

@@ -23,9 +23,18 @@ const ANCHOR_BY_CELL = new Map();
 for (const [color, def] of Object.entries(ANCHORS)) {
   for (const [row, col] of def.cells) ANCHOR_BY_CELL.set(cellKey(row, col), color);
 }
+const LEGENDARY_PLACE_RULE_BY_ID = Object.fromEntries(
+  runtime.LEGENDARY_PLACE_RULES.map(place => [place.id, place])
+);
 const LEGENDARY_PLACES = Object.fromEntries(Object.entries(map.LEGENDARY_PLACES).map(([id, place]) => {
-  const rule = rules.legends.places.find(p => p.id === id);
-  return [id, { ...place, reward: rule.unresolved ? null : rule.reward.type }];
+  const rule = LEGENDARY_PLACE_RULE_BY_ID[id];
+  return [id, {
+    ...place,
+    kind: rule?.kind || 'sea',
+    reward: rule?.unresolved ? null : (rule?.reward?.type || null),
+    rewardStatus: rule?.rewardStatus || null,
+    unresolved: rule?.unresolved || null,
+  }];
 }));
 module.exports = {
   ...runtime, ...map, COLORS, HAZARDS, ANCHORS, LEGENDARY_PLACES,

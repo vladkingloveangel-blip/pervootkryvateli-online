@@ -1,12 +1,7 @@
 {
-  "activeProfile": "stage-6-events-legends-6.2",
-  "note": "Read rules/ as master data. Stage 6.2 activates the canonical 26-card sailing-event deck and its current-sixth-circle effects on top of the stage-6.1 sequence/Observatory. Named place cards, expeditions and legendary-card finalization remain pending.",
+  "activeProfile": "stage-6-events-legends-6.3",
+  "note": "Read rules/ as master data. Stage 6.3 activates all ten legendary places and their ten public named cards: sea places are discovered by stopping on their map cells, legendary islands by first successful military capture; named cards and one-time rewards are never repeated. R05/R06 remain unresolved and are not invented.",
   "pendingConsumers": [
-    {
-      "path": "legends.namedCards",
-      "consumerStage": 6,
-      "status": "data-ready"
-    },
     {
       "path": "legends.expeditions",
       "consumerStage": 6,

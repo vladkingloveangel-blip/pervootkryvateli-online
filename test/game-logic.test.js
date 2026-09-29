@@ -142,6 +142,9 @@ const {
   completeAssignment,
   settleVassalTax,
   legendaryPlaceAt,
+  legendaryPlaceRule,
+  legendaryPlaceForIsland,
+  claimLegendaryPlaceDiscovery,
 } = require('../game-logic');
 const { BALANCE, MAP_META, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS, BUILDINGS, CHARACTERS, ANCHORS } = require('../game-data');
 
@@ -2105,11 +2108,64 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(Object.hasOwn(room.eventPhase, 'replacementIndex'), false);
   assert.equal(normalizeAssignmentCompatibility(room, () => 0.5).changed, false);
 }
-// Координаты морских легендарных мест доступны серверу для поручений посещения.
+// Семь морских легендарных мест остаются координатными объектами карты, а три
+// легендарных острова имеют отдельный военный триггер первого открытия.
 {
   assert.equal(legendaryPlaceAt(24, 6)?.id, 'kraken');
   assert.equal(legendaryPlaceAt(12, 26)?.id, 'abyss');
   assert.equal(legendaryPlaceAt(0, 0), null);
+  assert.equal(legendaryPlaceRule('kraken')?.kind, 'sea');
+  assert.equal(legendaryPlaceForIsland('atlantia')?.id, 'atlantia');
+  assert.equal(legendaryPlaceForIsland('adia')?.id, 'adia');
+  assert.equal(legendaryPlaceForIsland('skull')?.id, 'skull');
+  assert.equal(legendaryPlaceForIsland('kraken'), null);
+}
+
+// Первая отметка легендарного места закрепляет единственную открытую именную карту
+// за первооткрывателем; повторный визит другого игрока её не передаёт.
+{
+  const room = { legendaryPlacesExplored: {} };
+  const firstPlayer = { id: 'p1', namedPlaceCards: [] };
+  const secondPlayer = { id: 'p2', namedPlaceCards: [] };
+  const first = claimLegendaryPlaceDiscovery(room, firstPlayer, 'kraken');
+  assert.equal(first.first, true);
+  assert.equal(first.namedCard.id, 'place-kraken');
+  assert.equal(room.legendaryPlacesExplored.kraken, 'p1');
+  assert.deepEqual(firstPlayer.namedPlaceCards.map(card=>card.id), ['place-kraken']);
+  const repeat = claimLegendaryPlaceDiscovery(room, secondPlayer, 'kraken');
+  assert.equal(repeat.first, false);
+  assert.equal(repeat.exploredBy, 'p1');
+  assert.deepEqual(secondPlayer.namedPlaceCards, []);
+}
+
+// Легендарный остров открывается первым успешным военным захватом. Его обычная
+// островная награда выдаётся один раз, а повторный захват не создаёт вторую именную карту.
+{
+  const islands = cloneIslands();
+  const atlantia = islands.find(island => island.id === 'atlantia');
+  atlantia.army = 0;
+  const [row,col] = atlantia.cells[0];
+  const firstPlayer = { id:'p1', name:'One', row, col, shipClass:'brigantine', level:1, upgrades:[], escorts:[], ducats:0, debt:0, armyPoints:0, attackCountsThisRound:{}, namedPlaceCards:[] };
+  const room = { round:2, islands, players:[firstPlayer], alliances:[], factionState:{}, legendaryPlacesExplored:{}, legendaryDeck:{drawPile:[],discard:[]} };
+  const first = jointAssaultIsland(room, firstPlayer, atlantia);
+  assert.equal(first.ok, true);
+  assert.equal(first.outcome, 'attacker');
+  assert.equal(first.legendaryDiscovery.first, true);
+  assert.equal(first.legendaryDiscovery.namedCard.id, 'place-atlantia');
+  assert.equal(firstPlayer.ducats, 15);
+  assert.deepEqual(firstPlayer.namedPlaceCards.map(card=>card.id), ['place-atlantia']);
+  assert.equal(atlantia.rewardClaimed, true);
+
+  firstPlayer.row = 0; firstPlayer.col = 0;
+  const secondPlayer = { id:'p2', name:'Two', row, col, shipClass:'brigantine', level:1, upgrades:[], escorts:[], ducats:0, debt:0, armyPoints:0, attackCountsThisRound:{}, namedPlaceCards:[] };
+  room.players.push(secondPlayer);
+  const second = jointAssaultIsland(room, secondPlayer, atlantia);
+  assert.equal(second.ok, true);
+  assert.equal(second.outcome, 'attacker');
+  assert.equal(second.legendaryDiscovery, undefined);
+  assert.equal(secondPlayer.ducats, 0);
+  assert.deepEqual(secondPlayer.namedPlaceCards, []);
+  assert.equal(room.legendaryPlacesExplored.atlantia, 'p1');
 }
 
 
