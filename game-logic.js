@@ -1666,6 +1666,8 @@ function removeEscortsForShipyard(room, player, ids) {
   return { ok: true, removed };
 }
 
+// Compatibility only: current rules never create a Landin escort. This helper is
+// retained solely to finish restored legacy pending decisions.
 function createLandinEscort(player) {
   player.escorts ||= [];
   if (player.escorts.some(e => e.type === 'landin')) return { ok: false, error: 'Особое сопровождение Ландина уже получено.' };
@@ -2195,16 +2197,6 @@ function grantMilitaryReward(room, player, island, captureMode, options = {}) {
       const name = addRewardBuilding(island, spec);
       if (name) notes.push(name);
     }
-    if (reward.specialLandinEscort) {
-      player.escorts ||= [];
-      if (player.escorts.length < BALANCE.maxEscorts) {
-        const created = createLandinEscort(player);
-        if (created.ok) notes.push(`особое сопровождение Ландина: +${ESCORTS.landin.artillery} артиллерии и трюм ${ESCORTS.landin.cargo}`);
-      } else {
-        player.pendingLandinEscort = true;
-        notes.push(`особое сопровождение Ландина заменит одно из ${BALANCE.maxEscorts} имеющихся судов по выбору владельца`);
-      }
-    }
   }
   return notes;
 }
@@ -2431,7 +2423,6 @@ module.exports = {
   ordinaryEscortExcess,
   removeEscortById,
   removeEscortsForShipyard,
-  createLandinEscort,
   replaceEscortWithLandin,
   escortUseLimit,
   escortPurchasePrice,

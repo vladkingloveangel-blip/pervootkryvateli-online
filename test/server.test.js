@@ -104,7 +104,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.ruleset.rulesetVersion, canonical.metadata.rulesetVersion);
   assert.equal(watch.room.balanceCatalog.bastion.price, canonical.economy.buildings.bastion.price);
   assert.equal(watch.room.balanceCatalog.bastion.defense, canonical.economy.buildings.bastion.defense);
-  assert.equal(watch.room.runtimeProfile, 'stage-3-fleet-navigation');
+  assert.equal(watch.room.runtimeProfile, 'stage-3-fleet-escorts');
   assert.equal(watch.room.shipCatalog.brigantine.artillery, canonical.fleet.ships.brigantine.artillery);
   assert.deepEqual(watch.room.balanceCatalog.landCompany, canonical.economy.landCompany);
   assert.equal(watch.room.balanceCatalog.legendaryEffects['sea-curse'].amount, canonical.legends.legendary.find(c => c.id === 'sea-curse').effect.amount);
@@ -115,6 +115,9 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.shipUpgradeCatalog.iceStem.passability, 'ice');
   assert.equal(watch.room.shipUpgradeCatalog.portageSleds.passability, 'land1');
   assert.equal(watch.room.shipUpgradeCatalog.foreMarsel, undefined);
+  assert.equal(watch.room.escortCatalog.cargo.cargo, canonical.fleet.escorts.cargo.cargo);
+  assert.equal(watch.room.escortCatalog.combat.artillery, canonical.fleet.escorts.combat.artillery);
+  assert.equal(watch.room.escortCatalog.landin.retired, true);
   assert.equal(watch.room.buildingCatalog.admiralty, undefined);
   await stop(); // Abrupt restart: pending state must survive without disconnect handlers.
   // Emulate a persisted room created before rulesDataVersion existed. Keep the complete

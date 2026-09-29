@@ -30,9 +30,8 @@ const {
   shipyardSlotsForPlayer,
   ordinaryEscortExcess,
   removeEscortsForShipyard,
-  createLandinEscort,
-  replaceEscortWithLandin,
   escortUseLimit,
+  escortPurchasePrice,
   escortStatuses,
   buyEscort,
   loadCargo,
@@ -115,7 +114,7 @@ const {
   completeAssignment,
   legendaryPlaceAt,
 } = require('../game-logic');
-const { ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS } = require('../game-data');
+const { BALANCE, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS } = require('../game-data');
 
 function has(cells, row, col) { return cells.some(c => c.row === row && c.col === col); }
 
@@ -1460,7 +1459,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
     escorts: [
       { id: 'e1', type: 'cargo', special: false, cargo: { goodId: 'ore', quantity: 5 } },
       { id: 'e2', type: 'combat', special: false, cargo: null },
-      { id: 'e3', type: 'combat', special: true, cargo: null },
+      { id: 'e3', type: 'combat', special: false, cargo: null },
     ],
   };
   room.players.push(p);
@@ -1490,7 +1489,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
     escorts: [
       { id: 'e1', type: 'cargo', special: false, cargo: null },
       { id: 'e2', type: 'combat', special: false, cargo: null },
-      { id: 'e3', type: 'combat', special: true, cargo: null },
+      { id: 'e3', type: 'combat', special: false, cargo: null },
     ],
   };
   room.players.push(p);
@@ -1565,66 +1564,129 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(shipUpgradeStatuses(p).find(u => u.id === 'leadLine').active, true);
 }
 
-console.log('game-logic tests: OK');
-
-
-// v0.16: особое сопровождение Ландина совмещает боевой бонус и грузовой трюм.
+// Этап 3.4: каноническое сопровождение состоит только из грузовых и боевых судов,
+// использует цены 10/15/20, предел уровня 1/1/2/2/3/3 и общий максимум три.
 {
-  assert.equal(ESCORTS.landin.artillery, 6);
-  assert.equal(ESCORTS.landin.cargo, 5);
   const room = { islands: cloneIslands() };
-  const island = room.islands.find(i => i.id === 'bogamia');
-  island.ownerId = 'p1';
-  island.buildings = [{ type: 'farm', level: 1 }];
-  const p = { id: 'p1', row: island.cells[0][0], col: island.cells[0][1], shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 0, cargo: null };
-  const grant = createLandinEscort(p);
-  assert.equal(grant.ok, true);
-  assert.equal(p.escorts.length, 1);
-  assert.equal(p.escorts[0].type, 'landin');
-  assert.equal(fleetArtillery(room, p), shipStats(p).artillery + 6);
-  const loaded = loadCargo(room, p, island.id, 'provisions', p.escorts[0].id);
-  assert.equal(loaded.ok, true);
-  assert.equal(p.escorts[0].cargo.quantity, 5);
-}
-
-// Ландин при заполненном пределе трёх не создаёт четвёртое судно: владелец заменяет одно из имеющихся.
-{
+  const yard = room.islands.find(i => i.id === 'raisk');
+  yard.ownerId = 'p1';
+  yard.buildings = [{ type: 'shipyard', level: 3 }];
   const p = {
-    id: 'p1', shipClass: 'frigate', level: 7, upgrades: [], levelInactiveEscortIds: [],
-    escorts: [
-      { id: 'e1', type: 'cargo', special: false, cargo: { goodId: 'wood', quantity: 5 } },
-      { id: 'e2', type: 'combat', special: false, cargo: null },
-      { id: 'e3', type: 'combat', special: false, cargo: null },
-    ],
+    id: 'p1', row: 13, col: 13, shipClass: 'frigate', level: 5, ducats: 100,
+    upgrades: [], escorts: [], levelInactiveEscortIds: [],
   };
-  const result = replaceEscortWithLandin(p, 'e1');
-  assert.equal(result.ok, true);
+  assert.equal(shipyardSlotsForPlayer(room, p.id), 3);
+  assert.deepEqual([1,2,3,4,5,6].map(level => escortUseLimit({ level })), [1,1,2,2,3,3]);
+  assert.equal(escortPurchasePrice(p), BALANCE.escortPrices[0]);
+  const first = buyEscort(room, p, 'cargo');
+  assert.equal(first.ok, true);
+  assert.equal(first.price, BALANCE.escortPrices[0]);
+  assert.equal(ESCORTS[first.escort.type].cargo, 5);
+  assert.equal(escortPurchasePrice(p), BALANCE.escortPrices[1]);
+  const second = buyEscort(room, p, 'combat');
+  assert.equal(second.ok, true);
+  assert.equal(second.price, BALANCE.escortPrices[1]);
+  assert.equal(ESCORTS[second.escort.type].artillery, 5);
+  assert.equal(escortPurchasePrice(p), BALANCE.escortPrices[2]);
+  const third = buyEscort(room, p, 'cargo');
+  assert.equal(third.ok, true);
+  assert.equal(third.price, BALANCE.escortPrices[2]);
   assert.equal(p.escorts.length, 3);
-  assert.equal(p.escorts.some(e => e.id === 'e1'), false);
-  assert.equal(p.escorts.filter(e => e.type === 'landin').length, 1);
-  assert.deepEqual(result.cargoDiscarded, { goodId: 'wood', quantity: 5 });
+  assert.equal(escortPurchasePrice(p), null);
+  assert.equal(buyEscort(room, p, 'combat').ok, false);
 }
 
-// Потеря мест верфи уничтожает выбранное обычное сопровождение и его груз; Ландин места верфи не занимает.
+// Места нескольких собственных верфей складываются; без свободного места новое
+// сопровождение купить нельзя даже при достаточном уровне и количестве дукатов.
+{
+  const room = { islands: cloneIslands() };
+  const a = room.islands.find(i => i.id === 'raisk');
+  const b = room.islands.find(i => i.id === 'bogamia');
+  a.ownerId = b.ownerId = 'p1';
+  a.buildings = [{ type: 'shipyard', level: 1 }];
+  b.buildings = [{ type: 'shipyard', level: 2 }];
+  const p = { id: 'p1', row: 13, col: 13, shipClass: 'frigate', level: 6, ducats: 100, upgrades: [], escorts: [] };
+  assert.equal(shipyardSlotsForPlayer(room, p.id), 3);
+  assert.equal(buyEscort(room, p, 'cargo').ok, true);
+  assert.equal(buyEscort(room, p, 'combat').ok, true);
+  assert.equal(buyEscort(room, p, 'cargo').ok, true);
+
+  b.ownerId = 'other';
+  assert.equal(shipyardSlotsForPlayer(room, p.id), 1);
+  assert.equal(ordinaryEscortExcess(room, p), 2);
+}
+
+// При потере места верфи владелец выбирает конкретные лишние обычные суда:
+// они удаляются, а находившийся на них груз теряется.
 {
   const room = { islands: cloneIslands() };
   const yard = room.islands.find(i => i.id === 'kisalinia');
   yard.ownerId = 'p1';
-  yard.buildings = [{ type: 'shipyard', level: 1 }];
+  yard.buildings = [{ type: 'shipyard', level: 2 }];
   const p = {
-    id: 'p1', shipClass: 'frigate', level: 7, upgrades: [], levelInactiveEscortIds: [],
+    id: 'p1', shipClass: 'frigate', level: 6, upgrades: [], levelInactiveEscortIds: [],
     escorts: [
       { id: 'e1', type: 'cargo', special: false, cargo: { goodId: 'ore', quantity: 5 } },
       { id: 'e2', type: 'combat', special: false, cargo: null },
-      { id: 'landin', type: 'landin', special: true, cargo: null },
+      { id: 'e3', type: 'cargo', special: false, cargo: { goodId: 'wood', quantity: 5 } },
     ],
   };
   assert.equal(ordinaryEscortExcess(room, p), 1);
-  assert.equal(removeEscortsForShipyard(room, p, ['landin']).ok, false);
-  const removed = removeEscortsForShipyard(room, p, ['e1']);
+  assert.equal(removeEscortsForShipyard(room, p, []).ok, false);
+  const removed = removeEscortsForShipyard(room, p, ['e3']);
   assert.equal(removed.ok, true);
-  assert.deepEqual(removed.removed[0].cargoDiscarded, { goodId: 'ore', quantity: 5 });
-  assert.equal(p.escorts.length, 2);
-  assert.equal(p.escorts.some(e => e.type === 'landin'), true);
+  assert.deepEqual(removed.removed[0].cargoDiscarded, { goodId: 'wood', quantity: 5 });
+  assert.equal(p.escorts.some(e => e.id === 'e3'), false);
   assert.equal(ordinaryEscortExcess(room, p), 0);
 }
+
+// Потеря уровня не удаляет лишнее сопровождение: выбранное судно становится
+// неактивным, сохраняет груз, не даёт артиллерию и не может продавать груз.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const yard = room.islands.find(i => i.id === 'raisk');
+  yard.ownerId = 'p1';
+  yard.buildings = [{ type: 'shipyard', level: 3 }];
+  const p = {
+    id: 'p1', row: 13, col: 13, shipClass: 'frigate', level: 5, ducats: 0,
+    upgrades: [], disabledUpgradeIds: [], levelInactiveEscortIds: [],
+    cargo: null,
+    escorts: [
+      { id: 'e1', type: 'combat', special: false, cargo: null },
+      { id: 'e2', type: 'combat', special: false, cargo: null },
+      { id: 'e3', type: 'cargo', special: false, cargo: { goodId: 'ore', quantity: 5 } },
+    ],
+  };
+  room.players.push(p);
+  loseShipLevel(room, p);
+  assert.equal(p.escorts.length, 3);
+
+  assert.equal(setLevelInactiveEscorts(p, ['e3']).ok, true);
+  assert.equal(escortStatuses(room, p).find(e => e.id === 'e3').active, false);
+  assert.equal(p.escorts.find(e => e.id === 'e3').cargo.quantity, 5);
+  assert.equal(sellCargo(room, p, 'e3').ok, false);
+  assert.equal(p.escorts.find(e => e.id === 'e3').cargo.quantity, 5);
+
+  assert.equal(setLevelInactiveEscorts(p, ['e1']).ok, true);
+  assert.equal(escortStatuses(room, p).find(e => e.id === 'e1').active, false);
+  assert.equal(fleetArtillery(room, p), shipStats(p).artillery + ESCORTS.combat.artillery);
+}
+
+// Ландин отсутствует в каноническом каталоге правил и не продаётся; его retired-проекция
+// остаётся читаемой только для старых сохранений.
+{
+  assert.equal(ESCORTS.landin.retired, true);
+  const room = { islands: cloneIslands() };
+  const p = { id: 'legacy', row: 13, col: 13, shipClass: 'frigate', level: 6, ducats: 100, upgrades: [], escorts: [] };
+  assert.equal(buyEscort(room, p, 'landin').ok, false);
+
+  const old = {
+    id: 'legacy', row: 13, col: 13, shipClass: 'frigate', level: 6, upgrades: [],
+    levelInactiveEscortIds: [],
+    escorts: [{ id: 'old-landin', type: 'landin', special: true, cargo: { goodId: 'ore', quantity: 5 } }],
+  };
+  assert.equal(fleetArtillery(room, old), shipStats(old).artillery + ESCORTS.landin.artillery);
+  assert.equal(old.escorts[0].cargo.quantity, 5);
+}
+
+console.log('game-logic tests: OK');

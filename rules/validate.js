@@ -135,9 +135,20 @@ function validateRules(rules, map) {
     check(Number.isInteger(s.moveMod), s.id, 'missing moveMod');
     check(['shoal','reef','ice','land1'].includes(s.passability), s.id, 'invalid passability');
   }
-  check(Array.isArray(fleet.escortPrices) && fleet.escortPrices.length > 0, 'escortPrices', 'missing prices');
+  check(Array.isArray(fleet.escortPrices) && fleet.escortPrices.length === 3, 'escortPrices', 'expected three escort purchase prices');
   for (const [index, price] of (fleet.escortPrices || []).entries()) positive(price, `escortPrices.${index}`);
+  check(Object.keys(fleet.escorts).length === 2, 'escorts', 'expected cargo and combat escorts only');
+  for (const id of ['cargo','combat']) check(Boolean(fleet.escorts[id]), 'escorts', `missing ${id}`);
   for (const escort of Object.values(fleet.escorts)) for (const key of ['artillery','army','cargo']) integer(escort[key], `${escort.id}.${key}`);
+  check(fleet.escorts.cargo?.artillery === 0 && fleet.escorts.cargo?.army === 0 && fleet.escorts.cargo?.cargo > 0, 'escorts.cargo', 'invalid cargo escort profile');
+  check(fleet.escorts.combat?.artillery > 0 && fleet.escorts.combat?.army === 0 && fleet.escorts.combat?.cargo === 0, 'escorts.combat', 'invalid combat escort profile');
+  for (let level = 1; level <= fleet.maxLevel; level++) {
+    check(fleet.levels[level]?.escortLimit === Math.ceil(level / 2), `levels.${level}.escortLimit`, 'expected 1/1/2/2/3/3 escort limit');
+  }
+  const shipyardLevels = economy.buildings?.shipyard?.levels || {};
+  for (let level = 1; level <= 3; level++) {
+    check(shipyardLevels[level]?.escortSlots === level, `buildings.shipyard.levels.${level}.escortSlots`, 'expected one escort slot per shipyard level');
+  }
   positive(fleet.maxBranchUpgrades, 'fleet.maxBranchUpgrades');
   const upgradesByBranch = new Map();
   for (const u of Object.values(fleet.upgrades)) {
