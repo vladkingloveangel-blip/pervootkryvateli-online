@@ -41,6 +41,8 @@ function cloneIslands() {
     loadedRound: null,
     legendaryVeil: null,
     garrisonType: null,
+    garrisonDefense: null,
+    garrisonOrigin: null,
   }));
 }
 
@@ -1407,22 +1409,49 @@ function prioritizeBastionSupport() {
   return { ok: false, error: 'Поддержка бастионов выбирается только при обязательном решении после изменения числа мест каменотёсных дворов.' };
 }
 
+function clearIslandGarrison(island) {
+  if (!island) return null;
+  island.garrisonType = null;
+  island.garrisonDefense = null;
+  island.garrisonOrigin = null;
+  return null;
+}
+
 function normalizeIslandGarrison(island) {
-  if (!island?.garrisonType) return null;
+  if (!island?.garrisonType) return clearIslandGarrison(island);
   const status = islandStatus(island);
-  if (island.garrisonType === 'permanent' && status !== 'Крупный порт') {
-    island.garrisonType = status === 'Город' ? 'guard' : null;
-  } else if (island.garrisonType === 'guard' && status !== 'Город' && status !== 'Крупный порт') {
-    island.garrisonType = null;
+  const storedDefense = Math.max(0, Number(island.garrisonDefense) || 0);
+
+  if (island.garrisonType === 'permanent') {
+    if (status === 'Крупный порт') {
+      island.garrisonDefense = [BALANCE.garrisons.permanentDirect.defense, BALANCE.garrisons.permanentUpgrade.defense].includes(storedDefense)
+        ? storedDefense
+        : BALANCE.garrisons.permanentUpgrade.defense;
+      island.garrisonOrigin ||= 'legacy-permanent';
+      return island.garrisonType;
+    }
+    if (status === 'Город') {
+      island.garrisonType = 'guard';
+      island.garrisonDefense = BALANCE.garrisons.downgradedGuard.defense;
+      island.garrisonOrigin = 'downgraded-permanent';
+      return island.garrisonType;
+    }
+    return clearIslandGarrison(island);
   }
-  return island.garrisonType;
+
+  if (island.garrisonType === 'guard') {
+    if (!['Город', 'Крупный порт'].includes(status)) return clearIslandGarrison(island);
+    island.garrisonDefense = storedDefense > 0 ? storedDefense : BALANCE.garrisons.guard.defense;
+    island.garrisonOrigin ||= 'guard';
+    return island.garrisonType;
+  }
+
+  return clearIslandGarrison(island);
 }
 
 function garrisonDefenseValue(island) {
   const kind = normalizeIslandGarrison(island);
-  if (kind === 'permanent') return BALANCE.garrisons.permanentUpgrade.defense;
-  if (kind === 'guard') return BALANCE.garrisons.guard.defense;
-  return 0;
+  return kind ? Math.max(0, Number(island.garrisonDefense) || 0) : 0;
 }
 
 function garrisonDisplayName(island) {
@@ -1435,20 +1464,22 @@ function canBuyCityGuard(room, player, island) {
   if (!isCitadelCell(player.row, player.col)) return { ok: false, error: 'Городскую стражу покупают только в Цитадели.' };
   if (island.ownerId !== player.id) return { ok: false, error: 'Стражу можно назначить только своему острову.' };
   const status = islandStatus(island);
-  if (!['Город', 'Крупный порт'].includes(status)) return { ok: false, error: 'Городскую стражу можно назначить только городу или крупному порту.' };
+  if (status !== 'Город') return { ok: false, error: 'Городскую стражу можно назначить только своему городу.' };
   normalizeIslandGarrison(island);
   if (island.garrisonType) return { ok: false, error: 'На острове уже есть городской отряд.' };
   if ((Number(player.ducats) || 0) < BALANCE.garrisons.guard.price) return { ok: false, error: `Для городской стражи нужно ${BALANCE.garrisons.guard.price} дукатов.` };
-  return { ok: true, status };
+  return { ok: true, status, ...BALANCE.garrisons.guard };
 }
 
 function buyCityGuard(room, player, islandId) {
   const island = room?.islands?.find(i => i.id === islandId);
   const allowed = canBuyCityGuard(room, player, island);
   if (!allowed.ok) return allowed;
-  player.ducats -= BALANCE.garrisons.guard.price;
+  player.ducats -= allowed.price;
   island.garrisonType = 'guard';
-  return { ok: true, island, ...BALANCE.garrisons.guard };
+  island.garrisonDefense = allowed.defense;
+  island.garrisonOrigin = 'guard';
+  return { ok: true, island, price: allowed.price, defense: allowed.defense, mode: 'guard' };
 }
 
 function canBuyPermanentGarrison(room, player, island) {
@@ -1457,18 +1488,23 @@ function canBuyPermanentGarrison(room, player, island) {
   if (island.ownerId !== player.id) return { ok: false, error: 'Гарнизон можно назначить только своему острову.' };
   if (islandStatus(island) !== 'Крупный порт') return { ok: false, error: 'Постоянный гарнизон можно назначить только крупному порту.' };
   normalizeIslandGarrison(island);
-  if (island.garrisonType !== 'guard') return { ok: false, error: 'Постоянный гарнизон заменяет уже имеющуюся городскую стражу.' };
-  if ((Number(player.ducats) || 0) < BALANCE.garrisons.permanentUpgrade.price) return { ok: false, error: `Для постоянного гарнизона нужно ${BALANCE.garrisons.permanentUpgrade.price} дукатов.` };
-  return { ok: true };
+  if (island.garrisonType === 'permanent') return { ok: false, error: 'На острове уже есть постоянный гарнизон.' };
+  if (island.garrisonType && island.garrisonType !== 'guard') return { ok: false, error: 'На острове уже есть другой городской отряд.' };
+  const mode = island.garrisonType === 'guard' ? 'upgrade' : 'direct';
+  const spec = mode === 'upgrade' ? BALANCE.garrisons.permanentUpgrade : BALANCE.garrisons.permanentDirect;
+  if ((Number(player.ducats) || 0) < spec.price) return { ok: false, error: `Для постоянного гарнизона нужно ${spec.price} дукатов.` };
+  return { ok: true, mode, price: spec.price, defense: spec.defense };
 }
 
 function buyPermanentGarrison(room, player, islandId) {
   const island = room?.islands?.find(i => i.id === islandId);
   const allowed = canBuyPermanentGarrison(room, player, island);
   if (!allowed.ok) return allowed;
-  player.ducats -= BALANCE.garrisons.permanentUpgrade.price;
+  player.ducats -= allowed.price;
   island.garrisonType = 'permanent';
-  return { ok: true, island, ...BALANCE.garrisons.permanentUpgrade };
+  island.garrisonDefense = allowed.defense;
+  island.garrisonOrigin = allowed.mode === 'upgrade' ? 'guard-upgrade' : 'direct';
+  return { ok: true, island, price: allowed.price, defense: allowed.defense, mode: allowed.mode };
 }
 
 function arsenalLevelOnIsland(island) {
@@ -1484,28 +1520,43 @@ function canFormLandCompany(room, player, island) {
   const arsenalLevel = arsenalLevelOnIsland(island);
   if (!arsenalLevel) return { ok: false, error: 'На острове нужен арсенал.' };
   if (player.landCompany) return { ok: false, error: 'У игрока уже есть рота ландскнехтов.' };
-  if (player.cargo) return { ok: false, error: 'Основной трюм занят грузом. Рота занимает весь основной трюм.' };
-  return { ok: true, arsenalLevel, army: BALANCE.landCompany.armyByArsenalLevel[arsenalLevel] };
+  return {
+    ok: true,
+    arsenalLevel,
+    army: BALANCE.landCompany.armyByArsenalLevel[arsenalLevel],
+    discardedCargo: player.cargo ? { ...player.cargo } : null,
+  };
 }
 
 function formLandCompany(room, player, islandId) {
   const island = room?.islands?.find(i => i.id === islandId);
   const allowed = canFormLandCompany(room, player, island);
   if (!allowed.ok) return allowed;
+  const discardedCargo = allowed.discardedCargo ? { ...allowed.discardedCargo } : null;
+  player.cargo = null;
   player.landCompany = {
     army: allowed.army,
     arsenalLevel: allowed.arsenalLevel,
     sourceIslandId: island.id,
     formedAt: Date.now(),
   };
-  return { ok: true, island, company: { ...player.landCompany } };
+  return { ok: true, island, company: { ...player.landCompany }, discardedCargo };
 }
 
-function dismissLandCompany(player) {
-  if (!player?.landCompany) return { ok: false, error: 'Роты ландскнехтов нет.' };
+function canDismissLandCompany(room, player) {
+  if (!room || !player?.landCompany) return { ok: false, error: 'Роты ландскнехтов нет.' };
+  const island = (room.islands || []).find(candidate =>
+    candidate.ownerId === player.id && playerOnIsland(player, candidate) && arsenalLevelOnIsland(candidate) > 0);
+  if (!island) return { ok: false, error: 'Вернуть роту можно только у своего острова с арсеналом.' };
+  return { ok: true, island };
+}
+
+function dismissLandCompany(room, player) {
+  const allowed = canDismissLandCompany(room, player);
+  if (!allowed.ok) return allowed;
   const company = { ...player.landCompany };
   player.landCompany = null;
-  return { ok: true, company };
+  return { ok: true, company, island: allowed.island };
 }
 
 function landCompanyAssaultArmy(player) {
@@ -2570,6 +2621,7 @@ function publicIsland(island, room = null) {
     legendaryVeil: island.legendaryVeil ? { remaining: Number(island.legendaryVeil.remaining) || 0, sourcePlayerId: island.legendaryVeil.sourcePlayerId || null } : null,
     garrisonType: island.garrisonType || null,
     garrisonName: garrisonDisplayName(island),
+    garrisonDefense: garrisonDefenseValue(island),
     availableGoods: availableGoodsOnIsland(island),
     buildings: island.buildings.map((b, index) => {
       const next = upgradeForBuilding(b);
@@ -2627,6 +2679,7 @@ module.exports = {
   buyPermanentGarrison,
   canFormLandCompany,
   formLandCompany,
+  canDismissLandCompany,
   dismissLandCompany,
   landCompanyAssaultArmy,
   marketIncomeForPlayer,

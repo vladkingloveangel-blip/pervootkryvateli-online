@@ -36,6 +36,7 @@ const {
   buyCityGuard,
   buyPermanentGarrison,
   formLandCompany,
+  canDismissLandCompany,
   dismissLandCompany,
   marketIncomeForPlayer,
   hasOwnedBuilding,
@@ -697,6 +698,7 @@ function publicRoom(room, viewerId = null) {
         nextTurnEffects: p.id === viewerId ? { ...(p.nextTurnEffects || {}) } : {},
         activeTurnEffects: p.id === viewerId ? { ...(p.activeTurnEffects || {}) } : {},
         landCompany: p.landCompany ? { ...p.landCompany } : null,
+        canDismissLandCompanyHere: p.id === viewerId ? canDismissLandCompany(room, p).ok : false,
         character: p.id === viewerId && p.character ? { ...(CHARACTERS[typeof p.character === 'string' ? p.character : p.character.id] || {}), id: typeof p.character === 'string' ? p.character : p.character.id } : null,
         characterReplacedThisRound: p.id === viewerId ? Number(p.characterReplacedRound) === Number(room.round) : false,
         admiraltyLevelHere: p.id === viewerId ? bestAdmiraltyLevelAtPlayer(room, p) : 0,
@@ -3067,7 +3069,8 @@ io.on('connection', socket => {
     const result = formLandCompany(room, p, String(data?.islandId || ''));
     if (!result.ok) return ackSafe(ack, result);
     room.actionsLeft -= 1;
-    log(room, `${p.name} снаряжает роту ландскнехтов в арсенале ${ROMAN_SERVER[result.company.arsenalLevel] || result.company.arsenalLevel} на ${result.island.name}: +${result.company.army} войска при штурме. Основной трюм занят ротой. Осталось действий: ${room.actionsLeft}.`);
+    const cargoText = result.discardedCargo ? ' Прежний груз основного трюма сброшен без выручки.' : '';
+    log(room, `${p.name} снаряжает роту ландскнехтов в арсенале ${ROMAN_SERVER[result.company.arsenalLevel] || result.company.arsenalLevel} на ${result.island.name}: +${result.company.army} войска при штурме. Основной трюм занят ротой.${cargoText} Осталось действий: ${room.actionsLeft}.`);
     ackSafe(ack, { ok: true });
     emitRoom(room);
   });
@@ -3078,9 +3081,9 @@ io.on('connection', socket => {
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Распустить роту можно в свой личный ход.' });
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
     if (!['navigation', 'actions'].includes(room.phase)) return ackSafe(ack, { ok: false, error: 'Сейчас роту распустить нельзя.' });
-    const result = dismissLandCompany(p);
+    const result = dismissLandCompany(room, p);
     if (!result.ok) return ackSafe(ack, result);
-    log(room, `${p.name} бесплатно распускает роту ландскнехтов и освобождает основной трюм.`);
+    log(room, `${p.name} бесплатно возвращает роту ландскнехтов у арсенала на ${result.island.name} и освобождает основной трюм.`);
     ackSafe(ack, { ok: true });
     emitRoom(room);
   });
@@ -3112,7 +3115,8 @@ io.on('connection', socket => {
     const result = buyPermanentGarrison(room, p, String(data?.islandId || ''));
     if (!result.ok) return ackSafe(ack, result);
     room.actionsLeft -= 1;
-    log(room, `${p.name} заменяет городскую стражу на постоянный гарнизон ${result.island.name}: +${result.defense} войска к защите за ${result.price} дукатов. Осталось действий: ${room.actionsLeft}.`);
+    const modeText = result.mode === 'upgrade' ? 'заменяет городскую стражу постоянным гарнизоном' : 'покупает постоянный гарнизон напрямую';
+    log(room, `${p.name} ${modeText} для ${result.island.name}: +${result.defense} войска к защите за ${result.price} дукатов. Осталось действий: ${room.actionsLeft}.`);
     ackSafe(ack, { ok: true });
     emitRoom(room);
   });

@@ -107,6 +107,7 @@ const {
   buyPermanentGarrison,
   canFormLandCompany,
   formLandCompany,
+  canDismissLandCompany,
   dismissLandCompany,
   landCompanyAssaultArmy,
   addEnmity,
@@ -1581,8 +1582,45 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   }
 }
 
-// Арсенал снаряжает одну роту, которая занимает основной трюм и добавляет войско
-// только к штурму. После проигранного штурма рота сбрасывается.
+// Арсенал снаряжает одну роту бесплатно за действие. Рота занимает весь основной
+// трюм: существующий груз автоматически сбрасывается без выручки, а сила фиксируется
+// по уровню арсенала в момент снаряжения.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const home = room.islands.find(i => i.id === 'bogamia');
+  home.ownerId = 'p1';
+  home.buildings = [{ type: 'arsenal', level: 2 }];
+  const p = {
+    id: 'p1', row: home.cells[0][0], col: home.cells[0][1],
+    shipClass: 'brigantine', level: 2, upgrades: [], escorts: [], ducats: 0,
+    cargo: { goodId: 'wood', quantity: 2 },
+  };
+  room.players.push(p);
+  assert.equal(canFormLandCompany(room, p, home).ok, true);
+  const formed = formLandCompany(room, p, home.id);
+  assert.equal(formed.company.army, 4);
+  assert.deepEqual(formed.discardedCargo, { goodId: 'wood', quantity: 2 });
+  assert.equal(p.cargo, null);
+  assert.equal(landCompanyAssaultArmy(p), 4);
+  assert.equal(canLoadCargo(room, p, home, 'provisions', 'main').ok, false);
+
+  // Понижение арсенала/уровня корабля не пересчитывает уже подготовленную силу.
+  home.buildings[0].level = 1;
+  p.level = 1;
+  assert.equal(landCompanyAssaultArmy(p), 4);
+
+  // Добровольный возврат возможен только у собственного острова с арсеналом.
+  p.row = 13; p.col = 13;
+  assert.equal(canDismissLandCompany(room, p).ok, false);
+  assert.equal(dismissLandCompany(room, p).ok, false);
+  p.row = home.cells[0][0]; p.col = home.cells[0][1];
+  assert.equal(canDismissLandCompany(room, p).ok, true);
+  assert.equal(dismissLandCompany(room, p).ok, true);
+  assert.equal(p.landCompany, null);
+}
+
+// Рота участвует только в штурме: после проигранного штурма она сбрасывается,
+// при победе или ничьей сохраняется.
 {
   const room = { islands: cloneIslands(), players: [] };
   const home = room.islands.find(i => i.id === 'bogamia');
@@ -1590,72 +1628,74 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   home.buildings = [{ type: 'arsenal', level: 2 }];
   const p = { id: 'p1', row: home.cells[0][0], col: home.cells[0][1], shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0, cargo: null };
   room.players.push(p);
-  assert.equal(canFormLandCompany(room, p, home).ok, true);
-  assert.equal(formLandCompany(room, p, home.id).company.army, 4);
-  assert.equal(landCompanyAssaultArmy(p), 4);
-  assert.equal(canLoadCargo(room, p, home, 'provisions', 'main').ok, false);
-
+  formLandCompany(room, p, home.id);
   const enemy = room.islands.find(i => i.id === 'adia');
   p.row = enemy.cells[0][0]; p.col = enemy.cells[0][1];
   const loss = assaultIsland(room, p, enemy, 'preserve');
   assert.equal(loss.ok, true);
   assert.equal(loss.outcome, 'defender');
   assert.equal(p.landCompany, null);
-}
 
-// При победе или ничьей штурма рота сохраняется, а потеря уровня корабля сама по себе
-// не меняет заранее зафиксированную силу роты.
-{
-  const room = { islands: cloneIslands(), players: [] };
-  const enemy = room.islands.find(i => i.id === 'agmor');
-  const p = { id: 'p1', row: enemy.cells[0][0], col: enemy.cells[0][1], shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, cargo: null, landCompany: { army: 3, arsenalLevel: 1 } };
-  room.players.push(p);
-  const win = assaultIsland(room, p, enemy, 'preserve');
+  const room2 = { islands: cloneIslands(), players: [] };
+  const weak = room2.islands.find(i => i.id === 'agmor');
+  const p2 = { id: 'p2', row: weak.cells[0][0], col: weak.cells[0][1], shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, cargo: null, landCompany: { army: 3, arsenalLevel: 1 } };
+  room2.players.push(p2);
+  const win = assaultIsland(room2, p2, weak, 'preserve');
   assert.equal(win.outcome, 'attacker');
-  assert.equal(p.landCompany.army, 3);
+  assert.equal(p2.landCompany.army, 3);
 }
 
-// Городская стража и постоянный гарнизон покупаются в Цитадели и участвуют в защите.
+// Городская стража и постоянный гарнизон используют канонические три варианта
+// покупки: стража города 5/+1, замена стражи в крупном порту 10/+3,
+// прямая покупка в крупном порту 15/+2.
 {
   const room = { islands: cloneIslands(), players: [] };
   const island = room.islands.find(i => i.id === 'raisk');
   island.ownerId = 'p1';
-  // Поместье I + ещё четыре непищевых здания = город.
   island.buildings = [
     { type: 'manor', level: 1 }, { type: 'farm', level: 1 }, { type: 'fort', level: 1 },
     { type: 'market', level: 1 }, { type: 'lumbermill', level: 1 }, { type: 'quarry', level: 1 },
   ];
-  const p = { id: 'p1', row: 13, col: 13, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 40 };
+  const p = { id: 'p1', row: 13, col: 13, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 100 };
   room.players.push(p);
-  assert.equal(canBuyCityGuard(room, p, island).ok, true);
-  assert.equal(buyCityGuard(room, p, island.id).ok, true);
-  assert.equal(island.garrisonType, 'guard');
-  assert.equal(islandDefenseArmy(room, island).hiredGarrison, 5);
+  assert.equal(islandStatus(island), 'Город');
+  const guard = buyCityGuard(room, p, island.id);
+  assert.equal(guard.ok, true);
+  assert.equal(guard.price, 5);
+  assert.equal(islandDefenseArmy(room, island).hiredGarrison, 1);
 
-  // Превращаем остров в крупный порт, сохраняя стражу, затем заменяем её гарнизоном.
   island.buildings = [
     { type: 'manor', level: 2 },
     { type: 'shipyard', level: 1 }, { type: 'stoneworks', level: 1 },
     { type: 'arsenal', level: 1 }, { type: 'fortress', level: 1 },
     { type: 'bank', level: 1 }, { type: 'lumbermill', level: 1 },
   ];
-  assert.equal(canBuyPermanentGarrison(room, p, island).ok, true);
-  assert.equal(buyPermanentGarrison(room, p, island.id).ok, true);
-  assert.equal(island.garrisonType, 'permanent');
-  assert.equal(islandDefenseArmy(room, island).hiredGarrison, 10);
+  assert.equal(islandStatus(island), 'Крупный порт');
+  const upgraded = buyPermanentGarrison(room, p, island.id);
+  assert.deepEqual([upgraded.mode, upgraded.price, upgraded.defense], ['upgrade', 10, 3]);
+  assert.equal(islandDefenseArmy(room, island).hiredGarrison, 3);
 
-  // Потеря крупного порта, но сохранение города автоматически переводит гарнизон в стражу.
   island.buildings = [
     { type: 'manor', level: 1 }, { type: 'farm', level: 1 }, { type: 'fort', level: 1 },
     { type: 'market', level: 1 }, { type: 'lumbermill', level: 1 }, { type: 'quarry', level: 1 },
   ];
-  assert.equal(islandDefenseArmy(room, island).hiredGarrison, 5);
+  assert.equal(islandDefenseArmy(room, island).hiredGarrison, 3);
   assert.equal(island.garrisonType, 'guard');
 
-  // Потеря статуса города распускает стражу.
   island.buildings = [{ type: 'farm', level: 1 }];
   assert.equal(islandDefenseArmy(room, island).hiredGarrison, 0);
   assert.equal(island.garrisonType, null);
+
+  island.buildings = [
+    { type: 'manor', level: 2 },
+    { type: 'shipyard', level: 1 }, { type: 'stoneworks', level: 1 },
+    { type: 'arsenal', level: 1 }, { type: 'fortress', level: 1 },
+    { type: 'bank', level: 1 }, { type: 'lumbermill', level: 1 },
+  ];
+  assert.equal(canBuyCityGuard(room, p, island).ok, false);
+  const direct = buyPermanentGarrison(room, p, island.id);
+  assert.deepEqual([direct.mode, direct.price, direct.defense], ['direct', 15, 2]);
+  assert.equal(islandDefenseArmy(room, island).hiredGarrison, 2);
 }
 
 

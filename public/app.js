@@ -1998,8 +1998,9 @@
       const dismiss = document.createElement('button');
       dismiss.type = 'button';
       dismiss.className = 'build-btn danger-soft';
-      dismiss.textContent = `Распустить роту +${mine.landCompany.army} · бесплатно`;
-      dismiss.disabled = !myTurnAnyPhase;
+      dismiss.textContent = `Вернуть роту +${mine.landCompany.army} у своего Арсенала · бесплатно`;
+      dismiss.disabled = !myTurnAnyPhase || !mine.canDismissLandCompanyHere;
+      dismiss.title = mine.canDismissLandCompanyHere ? '' : 'Нужно находиться у своего острова с Арсеналом.';
       dismiss.addEventListener('click', () => socket.emit('dismissLandCompany', {}, handleGameAck));
       actions.appendChild(dismiss);
     }
@@ -2084,8 +2085,8 @@
     }
 
     const ownedSettlements = (state.room.islands || []).filter(i => i.ownerId === state.myId);
-    const guardTargets = ownedSettlements.filter(i => ['Город', 'Крупный порт'].includes(i.status) && !i.garrisonType);
-    const permanentTargets = ownedSettlements.filter(i => i.status === 'Крупный порт' && i.garrisonType === 'guard');
+    const guardTargets = ownedSettlements.filter(i => i.status === 'Город' && !i.garrisonType);
+    const permanentTargets = ownedSettlements.filter(i => i.status === 'Крупный порт' && i.garrisonType !== 'permanent');
     if (guardTargets.length || permanentTargets.length) {
       const defenseLabel = document.createElement('div');
       defenseLabel.className = 'action-group-label';
@@ -2100,10 +2101,12 @@
         actions.appendChild(b);
       }
       for (const island of permanentTargets) {
+        const upgrading = island.garrisonType === 'guard';
+        const spec = upgrading ? state.room.balanceCatalog.garrisons.permanentUpgrade : state.room.balanceCatalog.garrisons.permanentDirect;
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'build-btn';
-        b.textContent = `Постоянный гарнизон → ${island.name} · ${state.room.balanceCatalog.garrisons.permanentUpgrade.price} дук. · +${state.room.balanceCatalog.garrisons.permanentUpgrade.defense} защиты`;
-        b.disabled = !canBuyHere || mine.ducats < state.room.balanceCatalog.garrisons.permanentUpgrade.price;
+        b.textContent = `${upgrading ? 'Постоянный гарнизон вместо стражи' : 'Постоянный гарнизон напрямую'} → ${island.name} · ${spec.price} дук. · +${spec.defense} защиты`;
+        b.disabled = !canBuyHere || mine.ducats < spec.price;
         b.addEventListener('click', () => emitDataAction(b, 'buyPermanentGarrison', { islandId: island.id }));
         actions.appendChild(b);
       }
@@ -2262,7 +2265,7 @@
         <span>Текущая защита</span><strong>${defense}</strong>
         <span>Исходный / нанятый / укрепления / бастион / корабль</span><strong>${defenseParts.garrison || 0} / ${defenseParts.hiredGarrison || 0} / ${defenseParts.fortifications || 0} / ${defenseParts.bastions || 0} / ${defenseParts.ownerShip || 0}</strong>
       </div>
-      <div class="building-line"><span class="muted">Городской отряд:</span> ${escapeHtml(island.garrisonName || 'нет')}</div>
+      <div class="building-line"><span class="muted">Городской отряд:</span> ${escapeHtml(island.garrisonName ? `${island.garrisonName} (+${island.garrisonDefense || 0})` : 'нет')}</div>
       <div class="building-line"><span class="muted">Постройки:</span> ${escapeHtml(buildings)}</div>
       <div class="building-line"><span class="muted">Погрузка в раунде ${state.room.round}:</span> ${island.loadedRound === state.room.round ? 'уже выполнена' : 'доступна'}</div>
       ${island.reward ? `<div class="reward-note"><span class="muted">Разовая награда:</span> ${escapeHtml(island.reward)}</div>` : ''}`;
@@ -2319,8 +2322,9 @@
       if (arsenal) {
         const companyBtn = document.createElement('button');
         companyBtn.type = 'button'; companyBtn.className = 'build-btn';
-        companyBtn.textContent = mine?.landCompany ? `Рота уже снаряжена · +${mine.landCompany.army}` : `Снарядить роту · Арсенал ${ROMAN[arsenal.level] || arsenal.level} · +${r.balanceCatalog.landCompany.armyByArsenalLevel[arsenal.level]} войска`;
-        companyBtn.disabled = !canAct || Boolean(mine?.landCompany) || Boolean(mine?.cargo);
+        const cargoWarning = mine?.cargo ? ' · текущий груз будет сброшен' : '';
+        companyBtn.textContent = mine?.landCompany ? `Рота уже снаряжена · +${mine.landCompany.army}` : `Снарядить роту · Арсенал ${ROMAN[arsenal.level] || arsenal.level} · +${r.balanceCatalog.landCompany.armyByArsenalLevel[arsenal.level]} войска${cargoWarning}`;
+        companyBtn.disabled = !canAct || Boolean(mine?.landCompany);
         companyBtn.addEventListener('click', () => socket.emit('formLandCompany', { islandId: island.id }, handleGameAck));
         actions.appendChild(companyBtn);
       }
