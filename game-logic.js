@@ -208,47 +208,140 @@ function drawFeudCard(room, factionId, rng = Math.random) {
 function createAssignmentDecks(rng = Math.random) {
   const out = {};
   for (const factionId of Object.keys(ASSIGNMENT_CARDS)) {
-    out[factionId] = { drawPile: shuffleCards(expandCardDefinitions(ASSIGNMENT_CARDS[factionId] || []), rng), discard: [] };
+    out[factionId] = {
+      drawPile: shuffleCards(expandCardDefinitions(ASSIGNMENT_CARDS[factionId] || []), rng),
+      discard: [],
+      removed: [],
+    };
   }
   return out;
 }
 
-function assignmentCardPossible(room, player, card) {
-  if (!room || !player || !card) return false;
-  if (card.type === 'capture-island') {
-    const island = room.islands?.find(i => i.id === card.islandId);
-    return Boolean(island && island.ownerId !== player.id);
-  }
-  if (card.type === 'ship-level') return (Number(player.level) || 1) < BALANCE.maxShipLevel;
-  if (card.type === 'stat-upgrade') {
-    const installed = new Set(player.upgrades || []);
-    return Object.values(SHIP_UPGRADES).some(u => u.branch === card.branch && !installed.has(u.id));
-  }
-  if (card.type === 'build-branch' && card.islandId) return Boolean(room.islands?.some(i => i.id === card.islandId));
-  if (card.type === 'build-type' && card.resource) return Boolean(room.islands?.some(i => (i.resources || []).includes(card.resource)));
-  if (card.type === 'visit-place') return Boolean(LEGENDARY_PLACES[card.placeId]);
-  return true;
+function assignmentBranchAtMaximum(island, branch) {
+  if (!island || !branch) return false;
+  const branchBuildings = (island.buildings || []).filter(building => BUILDINGS[building.type]?.branch === branch);
+  const globalLimit = Math.max(0, ...Object.values(BALANCE.branchLimits || {}).map(value => Number(value) || 0));
+  if (!globalLimit || branchBuildings.length < globalLimit) return false;
+  return branchBuildings.every(building => !upgradeForBuilding(building));
 }
 
-function drawAssignmentCard(room, player, factionId, rng = Math.random) {
+function assignmentCardEligibility(room, player, card) {
+  if (!room || !player || !card) return 'remove';
+
+  if (card.type === 'capture-island') {
+    const island = room.islands?.find(item => item.id === card.islandId);
+    if (!island) return 'remove';
+    return island.ownerId === player.id ? 'skip' : 'eligible';
+  }
+
+  if (card.type === 'ship-level') {
+    return (Number(player.level) || 1) >= BALANCE.maxShipLevel ? 'skip' : 'eligible';
+  }
+
+  if (card.type === 'stat-upgrade') {
+    const candidates = Object.values(SHIP_UPGRADES)
+      .filter(upgrade => upgrade.branch === card.branch && !upgrade.retired);
+    if (!candidates.length) return 'remove';
+    const installed = new Set(player.upgrades || []);
+    return candidates.every(upgrade => installed.has(upgrade.id)) ? 'skip' : 'eligible';
+  }
+
+  if (card.type === 'build-branch') {
+    if (!card.islandId || !Object.values(BUILDINGS).some(building => building.branch === card.branch)) return 'remove';
+    const island = room.islands?.find(item => item.id === card.islandId);
+    if (!island) return 'remove';
+    if (island.ownerId === player.id && assignmentBranchAtMaximum(island, card.branch)) return 'skip';
+    return 'eligible';
+  }
+
+  if (card.type === 'build-type') {
+    const building = BUILDINGS[card.buildingType];
+    if (!building || !card.resource) return 'remove';
+    const resourceIslands = (room.islands || []).filter(island => (island.resources || []).includes(card.resource));
+    if (!resourceIslands.length) return 'remove';
+    const ownResourceIslands = resourceIslands.filter(island => island.ownerId === player.id);
+    const otherResourceIslands = resourceIslands.filter(island => island.ownerId !== player.id);
+    if (otherResourceIslands.length) return 'eligible';
+    if (ownResourceIslands.length && ownResourceIslands.every(island => assignmentBranchAtMaximum(island, building.branch))) return 'skip';
+    return 'eligible';
+  }
+
+  if (card.type === 'visit-place') return LEGENDARY_PLACES[card.placeId] ? 'eligible' : 'remove';
+
+  if (card.type === 'visit-island') {
+    return room.islands?.some(island => island.id === card.islandId) ? 'eligible' : 'remove';
+  }
+
+  if (card.type === 'visit-route') {
+    const route = Array.isArray(card.route) ? card.route : [];
+    if (!route.length) return 'remove';
+    for (const stop of route) {
+      if (stop.islandId && !room.islands?.some(island => island.id === stop.islandId)) return 'remove';
+      if (stop.mapObjectId && stop.mapObjectId !== 'citadel') return 'remove';
+      if (!stop.islandId && !stop.mapObjectId) return 'remove';
+    }
+    return 'eligible';
+  }
+
+  if (card.type === 'anchor-win') {
+    const colors = Array.isArray(card.colors) ? card.colors : [];
+    return colors.length && colors.every(color => ANCHORS[color]) ? 'eligible' : 'remove';
+  }
+
+  if (card.type === 'delivery') {
+    if (card.goodIds == null) return 'eligible';
+    if (!Array.isArray(card.goodIds) || !card.goodIds.length) return 'remove';
+    return card.goodIds.every(goodId => GOODS[goodId]) ? 'eligible' : 'remove';
+  }
+
+  if (card.type === 'attack-player-island' || card.type === 'treasure-resolved') return 'eligible';
+
+  return 'remove';
+}
+
+function prepareAssignmentDeck(room, factionId, rng = Math.random) {
   room.assignmentDecks ||= createAssignmentDecks(rng);
   const deck = room.assignmentDecks[factionId];
   if (!deck) return null;
-  if (!deck.drawPile?.length && deck.discard?.length) {
-    deck.drawPile = shuffleCards(deck.discard, rng);
-    deck.discard = [];
-  }
-  const attempts = deck.drawPile?.length || 0;
+  deck.drawPile ||= [];
+  deck.discard ||= [];
+  deck.removed ||= [];
+  return deck;
+}
+
+function drawAssignmentCandidates(room, player, factionId, count = 1, rng = Math.random) {
+  const deck = prepareAssignmentDeck(room, factionId, rng);
+  if (!deck) return [];
+  const wanted = Math.max(1, Number(count) || 1);
+  const cards = [];
   const skipped = [];
-  let card = null;
-  for (let i = 0; i < attempts; i++) {
+  let recycledDiscard = false;
+
+  while (cards.length < wanted) {
+    if (!deck.drawPile.length) {
+      if (!recycledDiscard && deck.discard.length) {
+        deck.drawPile = shuffleCards(deck.discard, rng);
+        deck.discard = [];
+        recycledDiscard = true;
+      } else {
+        break;
+      }
+    }
+
     const candidate = deck.drawPile.shift();
-    if (!candidate) break;
-    if (assignmentCardPossible(room, player, candidate)) { card = candidate; break; }
-    skipped.push(candidate);
+    if (!candidate) continue;
+    const eligibility = assignmentCardEligibility(room, player, candidate);
+    if (eligibility === 'eligible') cards.push(candidate);
+    else if (eligibility === 'skip') skipped.push(candidate);
+    else deck.removed.push(candidate);
   }
-  if (skipped.length) deck.drawPile.push(...shuffleCards(skipped, rng));
-  return card;
+
+  if (skipped.length) deck.drawPile = shuffleCards([...(deck.drawPile || []), ...skipped], rng);
+  return cards;
+}
+
+function drawAssignmentCard(room, player, factionId, rng = Math.random) {
+  return drawAssignmentCandidates(room, player, factionId, 1, rng)[0] || null;
 }
 
 function discardAssignmentCard(room, factionId, card) {
@@ -259,7 +352,6 @@ function discardAssignmentCard(room, factionId, card) {
 function ensureAssignmentPlayer(player) {
   if (!player) return player;
   player.activeAssignment ||= null;
-  player.replacedAssignmentConditions ||= [];
   return player;
 }
 
@@ -268,7 +360,7 @@ function assignAssignmentCard(room, player, factionId, card, rng = Math.random) 
   if (player.activeAssignment) return { ok: false, error: 'У игрока уже есть активное поручение.' };
   if (!card) return { ok: false, empty: true, error: 'Подходящего поручения сейчас нет.' };
   player.activeAssignment = {
-    instanceId: `${factionId}:${card.id}:${Date.now()}:${Math.floor((Number(rng()) || 0) * 1e9)}`,
+    instanceId: [factionId, card.id, Date.now(), Math.floor((Number(rng()) || 0) * 1e9)].join(':'),
     factionId,
     card: { ...card },
     issuedRound: Number(room.round) || 1,
@@ -286,47 +378,20 @@ function issueAssignment(room, player, factionId, rng = Math.random) {
 function offerAssignmentCards(room, player, factionId, count = 2, rng = Math.random) {
   ensureAssignmentPlayer(player);
   if (player.activeAssignment) return { ok: false, error: 'У игрока уже есть активное поручение.', cards: [] };
-  const cards = [];
-  for (let i = 0; i < Math.max(1, Number(count) || 1); i++) {
-    const card = drawAssignmentCard(room, player, factionId, rng);
-    if (!card) break;
-    cards.push(card);
-  }
-  return { ok: true, cards };
+  return { ok: true, cards: drawAssignmentCandidates(room, player, factionId, count, rng) };
 }
 
 function chooseAssignmentOffer(room, player, factionId, offeredCards, cardId, rng = Math.random) {
+  ensureAssignmentPlayer(player);
+  if (player.activeAssignment) return { ok: false, error: 'У игрока уже есть активное поручение.' };
   const cards = (offeredCards || []).map(card => ({ ...card }));
   const chosen = cards.find(card => card.id === cardId);
   if (!chosen) return { ok: false, error: 'Выберите одно из предложенных поручений.' };
-  room.assignmentDecks ||= createAssignmentDecks(rng);
-  const deck = room.assignmentDecks[factionId];
+  const deck = prepareAssignmentDeck(room, factionId, rng);
   if (!deck) return { ok: false, error: 'Колода поручений не найдена.' };
   const returned = cards.filter(card => card.id !== chosen.id);
   if (returned.length) deck.drawPile = shuffleCards([...(deck.drawPile || []), ...returned], rng);
   return assignAssignmentCard(room, player, factionId, chosen, rng);
-}
-
-function canReplaceAssignment(player) {
-  ensureAssignmentPlayer(player);
-  if (!player.activeAssignment) return { ok: false, error: 'Нет активного поручения.' };
-  if ((Number(player.ducats) || 0) < BALANCE.assignmentReplacementPrice) return { ok: false, error: `Для замены поручения нужно ${BALANCE.assignmentReplacementPrice} дуката.` };
-  const key = player.activeAssignment.card?.conditionKey;
-  if (key && player.replacedAssignmentConditions.includes(key)) return { ok: false, error: 'Поручение с таким условием уже заменялось вами за плату в этой партии.' };
-  return { ok: true };
-}
-
-function replaceAssignment(room, player, rng = Math.random) {
-  const allowed = canReplaceAssignment(player);
-  if (!allowed.ok) return allowed;
-  const previous = player.activeAssignment;
-  const key = previous.card?.conditionKey;
-  player.ducats -= BALANCE.assignmentReplacementPrice;
-  if (key && !player.replacedAssignmentConditions.includes(key)) player.replacedAssignmentConditions.push(key);
-  discardAssignmentCard(room, previous.factionId, previous.card);
-  player.activeAssignment = null;
-  const next = issueAssignment(room, player, player.suzerainId || previous.factionId, rng);
-  return { ok: true, previous, next: next.ok ? next.assignment : null, noReplacement: !next.ok };
 }
 
 function assignmentEventMatches(player, event) {
@@ -2907,8 +2972,6 @@ module.exports = {
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,
-  canReplaceAssignment,
-  replaceAssignment,
   assignmentEventMatches,
   completeAssignment,
   legendaryPlaceAt,

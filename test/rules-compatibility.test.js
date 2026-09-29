@@ -16,7 +16,9 @@ test('legacy profile references remain valid while canonical master data stays s
   assert.deepEqual(runtime.SHIP_UPGRADES[legacy.removedUpgrade.id],{...legacy.removedUpgrade,retired:true});
   assert.deepEqual(runtime.ESCORTS[legacy.removedEscort.id],{...legacy.removedEscort,retired:true});
   assert.equal(runtime.FACTIONS.mori.giftIslandId,'miyosi');
-  assert.equal(runtime.ASSIGNMENT_CARDS.mori,undefined); // canonical Mori assignments are activated in block 5.8
+  assert.deepEqual(Object.keys(runtime.ASSIGNMENT_CARDS),['lionia','kadingir','mori','suniksiya','pirates']);
+  assert.equal(Object.values(runtime.ASSIGNMENT_CARDS).flat().length,49);
+  assert.equal(runtime.BALANCE.assignmentReplacementPrice,undefined);
   assert.deepEqual(Object.keys(runtime.FEUD_CARDS),rules.politics.order);
   for (const [id, masterCards] of Object.entries(rules.events.feud)) {
     const cards = runtime.FEUD_CARDS[id];

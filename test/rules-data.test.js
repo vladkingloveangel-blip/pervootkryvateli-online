@@ -167,7 +167,7 @@ test('complete known sea, assignment, feud and event decks match appendix rows',
 });
 
 test('stage 5.7 activates all six canonical feud decks without advancing Mori assignments or service', () => {
-  assert.equal(rules.implementation.activeProfile,'stage-5-combat-politics-5.7');
+  assert.equal(rules.implementation.activeProfile,'stage-5-combat-politics-5.8.1');
   assert.equal(rules.implementation.pendingConsumers.every(item => item.consumerStage >= 5),true);
   assert.equal(rules.scoring.combat.attacksPerOpponentPerRound,1);
   assert.equal(data.BALANCE.combat.attacksPerOpponentPerRound,rules.scoring.combat.attacksPerOpponentPerRound);
@@ -190,7 +190,9 @@ test('stage 5.7 activates all six canonical feud decks without advancing Mori as
   assert.equal(data.FACTIONS.kadingir.fullConquestPrize.amountUnresolved,true);
   assert.deepEqual(data.MILITARY_REWARDS.kadingir.preserveBuildings,[]);
   assert.deepEqual(data.MILITARY_REWARDS.kisalinia.preserveBuildings,[{type:'fort',level:1}]);
-  assert.equal(data.ASSIGNMENT_CARDS.mori,undefined);
+  assert.deepEqual(Object.keys(data.ASSIGNMENT_CARDS),['lionia','kadingir','mori','suniksiya','pirates']);
+  assert.equal(Object.values(data.ASSIGNMENT_CARDS).flat().length,49);
+  assert.equal(data.BALANCE.assignmentReplacementPrice,undefined);
   assert.deepEqual(Object.keys(data.FEUD_CARDS),rules.politics.order);
   for (const factionId of rules.politics.order) {
     assert.equal(data.FEUD_CARDS[factionId].reduce((sum,card)=>sum+card.quantity,0),10,factionId);

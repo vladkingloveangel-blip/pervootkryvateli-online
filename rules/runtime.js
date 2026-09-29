@@ -64,7 +64,7 @@ const FEUD_CARDS = Object.fromEntries(Object.entries(rules.events.feud).map(([fa
   })),
 ]));
 module.exports = {
-  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-5-combat-politics-5.7',
+  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-5-combat-politics-5.8.1',
   BALANCE: {
     session: rules.session,
     maxShipLevel: rules.fleet.maxLevel, maxReadableShipLevel: legacy.shipLevel7.level,
@@ -74,7 +74,6 @@ module.exports = {
     landCompany: rules.economy.landCompany, combat: rules.scoring.combat, fleetScoring: rules.scoring.fleet, armyScoring: rules.scoring.army,
     contractBonusRatio: rules.economy.contractBonusRatio,
     loadingLimitPerIslandPerRound: rules.economy.loadingLimitPerIslandPerRound,
-    assignmentReplacementPrice: legacy.assignmentReplacementPrice,
     gloryCapture: legacy.gloryCapture, treasuryLossRatio: legacy.treasuryLossRatio,
     reclaimIslandFallback: rules.events.feud.lionia.find(c => c.effect.type === 'reclaim-island').effect.fallbackDucats,
     legendaryEffects: Object.fromEntries(rules.legends.legendary.map(c => [c.id, c.effect])),
@@ -83,9 +82,10 @@ module.exports = {
   ESCORTS: { ...rules.fleet.escorts, [legacy.removedEscort.id]: { ...legacy.removedEscort, retired: true } },
   GOODS: rules.economy.goods, BUILDINGS, BUILDING_UPGRADES, CHARACTERS, MILITARY_REWARDS, FACTIONS,
   POLITICAL_FACTION_ORDER: rules.politics.order.filter(id => id in FACTIONS),
-  // Mori politics is active in 5.6, but its assignment/service consumer belongs to 5.8.
-  ASSIGNMENT_CARDS: Object.fromEntries(Object.entries(rules.politics.assignments)
-    .filter(([id]) => id in FACTIONS && id !== 'mori')),
+  // Five suzerains issue assignments. Mayo has no vassalage and therefore no assignment deck.
+  ASSIGNMENT_CARDS: Object.fromEntries(POLITICAL_FACTION_ORDER
+    .filter(id => FACTIONS[id]?.canHaveVassal)
+    .map(id => [id, copy(rules.politics.assignments[id] || [])])),
   ANCHOR_CARDS: rules.sea,
   SAILING_EVENT_CARDS: rules.events.sailing.map(card => card.type === 'turn-effect'
     ? { ...card, type: 'next-turn', timing: 'next-personal-turn' } : card),

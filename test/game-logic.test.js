@@ -137,8 +137,6 @@ const {
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,
-  canReplaceAssignment,
-  replaceAssignment,
   assignmentEventMatches,
   completeAssignment,
   legendaryPlaceAt,
@@ -1561,18 +1559,20 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(decks.mori.drawPile.filter(card => card.type === 'movement-penalty' && card.amount === 2).length, 2);
 }
 
-// Все четыре колоды поручений содержат ровно 39 карт: 10 + 10 + 9 + 10.
+// Пять колод поручений содержат ровно 49 карт: Лиония 10, Кадингир 10, Мори 10, Суниксия 10, пираты 9.
 {
+  assert.deepEqual(Object.keys(ASSIGNMENT_CARDS), ['lionia', 'kadingir', 'mori', 'suniksiya', 'pirates']);
   assert.equal(ASSIGNMENT_CARDS.lionia.length, 10);
   assert.equal(ASSIGNMENT_CARDS.kadingir.length, 10);
-  assert.equal(ASSIGNMENT_CARDS.pirates.length, 9);
+  assert.equal(ASSIGNMENT_CARDS.mori.length, 10);
   assert.equal(ASSIGNMENT_CARDS.suniksiya.length, 10);
-  assert.equal(Object.values(ASSIGNMENT_CARDS).flat().length, 39);
+  assert.equal(ASSIGNMENT_CARDS.pirates.length, 9);
+  assert.equal(Object.values(ASSIGNMENT_CARDS).flat().length, 49);
   const decks = createAssignmentDecks(() => 0.5);
-  assert.equal(decks.lionia.drawPile.length, 10);
-  assert.equal(decks.kadingir.drawPile.length, 10);
-  assert.equal(decks.pirates.drawPile.length, 9);
-  assert.equal(decks.suniksiya.drawPile.length, 10);
+  assert.deepEqual(Object.fromEntries(Object.entries(decks).map(([id, deck]) => [id, deck.drawPile.length])), {
+    lionia: 10, kadingir: 10, mori: 10, suniksiya: 10, pirates: 9,
+  });
+  for (const deck of Object.values(decks)) assert.deepEqual(deck.removed, []);
 }
 
 // Поручение засчитывает нужное событие и выплачивает полную награду Лионии.
@@ -1611,20 +1611,9 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(assignmentEventMatches(p, { type: 'delivery', goodId: 'ore', assignmentInstanceId: 'delivery-1' }), true);
 }
 
-// Платная замена стоит 2 дуката и навсегда отмечает условие, чтобы его нельзя было заменить повторно.
+// Платная замена поручения удалена из активного runtime.
 {
-  const oldCard = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-yellow-a');
-  const newCard = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-ship-level');
-  const room = { round: 2, islands: cloneIslands(), assignmentDecks: { lionia: { drawPile: [{ ...newCard }], discard: [] } } };
-  const p = { id: 'p1', suzerainId: 'lionia', level: 1, upgrades: [], ducats: 5, activeAssignment: { instanceId: 'old', factionId: 'lionia', card: { ...oldCard } }, replacedAssignmentConditions: [] };
-  assert.equal(canReplaceAssignment(p).ok, true);
-  const result = replaceAssignment(room, p, () => 0.4);
-  assert.equal(result.ok, true);
-  assert.equal(p.ducats, 3);
-  assert.equal(p.replacedAssignmentConditions.includes('anchor:yellow'), true);
-  assert.equal(p.activeAssignment.card.id, 'lionia-ship-level');
-  p.activeAssignment = { instanceId: 'again', factionId: 'lionia', card: { ...oldCard } };
-  assert.equal(canReplaceAssignment(p).ok, false);
+  assert.equal(BALANCE.assignmentReplacementPrice, undefined);
 }
 
 // При выдаче карта захвата уже принадлежащего игроку острова пропускается.
@@ -1638,6 +1627,66 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const result = issueAssignment(room, p, 'lionia', () => 0.3);
   assert.equal(result.ok, true);
   assert.equal(result.assignment.card.id, 'lionia-ship-level');
+  assert.equal(room.assignmentDecks.lionia.drawPile.some(card => card.id === 'lionia-asigoriy'), true);
+  assert.equal(room.assignmentDecks.lionia.removed.length, 0);
+}
+
+// Необратимо невозможная карта удаляется из колоды и не возвращается в обычный цикл.
+{
+  const valid = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-ship-level');
+  const broken = { id: 'broken-capture', type: 'capture-island', islandId: 'missing-island', text: 'broken', reward: 0, factionId: 'lionia' };
+  const room = { round: 2, islands: cloneIslands(), assignmentDecks: { lionia: { drawPile: [broken, { ...valid }], discard: [] } } };
+  const p = { id: 'p1', level: 1, upgrades: [], activeAssignment: null };
+  const result = issueAssignment(room, p, 'lionia', () => 0.5);
+  assert.equal(result.ok, true);
+  assert.equal(result.assignment.card.id, valid.id);
+  assert.deepEqual(room.assignmentDecks.lionia.removed.map(card => card.id), ['broken-capture']);
+}
+
+// При одной выдаче Посольство просматривает доступные карты один раз:
+// временно недопустимая карта возвращается после выдачи, а сброс при необходимости перемешивается в колоду.
+{
+  const ownCapture = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-asigoriy');
+  const first = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-ship-level');
+  const second = ASSIGNMENT_CARDS.lionia.find(c => c.id === 'lionia-yellow-a');
+  const islands = cloneIslands();
+  islands.find(i => i.id === 'asigoriy').ownerId = 'p1';
+  const room = {
+    round: 2,
+    islands,
+    assignmentDecks: { lionia: { drawPile: [{ ...ownCapture }, { ...first }], discard: [{ ...second }], removed: [] } },
+  };
+  const p = { id: 'p1', level: 1, upgrades: [], activeAssignment: null };
+  const offered = offerAssignmentCards(room, p, 'lionia', 2, () => 0.5);
+  assert.deepEqual(offered.cards.map(card => card.id), [first.id, second.id]);
+  assert.equal(room.assignmentDecks.lionia.drawPile.filter(card => card.id === ownCapture.id).length, 1);
+  assert.equal(room.assignmentDecks.lionia.removed.length, 0);
+}
+
+// Поручение на уже достигший максимум здания временно пропускается для этого игрока.
+{
+  const maxed = ASSIGNMENT_CARDS.kadingir.find(c => c.id === 'kadingir-market');
+  const next = ASSIGNMENT_CARDS.kadingir.find(c => c.id === 'kadingir-ship-level');
+  const islands = cloneIslands();
+  const island = islands.find(i => i.id === 'kadingir');
+  island.ownerId = 'p1';
+  island.buildings = [{ type: 'bank', level: 3 }, { type: 'bank', level: 3 }];
+  const room = { round: 2, islands, assignmentDecks: { kadingir: { drawPile: [{ ...maxed }, { ...next }], discard: [], removed: [] } } };
+  const p = { id: 'p1', level: 1, upgrades: [], activeAssignment: null };
+  const result = issueAssignment(room, p, 'kadingir', () => 0.5);
+  assert.equal(result.ok, true);
+  assert.equal(result.assignment.card.id, next.id);
+  assert.equal(room.assignmentDecks.kadingir.drawPile.some(card => card.id === maxed.id), true);
+}
+
+// Одновременно у игрока может быть только одно активное поручение.
+{
+  const room = { round: 2, islands: cloneIslands(), assignmentDecks: createAssignmentDecks(() => 0.5) };
+  const p = { id: 'p1', level: 1, upgrades: [], activeAssignment: null };
+  assert.equal(issueAssignment(room, p, 'lionia', () => 0.5).ok, true);
+  const second = issueAssignment(room, p, 'lionia', () => 0.5);
+  assert.equal(second.ok, false);
+  assert.equal(second.error, 'У игрока уже есть активное поручение.');
 }
 
 // Координаты морских легендарных мест доступны серверу для поручений посещения.
@@ -1723,7 +1772,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(canEnterVassalage(room, second, 'lionia').ok, false);
 }
 
-// Сёгунат Мори участвует в подданстве уже в 5.6, но его поручения остаются границей 5.8.
+// Сёгунат Мори участвует в подданстве и имеет свою десятикарточную колоду поручений в 5.8.1.
 {
   const room = { islands: cloneIslands(), players: [], factionState: {} };
   const mori = room.islands.find(i => i.id === 'mori');
@@ -1733,7 +1782,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(joined.ok, true);
   assert.equal(joined.gift.id, 'miyosi');
   assert.equal(p.suzerainId, 'mori');
-  assert.equal(ASSIGNMENT_CARDS.mori, undefined);
+  assert.equal(ASSIGNMENT_CARDS.mori.length, 10);
 }
 
 // Спорный приз Кадингира: триггер и получатель фиксируются, но runtime не придумывает сумму.

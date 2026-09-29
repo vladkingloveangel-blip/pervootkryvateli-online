@@ -106,8 +106,6 @@ const {
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,
-  canReplaceAssignment,
-  replaceAssignment,
   assignmentEventMatches,
   completeAssignment,
   legendaryPlaceAt,
@@ -647,7 +645,7 @@ function publicRoom(room, viewerId = null) {
     balanceCatalog: { session: BALANCE.session, maxShipLevel: BALANCE.maxShipLevel,
       combat: BALANCE.combat, fleetScoring: BALANCE.fleetScoring, armyScoring: BALANCE.armyScoring,
       garrisons: BALANCE.garrisons, bastion: { price: BUILDINGS.bastion.price, defense: BUILDINGS.bastion.defense },
-      assignmentReplacementPrice: BALANCE.assignmentReplacementPrice, maxEscorts: BALANCE.maxEscorts, contractBonusRatio: BALANCE.contractBonusRatio,
+      maxEscorts: BALANCE.maxEscorts, contractBonusRatio: BALANCE.contractBonusRatio,
       loadingLimitPerIslandPerRound: BALANCE.loadingLimitPerIslandPerRound,
       landCompany: BALANCE.landCompany, legendaryEffects: BALANCE.legendaryEffects },
     shipCatalog: Object.fromEntries(Object.entries(SHIPS).map(([id, ship]) => [id, { ...ship }])),
@@ -891,13 +889,6 @@ function buildAssignmentQueue(room, snapshot) {
   return queue;
 }
 
-function buildAssignmentReplaceQueue(room) {
-  return (room.order || []).filter(id => {
-    const p = playerById(room, id);
-    return Boolean(p?.suzerainId && p.activeAssignment);
-  });
-}
-
 function refreshPoliticsWithLog(room) {
   const changes = refreshFactionExistence(room);
   for (const change of changes) {
@@ -953,7 +944,7 @@ function pendingDecisionError(room) {
   if (room?.pendingBattle) return 'Сначала завершите текущий совместный бой.';
   if (room?.pendingEvent) return 'Сначала разрешите карту события.';
   if (room?.pendingFeud) return 'Сначала разрешите карту вражды.';
-  if (room?.pendingAssignmentChoice) return 'Сначала решите, оставлять ли поручение сюзерена.';
+  if (room?.pendingAssignmentChoice) return 'Сначала выберите поручение через Посольство.';
   if (room?.pendingStatePrize) return 'Сначала разместите призовые здания за полное подчинение государства.';
   if (room?.pendingIslandCorrection) return room.pendingIslandCorrection.kind === 'capture-retention' ? 'Сначала выберите постройки, которые будут уничтожены после захвата острова.' : 'Сначала удалите лишние постройки с острова после потери статуса.';
   if (room?.pendingFleetAdjustment) return 'Сначала завершите обязательный выбор по флотилии или поддержке бастионов.';
@@ -2143,14 +2134,8 @@ function processEventPhase(room) {
       const index = Number(room.eventPhase.assignmentIndex) || 0;
       const queue = room.eventPhase.assignmentQueue || [];
       if (index >= queue.length) {
-        room.eventPhase.stage = 'assignment-replace';
-        room.eventPhase.replacementQueue = room.eventPhase.personalTurn
-          ? buildAssignmentReplaceQueue(room).filter(id => id === room.eventPhase.turnPlayerId)
-          : buildAssignmentReplaceQueue(room);
-        room.eventPhase.replacementIndex = 0;
-        room.eventPhase.currentPlayerId = room.eventPhase.replacementQueue?.[0] || null;
-        log(room, `Фаза событий: выдача поручений завершена. Вассалы могут по одному разу заменить активное поручение за ${BALANCE.assignmentReplacementPrice} дуката.`);
-        continue;
+        finishEventPhase(room);
+        return;
       }
       const item = queue[index];
       const player = playerById(room, item.playerId);
@@ -2186,24 +2171,6 @@ function processEventPhase(room) {
       room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: issued.assignment.card.text, factionId: item.factionId, factionName: FACTIONS[item.factionId]?.name, pending: false, source: 'assignment' };
       log(room, `${player.name} получает поручение ${FACTIONS[item.factionId]?.name}: «${issued.assignment.card.text}». Награда ${issued.assignment.card.reward} дукатов.`);
       continue;
-    }
-
-    if (room.eventPhase.stage === 'assignment-replace') {
-      const index = Number(room.eventPhase.replacementIndex) || 0;
-      const queue = room.eventPhase.replacementQueue || [];
-      if (index >= queue.length) { finishEventPhase(room); return; }
-      const playerId = queue[index];
-      const player = playerById(room, playerId);
-      room.eventPhase.currentPlayerId = playerId;
-      if (!player?.suzerainId || !player.activeAssignment || !player.connected) { room.eventPhase.replacementIndex += 1; continue; }
-      const allowed = canReplaceAssignment(player);
-      if (!allowed.ok) { room.eventPhase.replacementIndex += 1; continue; }
-      room.pendingAssignmentChoice = {
-        id: crypto.randomUUID(), playerId: player.id, factionId: player.suzerainId,
-        assignment: player.activeAssignment, canReplace: true, replaceError: null,
-      };
-      room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: player.activeAssignment.card.text, factionId: player.suzerainId, factionName: FACTIONS[player.suzerainId]?.name, pending: true, source: 'assignment-replace' };
-      return;
     }
 
     finishEventPhase(room);
@@ -3876,38 +3843,16 @@ io.on('connection', socket => {
     const pending = room?.pendingAssignmentChoice;
     if (!room || !pending || pending.id !== String(data?.choiceId || '')) return ackSafe(ack, { ok: false, error: 'Это решение по поручению больше не ожидается.' });
     if (pending.playerId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Решение адресовано другому игроку.' });
+    if (pending.kind !== 'embassy') return ackSafe(ack, { ok: false, error: 'Платная замена поручения удалена действующими правилами.' });
     const player = playerById(room, pending.playerId);
     if (!player) return ackSafe(ack, { ok: false, error: 'Игрок не найден.' });
-    if ((pending.kind || 'replace') === 'embassy') {
-      const assignmentId = String(data?.assignmentId || '');
-      const result = chooseAssignmentOffer(room, player, pending.factionId, pending.options || [], assignmentId);
-      if (!result.ok) return ackSafe(ack, result);
-      log(room, `${player.name} выбирает через Посольство поручение ${FACTIONS[pending.factionId]?.name || pending.factionId}: «${result.assignment.card.text}».`);
-      room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: result.assignment.card.text, factionId: pending.factionId, factionName: FACTIONS[pending.factionId]?.name, pending: false, source: 'assignment' };
-      room.pendingAssignmentChoice = null;
-      processEventPhase(room);
-      ackSafe(ack, { ok: true });
-      emitRoom(room);
-      return;
-    }
 
-    const replace = Boolean(data?.replace);
-    if (replace) {
-      const result = replaceAssignment(room, player);
-      if (!result.ok) return ackSafe(ack, result);
-      if (result.next) {
-        log(room, `${player.name} платит ${BALANCE.assignmentReplacementPrice} дуката и заменяет поручение «${result.previous.card.text}» на «${result.next.card.text}».`);
-        room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: result.next.card.text, factionId: player.suzerainId, factionName: FACTIONS[player.suzerainId]?.name, pending: false, source: 'assignment-replace' };
-      } else {
-        log(room, `${player.name} платит ${BALANCE.assignmentReplacementPrice} дуката и сбрасывает поручение «${result.previous.card.text}», но подходящей замены сейчас нет.`);
-        room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: 'Подходящей замены нет', factionId: player.suzerainId, factionName: FACTIONS[player.suzerainId]?.name, pending: false, source: 'assignment-replace' };
-      }
-    } else {
-      log(room, `${player.name} оставляет активное поручение «${player.activeAssignment?.card?.text || 'поручение'}».`);
-      if (room.eventPhase?.lastCard) room.eventPhase.lastCard.pending = false;
-    }
+    const assignmentId = String(data?.assignmentId || '');
+    const result = chooseAssignmentOffer(room, player, pending.factionId, pending.options || [], assignmentId);
+    if (!result.ok) return ackSafe(ack, result);
+    log(room, player.name + ' выбирает через Посольство поручение ' + (FACTIONS[pending.factionId]?.name || pending.factionId) + ': «' + result.assignment.card.text + '».');
+    room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: result.assignment.card.text, factionId: pending.factionId, factionName: FACTIONS[pending.factionId]?.name, pending: false, source: 'assignment' };
     room.pendingAssignmentChoice = null;
-    room.eventPhase.replacementIndex += 1;
     processEventPhase(room);
     ackSafe(ack, { ok: true });
     emitRoom(room);
