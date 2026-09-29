@@ -59,7 +59,7 @@ const FEUD_CARDS = Object.fromEntries(Object.entries(rules.events.feud).map(([fa
   })),
 ]));
 module.exports = {
-  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-5-combat-politics-5.8.5',
+  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-5-combat-politics-complete',
   BALANCE: {
     session: rules.session,
     maxShipLevel: rules.fleet.maxLevel, maxReadableShipLevel: legacy.shipLevel7.level,

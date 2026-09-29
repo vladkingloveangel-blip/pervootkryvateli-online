@@ -2892,4 +2892,50 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(has(reachableCells(withSleds, 2), 5, 6), true);
 }
 
+
+// Финальный smoke 5.9: активные потребители этапа 5 работают совместно в одном runtime.
+// Союзный морской бой расходует единый предел каждого атакующего, начисляет очки флота;
+// исчезновение государства выдаёт итоговый приз; налоговая санкция использует тот же политический профиль.
+{
+  const battleRoom = { round: 2, islands: cloneIslands(), players: [], alliances: [] };
+  const a = { id: 'stage5-a', name: 'A', row: 10, col: 10, shipClass: 'frigate', level: 2, upgrades: [], escorts: [], ducats: 5, brokenAlliesThisTurn: [] };
+  const ally = { id: 'stage5-ally', name: 'Ally', row: 9, col: 10, shipClass: 'frigate', level: 1, upgrades: [], escorts: [], ducats: 0, brokenAlliesThisTurn: [] };
+  const target = { id: 'stage5-target', name: 'Target', row: 10, col: 10, shipClass: 'brigantine', level: 3, upgrades: [], escorts: [], ducats: 3, brokenAlliesThisTurn: [] };
+  battleRoom.players = [a, ally, target];
+  assert.equal(addAlliance(battleRoom, a.id, ally.id), true);
+  const sea = jointSeaBattle(battleRoom, a, target, [ally.id], []);
+  assert.equal(sea.ok, true);
+  assert.equal(sea.outcome, 'attacker');
+  assert.equal(a.fleetPoints, 2);
+  assert.equal(ally.fleetPoints, 2);
+  assert.equal(canAttackPlayerThisRound(battleRoom, a, target.id).ok, false);
+  assert.equal(canAttackPlayerThisRound(battleRoom, ally, target.id).ok, false);
+  assert.equal(jointSeaBattle(battleRoom, a, target, [ally.id], []).ok, false);
+
+  const stateRoom = { islands: cloneIslands(), players: [], factionState: {}, round: 2, legendaryDeck: createLegendaryDeck() };
+  const kadingir = stateRoom.islands.find(i => i.id === 'kadingir');
+  kadingir.army = 0;
+  const conqueror = {
+    id: 'stage5-conqueror', row: kadingir.cells[0][0], col: kadingir.cells[0][1],
+    shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0, enemyFactionIds: [],
+  };
+  stateRoom.players = [conqueror];
+  const conquest = assaultIsland(stateRoom, conqueror, kadingir, 'preserve');
+  assert.equal(conquest.outcome, 'attacker');
+  assert.equal(conquest.statePrize.triggered, true);
+  assert.equal(conquest.statePrize.ducats, 50);
+  assert.equal(conqueror.ducats, 50);
+  assert.equal(stateExists(stateRoom, 'kadingir'), false);
+
+  const taxed = { ducats: 1, debt: 0, nextActionLimit: null };
+  const tax = settleVassalTax(taxed, 'lionia');
+  assert.equal(tax.underpaid, true);
+  assert.equal(tax.paid, 1);
+  assert.equal(taxed.nextActionLimit, 2);
+
+  const assignmentDecks = createAssignmentDecks(() => 0.5);
+  assert.equal(Object.values(assignmentDecks).reduce((sum, deck) => sum + deck.drawPile.length, 0), 49);
+  assert.deepEqual(Object.keys(createFeudDecks(() => 0.5)), ['lionia','kadingir','mori','mayo','suniksiya','pirates']);
+}
+
 console.log('game-logic tests: OK');
