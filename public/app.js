@@ -1495,8 +1495,10 @@
       const relation = mine.suzerainId === f.id ? ' · ваш сюзерен' : enemies.has(f.id) ? ' · ВРАЖДА' : '';
       const gift = f.giftIslandName ? ` · передаваемый остров: ${escapeHtml(f.giftIslandName)}` : '';
       const prize = f.fullConquestPrize;
-      const prizeText = prize ? ` · итоговый приз: сохранить — ${(prize.preserveBuildings || []).map(b => escapeHtml(b.name)).join(' + ') || '—'}; разорить — ${prize.razeDucats} дукатов` : '';
-      const claimed = f.fullConquestClaimed ? ` · приз уже получен: ${escapeHtml(playerName(f.fullConquestPlayerId))}` : '';
+      const prizeText = prize
+        ? ` · итоговый приз: ${prize.amountUnresolved ? 'сумма требует решения автора' : `${prize.ducats} дукатов`}`
+        : '';
+      const claimed = f.fullConquestClaimed ? ` · получатель приза: ${escapeHtml(playerName(f.fullConquestPlayerId))}` : '';
       return `<div class="politics-row"><strong>${escapeHtml(f.name)}</strong><br><span class="cargo-meta">${state} · вассал: ${escapeHtml(vassal)}${gift}${escapeHtml(relation)}${prizeText}${claimed}</span></div>`;
     }).join('');
     content.innerHTML = html;
@@ -1532,15 +1534,15 @@
 
     if (!r?.started) {
       badge.textContent = '—';
-      content.textContent = 'Итоговый приз появится при первом полном подчинении государства.';
+      content.textContent = 'Итоговый приз возникает после военного захвата последнего острова, которым ещё владеет само государство.';
       return;
     }
     if (!pending) {
       const claimed = (r.factions || []).filter(f => f.fullConquestClaimed);
       badge.textContent = claimed.length ? `получено ${claimed.length}` : 'ожидание';
       content.innerHTML = claimed.length
-        ? `<div class="event-current">Уже выданы: ${claimed.map(f => `${escapeHtml(f.name)} — ${escapeHtml(playerName(f.fullConquestPlayerId))}`).join('<br>')}</div>`
-        : '<div class="event-current">Приз выдаётся один раз за партию, когда один игрок впервые получает контроль над всеми исходными островами государства военным захватом последнего острова.</div>';
+        ? `<div class="event-current">Зафиксированные получатели: ${claimed.map(f => `${escapeHtml(f.name)} — ${escapeHtml(playerName(f.fullConquestPlayerId))}${f.fullConquestPrize?.amountUnresolved ? ' (сумма требует решения автора)' : ` (${f.fullConquestPrize?.ducats || 0} дукатов)`}`).join('<br>')}</div>`
+        : '<div class="event-current">Приз выдаётся один раз после военного захвата последнего острова, которым ещё владело само государство. Владеть его прежними островами не требуется.</div>';
       return;
     }
 

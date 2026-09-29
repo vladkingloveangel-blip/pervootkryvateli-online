@@ -563,12 +563,13 @@ function publicRoom(room, viewerId = null) {
         giftIslandId: f.giftIslandId || null, giftIslandName: gift?.name || null, vassalPlayerId: vassal?.id || null,
         tax: Number(f.tax) || 0, rewardShare: Number(f.rewardShare) || 0, canJoin: Boolean(canJoin.ok),
         fullConquestPrize: f.fullConquestPrize ? {
-          preserveBuildings: (f.fullConquestPrize.preserveBuildings || []).map(spec => ({ ...spec, name: buildingDisplayName(spec) })),
-          razeDucats: Number(f.fullConquestPrize.razeDucats) || 0,
+          ducats: f.fullConquestPrize.amountUnresolved ? null : Math.max(0, Number(f.fullConquestPrize.ducats) || 0),
+          amountUnresolved: Boolean(f.fullConquestPrize.amountUnresolved),
+          trigger: f.fullConquestPrize.trigger || null,
         } : null,
         fullConquestClaimed: Boolean(room.factionState?.[factionId]?.fullConquestClaimed),
         fullConquestPlayerId: room.factionState?.[factionId]?.fullConquestPlayerId || null,
-        fullConquestMode: room.factionState?.[factionId]?.fullConquestMode || null,
+        ceasedRound: room.factionState?.[factionId]?.ceasedRound || null,
       };
     }),
     feudDecks: Object.fromEntries(POLITICAL_FACTION_ORDER.map(id => [id, { remaining: room.feudDecks?.[id]?.drawPile?.length || 0, discard: room.feudDecks?.[id]?.discard?.length || 0 }])),
@@ -1436,28 +1437,14 @@ function queueStatePrizeFromAssault(room, attacker, result) {
   const prize = result?.statePrize;
   if (!prize?.triggered) return false;
   const factionName = prize.factionName || FACTIONS[prize.factionId]?.name || prize.factionId;
-
-  if (prize.mode === 'raze') {
-    log(room, `${attacker.name} впервые подчиняет все исходные острова ${factionName} разорением последнего острова. Итоговый денежный приз: ${prize.ducats} дукатов.`);
+  if (prize.amountUnresolved) {
+    log(room, `${attacker.name} военным штурмом берёт последний остров, которым владело государство ${factionName}. Получатель итогового приза зафиксирован, но сумма не выплачена: мастер-правила содержат нерешённое противоречие по этому призу.`);
     return false;
   }
-
-  const all = (prize.allBuildings || []).map(buildingDisplayName);
-  const dedup = (prize.deduplicatedBuildings || []).map(buildingDisplayName);
-  const remaining = (prize.buildings || []).map(spec => ({ ...spec }));
-  const dedupText = dedup.length ? ` Уже полученные одновременно одинаковые награды не дублируются: ${dedup.join(', ')}.` : '';
-  log(room, `${attacker.name} впервые подчиняет все исходные острова ${factionName} с сохранением последнего острова. Итоговый приз: ${all.join(', ') || 'без зданий'}.${dedupText}`);
-
-  if (!remaining.length) return false;
-  room.pendingStatePrize = {
-    id: crypto.randomUUID(),
-    playerId: attacker.id,
-    factionId: prize.factionId,
-    remainingBuildings: remaining,
-    options: [],
-    lost: [],
-  };
-  return advanceStatePrizePlacement(room);
+  const c = prize.credit;
+  const debtText = c?.debtPaid ? ` Из ${prize.ducats} дукатов ${c.debtPaid} погашают долг; в казну ${c.net}.` : '';
+  log(room, `${attacker.name} получает итоговый приз ${factionName} за военный захват последнего острова государства: ${prize.ducats} дукатов.${debtText}`);
+  return false;
 }
 
 function queueCaptureRetentionFromAssault(room, attacker, island, result) {

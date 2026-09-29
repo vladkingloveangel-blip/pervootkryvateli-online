@@ -1,6 +1,6 @@
 {
-  "activeProfile": "stage-5-combat-politics-5.5",
-  "note": "Read rules/ as master data. Stage 5 combat/politics is active through block 5.5 only; stage-5 pending consumers remain pending until their blocks are implemented and finalized.",
+  "activeProfile": "stage-5-combat-politics-5.6",
+  "note": "Read rules/ as master data. Stage 5 combat/politics is active through block 5.6 only; stage-5 pending consumers remain pending until the stage is finalized.",
   "pendingConsumers": [
     {
       "path": "politics.factions.mori",

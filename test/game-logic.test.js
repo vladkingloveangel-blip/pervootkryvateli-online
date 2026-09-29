@@ -98,8 +98,8 @@ const {
   factionIdForIsland,
   stateExists,
   refreshFactionExistence,
-  fullSubjugationController,
-  claimFullSubjugationPrize,
+  stateOwnedIslandIds,
+  resolveStateMilitaryCapture,
   canPlacePrizeBuilding,
   prizeBuildingPlacementOptions,
   placePrizeBuilding,
@@ -1473,17 +1473,18 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(room.islands.find(i => i.id === 'frandia').ownerId, null);
 }
 
-// Государство исчезает, когда все его исходные острова принадлежат не-вассалам; старая вражда снимается.
+// Владение прежними островами игроками само по себе не прекращает государство:
+ // прекращение — отдельное необратимое состояние после квалифицирующего военного захвата.
 {
   const room = { islands: cloneIslands(), players: [], factionState: {} };
   const p = { id: 'p1', suzerainId: null, vassalGiftIslandId: null, enemyFactionIds: ['lionia'] };
   room.players.push(p);
   for (const id of ['landin', 'frandia', 'eidon']) room.islands.find(i => i.id === id).ownerId = 'p1';
-  assert.equal(stateExists(room, 'lionia'), false);
+  assert.equal(stateOwnedIslandIds(room, 'lionia').length, 0);
+  assert.equal(stateExists(room, 'lionia'), true);
   refreshFactionExistence(room);
-  assert.equal(room.factionState.lionia.exists, false);
-  assert.deepEqual(p.enemyFactionIds, []);
-  assert.equal(addEnmity(room, p, 'lionia').ok, false);
+  assert.equal(room.factionState.lionia.exists, true);
+  assert.deepEqual(p.enemyFactionIds, ['lionia']);
 }
 
 // Политические карты могут выбирать постройки, улучшения, трюмы и закрытые удерживаемые карты.
@@ -1601,35 +1602,96 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 }
 
 
-// Итоговые призы полного подчинения заданы для всех пяти политических государств.
+// Все шесть государств присутствуют в политическом runtime. Итоговые призы — только денежные;
+// сумма Кадингира остаётся явно нерешённой из-за противоречия мастер-текста.
 {
-  assert.deepEqual(FACTIONS.lionia.fullConquestPrize.preserveBuildings.map(x => x.type), ['market', 'market']);
-  assert.equal(FACTIONS.lionia.fullConquestPrize.razeDucats, 60);
-  assert.deepEqual(FACTIONS.kadingir.fullConquestPrize.preserveBuildings.map(x => x.type), ['bank', 'market']);
-  assert.equal(FACTIONS.kadingir.fullConquestPrize.razeDucats, 50);
-  assert.equal(FACTIONS.mayo.fullConquestPrize.razeDucats, 10);
-  assert.equal(FACTIONS.suniksiya.fullConquestPrize.razeDucats, 30);
-  assert.equal(FACTIONS.pirates.fullConquestPrize.razeDucats, 20);
+  assert.deepEqual(
+    ['lionia','kadingir','mori','mayo','suniksiya','pirates'].filter(id => Boolean(FACTIONS[id])),
+    ['lionia','kadingir','mori','mayo','suniksiya','pirates']
+  );
+  assert.deepEqual(
+    [FACTIONS.lionia.fullConquestPrize.ducats, FACTIONS.mori.fullConquestPrize.ducats, FACTIONS.mayo.fullConquestPrize.ducats, FACTIONS.suniksiya.fullConquestPrize.ducats, FACTIONS.pirates.fullConquestPrize.ducats],
+    [60,40,10,30,20]
+  );
+  assert.equal(FACTIONS.kadingir.fullConquestPrize.amountUnresolved, true);
+  assert.equal(FACTIONS.lionia.fullConquestPrize.preserveBuildings, undefined);
+  assert.equal(FACTIONS.lionia.fullConquestPrize.razeDucats, undefined);
 }
 
-// Полное подчинение требует, чтобы все исходные острова фракции принадлежали одному игроку,
-// и один и тот же итоговый приз нельзя получить второй раз.
+// Последний остров, которым ещё владеет само государство, прекращает Лионию и даёт приз инициатору,
+// даже если прежние острова Лионии принадлежат другим игрокам. Вассал освобождается, вражда исчезает.
 {
-  const room = { islands: cloneIslands(), players: [{ id: 'p1' }], factionState: {}, round: 3 };
-  const p = room.players[0];
-  for (const id of ['landin', 'frandia']) room.islands.find(i => i.id === id).ownerId = p.id;
-  assert.equal(fullSubjugationController(room, 'lionia'), null);
-  room.islands.find(i => i.id === 'eidon').ownerId = p.id;
-  assert.equal(fullSubjugationController(room, 'lionia'), p.id);
-  const first = claimFullSubjugationPrize(room, p, 'lionia', 'preserve');
-  assert.equal(first.triggered, true);
-  assert.equal(first.buildings.length, 2);
-  assert.equal(room.factionState.lionia.fullConquestClaimed, true);
-  assert.equal(claimFullSubjugationPrize(room, p, 'lionia', 'preserve'), null);
+  const room = { islands: cloneIslands(), players: [], factionState: {}, round: 3, legendaryDeck: createLegendaryDeck() };
+  const landin = room.islands.find(i => i.id === 'landin');
+  const frandia = room.islands.find(i => i.id === 'frandia');
+  const eidon = room.islands.find(i => i.id === 'eidon');
+  landin.ownerId = 'other';
+  frandia.ownerId = 'vassal';
+  eidon.army = 0;
+  eidon.buildings = [{ type: 'farm', level: 1 }, { type: 'market', level: 1 }];
+  const attacker = { id: 'attacker', row: eidon.cells[0][0], col: eidon.cells[0][1], shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0, enemyFactionIds: ['lionia'] };
+  const vassal = { id: 'vassal', suzerainId: 'lionia', vassalGiftIslandId: 'frandia', enemyFactionIds: [], activeAssignment: null };
+  const enemy = { id: 'enemy', suzerainId: null, vassalGiftIslandId: null, enemyFactionIds: ['lionia'] };
+  room.players.push(attacker, vassal, enemy, { id: 'other' });
+  refreshFactionExistence(room);
+  assert.deepEqual(stateOwnedIslandIds(room, 'lionia'), ['eidon']);
+  const result = assaultIsland(room, attacker, eidon, 'preserve');
+  assert.equal(result.outcome, 'attacker');
+  assert.equal(result.statePrize.triggered, true);
+  assert.equal(result.statePrize.ducats, 60);
+  assert.equal(attacker.ducats, 60); // 30 острова не складываются с итоговыми 60
+  assert.equal(result.captureRetention, null);
+  assert.equal(eidon.buildings.length, 2); // государственные постройки не делятся пополам как постройки игрока
+  assert.equal(room.factionState.lionia.ceased, true);
+  assert.equal(stateExists(room, 'lionia'), false);
+  refreshFactionExistence(room);
+  assert.equal(vassal.suzerainId, null);
+  assert.equal(frandia.ownerId, 'vassal'); // распад государства не отбирает подаренный остров
+  assert.deepEqual(attacker.enemyFactionIds, []);
+  assert.deepEqual(enemy.enemyFactionIds, []);
+  assert.equal(addEnmity(room, enemy, 'lionia').ok, false);
 }
 
-// Кадингир: при сохранении Банк I карточки острова совпадает с Банком I итогового приза,
-// поэтому второй такой банк не создаётся; остаётся разместить только Рынок I.
+// Мирная передача единственного острова вассалу не прекращает государство и не даёт итоговый приз.
+{
+  const room = { islands: cloneIslands(), players: [], factionState: {}, round: 2 };
+  const island = room.islands.find(i => i.id === 'kadingir');
+  const p = { id: 'p1', row: island.cells[0][0], col: island.cells[0][1], suzerainId: null, vassalGiftIslandId: null, enemyFactionIds: [], ducats: 0 };
+  room.players.push(p);
+  assert.equal(enterVassalage(room, p, 'kadingir').ok, true);
+  assert.equal(island.ownerId, p.id);
+  assert.equal(stateOwnedIslandIds(room, 'kadingir').length, 0);
+  assert.equal(stateExists(room, 'kadingir'), true);
+  assert.equal(room.factionState.kadingir?.fullConquestClaimed || false, false);
+}
+
+// Действующий вассал блокирует второго даже после утраты подаренного острова.
+{
+  const room = { islands: cloneIslands(), players: [], factionState: {} };
+  const landin = room.islands.find(i => i.id === 'landin');
+  const first = { id: 'a', row: landin.cells[0][0], col: landin.cells[0][1], suzerainId: null, vassalGiftIslandId: null, enemyFactionIds: [] };
+  const second = { id: 'b', row: landin.cells[0][0], col: landin.cells[0][1], suzerainId: null, vassalGiftIslandId: null, enemyFactionIds: [] };
+  room.players.push(first, second);
+  assert.equal(enterVassalage(room, first, 'lionia').ok, true);
+  room.islands.find(i => i.id === 'frandia').ownerId = 'third';
+  assert.equal(canEnterVassalage(room, second, 'lionia').ok, false);
+}
+
+// Сёгунат Мори участвует в подданстве уже в 5.6, но его поручения остаются границей 5.8.
+{
+  const room = { islands: cloneIslands(), players: [], factionState: {} };
+  const mori = room.islands.find(i => i.id === 'mori');
+  const p = { id: 'p1', row: mori.cells[0][0], col: mori.cells[0][1], suzerainId: null, vassalGiftIslandId: null, enemyFactionIds: [] };
+  room.players.push(p);
+  const joined = enterVassalage(room, p, 'mori');
+  assert.equal(joined.ok, true);
+  assert.equal(joined.gift.id, 'miyosi');
+  assert.equal(p.suzerainId, 'mori');
+  assert.equal(ASSIGNMENT_CARDS.mori, undefined);
+}
+
+// Спорный приз Кадингира: триггер и получатель фиксируются, но runtime не придумывает сумму.
+// Подтверждённая островная награда 30 дукатов при этом сохраняется.
 {
   const room = { islands: cloneIslands(), players: [], factionState: {}, round: 2, legendaryDeck: createLegendaryDeck() };
   const island = room.islands.find(i => i.id === 'kadingir');
@@ -1639,31 +1701,13 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const result = assaultIsland(room, p, island, 'preserve');
   assert.equal(result.ok, true);
   assert.equal(result.outcome, 'attacker');
-  assert.equal(p.ducats, 30);
-  assert.equal(island.buildings.filter(b => b.type === 'bank').length, 1);
   assert.equal(result.statePrize.triggered, true);
-  assert.deepEqual(result.statePrize.deduplicatedBuildings.map(b => b.type), ['bank']);
-  assert.deepEqual(result.statePrize.buildings.map(b => b.type), ['market']);
-  const options = prizeBuildingPlacementOptions(room, p, result.statePrize.buildings[0]);
-  assert.equal(options.some(o => o.islandId === 'kadingir'), false);
-  const placed = placePrizeBuilding(room, p, 'kadingir', result.statePrize.buildings[0], { factionId: 'kadingir' });
-  assert.equal(placed.ok, false);
-  assert.equal(island.buildings.filter(b => b.type === 'market').length, 0);
-}
-
-// Кадингир: при разорении последнего острова итоговые 50 дукатов являются общей денежной
-// добычей финального захвата, а не складываются с 30 дукатами карточки острова.
-{
-  const room = { islands: cloneIslands(), players: [], factionState: {}, round: 2, legendaryDeck: createLegendaryDeck() };
-  const island = room.islands.find(i => i.id === 'kadingir');
-  island.army = 0;
-  const p = { id: 'p1', row: island.cells[0][0], col: island.cells[0][1], shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0, glory: 0, enemyFactionIds: [] };
-  room.players.push(p);
-  const result = assaultIsland(room, p, island, 'raze');
-  assert.equal(result.ok, true);
-  assert.equal(result.outcome, 'attacker');
-  assert.equal(result.statePrize.ducats, 50);
-  assert.equal(p.ducats, 50);
+  assert.equal(result.statePrize.amountUnresolved, true);
+  assert.equal(result.statePrize.ducats, null);
+  assert.equal(result.statePrize.playerId, p.id);
+  assert.equal(p.ducats, 30);
+  assert.equal(island.buildings.length, 0); // legacy Банк I больше не подмешивается к карточке Кадингира
+  assert.equal(stateExists(room, 'kadingir'), false);
 }
 
 // Призовая постройка игнорирует обычные требования фермы/форта и положения корабля,

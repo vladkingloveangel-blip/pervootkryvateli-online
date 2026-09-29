@@ -387,123 +387,87 @@ function ensurePoliticalPlayer(player) {
 }
 
 function stateExists(room, factionId) {
+  if (!room || !FACTIONS[factionId]) return false;
+  return room.factionState?.[factionId]?.ceased !== true;
+}
+
+function stateOwnedIslandIds(room, factionId) {
   const faction = FACTIONS[factionId];
-  if (!room || !faction) return false;
-  for (const islandId of faction.originalIslandIds || []) {
+  if (!room || !faction) return [];
+  return (faction.originalIslandIds || []).filter(islandId => {
     const island = room.islands?.find(i => i.id === islandId);
-    if (!island) continue;
-    if (!island.ownerId) return true;
-    const owner = room.players?.find(p => p.id === island.ownerId);
-    if (owner?.suzerainId === factionId) return true;
+    return Boolean(island && !island.ownerId);
+  });
+}
+
+function clearCeasedStateRelations(room, factionId) {
+  for (const player of room?.players || []) {
+    ensurePoliticalPlayer(player);
+    player.enemyFactionIds = player.enemyFactionIds.filter(id => id !== factionId);
+    if (player.suzerainId === factionId) {
+      if (player.activeAssignment?.card) discardAssignmentCard(room, factionId, player.activeAssignment.card);
+      player.suzerainId = null;
+      player.vassalGiftIslandId = null;
+      player.activeAssignment = null;
+    }
   }
-  return false;
 }
 
 function refreshFactionExistence(room) {
   room.factionState ||= {};
   const changes = [];
   for (const factionId of POLITICAL_FACTION_ORDER) {
-    const before = room.factionState[factionId]?.exists;
-    const exists = stateExists(room, factionId);
-    room.factionState[factionId] ||= { exists: true };
-    room.factionState[factionId].exists = exists;
+    const state = (room.factionState[factionId] ||= {});
+    const before = state.exists;
+    const exists = state.ceased !== true;
+    state.exists = exists;
     if (before !== undefined && before !== exists) changes.push({ factionId, before, exists });
-    if (!exists) {
-      for (const player of room.players || []) {
-        ensurePoliticalPlayer(player);
-        player.enemyFactionIds = player.enemyFactionIds.filter(id => id !== factionId);
-        if (player.suzerainId === factionId) {
-          if (player.activeAssignment?.card) discardAssignmentCard(room, factionId, player.activeAssignment.card);
-          player.suzerainId = null;
-          player.vassalGiftIslandId = null;
-          player.activeAssignment = null;
-        }
-      }
-    }
+    if (!exists) clearCeasedStateRelations(room, factionId);
   }
   return changes;
 }
 
-
-function fullSubjugationController(room, factionId) {
+function resolveStateMilitaryCapture(room, player, island, previousOwnerId = null) {
+  if (!room || !player || !island || previousOwnerId) return null;
+  const factionId = factionIdForIsland(island);
   const faction = FACTIONS[factionId];
-  if (!room || !faction?.originalIslandIds?.length) return null;
-  let ownerId = null;
-  for (const islandId of faction.originalIslandIds) {
-    const island = room.islands?.find(i => i.id === islandId);
-    if (!island?.ownerId) return null;
-    if (ownerId == null) ownerId = island.ownerId;
-    if (island.ownerId !== ownerId) return null;
-  }
-  return ownerId;
-}
+  if (!faction || !stateExists(room, factionId)) return null;
+  if (stateOwnedIslandIds(room, factionId).length) return null;
 
-function buildingSpecKey(spec) {
-  return `${String(spec?.type || '')}:${Math.max(1, Number(spec?.level) || 1)}`;
-}
-
-function subtractBuildingRewards(prizeBuildings, overlappingBuildings) {
-  const overlap = new Map();
-  for (const spec of overlappingBuildings || []) {
-    const key = buildingSpecKey(spec);
-    overlap.set(key, (overlap.get(key) || 0) + 1);
-  }
-  const remaining = [];
-  const deduplicated = [];
-  for (const spec of prizeBuildings || []) {
-    const key = buildingSpecKey(spec);
-    const count = overlap.get(key) || 0;
-    if (count > 0) {
-      overlap.set(key, count - 1);
-      deduplicated.push({ ...spec });
-    } else {
-      remaining.push({ ...spec });
-    }
-  }
-  return { remaining, deduplicated };
-}
-
-function claimFullSubjugationPrize(room, player, factionId, captureMode = 'preserve', overlappingBuildings = []) {
-  const faction = FACTIONS[factionId];
-  if (!room || !player || !faction?.fullConquestPrize) return null;
   room.factionState ||= {};
-  room.factionState[factionId] ||= { exists: stateExists(room, factionId) };
-  const state = room.factionState[factionId];
-  if (state.fullConquestClaimed) return null;
-  if (fullSubjugationController(room, factionId) !== player.id) return null;
+  const state = (room.factionState[factionId] ||= {});
+  if (state.ceased) return null;
 
-  const mode = captureMode === 'raze' ? 'raze' : 'preserve';
-  const prize = faction.fullConquestPrize;
-  state.fullConquestClaimed = true;
+  state.ceased = true;
+  state.ceasedRound = Number(room.round) || null;
+  state.ceasedByPlayerId = player.id;
+  state.ceasedOnIslandId = island.id;
+  state.fullConquestClaimed = true; // legacy field retained for saved-room compatibility
   state.fullConquestPlayerId = player.id;
-  state.fullConquestMode = mode;
   state.fullConquestRound = Number(room.round) || null;
 
-  if (mode === 'raze') {
-    return {
-      triggered: true,
-      factionId,
-      factionName: faction.name,
-      mode,
-      ducats: Math.max(0, Math.floor(Number(prize.razeDucats) || 0)),
-      buildings: [],
-      allBuildings: [],
-      deduplicatedBuildings: [],
-    };
-  }
+  const prize = faction.fullConquestPrize || {};
+  const amountUnresolved = Boolean(prize.amountUnresolved);
+  const ducats = amountUnresolved ? null : Math.max(0, Math.floor(Number(prize.ducats) || 0));
+  state.finalPrizeAmountUnresolved = amountUnresolved;
+  state.finalPrizeDucats = ducats;
 
-  const allBuildings = (prize.preserveBuildings || []).map(spec => ({ ...spec }));
-  const dedupe = subtractBuildingRewards(allBuildings, overlappingBuildings);
-  return {
+  clearCeasedStateRelations(room, factionId);
+
+  const result = {
     triggered: true,
     factionId,
     factionName: faction.name,
-    mode,
-    ducats: 0,
-    buildings: dedupe.remaining,
-    allBuildings,
-    deduplicatedBuildings: dedupe.deduplicated,
+    stateCeased: true,
+    playerId: player.id,
+    islandId: island.id,
+    ducats,
+    amountUnresolved,
+    excludesIslandDucats: prize.excludesIslandDucats !== false,
+    credit: null,
   };
+  if (!amountUnresolved && ducats > 0) result.credit = creditDucats(player, ducats);
+  return result;
 }
 
 function addEnmity(room, player, factionId) {
@@ -521,7 +485,9 @@ function canEnterVassalage(room, player, factionId) {
   if (!faction.canHaveVassal) return { ok: false, error: `${faction.name} не принимает подданство.` };
   if (!stateExists(room, factionId)) return { ok: false, error: `${faction.name} больше не существует.` };
   if (player.suzerainId) return { ok: false, error: 'Игрок может быть вассалом только одного государства.' };
-  if (player.enemyFactionIds.includes(factionId)) return { ok: false, error: 'Правила не описывают вступление в подданство при действующей вражде; в MVP сначала это состояние должно исчезнуть вместе с государством.' };
+  const currentVassal = room.players?.find(p => p.id !== player.id && p.suzerainId === factionId);
+  if (currentVassal) return { ok: false, error: `У ${faction.name} уже есть вассал.` };
+  if (player.enemyFactionIds.includes(factionId)) return { ok: false, error: 'Правила не описывают вступление в подданство при действующей вражде; это состояние не меняется автоматически.' };
   const gift = room.islands?.find(i => i.id === faction.giftIslandId);
   if (!gift || gift.ownerId) return { ok: false, error: 'Остров, который сюзерен должен передать, уже не принадлежит государству.' };
   const here = islandAt(room, player.row, player.col).find(i => !i.ownerId && factionIdForIsland(i) === factionId);
@@ -2722,30 +2688,29 @@ function jointAssaultIsland(room, attacker, island, captureMode = 'preserve', at
   if (attackerPower > defense.total) {
     result.outcome = 'attacker';
     result.previousOwnerId = island.ownerId || null;
-    result.captureRetention = captureRetentionPlan(island);
+    // §8.4 halves infrastructure only when an island is captured from another player.
+    result.captureRetention = result.previousOwnerId ? captureRetentionPlan(island) : null;
     island.ownerId = attacker.id;
     const firstMilitaryConquest = !island.firstMilitaryConquered;
     if (firstMilitaryConquest) island.firstMilitaryConquered = true;
     if (firstMilitaryConquest) result.armyPointAwards = awardArmyVictoryPoints(room, [attacker], result.previousOwnerId, armyCapturePoints(defense.total));
 
-    const islandRewardWasClaimable = !island.rewardClaimed;
-    const factionId = factionIdForIsland(island);
-    const overlap = islandRewardWasClaimable && captureMode === 'preserve'
-      ? (MILITARY_REWARDS[island.id]?.preserveBuildings || [])
-      : [];
-    result.statePrize = factionId ? claimFullSubjugationPrize(room, attacker, factionId, captureMode, overlap) : null;
-
-    // При разорении последнего острова итоговый денежный приз государства является
-    // всей денежной добычей этого финального захвата. Это не складывается с
-    // денежной наградой карточки острова (явно оговорено для Кадингира).
-    const replaceIslandCash = Boolean(result.statePrize?.triggered && result.statePrize.mode === 'raze' && result.statePrize.ducats > 0);
+    result.statePrize = resolveStateMilitaryCapture(room, attacker, island, result.previousOwnerId);
+    const replaceIslandCash = Boolean(
+      result.statePrize?.triggered
+      && !result.statePrize.amountUnresolved
+      && result.statePrize.excludesIslandDucats
+    );
     result.rewardNotes = grantMilitaryReward(room, attacker, island, captureMode, { skipDucats: replaceIslandCash });
-    if (replaceIslandCash) {
-      result.statePrize.credit = creditDucats(attacker, result.statePrize.ducats);
-      const c = result.statePrize.credit;
-      result.rewardNotes.push(c.debtPaid
-        ? `итоговый приз ${result.statePrize.factionName}: ${result.statePrize.ducats} дукатов (${c.debtPaid} в долг, ${c.net} в казну)`
-        : `итоговый приз ${result.statePrize.factionName}: +${result.statePrize.ducats} дукатов`);
+    if (result.statePrize?.triggered) {
+      if (result.statePrize.amountUnresolved) {
+        result.rewardNotes.push(`итоговый приз ${result.statePrize.factionName}: сумма ожидает решения автора`);
+      } else {
+        const c = result.statePrize.credit;
+        result.rewardNotes.push(c?.debtPaid
+          ? `итоговый приз ${result.statePrize.factionName}: ${result.statePrize.ducats} дукатов (${c.debtPaid} в долг, ${c.net} в казну)`
+          : `итоговый приз ${result.statePrize.factionName}: +${result.statePrize.ducats || 0} дукатов`);
+      }
     }
   } else if (attackerPower < defense.total) {
     result.outcome = 'defender';
@@ -2933,8 +2898,8 @@ module.exports = {
   factionIdForIsland,
   stateExists,
   refreshFactionExistence,
-  fullSubjugationController,
-  claimFullSubjugationPrize,
+  stateOwnedIslandIds,
+  resolveStateMilitaryCapture,
   addEnmity,
   canEnterVassalage,
   enterVassalage,

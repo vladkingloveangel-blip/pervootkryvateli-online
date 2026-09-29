@@ -32,16 +32,25 @@ SHIP_UPGRADES[legacy.removedUpgrade.id] = { ...legacy.removedUpgrade, retired: t
 const SHIP_LEVELS = { ...rules.fleet.levels, [legacy.shipLevel7.level]: { ...legacy.shipLevel7, retired: true } };
 const MILITARY_REWARDS = {};
 for (const island of rules.islands.filter(i => i.kind !== 'free')) {
-  MILITARY_REWARDS[island.id] = { ...island.reward,
-    // Remaining prize buildings await author clarification. Never grant a Landin ship.
-    ...(legacy.militaryRewardBuildings[island.id] ? { preserveBuildings: legacy.militaryRewardBuildings[island.id] } : {}) };
+  MILITARY_REWARDS[island.id] = {
+    ...copy(island.reward),
+    // Ready-made buildings exist only where the current island card explicitly lists them.
+    preserveBuildings: copy(island.reward?.buildings || []),
+  };
 }
 const FACTIONS = Object.fromEntries(Object.entries(rules.politics.factions)
-  .filter(([, faction]) => !faction.availability)
-  .map(([id, faction]) => [id, { ...faction, fullConquestPrize: {
-    preserveBuildings: copy(legacy.factionPrizeBuildings[id]),
-    razeDucats: faction.fullConquestPrize.ducats,
-  } }]));
+  .filter(([, faction]) => !faction.availability
+    || (faction.availability.status === 'data-ready' && faction.availability.consumerStage <= 5))
+  .map(([id, faction]) => [id, {
+    ...copy(faction),
+    // §8.4.2/§9.6 now define only a monetary final prize. Kadingir's amount is
+    // internally contradictory in the master document, so runtime records the
+    // claimant but does not invent a payout until the author resolves it.
+    fullConquestPrize: {
+      ...copy(faction.fullConquestPrize),
+      amountUnresolved: id === 'kadingir',
+    },
+  }]));
 const FEUD_CARDS = Object.fromEntries(Object.entries(legacy.feud).map(([id, cards]) => [id,
   cards.map(card => {
     const master = rules.events.feud[id].find(c => c.id === card.masterCardId);
@@ -50,7 +59,7 @@ const FEUD_CARDS = Object.fromEntries(Object.entries(legacy.feud).map(([id, card
   }),
 ]));
 module.exports = {
-  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-5-combat-politics-5.5',
+  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-5-combat-politics-5.6',
   BALANCE: {
     session: rules.session,
     maxShipLevel: rules.fleet.maxLevel, maxReadableShipLevel: legacy.shipLevel7.level,
@@ -69,7 +78,9 @@ module.exports = {
   ESCORTS: { ...rules.fleet.escorts, [legacy.removedEscort.id]: { ...legacy.removedEscort, retired: true } },
   GOODS: rules.economy.goods, BUILDINGS, BUILDING_UPGRADES, CHARACTERS, MILITARY_REWARDS, FACTIONS,
   POLITICAL_FACTION_ORDER: rules.politics.order.filter(id => id in FACTIONS),
-  ASSIGNMENT_CARDS: Object.fromEntries(Object.entries(rules.politics.assignments).filter(([id]) => id in FACTIONS)),
+  // Mori politics is active in 5.6, but its assignment/service consumer belongs to 5.8.
+  ASSIGNMENT_CARDS: Object.fromEntries(Object.entries(rules.politics.assignments)
+    .filter(([id]) => id in FACTIONS && id !== 'mori')),
   ANCHOR_CARDS: rules.sea,
   SAILING_EVENT_CARDS: rules.events.sailing.map(card => card.type === 'turn-effect'
     ? { ...card, type: 'next-turn', timing: 'next-personal-turn' } : card),

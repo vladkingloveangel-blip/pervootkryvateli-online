@@ -166,8 +166,8 @@ test('complete known sea, assignment, feud and event decks match appendix rows',
   assert.deepEqual(rules.politics.assignments.mori.slice(0,8).map(c=>c.islandId),['renaika','chertog','kisalinia','yukon','erkalon','asigoriy','atlantia','adia']);
 });
 
-test('stage 5.5 activates voluntary sea anchors and canonical fleet scoring without advancing later politics', () => {
-  assert.equal(rules.implementation.activeProfile,'stage-5-combat-politics-5.5');
+test('stage 5.6 activates six-state politics and canonical final-prize triggers without advancing feud or assignment consumers', () => {
+  assert.equal(rules.implementation.activeProfile,'stage-5-combat-politics-5.6');
   assert.equal(rules.implementation.pendingConsumers.every(item => item.consumerStage >= 5),true);
   assert.equal(rules.scoring.combat.attacksPerOpponentPerRound,1);
   assert.equal(data.BALANCE.combat.attacksPerOpponentPerRound,rules.scoring.combat.attacksPerOpponentPerRound);
@@ -181,6 +181,16 @@ test('stage 5.5 activates voluntary sea anchors and canonical fleet scoring with
   assert.deepEqual(data.BALANCE.fleetScoring.anchor,{blue:1,yellow:2,red:3});
   assert.deepEqual([data.ANCHORS.blue.fleetPoints,data.ANCHORS.yellow.fleetPoints,data.ANCHORS.red.fleetPoints],[1,2,3]);
   assert.equal(data.ANCHORS.blue.glory,undefined);
+  assert.deepEqual(Object.keys(data.FACTIONS),['lionia','kadingir','mayo','suniksiya','pirates','mori']);
+  assert.equal(data.FACTIONS.mori.giftIslandId,'miyosi');
+  assert.equal(data.FACTIONS.mori.fullConquestPrize.ducats,40);
+  assert.equal(data.FACTIONS.lionia.fullConquestPrize.ducats,60);
+  assert.equal(data.FACTIONS.lionia.fullConquestPrize.preserveBuildings,undefined);
+  assert.equal(data.FACTIONS.lionia.fullConquestPrize.razeDucats,undefined);
+  assert.equal(data.FACTIONS.kadingir.fullConquestPrize.amountUnresolved,true);
+  assert.deepEqual(data.MILITARY_REWARDS.kadingir.preserveBuildings,[]);
+  assert.deepEqual(data.MILITARY_REWARDS.kisalinia.preserveBuildings,[{type:'fort',level:1}]);
+  assert.equal(data.ASSIGNMENT_CARDS.mori,undefined);
   assert.equal(data.BALANCE.attackHistoryWindow,undefined);
   assert.equal(data.BALANCE.attackRebellionThreshold,undefined);
   for (const resolved of [

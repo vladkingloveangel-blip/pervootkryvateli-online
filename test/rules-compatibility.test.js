@@ -15,7 +15,9 @@ test('legacy profile references remain valid while canonical master data stays s
   assert.deepEqual(runtime.SHIP_LEVELS[legacy.shipLevel7.level],{...legacy.shipLevel7,retired:true});
   assert.deepEqual(runtime.SHIP_UPGRADES[legacy.removedUpgrade.id],{...legacy.removedUpgrade,retired:true});
   assert.deepEqual(runtime.ESCORTS[legacy.removedEscort.id],{...legacy.removedEscort,retired:true});
-  assert.equal(runtime.FACTIONS.mori,undefined);
+  assert.equal(runtime.FACTIONS.mori.giftIslandId,'miyosi');
+  assert.equal(runtime.FEUD_CARDS.mori,undefined); // canonical Mori feud deck is activated in block 5.7
+  assert.equal(runtime.ASSIGNMENT_CARDS.mori,undefined); // canonical Mori assignments are activated in block 5.8
   for (const [id, cards] of Object.entries(runtime.FEUD_CARDS)) {
     for (const card of cards) {
       const master = rules.events.feud[id].find(c => c.id === card.masterCardId);
@@ -23,7 +25,14 @@ test('legacy profile references remain valid while canonical master data stays s
       for (const key of ['percent','amount','count','fallbackDucats']) if (master.effect[key] !== undefined) assert.equal(card[key],master.effect[key],card.id);
     }
   }
-  for (const [id, buildings] of Object.entries(legacy.factionPrizeBuildings)) assert.deepEqual(runtime.FACTIONS[id].fullConquestPrize.preserveBuildings,buildings);
+  for (const id of Object.keys(legacy.factionPrizeBuildings)) {
+    assert.equal(runtime.FACTIONS[id].fullConquestPrize.preserveBuildings,undefined);
+    assert.equal(runtime.FACTIONS[id].fullConquestPrize.razeDucats,undefined);
+  }
+  assert.equal(runtime.FACTIONS.lionia.fullConquestPrize.ducats,60);
+  assert.equal(runtime.FACTIONS.kadingir.fullConquestPrize.amountUnresolved,true);
+  assert.deepEqual(runtime.MILITARY_REWARDS.kadingir.preserveBuildings,[]);
+  assert.deepEqual(runtime.MILITARY_REWARDS.kisalinia.preserveBuildings,[{type:'fort',level:1}]);
   assert.deepEqual(runtime.TREASURE_CARDS.map(c => c.id),[
     ...rules.legends.treasures.filter(c => c.effect.type === 'income-multiple').map(c => c.id),legacy.treasure.id,
   ]);
