@@ -139,6 +139,8 @@ const {
   chooseAssignmentOffer,
   assignmentEventMatches,
   assignmentRequiredAction,
+  noteMoriAssignmentDeparture,
+  advanceMoriAssignmentNavigation,
   completeAssignment,
   settleVassalTax,
   legendaryPlaceAt,
@@ -1792,11 +1794,130 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(assignmentRequiredAction(room, p, 1), null);
 }
 
-// Специальный прогресс посещений и маршрутов Мори намеренно остаётся блоком 5.8.4.
+// Одиночное поручение Мори выполняется завершением навигации у нужного берега;
+// владение островом, атака и разовая награда для этого не нужны.
 {
-  const card = ASSIGNMENT_CARDS.mori.find(c => c.type === 'visit-island');
-  const p = { id: 'p1', activeAssignment: { instanceId: 'mori-next', factionId: 'mori', card: { ...card } } };
-  const room = { islands: cloneIslands(), players: [p], alliances: [] };
+  const card = ASSIGNMENT_CARDS.mori.find(c => c.id === 'mori-1');
+  const islands = cloneIslands();
+  const target = islands.find(i => i.id === card.islandId);
+  target.ownerId = 'other-player';
+  const p = { id: 'p1', row: MAP_META.startCell[0], col: MAP_META.startCell[1], ducats: 0, debt: 0, activeAssignment: null };
+  const room = { round: 3, islands, players: [p], assignmentDecks: { mori: { drawPile: [{ ...card }], discard: [], removed: [] } } };
+  const issued = issueAssignment(room, p, 'mori', () => 0.5);
+  assert.equal(issued.ok, true);
+  assert.equal(issued.assignment.progress.departureRequired, false);
+  const from = { row: p.row, col: p.col };
+  [p.row, p.col] = target.cells[0];
+  const visit = advanceMoriAssignmentNavigation(room, p, from);
+  assert.equal(visit.completed, true);
+  assert.equal(visit.completionEvent.type, 'mori-visit-island');
+  const completed = completeAssignment(room, p, visit.completionEvent);
+  assert.equal(completed.ok, true);
+  assert.equal(completed.gross, 8);
+  assert.equal(completed.withheld, 0);
+  assert.equal(p.ducats, 8);
+  assert.equal(target.ownerId, 'other-player');
+}
+
+// Если карта выдана уже на береговой клетке цели, стояние на месте не засчитывается:
+// сначала нужно покинуть все клетки этого берега, затем завершить последующую навигацию после возврата.
+{
+  const card = ASSIGNMENT_CARDS.mori.find(c => c.id === 'mori-2');
+  const islands = cloneIslands();
+  const target = islands.find(i => i.id === card.islandId);
+  const p = { id: 'p1', row: target.cells[0][0], col: target.cells[0][1], ducats: 0, debt: 0, activeAssignment: null };
+  const room = { round: 3, islands, players: [p], assignmentDecks: { mori: { drawPile: [{ ...card }], discard: [], removed: [] } } };
+  const issued = issueAssignment(room, p, 'mori', () => 0.5);
+  assert.equal(issued.assignment.progress.departureRequired, true);
+  assert.equal(issued.assignment.progress.departureSatisfied, false);
+
+  const standing = advanceMoriAssignmentNavigation(room, p, { row: p.row, col: p.col });
+  assert.equal(standing.progressed, false);
+  assert.equal(standing.completionEvent, null);
+
+  const [awayRow, awayCol] = MAP_META.startCell;
+  p.row = awayRow; p.col = awayCol;
+  const left = noteMoriAssignmentDeparture(room, p);
+  assert.equal(left.changed, true);
+  assert.equal(p.activeAssignment.progress.departureSatisfied, true);
+
+  const from = { row: p.row, col: p.col };
+  [p.row, p.col] = target.cells[0];
+  const returned = advanceMoriAssignmentNavigation(room, p, from);
+  assert.equal(returned.completed, true);
+  assert.equal(returned.completionEvent.assignmentInstanceId, p.activeAssignment.instanceId);
+}
+
+// Двухточечный маршрут Мори идёт строго по порядку; второй пункт до первого ничего не даёт.
+// Отметка первого пункта хранится внутри activeAssignment и переживает сериализацию сохранения.
+{
+  const card = ASSIGNMENT_CARDS.mori.find(c => c.id === 'mori-9');
+  const islands = cloneIslands();
+  const firstIsland = islands.find(i => i.id === card.route[0].islandId);
+  const secondIsland = islands.find(i => i.id === card.route[1].islandId);
+  let p = { id: 'p1', row: MAP_META.startCell[0], col: MAP_META.startCell[1], ducats: 0, debt: 0, activeAssignment: null };
+  const room = { round: 4, islands, players: [p], assignmentDecks: { mori: { drawPile: [{ ...card }], discard: [], removed: [] } } };
+  assert.equal(issueAssignment(room, p, 'mori', () => 0.5).ok, true);
+
+  let from = { row: p.row, col: p.col };
+  [p.row, p.col] = secondIsland.cells[0];
+  const wrongOrder = advanceMoriAssignmentNavigation(room, p, from);
+  assert.equal(wrongOrder.progressed, false);
+  assert.equal(p.activeAssignment.progress.nextStopIndex, 0);
+
+  from = { row: p.row, col: p.col };
+  [p.row, p.col] = firstIsland.cells[0];
+  const first = advanceMoriAssignmentNavigation(room, p, from);
+  assert.equal(first.progressed, true);
+  assert.equal(first.completed, false);
+  assert.equal(first.stop.islandId, 'renaika');
+  assert.equal(p.activeAssignment.progress.nextStopIndex, 1);
+  assert.equal(p.activeAssignment.progress.completedStopCount, 1);
+
+  p = JSON.parse(JSON.stringify(p));
+  room.players = [p];
+  assert.equal(p.activeAssignment.progress.completedStops[0].islandId, 'renaika');
+  assert.equal(p.activeAssignment.progress.nextStopIndex, 1);
+
+  from = { row: p.row, col: p.col };
+  [p.row, p.col] = secondIsland.cells[0];
+  const second = advanceMoriAssignmentNavigation(room, p, from);
+  assert.equal(second.completed, true);
+  assert.equal(second.completionEvent.completedStopCount, 2);
+  const completed = completeAssignment(room, p, second.completionEvent);
+  assert.equal(completed.ok, true);
+  assert.equal(completed.gross, 16);
+  assert.equal(p.ducats, 16);
+}
+
+// Второй канонический маршрут Мори умеет завершаться в Цитадели без отдельного действия.
+{
+  const card = ASSIGNMENT_CARDS.mori.find(c => c.id === 'mori-10');
+  const islands = cloneIslands();
+  const firstIsland = islands.find(i => i.id === card.route[0].islandId);
+  let citadel = null;
+  for (let row = 0; row < MAP_META.rows && !citadel; row++) {
+    for (let col = 0; col < MAP_META.cols; col++) {
+      if (isCitadelCell(row, col)) { citadel = [row, col]; break; }
+    }
+  }
+  assert.ok(citadel);
+  const p = { id: 'p1', row: MAP_META.startCell[0], col: MAP_META.startCell[1], ducats: 0, debt: 0, activeAssignment: null };
+  const room = { round: 4, islands, players: [p], assignmentDecks: { mori: { drawPile: [{ ...card }], discard: [], removed: [] } } };
+  assert.equal(issueAssignment(room, p, 'mori', () => 0.5).ok, true);
+
+  let from = { row: p.row, col: p.col };
+  [p.row, p.col] = firstIsland.cells[0];
+  const first = advanceMoriAssignmentNavigation(room, p, from);
+  assert.equal(first.progressed, true);
+  assert.equal(first.completed, false);
+
+  from = { row: p.row, col: p.col };
+  [p.row, p.col] = citadel;
+  const finish = advanceMoriAssignmentNavigation(room, p, from);
+  assert.equal(finish.completed, true);
+  assert.equal(finish.stop.mapObjectId, 'citadel');
+  assert.equal(finish.completionEvent.type, 'mori-visit-route');
   assert.equal(assignmentRequiredAction(room, p, 3), null);
 }
 // Платная замена поручения удалена из активного runtime.

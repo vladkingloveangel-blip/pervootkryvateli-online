@@ -166,8 +166,8 @@ test('complete known sea, assignment, feud and event decks match appendix rows',
   assert.deepEqual(rules.politics.assignments.mori.slice(0,8).map(c=>c.islandId),['renaika','chertog','kisalinia','yukon','erkalon','asigoriy','atlantia','adia']);
 });
 
-test('stage 5.8.3 activates canonical assignment rewards and vassal taxes while Mori route service remains separate', () => {
-  assert.equal(rules.implementation.activeProfile,'stage-5-combat-politics-5.8.3');
+test('stage 5.8.4 activates canonical Mori visit and ordered-route service on top of assignment rewards and taxes', () => {
+  assert.equal(rules.implementation.activeProfile,'stage-5-combat-politics-5.8.4');
   assert.equal(rules.implementation.pendingConsumers.every(item => item.consumerStage >= 5),true);
   assert.equal(rules.scoring.combat.attacksPerOpponentPerRound,1);
   assert.equal(data.BALANCE.combat.attacksPerOpponentPerRound,rules.scoring.combat.attacksPerOpponentPerRound);
@@ -196,6 +196,9 @@ test('stage 5.8.3 activates canonical assignment rewards and vassal taxes while 
   assert.deepEqual([data.FACTIONS.lionia.tax,data.FACTIONS.kadingir.tax,data.FACTIONS.mori.tax,data.FACTIONS.suniksiya.tax,data.FACTIONS.pirates.tax],[2,2,0,0,0]);
   assert.deepEqual([data.FACTIONS.lionia.rewardShare,data.FACTIONS.kadingir.rewardShare,data.FACTIONS.mori.rewardShare,data.FACTIONS.suniksiya.rewardShare,data.FACTIONS.pirates.rewardShare],[0,0,0,0.5,0.5]);
   assert.equal(data.BALANCE.session.taxUnderpaymentActionLimit,2);
+  assert.deepEqual(data.ASSIGNMENT_CARDS.mori.map(card=>card.type),['visit-island','visit-island','visit-island','visit-island','visit-island','visit-island','visit-island','visit-island','visit-route','visit-route']);
+  assert.deepEqual(data.ASSIGNMENT_CARDS.mori[8].route,[{islandId:'renaika'},{islandId:'mori'}]);
+  assert.deepEqual(data.ASSIGNMENT_CARDS.mori[9].route,[{islandId:'kisalinia'},{mapObjectId:'citadel'}]);
   assert.deepEqual(Object.keys(data.FEUD_CARDS),rules.politics.order);
   for (const factionId of rules.politics.order) {
     assert.equal(data.FEUD_CARDS[factionId].reduce((sum,card)=>sum+card.quantity,0),10,factionId);

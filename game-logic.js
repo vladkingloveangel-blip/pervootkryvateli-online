@@ -355,6 +355,123 @@ function ensureAssignmentPlayer(player) {
   return player;
 }
 
+function moriAssignmentStops(card) {
+  if (!card) return [];
+  if (card.type === 'visit-island' && card.islandId) return [{ islandId: card.islandId }];
+  if (card.type === 'visit-route' && Array.isArray(card.route)) return card.route.map(stop => ({ ...stop }));
+  return [];
+}
+
+function moriStopMatches(room, player, stop, row = player?.row, col = player?.col) {
+  if (!room || !player || !stop) return false;
+  if (stop.islandId) {
+    const island = room.islands?.find(item => item.id === stop.islandId);
+    return Boolean(island?.cells?.some(([r, c]) => r === Number(row) && c === Number(col)));
+  }
+  if (stop.mapObjectId === 'citadel') return isCitadelCell(row, col);
+  return false;
+}
+
+function moriStopLabel(room, stop) {
+  if (stop?.islandId) return room?.islands?.find(item => item.id === stop.islandId)?.name || stop.islandId;
+  if (stop?.mapObjectId === 'citadel') return 'Цитадель';
+  return 'пункт маршрута';
+}
+
+function createMoriAssignmentProgress(room, player, card) {
+  const stops = moriAssignmentStops(card);
+  if (!stops.length) return null;
+  const startsOnFirstStop = moriStopMatches(room, player, stops[0]);
+  return {
+    kind: 'mori-service',
+    nextStopIndex: 0,
+    completedStopCount: 0,
+    departureRequired: startsOnFirstStop,
+    departureSatisfied: !startsOnFirstStop,
+    completedStops: [],
+  };
+}
+
+function ensureMoriAssignmentProgress(room, player) {
+  const assignment = player?.activeAssignment;
+  if (!assignment?.card || assignment.factionId !== 'mori') return null;
+  if (!['visit-island', 'visit-route'].includes(assignment.card.type)) return null;
+  if (!assignment.progress || assignment.progress.kind !== 'mori-service') {
+    assignment.progress = createMoriAssignmentProgress(room, player, assignment.card);
+  }
+  assignment.progress.completedStops ||= [];
+  assignment.progress.nextStopIndex = Math.max(0, Number(assignment.progress.nextStopIndex) || 0);
+  assignment.progress.completedStopCount = Math.max(0, Number(assignment.progress.completedStopCount) || assignment.progress.completedStops.length || 0);
+  return assignment.progress;
+}
+
+function noteMoriAssignmentDeparture(room, player) {
+  const assignment = player?.activeAssignment;
+  const progress = ensureMoriAssignmentProgress(room, player);
+  if (!assignment || !progress || progress.nextStopIndex !== 0 || !progress.departureRequired || progress.departureSatisfied) {
+    return { ok: Boolean(progress), changed: false, progress };
+  }
+  const firstStop = moriAssignmentStops(assignment.card)[0];
+  if (!firstStop || moriStopMatches(room, player, firstStop)) return { ok: true, changed: false, progress };
+  progress.departureSatisfied = true;
+  return { ok: true, changed: true, progress };
+}
+function advanceMoriAssignmentNavigation(room, player, from = null) {
+  const assignment = player?.activeAssignment;
+  const progress = ensureMoriAssignmentProgress(room, player);
+  if (!assignment || !progress) return { ok: false, active: false };
+  const stops = moriAssignmentStops(assignment.card);
+  if (!stops.length || progress.nextStopIndex >= stops.length) return { ok: false, active: true };
+
+  const targetIndex = progress.nextStopIndex;
+  const target = stops[targetIndex];
+  let departureChanged = false;
+
+  if (targetIndex === 0 && progress.departureRequired && !progress.departureSatisfied) {
+    const fromKnown = Number.isFinite(Number(from?.row)) && Number.isFinite(Number(from?.col));
+    const fromAtTarget = fromKnown ? moriStopMatches(room, player, target, Number(from.row), Number(from.col)) : true;
+    const nowAtTarget = moriStopMatches(room, player, target);
+    if (!fromAtTarget || !nowAtTarget) {
+      progress.departureSatisfied = true;
+      departureChanged = true;
+    }
+    if (!progress.departureSatisfied) {
+      return { ok: true, active: true, departureChanged: false, progressed: false, completionEvent: null, progress };
+    }
+  }
+
+  if (!moriStopMatches(room, player, target)) {
+    return { ok: true, active: true, departureChanged, progressed: false, completionEvent: null, progress };
+  }
+
+  const stopRecord = {
+    index: targetIndex,
+    islandId: target.islandId || null,
+    mapObjectId: target.mapObjectId || null,
+    label: moriStopLabel(room, target),
+  };
+  progress.completedStops[targetIndex] = stopRecord;
+  progress.completedStopCount = Math.max(progress.completedStopCount, targetIndex + 1);
+  progress.nextStopIndex = targetIndex + 1;
+
+  if (progress.nextStopIndex >= stops.length) {
+    return {
+      ok: true, active: true, departureChanged, progressed: true, completed: true, stop: stopRecord, progress,
+      completionEvent: {
+        type: assignment.card.type === 'visit-island' ? 'mori-visit-island' : 'mori-visit-route',
+        assignmentInstanceId: assignment.instanceId,
+        completedStopCount: stops.length,
+        islandId: target.islandId || null,
+        mapObjectId: target.mapObjectId || null,
+      },
+    };
+  }
+
+  return {
+    ok: true, active: true, departureChanged, progressed: true, completed: false, stop: stopRecord, progress, completionEvent: null,
+  };
+}
+
 function assignAssignmentCard(room, player, factionId, card, rng = Math.random) {
   ensureAssignmentPlayer(player);
   if (player.activeAssignment) return { ok: false, error: 'У игрока уже есть активное поручение.' };
@@ -365,6 +482,9 @@ function assignAssignmentCard(room, player, factionId, card, rng = Math.random) 
     card: { ...card },
     issuedRound: Number(room.round) || 1,
   };
+  if (factionId === 'mori' && ['visit-island', 'visit-route'].includes(card.type)) {
+    player.activeAssignment.progress = createMoriAssignmentProgress(room, player, card);
+  }
   return { ok: true, assignment: player.activeAssignment };
 }
 
@@ -603,6 +723,13 @@ function assignmentEventMatches(player, event) {
     return event.type === 'anchor-win' && colors.includes(event.color);
   }
   if (card.type === 'visit-place') return event.type === 'visit-place' && event.placeId === card.placeId;
+  if (card.type === 'visit-island') {
+    return event.type === 'mori-visit-island' && event.assignmentInstanceId === assignment.instanceId && event.islandId === card.islandId;
+  }
+  if (card.type === 'visit-route') {
+    const route = Array.isArray(card.route) ? card.route : [];
+    return event.type === 'mori-visit-route' && event.assignmentInstanceId === assignment.instanceId && event.completedStopCount === route.length;
+  }
   if (card.type === 'attack-player-island') return event.type === 'attack-player-island';
   if (card.type === 'treasure-resolved') {
     return event.type === 'treasure-resolved' && event.assignmentInstanceId === assignment.instanceId;
@@ -3213,6 +3340,8 @@ module.exports = {
   chooseAssignmentOffer,
   assignmentEventMatches,
   assignmentRequiredAction,
+  noteMoriAssignmentDeparture,
+  advanceMoriAssignmentNavigation,
   completeAssignment,
   settleVassalTax,
   legendaryPlaceAt,

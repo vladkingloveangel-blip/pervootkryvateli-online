@@ -108,6 +108,8 @@ const {
   chooseAssignmentOffer,
   assignmentEventMatches,
   assignmentRequiredAction,
+  noteMoriAssignmentDeparture,
+  advanceMoriAssignmentNavigation,
   completeAssignment,
   settleVassalTax,
   legendaryPlaceAt,
@@ -848,6 +850,14 @@ function assignmentPublic(assignment) {
     reward: Number(card.reward) || 0,
     type: card.type,
     issuedRound: Number(assignment.issuedRound) || null,
+    progress: assignment.progress ? {
+      kind: assignment.progress.kind || null,
+      nextStopIndex: Number(assignment.progress.nextStopIndex) || 0,
+      completedStopCount: Number(assignment.progress.completedStopCount) || 0,
+      departureRequired: Boolean(assignment.progress.departureRequired),
+      departureSatisfied: Boolean(assignment.progress.departureSatisfied),
+      completedStops: (assignment.progress.completedStops || []).filter(Boolean).map(stop => ({ ...stop })),
+    } : null,
   };
 }
 
@@ -862,6 +872,15 @@ function trackAssignment(room, player, event) {
   return result;
 }
 
+function trackMoriNavigation(room, player, from = null) {
+  const result = advanceMoriAssignmentNavigation(room, player, from);
+  if (!result?.ok || !result.active) return result;
+  if (result.progressed && !result.completed && result.stop) {
+    log(room, `${player.name}: поручение Мори — первый пункт «${result.stop.label}» отмечен; маршрут продолжается.`);
+  }
+  if (result.completionEvent) result.completion = trackAssignment(room, player, result.completionEvent);
+  return result;
+}
 function assignmentBuildingEvent(island, building, previousBuilding = null) {
   const def = BUILDINGS[building?.type];
   return {
@@ -2648,6 +2667,7 @@ function handleLegendaryPlaceStop(room, player) {
 }
 
 function handleArrival(room, player) {
+  noteMoriAssignmentDeparture(room, player);
   const claims = claimFreeIslandsAt(room, player);
   for (const island of claims) {
     log(room, `${player.name} открывает свободный остров ${island.name} и становится его владельцем.`);
@@ -3094,10 +3114,12 @@ io.on('connection', socket => {
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
     if (room.phase !== 'navigation') return ackSafe(ack, { ok: false, error: 'Навигация уже завершена.' });
+    const from = { row: p.row, col: p.col };
     room.roll = null;
     room.movePoints = 0;
     room.phase = 'actions';
     handleArrival(room, p);
+    trackMoriNavigation(room, p, from);
     log(room, `${p.name} остался на месте.`);
     ackSafe(ack, { ok: true });
     emitRoom(room);
@@ -3119,11 +3141,13 @@ io.on('connection', socket => {
     const allowed = reachableCells(p, room.movePoints).some(c => c.row === row && c.col === col);
     if (!allowed) return ackSafe(ack, { ok: false, error: 'До этой клетки нельзя доплыть данным кораблём за текущую навигацию.' });
 
+    const from = { row: p.row, col: p.col };
     p.row = row;
     p.col = col;
     room.phase = 'actions';
     log(room, `${p.name} переместился на клетку ${col + 1}:${row + 1}.`);
     handleArrival(room, p);
+    trackMoriNavigation(room, p, from);
     ackSafe(ack, { ok: true });
     emitRoom(room);
   });
