@@ -10,6 +10,9 @@ const {
   isIslandProtected,
   applySeaVeilToShip,
   applySeaVeilToIsland,
+  applySeaVeilHostileReactionToShip,
+  applySeaVeilHostileReactionToIsland,
+  clearSeaVeilHostileReactionsAtTurnEnd,
   applySeaCurse,
   legendaryMovementPenalty,
   tickLegendaryEffectsForPlayer,
@@ -81,7 +84,7 @@ const {
   drawSailingEventCard,
   createTreasureDeck,
   drawTreasureCard,
-  createLegendaryDeck,
+  createExpeditionDeck,
   drawLegendaryCard,
   discardDeckCard,
   emptyCargoHolds,
@@ -132,6 +135,7 @@ const {
   discardRandomHeldCard,
   createAssignmentDecks,
   normalizeAssignmentCompatibility,
+  normalizeStage6Compatibility,
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,
@@ -142,8 +146,15 @@ const {
   completeAssignment,
   settleVassalTax,
   legendaryPlaceAt,
+  legendaryPlaceRule,
+  legendaryPlaceForIsland,
+  claimLegendaryPlaceDiscovery,
+  canTakeExpedition,
+  takeExpedition,
+  completeExpeditionAtArrival,
+  playerAtExpeditionPlace,
 } = require('../game-logic');
-const { BALANCE, MAP_META, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS, BUILDINGS, CHARACTERS, ANCHORS } = require('../game-data');
+const { BALANCE, MAP_META, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS, BUILDINGS, CHARACTERS, ANCHORS, LEGENDARY_PLACES, LEGENDARY_CARDS } = require('../game-data');
 
 function has(cells, row, col) { return cells.some(c => c.row === row && c.col === col); }
 
@@ -1283,15 +1294,46 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(contractBonusForRevenue(5), 2);
 }
 
-// Легендарная колода содержит восемь карт: по две каждого из четырёх видов.
+// Цифровой легендарный пул содержит четыре типа и выбирает независимо с возвращением.
 {
-  const room = { legendaryDeck: createLegendaryDeck(() => 0.5) };
-  assert.equal(room.legendaryDeck.drawPile.length, 8);
-  const names = new Map();
-  for (const card of room.legendaryDeck.drawPile) names.set(card.id, (names.get(card.id) || 0) + 1);
-  assert.deepEqual([...names.values()].sort(), [2, 2, 2, 2]);
-  assert.ok(drawLegendaryCard(room));
-  assert.equal(room.legendaryDeck.drawPile.length, 7);
+  assert.equal(BALANCE.legendaryPool.mode,'random-with-replacement');
+  assert.equal(BALANCE.legendaryPool.selection,'uniform');
+  assert.deepEqual(
+    [0,0.25,0.5,0.75].map(value=>drawLegendaryCard(null,()=>value).id),
+    ['sea-veil','hellfire','mist-path','sea-curse']
+  );
+  assert.equal(drawLegendaryCard(null,()=>0).id,'sea-veil');
+  assert.equal(drawLegendaryCard(null,()=>0).id,'sea-veil'); // тот же тип может выпасть повторно
+}
+
+// Адия открывается как легендарное место только первым военным завоеванием.
+// Её собственная военная награда остаётся отдельной: первый захват даёт
+// 20 дукатов, легендарную карту острова и ещё одну карту за легендарное открытие.
+{
+  const islands = cloneIslands();
+  const adia = islands.find(island => island.id === 'adia');
+  adia.army = 0;
+  const [row,col] = adia.cells[0];
+  const player = {
+    id:'digital-legendary-player', name:'Digital', row, col, shipClass:'brigantine', level:1,
+    upgrades:[], escorts:[], ducats:0, debt:0, armyPoints:0,
+    attackCountsThisRound:{}, namedPlaceCards:[], legendaryCards:[],
+  };
+  const room = {
+    round:2, islands, players:[player], alliances:[], factionState:{},
+    legendaryPlacesExplored:{},
+  };
+  const result = jointAssaultIsland(room, player, adia, [], [], { rng:()=>0 });
+  assert.equal(result.ok,true);
+  assert.equal(result.outcome,'attacker');
+  assert.equal(player.ducats,20);
+  assert.equal(result.legendaryDiscovery.first,true);
+  assert.equal(result.legendaryDiscovery.namedCard.id,'place-adia');
+  assert.equal(result.legendaryDiscovery.legendaryCard.id,'sea-veil');
+  assert.equal(room.legendaryPlacesExplored.adia,'digital-legendary-player');
+  assert.deepEqual(player.namedPlaceCards.map(card=>card.id),['place-adia']);
+  assert.deepEqual(player.legendaryCards.map(card=>card.id),['sea-veil','sea-veil']);
+  assert.equal(Object.hasOwn(player,'pendingLegendary'),false);
 }
 
 // Найденный груз можно положить напрямую в любой пустой активный трюм до полной вместимости.
@@ -1328,7 +1370,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(p.ducats, 0);
 }
 
-// «Набег» даёт только постройки выше I уровня и понижает выбранную ровно на одну ступень.
+// «Набег» позволяет выбрать любую свою постройку и понижает её ровно на одну строительную ступень.
+// Исходная форма I при таком понижении удаляется.
 {
   const room = { islands: cloneIslands() };
   const island = room.islands.find(i => i.id === 'bogamia');
@@ -1336,10 +1379,29 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   island.buildings = [{ type: 'farm', level: 3 }, { type: 'market', level: 1 }];
   const p = { id: 'p1' };
   const opts = raidBuildingOptions(room, p);
-  assert.equal(opts.length, 1);
-  const result = applyRaidDowngrade(room, p, opts[0].islandId, opts[0].buildingIndex);
-  assert.equal(result.ok, true);
+  assert.equal(opts.length, 2);
+  const farmResult = applyRaidDowngrade(room, p, island.id, 0);
+  assert.equal(farmResult.ok, true);
+  assert.equal(farmResult.removed, false);
   assert.equal(island.buildings[0].level, 2);
+  const marketResult = applyRaidDowngrade(room, p, island.id, 1);
+  assert.equal(marketResult.ok, true);
+  assert.equal(marketResult.removed, true);
+  assert.equal(marketResult.afterName, null);
+  assert.deepEqual(island.buildings, [{ type: 'farm', level: 2 }]);
+}
+
+// Продвинутая форма I при «Набеге» возвращается в исходную форму III.
+{
+  const room = { islands: cloneIslands() };
+  const island = room.islands.find(i => i.id === 'bogamia');
+  island.ownerId = 'p1';
+  island.buildings = [{ type: 'bank', level: 1 }];
+  const p = { id: 'p1' };
+  const result = applyRaidDowngrade(room, p, island.id, 0);
+  assert.equal(result.ok, true);
+  assert.equal(result.removed, false);
+  assert.deepEqual([island.buildings[0].type, island.buildings[0].level], ['market', 3]);
 }
 
 // «Абордаж» может принудительно снять первое улучшение ветви; второе остаётся в слоте, но перестаёт действовать.
@@ -1362,6 +1424,32 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.ok(options.length > 0);
   const island = room.islands.find(i => i.id === 'landin');
   assert.equal(options.every(o => island.cells.some(([r,c]) => r === o.row && c === o.col)), true);
+}
+
+// Колода событий плавания содержит ровно 26 физических карт и использует канонический
+// тип turn-effect с эффектом текущего личного хода. Старое сохранение карты next-turn
+// при чтении нормализуется по id к актуальной мастер-карте.
+{
+  const deck = createSailingEventDeck(() => 0.5);
+  assert.equal(deck.drawPile.length, 26);
+  const timed = deck.drawPile.filter(card => card.type === 'turn-effect');
+  assert.equal(timed.length, 9);
+  assert.equal(timed.every(card => card.timing === 'current-personal-turn'), true);
+  assert.equal(deck.drawPile.some(card => card.type === 'next-turn' || card.timing === 'next-personal-turn'), false);
+
+  const room = {
+    eventDeck: {
+      drawPile: [{ id: 'tailwind-1', name: 'legacy', type: 'next-turn', effect: 'moveBonus', value: 99, timing: 'next-personal-turn' }],
+      discard: [],
+    },
+  };
+  const restored = drawSailingEventCard(room, () => 0.5);
+  assert.equal(restored.id, 'tailwind-1');
+  assert.equal(restored.masterCardId, 'tailwind-1');
+  assert.equal(restored.type, 'turn-effect');
+  assert.equal(restored.effect, 'moveBonus');
+  assert.equal(restored.value, 1);
+  assert.equal(restored.timing, 'current-personal-turn');
 }
 
 // «Путь сквозь туман» использует те же запреты препятствий, но без лимита d6.
@@ -1397,6 +1485,32 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(isIslandProtected(island), false);
 }
 
+// Реактивный «Покров моря» против враждебной легендарной карты не создаёт
+// трёхходовый эффект: он защищает только до конца текущего хода источника.
+{
+  const room = { islands: cloneIslands(), players: [] };
+  const source = { id:'source', legendaryEffects:{ seaCurses:[] } };
+  const target = { id:'target', legendaryEffects:{ seaCurses:[] } };
+  room.players.push(source,target);
+  const island = room.islands.find(i => i.id === 'bogamia');
+  island.ownerId = target.id;
+
+  assert.equal(applySeaVeilHostileReactionToShip(target, source.id).ok,true);
+  assert.equal(isShipProtected(target),true);
+  assert.equal(target.legendaryEffects.shipVeil,undefined);
+  assert.equal(target.legendaryEffects.shipVeilReaction.expiry,'end-of-current-turn');
+
+  assert.equal(applySeaVeilHostileReactionToIsland(island,target,source.id).ok,true);
+  assert.equal(isIslandProtected(island),true);
+  assert.equal(island.legendaryVeil,null);
+  assert.equal(island.legendaryVeilReaction.expiry,'end-of-current-turn');
+
+  const expired = clearSeaVeilHostileReactionsAtTurnEnd(room,source.id);
+  assert.equal(expired.length,2);
+  assert.equal(isShipProtected(target),false);
+  assert.equal(isIslandProtected(island),false);
+}
+
 // «Морское проклятие» даёт −3 к движению три личных хода и может складываться.
 {
   const room = { islands: cloneIslands() };
@@ -1411,7 +1525,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(legendaryMovementPenalty(p), 0);
 }
 
-// «Пламя Ада» снижает каждое здание выше I уровня на одну ступень, I уровень не трогает.
+// «Пламя Ада» понижает каждое здание на одну строительную ступень:
+ // исходная форма I удаляется, продвинутая I возвращается в исходную III.
 {
   const room = { islands: cloneIslands() };
   const island = room.islands.find(i => i.id === 'bogamia');
@@ -1424,18 +1539,18 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const attacker = { id: 'a', row: 5, col: 1 };
   const result = applyHellfire(room, attacker, island);
   assert.equal(result.ok, true);
-  assert.equal(result.changed, 2);
+  assert.equal(result.changed, 3);
   assert.deepEqual(island.buildings.map(b => [b.type, b.level]), [
     ['farm', 2],
-    ['market', 1],
     ['market', 3], // Банк I -> Рынок III
   ]);
+  assert.equal(result.changes.some(change => change.beforeName.includes('Рынок') && change.removed), true);
 }
 
-// Каждая из пяти политических фракций имеет колоду вражды из 10 карт.
+// Каждая из шести политических фракций имеет колоду вражды из 10 карт.
 {
   const decks = createFeudDecks(() => 0.5);
-  assert.deepEqual(Object.keys(decks).sort(), ['kadingir', 'lionia', 'mayo', 'pirates', 'suniksiya']);
+  assert.deepEqual(Object.keys(decks).sort(), ['kadingir', 'lionia', 'mayo', 'mori', 'pirates', 'suniksiya']);
   for (const deck of Object.values(decks)) assert.equal(deck.drawPile.length, 10);
 }
 
@@ -1492,7 +1607,6 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 {
   const room = {
     islands: cloneIslands(),
-    legendaryDeck: { drawPile: [], discard: [] },
     eventDeck: { drawPile: [], discard: [] },
     treasureDeck: { drawPile: [], discard: [] },
   };
@@ -1748,6 +1862,31 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(assignmentRequiredAction(room, p, 0), null);
   p.row = 13; p.col = 13;
   assert.equal(assignmentRequiredAction(room, p, 2), null);
+}
+
+// «Судовой мастер» может сделать улучшение обязательным по поручению только там,
+// где такое улучшение вообще допустимо устанавливать — в Цитадели.
+{
+  const card = ASSIGNMENT_CARDS.kadingir.find(c => c.type === 'stat-upgrade' && c.branch === 'cargo');
+  const p = {
+    id: 'p1', row: 0, col: 0, shipClass: 'brigantine', level: 1, upgrades: [], escorts: [], ducats: 0,
+    savedEventCards: [{ id: 'master-1', kind: 'ship-master' }],
+    activeAssignment: { instanceId: 'priority-master', factionId: 'kadingir', card: { ...card } },
+  };
+  const room = { round: 2, islands: cloneIslands(), players: [p], alliances: [] };
+  assert.equal(assignmentRequiredAction(room, p, 1), null);
+  let citadel = null;
+  for (let row = 0; row < MAP_META.rows && !citadel; row++) {
+    for (let col = 0; col < MAP_META.cols; col++) {
+      if (isCitadelCell(row, col)) { citadel = [row, col]; break; }
+    }
+  }
+  assert.ok(citadel);
+  [p.row, p.col] = citadel;
+  const required = assignmentRequiredAction(room, p, 1);
+  assert.equal(required.kind, 'ship-upgrade');
+  assert.deepEqual(required.shipMasterIds, ['master-1']);
+  assert.ok(required.freeUpgradeIds.length > 0);
 }
 
 // Захват, якорь и доставка создают обязательное следующее действие только при доступной цели.
@@ -2008,10 +2147,13 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const p = {
     id: 'p1', row: target.cells[0][0], col: target.cells[0][1], ducats: 4, debt: 0,
     replacedAssignmentConditions: ['old-paid-condition'],
+    pendingLegendary: 2,
+    legendaryCards: [],
     activeAssignment: { factionId: 'mori', card: { ...moriCard }, issuedRound: 3 },
   };
   const room = {
     round: 6, islands, players: [p],
+    legendaryDeck: { drawPile:[{id:'legacy-card'}], discard:[], total:8, unresolved:'R05' },
     assignmentDecks: { lionia: { drawPile: [], discard: [] } },
     pendingAssignmentChoice: { id: 'old-paid-choice', playerId: 'p1', factionId: 'mori' },
     eventPhase: { active: true, stage: 'assignment-replace', assignmentQueue: [{ playerId: 'p1', factionId: 'mori' }], replacementQueue: ['p1'], replacementIndex: 0 },
@@ -2023,6 +2165,9 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(room.assignmentDecks.mori.drawPile.length, 9); // активная карта не дублируется в восстановленной колоде
   assert.deepEqual(room.assignmentDecks.lionia.removed, []);
   assert.equal(Object.hasOwn(p, 'replacedAssignmentConditions'), false);
+  assert.equal(Object.hasOwn(room,'legendaryDeck'),false);
+  assert.equal(Object.hasOwn(p,'pendingLegendary'),false);
+  assert.deepEqual(p.legendaryCards.map(card=>card.id),['mist-path','mist-path']);
   assert.match(p.activeAssignment.instanceId, /^legacy:p1:mori:mori-1:/);
   assert.equal(p.activeAssignment.progress.kind, 'mori-service');
   assert.equal(p.activeAssignment.progress.departureRequired, true);
@@ -2034,13 +2179,166 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(Object.hasOwn(room.eventPhase, 'replacementIndex'), false);
   assert.equal(normalizeAssignmentCompatibility(room, () => 0.5).changed, false);
 }
-// Координаты морских легендарных мест доступны серверу для поручений посещения.
+
+// Финализация 6.7 восстанавливает поля этапа 6 и удаляет из старых сохранений
+// отменённые экспедиции на Атлантию, Адию и Череп.
+{
+  const p = {
+    id:'stage6-legacy',
+    namedPlaceCards:[],
+    legendaryCards:[],
+    legendaryEffects:{ seaCurses:[] },
+    activeExpedition:{ cardId:'expedition-atlantia', placeId:'atlantia', name:'Атлантия', acceptedRound:4, startedAtTarget:false, departedAfterIssue:false },
+    expeditionHistory:[{ placeId:'atlantia', name:'Атлантия', cardId:'expedition-atlantia', completedRound:3 }],
+  };
+  const room = {
+    round:5,
+    islands:cloneIslands(),
+    players:[p],
+    legendaryPlacesExplored:{ kraken:p.id },
+    assignmentDecks:createAssignmentDecks(()=>0.5),
+    expeditionDeck:{ drawPile:createExpeditionDeck(()=>0.5).drawPile.concat([{ id:'expedition-atlantia', placeId:'atlantia', name:'Атлантия' }]) },
+  };
+  const result = normalizeStage6Compatibility(room,()=>0.5);
+  assert.equal(result.changed,true);
+  assert.deepEqual(p.namedPlaceCards.map(card=>card.id),['place-kraken']);
+  assert.deepEqual(p.expeditionHistory,[]);
+  assert.equal(p.activeExpedition,null);
+  assert.equal(p.expeditionDrawRound,null);
+  assert.equal(p.expeditionsDrawnThisRound,0);
+  assert.equal(room.expeditionDeck.drawPile.length,7);
+  assert.equal(room.expeditionDeck.drawPile.some(card=>['expedition-atlantia','expedition-adia','expedition-skull'].includes(card.id)),false);
+  assert.deepEqual(room.pendingExpeditionRewards,[]);
+  assert.equal(normalizeStage6Compatibility(room,()=>0.5).changed,false);
+}
+
+// Семь морских легендарных мест остаются координатными объектами карты, а три
+// легендарных острова связаны с островами и открываются первым военным завоеванием.
 {
   assert.equal(legendaryPlaceAt(24, 6)?.id, 'kraken');
   assert.equal(legendaryPlaceAt(12, 26)?.id, 'abyss');
   assert.equal(legendaryPlaceAt(0, 0), null);
+  assert.equal(legendaryPlaceRule('kraken')?.kind, 'sea');
+  assert.equal(legendaryPlaceForIsland('atlantia')?.id, 'atlantia');
+  assert.equal(legendaryPlaceForIsland('adia')?.id, 'adia');
+  assert.equal(legendaryPlaceForIsland('skull')?.id, 'skull');
+  assert.equal(legendaryPlaceForIsland('kraken'), null);
 }
 
+// Первая отметка легендарного места закрепляет единственную открытую именную карту
+// за первооткрывателем; повторный визит другого игрока её не передаёт.
+{
+  const room = { legendaryPlacesExplored: {} };
+  const firstPlayer = { id: 'p1', namedPlaceCards: [], legendaryCards: [] };
+  const secondPlayer = { id: 'p2', namedPlaceCards: [], legendaryCards: [] };
+  const first = claimLegendaryPlaceDiscovery(room, firstPlayer, 'kraken', ()=>0.75);
+  assert.equal(first.first, true);
+  assert.equal(first.namedCard.id, 'place-kraken');
+  assert.equal(first.legendaryCard.id, 'sea-curse');
+  assert.equal(room.legendaryPlacesExplored.kraken, 'p1');
+  assert.deepEqual(firstPlayer.namedPlaceCards.map(card=>card.id), ['place-kraken']);
+  assert.deepEqual(firstPlayer.legendaryCards.map(card=>card.id), ['sea-curse']);
+  const repeat = claimLegendaryPlaceDiscovery(room, secondPlayer, 'kraken', ()=>0);
+  assert.equal(repeat.first, false);
+  assert.equal(repeat.exploredBy, 'p1');
+  assert.deepEqual(secondPlayer.namedPlaceCards, []);
+  assert.deepEqual(secondPlayer.legendaryCards, []);
+}
+
+// Легендарный остров открывается первым военным завоеванием. Обычная военная
+// награда острова остаётся отдельной; последующий захват не повторяет награду места.
+{
+  const islands = cloneIslands();
+  const atlantia = islands.find(island => island.id === 'atlantia');
+  atlantia.army = 0;
+  const [row,col] = atlantia.cells[0];
+  const firstPlayer = { id:'p1', name:'One', row, col, shipClass:'brigantine', level:1, upgrades:[], escorts:[], ducats:0, debt:0, armyPoints:0, attackCountsThisRound:{}, namedPlaceCards:[], legendaryCards:[] };
+  const room = { round:2, islands, players:[firstPlayer], alliances:[], factionState:{}, legendaryPlacesExplored:{} };
+
+  const first = jointAssaultIsland(room, firstPlayer, atlantia, [], [], { rng:()=>0.25 });
+  assert.equal(first.ok, true);
+  assert.equal(first.outcome, 'attacker');
+  assert.equal(first.legendaryDiscovery.first, true);
+  assert.equal(first.legendaryDiscovery.namedCard.id, 'place-atlantia');
+  assert.equal(first.legendaryDiscovery.legendaryCard.id, 'hellfire');
+  assert.equal(firstPlayer.ducats, 15);
+  assert.deepEqual(firstPlayer.namedPlaceCards.map(card=>card.id), ['place-atlantia']);
+  assert.deepEqual(firstPlayer.legendaryCards.map(card=>card.id), ['hellfire']);
+  assert.equal(atlantia.rewardClaimed, true);
+
+  firstPlayer.row = 0; firstPlayer.col = 0;
+  const secondPlayer = { id:'p2', name:'Two', row, col, shipClass:'brigantine', level:1, upgrades:[], escorts:[], ducats:0, debt:0, armyPoints:0, attackCountsThisRound:{}, namedPlaceCards:[], legendaryCards:[] };
+  room.players.push(secondPlayer);
+  const second = jointAssaultIsland(room, secondPlayer, atlantia);
+  assert.equal(second.ok, true);
+  assert.equal(second.outcome, 'attacker');
+  assert.equal(second.legendaryDiscovery, undefined);
+  assert.equal(secondPlayer.ducats, 0);
+  assert.deepEqual(secondPlayer.namedPlaceCards, []);
+  assert.deepEqual(secondPlayer.legendaryCards, []);
+  assert.equal(room.legendaryPlacesExplored.atlantia, 'p1');
+}
+
+// Экспедиционная колода содержит только 7 морских мест. Получение возможно только
+// за одно действие на клетке собственного острова с Картографической палатой.
+{
+  const expeditionDeck = createExpeditionDeck(() => 0.5);
+  assert.equal(expeditionDeck.drawPile.length, 7);
+  const krakenIndex = expeditionDeck.drawPile.findIndex(card => card.id === 'expedition-kraken');
+  const [krakenCard] = expeditionDeck.drawPile.splice(krakenIndex, 1);
+  expeditionDeck.drawPile.unshift(krakenCard);
+
+  const islands = cloneIslands();
+  const home = islands.find(island => island.id === 'maikan');
+  home.ownerId = 'p1';
+  home.buildings = [{ type:'farm', level:1 }, { type:'cartography', level:1 }];
+  const [homeRow,homeCol] = home.cells[0];
+  const p = {
+    id:'p1',
+    row:homeRow,
+    col:homeCol,
+    activeExpedition:null,
+    expeditionHistory:[],
+    expeditionDrawRound:null,
+    expeditionsDrawnThisRound:0,
+  };
+  const room = { round:2, islands, players:[p], expeditionDeck };
+
+  assert.equal(canTakeExpedition(room, p).ok, true);
+  const taken = takeExpedition(room, p, () => 0.5);
+  assert.equal(taken.ok, true);
+  assert.equal(taken.actionCost, 1);
+  assert.equal(taken.expedition.cardId, 'expedition-kraken');
+  assert.equal(taken.requiresLeaveAndReturn, false);
+  assert.equal(room.expeditionDeck.drawPile.length, 6);
+  assert.equal(canTakeExpedition(room, p).ok, false);
+
+  p.row = LEGENDARY_PLACES.kraken.row;
+  p.col = LEGENDARY_PLACES.kraken.col;
+  const completed = completeExpeditionAtArrival(room, p, () => 0.5);
+  assert.equal(completed.completed, true);
+  assert.equal(p.activeExpedition, null);
+  assert.deepEqual(p.expeditionHistory.map(item=>item.placeId), ['kraken']);
+  assert.equal(room.expeditionDeck.drawPile.length, 7);
+  assert.equal(canTakeExpedition(room, p).ok, false); // не у своего острова и выдача этого раунда использована
+
+  room.round = 3;
+  p.row = homeRow; p.col = homeCol;
+  const returnedIndex = room.expeditionDeck.drawPile.findIndex(card => card.id === 'expedition-kraken');
+  const [returnedKraken] = room.expeditionDeck.drawPile.splice(returnedIndex, 1);
+  room.expeditionDeck.drawPile.unshift(returnedKraken);
+  const next = takeExpedition(room, p, () => 0.5);
+  assert.equal(next.ok, true);
+  assert.notEqual(next.expedition.placeId, 'kraken'); // завершённое место временно откладывается
+  assert.equal(room.expeditionDeck.drawPile.some(card => card.id === 'expedition-kraken'), true); // затем возвращается и перемешивается
+}
+
+// Новый цифровой канон: экспедиций на Атлантию, Адию и Череп нет.
+{
+  const expeditionDeck = createExpeditionDeck(() => 0.5);
+  assert.equal(expeditionDeck.drawPile.length, 7);
+  assert.equal(expeditionDeck.drawPile.some(card => ['atlantia','adia','skull'].includes(card.placeId)), false);
+}
 
 // Все шесть государств присутствуют в политическом runtime. Итоговые призы — только денежные;
 // авторское решение фиксирует итоговый приз Кадингира в 50 дукатов.
@@ -2061,7 +2359,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 // Последний остров, которым ещё владеет само государство, прекращает Лионию и даёт приз инициатору,
 // даже если прежние острова Лионии принадлежат другим игрокам. Вассал освобождается, вражда исчезает.
 {
-  const room = { islands: cloneIslands(), players: [], factionState: {}, round: 3, legendaryDeck: createLegendaryDeck() };
+  const room = { islands: cloneIslands(), players: [], factionState: {}, round: 3 };
   const landin = room.islands.find(i => i.id === 'landin');
   const frandia = room.islands.find(i => i.id === 'frandia');
   const eidon = room.islands.find(i => i.id === 'eidon');
@@ -2133,7 +2431,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 // Авторское решение по Кадингиру: итоговый приз равен 50 дукатам.
 // Он заменяет денежную награду карточки последнего государственного острова и не складывается с её 30 дукатами.
 {
-  const room = { islands: cloneIslands(), players: [], factionState: {}, round: 2, legendaryDeck: createLegendaryDeck() };
+  const room = { islands: cloneIslands(), players: [], factionState: {}, round: 2 };
   const island = room.islands.find(i => i.id === 'kadingir');
   island.army = 0;
   const p = { id: 'p1', row: island.cells[0][0], col: island.cells[0][1], shipClass: 'caravel', level: 1, upgrades: [], escorts: [], ducats: 0, debt: 0, glory: 0, enemyFactionIds: [] };
@@ -2899,7 +3197,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(canAttackPlayerThisRound(battleRoom, ally, target.id).ok, false);
   assert.equal(jointSeaBattle(battleRoom, a, target, [ally.id], []).ok, false);
 
-  const stateRoom = { islands: cloneIslands(), players: [], factionState: {}, round: 2, legendaryDeck: createLegendaryDeck() };
+  const stateRoom = { islands: cloneIslands(), players: [], factionState: {}, round: 2 };
   const kadingir = stateRoom.islands.find(i => i.id === 'kadingir');
   kadingir.army = 0;
   const conqueror = {

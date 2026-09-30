@@ -54,8 +54,9 @@ const FEUD_CARDS = Object.fromEntries(Object.entries(rules.events.feud).map(([fa
     ...copy(card.effect),
   })),
 ]));
+const POLITICAL_FACTION_ORDER = rules.politics.order.filter(id => id in FACTIONS);
 module.exports = {
-  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-5-combat-politics-complete',
+  RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-6-events-legends-6.7',
   BALANCE: {
     session: rules.session,
     maxShipLevel: rules.fleet.maxLevel, maxReadableShipLevel: legacy.shipLevel7.level,
@@ -68,20 +69,24 @@ module.exports = {
     gloryCapture: legacy.gloryCapture, treasuryLossRatio: legacy.treasuryLossRatio,
     reclaimIslandFallback: rules.events.feud.lionia.find(c => c.effect.type === 'reclaim-island').effect.fallbackDucats,
     legendaryEffects: Object.fromEntries(rules.legends.legendary.map(c => [c.id, c.effect])),
+    legendaryPool: copy(rules.legends.legendaryPool),
+    expeditionLimits: copy(rules.legends.expeditionLimits),
   },
   SHIPS: rules.fleet.ships, SHIP_LEVELS, SHIP_UPGRADES,
   ESCORTS: { ...rules.fleet.escorts, [legacy.removedEscort.id]: { ...legacy.removedEscort, retired: true } },
   GOODS: rules.economy.goods, BUILDINGS, BUILDING_UPGRADES, CHARACTERS, MILITARY_REWARDS, FACTIONS,
-  POLITICAL_FACTION_ORDER: rules.politics.order.filter(id => id in FACTIONS),
+  POLITICAL_FACTION_ORDER,
   // Five suzerains issue assignments. Mayo has no vassalage and therefore no assignment deck.
   ASSIGNMENT_CARDS: Object.fromEntries(POLITICAL_FACTION_ORDER
     .filter(id => FACTIONS[id]?.canHaveVassal)
     .map(id => [id, copy(rules.politics.assignments[id] || [])])),
   ANCHOR_CARDS: rules.sea,
-  SAILING_EVENT_CARDS: rules.events.sailing.map(card => card.type === 'turn-effect'
-    ? { ...card, type: 'next-turn', timing: 'next-personal-turn' } : card),
+  SAILING_EVENT_CARDS: rules.events.sailing.map(card => copy(card)),
   FEUD_CARDS,
-  LEGENDARY_CARDS: rules.legends.legendary.map(card => ({ ...card, quantity: legacy.legendaryQuantities[card.id] })),
+  LEGENDARY_PLACE_RULES: rules.legends.places.map(place => copy(place)),
+  NAMED_PLACE_CARDS: rules.legends.namedCards.map(card => copy(card)),
+  EXPEDITION_CARDS: rules.legends.expeditions.map(card => copy(card)),
+  LEGENDARY_CARDS: rules.legends.legendary.map(card => copy(card)),
   // Physical treasure copy counts are unresolved in the source. Runtime keeps one
   // instance of each canonical treasure kind without inventing additional copies.
   TREASURE_CARDS: rules.legends.treasures.map(card => copy(card)),

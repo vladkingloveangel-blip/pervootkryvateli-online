@@ -59,7 +59,7 @@ test('leader, clockwise order and six complete personal circles', { timeout: 300
   assert.deepEqual([room.round,room.circle,room.players.find(p=>p.id===order[0]).actionsLeft],[1,1,rules.session.actionsPerTurn]);
   const socketFor=id=>players[ids.indexOf(id)];
   for(let turn=0;turn<20;turn++){
-    assert.equal(room.activePlayerId,order[turn%4]);
+    assert.equal(room.activePlayerId,order[turn%4],`turn ${turn} circle ${room.circle}`);
     const nextId=order[(turn+1)%4];
     room=await change(socketFor(room.activePlayerId),'endTurn',{},socketFor(nextId));
     if((turn+1)%4===0 && turn<19)assert.equal(room.circle,2+Math.floor(turn/4));

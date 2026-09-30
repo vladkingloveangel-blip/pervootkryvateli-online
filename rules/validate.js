@@ -322,26 +322,38 @@ function validateRules(rules, map) {
   records(legends.places, 'places'); check(legends.places.length === 10, 'places', 'expected ten places');
   for (const p of legends.places) {
     check(['island','sea'].includes(p.kind), p.id, 'invalid place kind');
-    if (p.kind === 'island') {
-      ref(p.islandId, islands, p.id);
-      check(p.reward?.type === 'island-reward' && p.reward.islandId === p.islandId, p.id, 'island reward/reference mismatch');
-    } else {
-      ref(p.mapPlaceId, new Set(Object.keys(map.LEGENDARY_PLACES)), p.id);
-      check(['treasure','legendary'].includes(p.reward?.type), p.id, 'invalid sea reward');
-      positive(p.reward?.count, `${p.id}.reward.count`);
-    }
+    if (p.kind === 'island') ref(p.islandId, islands, p.id);
+    else ref(p.mapPlaceId, new Set(Object.keys(map.LEGENDARY_PLACES)), p.id);
+    check(p.reward?.type === 'legendary', p.id, 'legendary place first-discovery reward must be legendary');
+    positive(p.reward?.count, `${p.id}.reward.count`);
   }
-  for (const key of ['namedCards','expeditions']) {
-    deck(legends[key], 10, key); unique(legends[key].map(c=>c.placeId), key);
-    for (const c of legends[key]) {
-      ref(c.placeId, places, c.id);
-      check(c.name === legends.places.find(p => p.id === c.placeId)?.name, c.id, 'place card/name mismatch');
-      check(c.quantity === 1, c.id, 'expected one named card per place');
-      if (key === 'namedCards') check(c.visibility === 'public', c.id, 'named place cards are public');
-      else check(c.reward?.type === 'treasure' && c.reward.count === 1, c.id, 'invalid expedition reward');
-    }
+  deck(legends.namedCards, 10, 'namedCards'); unique(legends.namedCards.map(c=>c.placeId), 'namedCards');
+  for (const c of legends.namedCards) {
+    ref(c.placeId, places, c.id);
+    check(c.name === legends.places.find(p => p.id === c.placeId)?.name, c.id, 'place card/name mismatch');
+    check(c.quantity === 1, c.id, 'expected one named card per place');
+    check(c.visibility === 'public', c.id, 'named place cards are public');
+  }
+  deck(legends.expeditions, 7, 'expeditions'); unique(legends.expeditions.map(c=>c.placeId), 'expeditions');
+  const seaPlaceIds = new Set(legends.places.filter(p => p.kind === 'sea').map(p => p.id));
+  check(seaPlaceIds.size === 7, 'expeditions', 'expected seven sea legendary places');
+  for (const c of legends.expeditions) {
+    ref(c.placeId, seaPlaceIds, c.id);
+    check(c.name === legends.places.find(p => p.id === c.placeId)?.name, c.id, 'place card/name mismatch');
+    check(c.quantity === 1, c.id, 'expected one expedition per sea place');
+    check(c.reward?.type === 'treasure' && c.reward.count === 1, c.id, 'invalid expedition reward');
   }
   records(legends.legendary, 'legendary'); records(legends.treasures, 'treasures');
+  check(legends.legendary.length === 4, 'legendary', 'expected four digital legendary types');
+  check(legends.legendaryPool?.mode === 'random-with-replacement', 'legendaryPool.mode', 'expected random-with-replacement');
+  check(legends.legendaryPool?.selection === 'uniform', 'legendaryPool.selection', 'expected uniform selection');
+  check(legends.legendaryPool?.consumedOnUse === true, 'legendaryPool.consumedOnUse', 'legendary cards must be consumed on use');
+  check(Array.isArray(legends.legendaryPool?.typeIds), 'legendaryPool.typeIds', 'missing type ids');
+  if (Array.isArray(legends.legendaryPool?.typeIds)) {
+    unique(legends.legendaryPool.typeIds, 'legendaryPool.typeIds');
+    check(legends.legendaryPool.typeIds.length === legends.legendary.length, 'legendaryPool.typeIds', 'pool/type count mismatch');
+    for (const id of legends.legendaryPool.typeIds) ref(id, new Set(legends.legendary.map(c=>c.id)), 'legendaryPool.typeIds');
+  }
   for (const c of [...legends.legendary,...legends.treasures]) effect(c.effect, c.id);
   for (const c of legends.treasures) {
     if (c.effect.type === 'income-multiple') check(c.multiplier === c.effect.multiplier && c.minimum === c.effect.minimum, c.id, 'treasure overview/effect mismatch');
@@ -350,7 +362,6 @@ function validateRules(rules, map) {
       check(c.cargoGoodId === c.effect.goodId, c.id, 'cargo overview/effect mismatch');
     }
   }
-  // Unknown copies stay nullable; do not turn a temporary runtime choice into a rule.
   records(rules.characters.characters, 'characters');
   check(rules.characters.characters.length === 6, 'characters', 'expected six characters');
   for (const c of rules.characters.characters) {

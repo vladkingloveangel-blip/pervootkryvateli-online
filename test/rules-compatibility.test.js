@@ -10,7 +10,7 @@ const copy = value => JSON.parse(JSON.stringify(value));
 
 test('legacy profile references remain valid while canonical master data stays separate', () => {
   assert.deepEqual(validateCompatibility(rules,legacy),[]);
-  assert.equal(runtime.RUNTIME_PROFILE,'stage-5-combat-politics-complete');
+  assert.equal(runtime.RUNTIME_PROFILE,'stage-6-events-legends-6.7');
   assert.equal(runtime.BALANCE.session.startingDucats,rules.session.startingDucats);
   assert.equal(runtime.BALANCE.session.players.min,4);
   assert.equal(runtime.BALANCE.session.players.max,6);
@@ -23,6 +23,12 @@ test('legacy profile references remain valid while canonical master data stays s
   assert.equal(Object.values(runtime.ASSIGNMENT_CARDS).flat().length,49);
   assert.equal(runtime.BALANCE.assignmentReplacementPrice,undefined);
   assert.deepEqual(Object.keys(runtime.FEUD_CARDS),rules.politics.order);
+  assert.deepEqual(runtime.SAILING_EVENT_CARDS,rules.events.sailing);
+  assert.equal(runtime.SAILING_EVENT_CARDS.some(card=>card.type==='next-turn' || card.timing==='next-personal-turn'),false);
+  assert.deepEqual(runtime.LEGENDARY_PLACE_RULES,rules.legends.places);
+  assert.deepEqual(runtime.NAMED_PLACE_CARDS,rules.legends.namedCards);
+  assert.deepEqual(runtime.EXPEDITION_CARDS,rules.legends.expeditions);
+  assert.deepEqual(runtime.BALANCE.expeditionLimits,rules.legends.expeditionLimits);
   for (const [id, masterCards] of Object.entries(rules.events.feud)) {
     const cards = runtime.FEUD_CARDS[id];
     assert.equal(cards.reduce((sum,card)=>sum+card.quantity,0),10,id);
@@ -45,11 +51,12 @@ test('legacy profile references remain valid while canonical master data stays s
   assert.equal(runtime.FACTIONS.kadingir.fullConquestPrize.amountUnresolved,undefined);
   assert.equal(Object.hasOwn(runtime.MILITARY_REWARDS.kadingir,'preserveBuildings'),false);
   assert.equal(runtime.MILITARY_REWARDS.kisalinia,undefined);
-  assert.deepEqual(runtime.TREASURE_CARDS.map(c => c.id),[
-    ...rules.legends.treasures.filter(c => c.effect.type === 'income-multiple').map(c => c.id),legacy.treasure.id,
-  ]);
+  assert.deepEqual(runtime.TREASURE_CARDS.map(c => c.id),rules.legends.treasures.map(c => c.id));
   assert.deepEqual(rules.legends.treasures.find(c => c.id === 'full-diamonds-hold').effect,{type:'fill-hold',goodId:'diamonds'});
-  assert.equal(rules.legends.legendaryDeck.copiesByKind,null); // R05 is not resolved by the temporary 2×4 runtime deck.
+  assert.deepEqual(runtime.BALANCE.legendaryPool,rules.legends.legendaryPool);
+  assert.deepEqual(runtime.LEGENDARY_CARDS,rules.legends.legendary);
+  assert.equal(runtime.LEGENDARY_CARDS.every(card => !Object.hasOwn(card,'quantity')),true);
+  assert.equal(Object.hasOwn(runtime.BALANCE,'legendaryDeck'),false);
 });
 
 test('compatibility validator rejects broken saved-state references and projections', () => {

@@ -34,7 +34,8 @@ test('unversioned rooms retain retired content, old deck copies, islands and pen
   assert.equal(drawAnchorCard(playable,'red').card.artillery,23);
   assert.equal(drawSailingEventCard(playable).id,'old-tailwind');
   assert.equal(drawTreasureCard(playable).id,'full-ore-hold');
-  assert.equal(drawLegendaryCard(playable).copy,2);
+  assert.equal(drawLegendaryCard(playable,()=>0).id,'sea-veil');
+  assert.equal(playable.legendaryDeck.drawPile.length,1); // цифровой выбор не потребляет старую физическую колоду; её удалит серверная нормализация
   assert.equal(drawFeudCard(playable,'lionia').percent,50);
   assert.equal(playable.pendingAssignmentChoice.id,'old-choice');
 });

@@ -11,7 +11,7 @@ test('appendix D: each feud row has the structured effect stated by the table', 
   const income = { type:'skip-income', timing:'current-personal-turn', buildingTypes:['market','bank'] };
   const percent = percent => ({ type:'treasury-percent', percent });
   const upgrade = branch => ({ type:'remove-upgrade', count:1, ...(branch && { branch }) });
-  const held = { type:'discard-random-held', count:1, targetZone:null, unresolved:'R29' };
+  const held = { type:'discard-random-held', count:1, targetZone:'closed-hand-except-active-assignment' };
   const cargo = { type:'remove-cargo', holds:1 };
   const none = { type:'none' };
   const ship = { type:'ship-level-loss', levels:1 };
@@ -129,9 +129,14 @@ test('appendix G assignments and legendary places reference the entities named i
   ]);
   assert.deepEqual(rules.politics.assignments.suniksiya.find(c => c.id === 'suniksiya-delivery-wood-stone').goodIds,['wood','stone']);
   for (const p of rules.legends.places) {
-    if (p.kind === 'island') assert.deepEqual(p.reward,{type:'island-reward',islandId:p.islandId});
-    else assert.deepEqual(p.reward,{type:p.id === 'kraken' ? 'legendary':'treasure',count:1});
+    assert.deepEqual(p.reward,{type:'legendary',count:1});
   }
+  assert.deepEqual(rules.legends.legendaryPool,{
+    mode:'random-with-replacement',
+    selection:'uniform',
+    typeIds:['sea-veil','hellfire','mist-path','sea-curse'],
+    consumedOnUse:true,
+  });
 });
 
 test('validator rejects malformed effect values and broken cross-catalog references', () => {
@@ -157,7 +162,7 @@ test('validator rejects malformed effect values and broken cross-catalog referen
     x => x.events.sailing.find(c => c.id === 'fortune').value = 2,
     x => x.events.sailing.find(c => c.id === 'military-levy').percent = 101,
     x => x.events.sailing.find(c => c.id === 'sea-veil').legendaryCardId = 'mist-path',
-    x => x.legends.places.find(p => p.id === 'atlantia').reward.islandId = 'skull',
+    x => x.legends.expeditions[0].placeId = 'atlantia',
     x => x.legends.places.find(p => p.id === 'kraken').reward.count = 0,
     x => delete x.characters.characters[0].effect.rerolls,
     x => x.characters.characters[1].effect.assignmentVisibility = true,

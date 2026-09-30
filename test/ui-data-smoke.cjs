@@ -66,6 +66,12 @@ const root = path.join(__dirname, '..');
         const city=room.islands.find(i=>i.id==='kisalinia');Object.assign(city,{ownerId:mine.id,status:'Город',garrisonType:null});
         window.__testSocket.listeners('roomState')[0](room);
       });
+      if(width<900)await page.click('[data-mobile-nav="actions"]');
+      assert.match(await page.locator('#legendaryPlacesContent').textContent(),/Первое посещение/);
+      assert.equal(await page.locator('#legendaryPlacesContent .named-place-card').count(),10);
+      assert.match(await page.locator('#legendaryPlacesContent').textContent(),/Активной экспедиции нет/);
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+
       if(width<900)await page.click('[data-mobile-nav="ship"]');
       const guard=page.getByRole('button',{name:/Городская стража →/});
       await guard.scrollIntoViewIfNeeded();
@@ -88,7 +94,7 @@ const root = path.join(__dirname, '..');
       assert.equal(await guard.getAttribute('aria-busy'),'true');
       assert.equal(await guard.isDisabled(),true);
       assert.deepEqual(errors,[]);
-      console.log(`UI ${width}px: no overflow, contained panel, 44px target, catalog label, single submit OK`);
+      console.log(`UI ${width}px: no overflow, Stage 6.7 legends panel, contained panel, 44px target, catalog label, single submit OK`);
       await context.close();
     }
     console.log(`Screenshots: ${dir}`);
