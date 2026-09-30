@@ -54,6 +54,7 @@ const FEUD_CARDS = Object.fromEntries(Object.entries(rules.events.feud).map(([fa
     ...copy(card.effect),
   })),
 ]));
+const POLITICAL_FACTION_ORDER = rules.politics.order.filter(id => id in FACTIONS);
 module.exports = {
   RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-6-events-legends-6.7',
   BALANCE: {
@@ -74,7 +75,7 @@ module.exports = {
   SHIPS: rules.fleet.ships, SHIP_LEVELS, SHIP_UPGRADES,
   ESCORTS: { ...rules.fleet.escorts, [legacy.removedEscort.id]: { ...legacy.removedEscort, retired: true } },
   GOODS: rules.economy.goods, BUILDINGS, BUILDING_UPGRADES, CHARACTERS, MILITARY_REWARDS, FACTIONS,
-  POLITICAL_FACTION_ORDER: rules.politics.order.filter(id => id in FACTIONS),
+  POLITICAL_FACTION_ORDER,
   // Five suzerains issue assignments. Mayo has no vassalage and therefore no assignment deck.
   ASSIGNMENT_CARDS: Object.fromEntries(POLITICAL_FACTION_ORDER
     .filter(id => FACTIONS[id]?.canHaveVassal)
