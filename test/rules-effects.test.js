@@ -162,7 +162,7 @@ test('validator rejects malformed effect values and broken cross-catalog referen
     x => x.events.sailing.find(c => c.id === 'fortune').value = 2,
     x => x.events.sailing.find(c => c.id === 'military-levy').percent = 101,
     x => x.events.sailing.find(c => c.id === 'sea-veil').legendaryCardId = 'mist-path',
-    x => x.legends.places.find(p => p.id === 'atlantia').reward.islandId = 'skull',
+    x => x.legends.expeditions[0].placeId = 'atlantia',
     x => x.legends.places.find(p => p.id === 'kraken').reward.count = 0,
     x => delete x.characters.characters[0].effect.rerolls,
     x => x.characters.characters[1].effect.assignmentVisibility = true,
