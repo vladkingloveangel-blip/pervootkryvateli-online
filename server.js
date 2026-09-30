@@ -2582,7 +2582,7 @@ function continueTurnAfterCards(room) {
   room.phase = 'navigation';
   room.roll = null;
   room.movePoints = null;
-  const configuredActionLimit = Number(p.nextActionLimit);
+  const configuredActionLimit = p.nextActionLimit == null ? NaN : Number(p.nextActionLimit);
   const actionLimit = Math.max(0, Math.min(
     BALANCE.session.actionsPerTurn,
     Number.isFinite(configuredActionLimit) && configuredActionLimit >= 0 ? configuredActionLimit : BALANCE.session.actionsPerTurn
