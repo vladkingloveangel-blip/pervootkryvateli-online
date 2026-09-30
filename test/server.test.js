@@ -353,6 +353,257 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
 });
 
 
+test('Scout reveal lifecycle survives reconnect, device replacement and same-turn restart but expires after the personal turn', { timeout: 45000 }, async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pervo-scout-lifecycle-'));
+  const file = path.join(dir, 'database.json');
+  const listener = net.createServer(); listener.listen(0, '127.0.0.1'); await once(listener, 'listening');
+  const port = listener.address().port; await new Promise(resolve => listener.close(resolve));
+  const base = 'http://127.0.0.1:' + port;
+  let child;
+  let output = '';
+  const sockets = [];
+
+  async function start() {
+    output = '';
+    child = spawn(process.execPath, ['--require', './test/fixtures/postgres.cjs', 'server.js'], {
+      cwd: path.join(__dirname, '..'), windowsHide: true,
+      env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', DATABASE_URL: 'postgres://test', AUTH_SECRET: 'scout-lifecycle-secret', TEST_DB_FILE: file },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    child.stdout.on('data', data => { output += data; });
+    child.stderr.on('data', data => { output += data; });
+    for (let i = 0; i < 150; i++) {
+      if (child.exitCode !== null) throw Error(output);
+      try { if ((await fetch(base + '/health')).ok) return; } catch {}
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    throw Error('Server did not start: ' + output);
+  }
+
+  async function stop() {
+    const exit = once(child, 'exit');
+    child.kill('SIGKILL');
+    await exit;
+  }
+
+  async function connect() {
+    const socket = io(base, { transports: ['websocket'], reconnection: false });
+    sockets.push(socket);
+    await once(socket, 'connect');
+    return socket;
+  }
+
+  const emit = (socket, name, data = {}) => new Promise((resolve, reject) =>
+    socket.timeout(5000).emit(name, data, (err, value) => err ? reject(err) : resolve(value))
+  );
+  async function api(route, body) {
+    const response = await fetch(base + route, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return response.json();
+  }
+  const database = () => JSON.parse(fs.readFileSync(file, 'utf8'));
+  const rows = () => database().game_rooms;
+  const writeDatabase = value => fs.writeFileSync(file, JSON.stringify(value));
+
+  t.after(async () => {
+    sockets.forEach(socket => socket.disconnect());
+    if (child?.exitCode === null) await stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  await start();
+  const accounts = [];
+  for (let i = 1; i <= 4; i++) {
+    const account = await api('/api/auth/register', { username: 'scoutlife' + i, password: 'password' + i });
+    assert.equal(account.ok, true);
+    accounts.push(account);
+  }
+
+  const initialSockets = await Promise.all(accounts.map(() => connect()));
+  const created = await emit(initialSockets[0], 'createRoom', { accountToken: accounts[0].token, name: 'Scout One' });
+  const joined = [];
+  for (let i = 1; i < 4; i++) {
+    joined.push(await emit(initialSockets[i], 'joinRoom', { code: created.code, accountToken: accounts[i].token, name: 'Scout ' + (i + 1) }));
+  }
+  const members = [
+    { playerId: created.playerId, account: accounts[0], socket: initialSockets[0] },
+    ...joined.map((entry, index) => ({ playerId: entry.playerId, account: accounts[index + 1], socket: initialSockets[index + 1] })),
+  ];
+
+  assert.equal((await emit(initialSockets[0], 'setSeatingOrder', { playerIds: members.map(member => member.playerId) })).ok, true);
+  assert.equal((await emit(initialSockets[0], 'setLeader', { playerId: members[0].playerId })).ok, true);
+  for (const member of members) assert.equal((await emit(member.socket, 'setReady', { ready: true })).ok, true);
+  assert.equal((await emit(initialSockets[0], 'startGame')).ok, true);
+  await new Promise(resolve => setTimeout(resolve, 50));
+
+  await stop();
+  let savedDatabase = database();
+  let savedRoom = savedDatabase.game_rooms[0].state;
+  const activeId = savedRoom.order[savedRoom.turnIndex];
+  const activeMember = members.find(member => member.playerId === activeId);
+  const targetMember = members.find(member => member.playerId !== activeId);
+  const observerMember = members.find(member => member.playerId !== activeId && member.playerId !== targetMember.playerId);
+  const activePlayer = savedRoom.players.find(player => player.id === activeId);
+  const targetPlayer = savedRoom.players.find(player => player.id === targetMember.playerId);
+  const observerPlayer = savedRoom.players.find(player => player.id === observerMember.playerId);
+  assert.ok(activeMember && targetMember && observerMember && activePlayer && targetPlayer && observerPlayer);
+  const scoutTurnNo = activePlayer.personalTurnNo;
+  assert.ok(scoutTurnNo > 0);
+
+  savedRoom.phase = 'actions';
+  savedRoom.actionsLeft = 2;
+  activePlayer.character = 'scout';
+  activePlayer.row = 10; activePlayer.col = 10;
+  targetPlayer.row = 10; targetPlayer.col = 14;
+  targetPlayer.debt = 4321;
+  savedRoom.scoutRevealGrants = [];
+  writeDatabase(savedDatabase);
+
+  await start();
+  const activeSocket = await connect();
+  const targetSocket = await connect();
+  const observerSocket = await connect();
+  let delivery = once(activeSocket, 'roomState');
+  assert.equal((await emit(activeSocket, 'resumeRoom', { code: created.code, accountToken: activeMember.account.token })).ok, true);
+  await delivery;
+  assert.equal((await emit(targetSocket, 'resumeRoom', { code: created.code, accountToken: targetMember.account.token })).ok, true);
+  assert.equal((await emit(observerSocket, 'resumeRoom', { code: created.code, accountToken: observerMember.account.token })).ok, true);
+
+  const activeRevealDelivery = once(activeSocket, 'roomState');
+  const observerRevealDelivery = once(observerSocket, 'roomState');
+  const used = await emit(activeSocket, 'useScout', { mode: 'money', targetPlayerId: targetMember.playerId, debt: true, ducats: 999 });
+  assert.equal(used.ok, true);
+  const [activeReveal] = await activeRevealDelivery;
+  const [observerReveal] = await observerRevealDelivery;
+  const activeTarget = activeReveal.players.find(player => player.id === targetMember.playerId);
+  const observerTarget = observerReveal.players.find(player => player.id === targetMember.playerId);
+  assert.equal(activeTarget.ducats, rows()[0].state.players.find(player => player.id === targetMember.playerId).ducats);
+  assert.equal(Object.hasOwn(activeTarget, 'debt'), false);
+  assert.equal(Object.hasOwn(observerTarget, 'ducats'), false);
+  assert.equal(Object.hasOwn(activeReveal, 'scoutRevealGrants'), false);
+  let persistedGrant = rows()[0].state.scoutRevealGrants;
+  assert.deepEqual(persistedGrant, [
+    { viewerPlayerId: activeId, mode: 'money', targetPlayerId: targetMember.playerId, personalTurnNo: scoutTurnNo },
+  ]);
+  assert.equal(Object.hasOwn(persistedGrant[0], 'socketId'), false);
+  assert.equal(Object.hasOwn(persistedGrant[0], 'ducats'), false);
+  assert.equal(Object.hasOwn(persistedGrant[0], 'debt'), false);
+
+  activeSocket.disconnect();
+  await new Promise(resolve => setTimeout(resolve, 100));
+  persistedGrant = rows()[0].state.scoutRevealGrants;
+  assert.deepEqual(persistedGrant, [
+    { viewerPlayerId: activeId, mode: 'money', targetPlayerId: targetMember.playerId, personalTurnNo: scoutTurnNo },
+  ]);
+
+  const reconnected = await connect();
+  const reconnectDelivery = once(reconnected, 'roomState');
+  const observerReconnectDelivery = once(observerSocket, 'roomState');
+  assert.equal((await emit(reconnected, 'resumeRoom', { code: created.code, accountToken: activeMember.account.token })).ok, true);
+  const [reconnectState] = await reconnectDelivery;
+  const [observerReconnectState] = await observerReconnectDelivery;
+  assert.equal(reconnectState.players.find(player => player.id === targetMember.playerId).ducats, targetPlayer.ducats);
+  assert.equal(Object.hasOwn(reconnectState.players.find(player => player.id === targetMember.playerId), 'debt'), false);
+  assert.equal(Object.hasOwn(observerReconnectState.players.find(player => player.id === targetMember.playerId), 'ducats'), false);
+  assert.equal(rows()[0].state.players.find(player => player.id === activeId).personalTurnNo, scoutTurnNo);
+
+  const replacement = await connect();
+  const removed = once(reconnected, 'removedFromRoom');
+  const replacementDelivery = once(replacement, 'roomState');
+  assert.equal((await emit(replacement, 'resumeRoom', { code: created.code, accountToken: activeMember.account.token })).ok, true);
+  const [removedPayload] = await removed;
+  const [replacementState] = await replacementDelivery;
+  assert.equal(removedPayload.reason, 'Игра открыта на другом устройстве.');
+  assert.equal(replacementState.players.find(player => player.id === targetMember.playerId).ducats, targetPlayer.ducats);
+  assert.equal(rows()[0].state.scoutRevealGrants.length, 1);
+
+  let detachedDeliveries = 0;
+  reconnected.on('roomState', () => { detachedDeliveries += 1; });
+  const observerAfterReplacement = once(observerSocket, 'roomState');
+  assert.equal((await emit(targetSocket, 'goHome')).ok, true);
+  const [observerAfterReplacementState] = await observerAfterReplacement;
+  await new Promise(resolve => setTimeout(resolve, 100));
+  assert.equal(detachedDeliveries, 0);
+  assert.equal(Object.hasOwn(observerAfterReplacementState.players.find(player => player.id === targetMember.playerId), 'ducats'), false);
+
+  await stop();
+  savedDatabase = database();
+  savedRoom = savedDatabase.game_rooms[0].state;
+  const savedActive = savedRoom.players.find(player => player.id === activeId);
+  const savedTarget = savedRoom.players.find(player => player.id === targetMember.playerId);
+  const savedObserver = savedRoom.players.find(player => player.id === observerMember.playerId);
+  savedTarget.ducats = 777;
+  savedTarget.debt = 888;
+  const validIslandId = savedRoom.islands[0].id;
+  savedRoom.scoutRevealGrants = [
+    { viewerPlayerId: 'unknown-viewer', mode: 'money', targetPlayerId: targetMember.playerId, personalTurnNo: scoutTurnNo },
+    { viewerPlayerId: activeId, mode: 'money', targetPlayerId: targetMember.playerId, personalTurnNo: scoutTurnNo - 1 },
+    { viewerPlayerId: activeId, mode: 'invalid-mode', targetPlayerId: targetMember.playerId, personalTurnNo: scoutTurnNo },
+    { viewerPlayerId: activeId, mode: 'money', personalTurnNo: scoutTurnNo },
+    { viewerPlayerId: activeId, mode: 'money', targetPlayerId: 'missing-target', personalTurnNo: scoutTurnNo },
+    { viewerPlayerId: activeId, mode: 'money', targetPlayerId: activeId, personalTurnNo: scoutTurnNo },
+    { viewerPlayerId: activeId, mode: 'garrison', islandId: validIslandId, personalTurnNo: scoutTurnNo },
+    {
+      viewerPlayerId: activeId,
+      mode: 'money',
+      targetPlayerId: targetMember.playerId,
+      personalTurnNo: scoutTurnNo,
+      ducats: 999,
+      debt: true,
+      garrison: { defenseArmy: 999 },
+      socketId: 'forbidden',
+    },
+    { viewerPlayerId: observerMember.playerId, mode: 'money', targetPlayerId: targetMember.playerId, personalTurnNo: savedObserver.personalTurnNo },
+  ];
+  assert.equal(savedActive.personalTurnNo, scoutTurnNo);
+  writeDatabase(savedDatabase);
+
+  await start();
+  persistedGrant = rows()[0].state.scoutRevealGrants;
+  assert.deepEqual(persistedGrant, [
+    { viewerPlayerId: activeId, mode: 'money', targetPlayerId: targetMember.playerId, personalTurnNo: scoutTurnNo },
+  ]);
+  const afterRestartSocket = await connect();
+  const restartDelivery = once(afterRestartSocket, 'roomState');
+  assert.equal((await emit(afterRestartSocket, 'resumeRoom', { code: created.code, accountToken: activeMember.account.token })).ok, true);
+  const [restartState] = await restartDelivery;
+  const liveTarget = restartState.players.find(player => player.id === targetMember.playerId);
+  assert.equal(liveTarget.ducats, 777);
+  assert.equal(Object.hasOwn(liveTarget, 'debt'), false);
+  assert.equal(JSON.stringify(restartState).includes('999'), false);
+  assert.equal(Object.hasOwn(restartState, 'scoutRevealGrants'), false);
+  assert.equal(rows()[0].state.players.find(player => player.id === activeId).personalTurnNo, scoutTurnNo);
+
+  assert.equal((await emit(afterRestartSocket, 'endTurn')).ok, true);
+  assert.deepEqual(rows()[0].state.scoutRevealGrants, []);
+
+  await stop();
+  savedDatabase = database();
+  savedRoom = savedDatabase.game_rooms[0].state;
+  savedRoom.scoutRevealGrants = [{
+    viewerPlayerId: activeId,
+    mode: 'money',
+    targetPlayerId: targetMember.playerId,
+    personalTurnNo: scoutTurnNo - 1,
+    ducats: 999,
+  }];
+  writeDatabase(savedDatabase);
+
+  await start();
+  assert.deepEqual(rows()[0].state.scoutRevealGrants, []);
+  const expiredSocket = await connect();
+  const expiredDelivery = once(expiredSocket, 'roomState');
+  assert.equal((await emit(expiredSocket, 'resumeRoom', { code: created.code, accountToken: activeMember.account.token })).ok, true);
+  const [expiredState] = await expiredDelivery;
+  assert.equal(Object.hasOwn(expiredState.players.find(player => player.id === targetMember.playerId), 'ducats'), false);
+  assert.equal(Object.hasOwn(expiredState, 'scoutRevealGrants'), false);
+});
+
+
+
 test('4.4 corrective: general gameplay gate reports private pending generically',()=>{
   const source=fs.readFileSync(path.join(__dirname,'..','server.js'),'utf8');
   const match=source.match(/function pendingDecisionError\(room\) \{([\s\S]*?)\n\}/);

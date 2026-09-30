@@ -1,5 +1,5 @@
 const { projectOpponentFacingRoomView } = require('./state-projection');
-const { applyScoutUse, scoutViewerContext, clearScoutRevealGrants } = require('./scout-runtime');
+const { applyScoutUse, scoutViewerContext, clearScoutRevealGrants, normalizeScoutRevealGrants } = require('./scout-runtime');
 const { BALANCE, RULESET, RUNTIME_PROFILE } = require('./game-data');
 const path = require('path');
 const crypto = require('crypto');
@@ -266,7 +266,8 @@ async function initDatabase() {
   for (const room of rooms.values()) {
     const compatibility = normalizeStage6Compatibility(room);
     if (compatibility.resumeEventPhase) processEventPhase(room);
-    if (compatibility.changed || compatibility.resumeEventPhase) await roomStore.save(room);
+    const scoutNormalization = normalizeScoutRevealGrants(room);
+    if (compatibility.changed || compatibility.resumeEventPhase || scoutNormalization.changed) await roomStore.save(room);
   }
   dbReady = true;
   dbInitError = null;

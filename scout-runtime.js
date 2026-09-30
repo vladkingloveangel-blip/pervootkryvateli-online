@@ -101,23 +101,60 @@ function applyScoutUse({ room, playerId, request, characterRule, hasBlockingPend
   return { ok: true, mode: reveal.grant.mode, actionCost, actionsLeft: room.actionsLeft };
 }
 
+function normalizeScoutRevealGrant(room, raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+
+  const viewerId = raw.viewerPlayerId == null ? '' : String(raw.viewerPlayerId);
+  if (!viewerId || activePlayerId(room) !== viewerId) return null;
+  const viewer = (room?.players || []).find(item => String(item.id) === viewerId);
+  if (!viewer) return null;
+
+  const personalTurnNo = Number(viewer.personalTurnNo) || 0;
+  if (!personalTurnNo || Number(raw.personalTurnNo) !== personalTurnNo) return null;
+
+  if (raw.mode === 'money') {
+    if (raw.targetPlayerId == null) return null;
+    const targetPlayerId = String(raw.targetPlayerId);
+    if (!targetPlayerId || targetPlayerId === viewerId) return null;
+    const target = (room?.players || []).find(item => String(item.id) === targetPlayerId);
+    if (!target) return null;
+    return { viewerPlayerId: viewerId, mode: 'money', targetPlayerId, personalTurnNo };
+  }
+
+  if (raw.mode === 'garrison') {
+    if (raw.islandId == null) return null;
+    const islandId = String(raw.islandId);
+    if (!islandId || !(room?.islands || []).some(item => String(item.id) === islandId)) return null;
+    return { viewerPlayerId: viewerId, mode: 'garrison', islandId, personalTurnNo };
+  }
+
+  return null;
+}
+
 function activeScoutRevealGrants(room, viewerPlayerId) {
   const viewerId = viewerPlayerId == null ? null : String(viewerPlayerId);
   if (viewerId === null || activePlayerId(room) !== viewerId) return [];
-  const viewer = (room?.players || []).find(item => String(item.id) === viewerId);
-  const personalTurnNo = Number(viewer?.personalTurnNo) || 0;
-  if (!personalTurnNo) return [];
 
-  const out = [];
+  let activeGrant = null;
   for (const raw of Array.isArray(room?.scoutRevealGrants) ? room.scoutRevealGrants : []) {
-    if (!raw || String(raw.viewerPlayerId) !== viewerId || Number(raw.personalTurnNo) !== personalTurnNo) continue;
-    if (raw.mode === 'money' && raw.targetPlayerId != null) {
-      out.push({ viewerPlayerId: viewerId, mode: 'money', targetPlayerId: String(raw.targetPlayerId), personalTurnNo });
-    } else if (raw.mode === 'garrison' && raw.islandId != null) {
-      out.push({ viewerPlayerId: viewerId, mode: 'garrison', islandId: String(raw.islandId), personalTurnNo });
-    }
+    const grant = normalizeScoutRevealGrant(room, raw);
+    if (grant && grant.viewerPlayerId === viewerId) activeGrant = grant;
   }
-  return out;
+  return activeGrant ? [activeGrant] : [];
+}
+
+function normalizeScoutRevealGrants(room) {
+  if (!room || typeof room !== 'object') return { changed: false, grants: [] };
+  const previous = room.scoutRevealGrants;
+  let activeGrant = null;
+  for (const raw of Array.isArray(previous) ? previous : []) {
+    const grant = normalizeScoutRevealGrant(room, raw);
+    if (grant) activeGrant = grant;
+  }
+  const grants = activeGrant ? [activeGrant] : [];
+  const changed = !Array.isArray(previous) || JSON.stringify(previous) !== JSON.stringify(grants);
+  room.scoutRevealGrants = grants;
+  return { changed, grants };
 }
 
 function scoutViewerContext(room, viewerPlayerId) {
@@ -142,6 +179,7 @@ module.exports = {
   buildScoutRevealGrant,
   applyScoutUse,
   activeScoutRevealGrants,
+  normalizeScoutRevealGrants,
   scoutViewerContext,
   clearScoutRevealGrants,
 };

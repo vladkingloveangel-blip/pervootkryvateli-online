@@ -1,7 +1,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { newDb } = require('pg-mem');
-const { RoomStore } = require('../room-store');
+const { RoomStore, roomSnapshot } = require('../room-store');
+const { normalizeScoutRevealGrants } = require('../scout-runtime');
 const logger = { log() {}, error() {} };
 const room = () => ({ code: 'ABCDE', started: true, players: [{ id: 'p1', accountId: 'a1', socketId: 'stale', connected: true, token: 'private', ducats: 42 }], islands: [{ ownerId: 'p1' }], order: ['p1'], phase: 'action', pendingBattle: { invites: [{ response: null }] }, legendaryDeck: ['secret'], round: 3 });
 function pool() { const { Pool } = newDb({ noAstCoverageCheck: true }).adapters.createPg(); return new Pool(); }
@@ -95,6 +96,47 @@ test('invalid snapshots stop restoration instead of silently dropping games', as
   await store.init(new Map());
   await db.query('INSERT INTO game_rooms (code, state) VALUES ($1,$2::jsonb)', ['BROKE', '{}']);
   await assert.rejects(store.init(new Map()), /Invalid saved room/);
+});
+
+test('roomSnapshot preserves the active Scout capability shape while clearing socket delivery fields', () => {
+  const original = room();
+  original.players[0].personalTurnNo = 4;
+  original.scoutRevealGrants = [{ viewerPlayerId: 'p1', mode: 'money', targetPlayerId: 'p2', personalTurnNo: 4 }];
+  original.players.push({ id: 'p2', socketId: 'other-socket', connected: true, personalTurnNo: 1, ducats: 17 });
+  original.order.push('p2');
+
+  const snapshot = roomSnapshot(original);
+  assert.equal(snapshot.players[0].socketId, null);
+  assert.equal(snapshot.players[0].connected, false);
+  assert.equal(snapshot.players[1].socketId, null);
+  assert.equal(snapshot.players[1].connected, false);
+  assert.deepEqual(snapshot.scoutRevealGrants, [
+    { viewerPlayerId: 'p1', mode: 'money', targetPlayerId: 'p2', personalTurnNo: 4 },
+  ]);
+  assert.equal(Object.hasOwn(snapshot.scoutRevealGrants[0], 'socketId'), false);
+  assert.equal(Object.hasOwn(snapshot.scoutRevealGrants[0], 'ducats'), false);
+  assert.equal(original.players[0].socketId, 'stale');
+  assert.equal(original.players[0].connected, true);
+});
+
+test('legacy restored room without Scout grants normalizes to an empty runtime-safe capability list only', async () => {
+  const db = pool();
+  const store = new RoomStore(db, { logger });
+  await store.init(new Map());
+  const original = room();
+  delete original.scoutRevealGrants;
+  original.legacySentinel = { keep: true };
+  await store.save(original);
+
+  const restored = new Map();
+  await new RoomStore(db, { logger }).init(restored);
+  const saved = restored.get(original.code);
+  assert.equal(Object.hasOwn(saved, 'scoutRevealGrants'), false);
+  const result = normalizeScoutRevealGrants(saved);
+  assert.equal(result.changed, true);
+  assert.deepEqual(saved.scoutRevealGrants, []);
+  assert.deepEqual(saved.legacySentinel, { keep: true });
+  assert.equal(saved.rulesDataVersion, undefined);
 });
 
 test('guest mode works without a database', async () => {

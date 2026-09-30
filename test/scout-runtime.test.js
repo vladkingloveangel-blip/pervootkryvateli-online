@@ -11,6 +11,8 @@ const {
   islandManhattanDistance,
   playerManhattanDistance,
   applyScoutUse,
+  activeScoutRevealGrants,
+  normalizeScoutRevealGrants,
   scoutViewerContext,
   clearScoutRevealGrants,
 } = require('../scout-runtime');
@@ -315,6 +317,105 @@ test('grant validity is bound to viewer and personalTurnNo even before cleanup',
   r.players[0].personalTurnNo = 7;
   r.turnIndex = 1;
   assert.equal(scoutViewerContext(r, 'p1').scoutRevealGrants.length, 0);
+});
+
+test('restore normalization keeps only the last valid current Scout capability and strips arbitrary fields', () => {
+  const r = room();
+  const turnNo = r.players[0].personalTurnNo;
+  r.scoutRevealGrants = [
+    null,
+    'bad-entry',
+    { viewerPlayerId: 'missing-viewer', mode: 'money', targetPlayerId: 'p2', personalTurnNo: turnNo },
+    { viewerPlayerId: 'p2', mode: 'money', targetPlayerId: 'p3', personalTurnNo: r.players[1].personalTurnNo },
+    { viewerPlayerId: 'p1', mode: 'money', targetPlayerId: 'p2', personalTurnNo: turnNo - 1 },
+    { viewerPlayerId: 'p1', mode: 'bogus', targetPlayerId: 'p2', personalTurnNo: turnNo },
+    { viewerPlayerId: 'p1', mode: 'money', personalTurnNo: turnNo },
+    { viewerPlayerId: 'p1', mode: 'money', targetPlayerId: 'missing-target', personalTurnNo: turnNo },
+    { viewerPlayerId: 'p1', mode: 'money', targetPlayerId: 'p1', personalTurnNo: turnNo },
+    { viewerPlayerId: 'p1', mode: 'garrison', islandId: 'missing-island', personalTurnNo: turnNo },
+    { viewerPlayerId: 'p1', mode: 'garrison', islandId: 'i1', personalTurnNo: turnNo, garrison: { defenseArmy: 999 }, debt: true },
+    { viewerPlayerId: 'p1', mode: 'money', targetPlayerId: 'p3', personalTurnNo: turnNo, ducats: 999, debt: true, socketId: 'forbidden' },
+    { viewerPlayerId: 'p3', mode: 'money', targetPlayerId: 'p2', personalTurnNo: r.players[2].personalTurnNo },
+  ];
+
+  const result = normalizeScoutRevealGrants(r);
+  assert.equal(result.changed, true);
+  assert.deepEqual(r.scoutRevealGrants, [
+    { viewerPlayerId: 'p1', mode: 'money', targetPlayerId: 'p3', personalTurnNo: turnNo },
+  ]);
+  assert.deepEqual(Object.keys(r.scoutRevealGrants[0]).sort(), ['mode','personalTurnNo','targetPlayerId','viewerPlayerId']);
+});
+
+test('legacy and malformed Scout grant containers normalize to runtime-safe empty state without extending lifetime', () => {
+  for (const value of [undefined, null, {}, 'bad']) {
+    const r = room();
+    if (value === undefined) delete r.scoutRevealGrants;
+    else r.scoutRevealGrants = value;
+    const result = normalizeScoutRevealGrants(r);
+    assert.equal(result.changed, true);
+    assert.deepEqual(r.scoutRevealGrants, []);
+  }
+
+  const stale = room();
+  const originalTurnNo = stale.players[0].personalTurnNo;
+  stale.scoutRevealGrants = [{ viewerPlayerId: 'p1', mode: 'money', targetPlayerId: 'p2', personalTurnNo: originalTurnNo - 1 }];
+  normalizeScoutRevealGrants(stale);
+  assert.equal(stale.players[0].personalTurnNo, originalTurnNo);
+  assert.deepEqual(stale.scoutRevealGrants, []);
+
+  const inactive = room();
+  inactive.turnIndex = 1;
+  inactive.scoutRevealGrants = [{ viewerPlayerId: 'p1', mode: 'money', targetPlayerId: 'p2', personalTurnNo: originalTurnNo }];
+  normalizeScoutRevealGrants(inactive);
+  assert.deepEqual(inactive.scoutRevealGrants, []);
+});
+
+test('projection defense returns at most the last current valid grant without range, character, action or pending revalidation', () => {
+  const r = room();
+  const turnNo = r.players[0].personalTurnNo;
+  r.players[0].row = 0;
+  r.players[0].col = 0;
+  r.players[0].character = null;
+  r.actionsLeft = 0;
+  r.pendingEvent = { playerId: 'p1', kind: 'SECRET_PENDING' };
+  r.scoutRevealGrants = [
+    { viewerPlayerId: 'p1', mode: 'money', targetPlayerId: 'p2', personalTurnNo: turnNo },
+    { viewerPlayerId: 'p1', mode: 'garrison', islandId: 'i1', personalTurnNo: turnNo },
+    { viewerPlayerId: 'p1', mode: 'money', targetPlayerId: 'missing', personalTurnNo: turnNo },
+  ];
+
+  assert.deepEqual(activeScoutRevealGrants(r, 'p1'), [
+    { viewerPlayerId: 'p1', mode: 'garrison', islandId: 'i1', personalTurnNo: turnNo },
+  ]);
+  const out = projectOpponentFacingRoomView(r, scoutViewerContext(r, 'p1'));
+  assert.equal(out.islands.find(i => i.id === 'i1').garrisonType, 'SECRET_SCOUT_GARRISON');
+  assert.equal(has(out.players.find(p => p.id === 'p2'), 'ducats'), false);
+});
+
+test('restored garrison capability reads live authoritative garrison state and never stores a snapshot', () => {
+  const r = room();
+  const turnNo = r.players[0].personalTurnNo;
+  r.scoutRevealGrants = [{
+    viewerPlayerId: 'p1',
+    mode: 'garrison',
+    islandId: 'i1',
+    personalTurnNo: turnNo,
+    garrisonDefense: 999,
+    defenseBreakdown: { total: 999 },
+  }];
+  normalizeScoutRevealGrants(r);
+  r.islands[0].garrisonType = 'LIVE_RESTORED_GARRISON';
+  r.islands[0].defenseArmy = 17;
+  r.islands[0].defenseBreakdown.hiredGarrison = 11;
+
+  const out = projectOpponentFacingRoomView(r, scoutViewerContext(r, 'p1'));
+  const target = out.islands.find(i => i.id === 'i1');
+  assert.equal(target.garrisonType, 'LIVE_RESTORED_GARRISON');
+  assert.equal(target.defenseArmy, 17);
+  assert.equal(target.defenseBreakdown.hiredGarrison, 11);
+  assert.deepEqual(r.scoutRevealGrants, [
+    { viewerPlayerId: 'p1', mode: 'garrison', islandId: 'i1', personalTurnNo: turnNo },
+  ]);
 });
 
 test('two real sockets receive isolated Scout projections and public observer receives no grant', { timeout: 10000 }, async t => {
