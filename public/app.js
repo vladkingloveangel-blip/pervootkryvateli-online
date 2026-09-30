@@ -771,7 +771,6 @@
     actions: 'Действия',
     ship: 'Корабль и имущество',
     players: 'Игроки и отношения',
-    log: 'Журнал партии',
   };
 
   function openMobileTab(tab = 'map') {
@@ -928,7 +927,6 @@
     renderAlliances();
     renderCombat();
     renderMap();
-    renderLog();
     updateContextualActionPanels();
   }
 
@@ -3070,17 +3068,6 @@
     const { rows, cols } = mapSize();
     el.style.left = `${(col / cols) * 100}%`;
     el.style.top = `${(row / rows) * 100}%`;
-  }
-
-  function renderLog() {
-    const logEl = $('log');
-    logEl.innerHTML = '';
-    for (const item of [...state.room.log].reverse()) {
-      const div = document.createElement('div');
-      div.className = 'log-entry';
-      div.textContent = item.text;
-      logEl.appendChild(div);
-    }
   }
 
   function escapeHtml(s) {

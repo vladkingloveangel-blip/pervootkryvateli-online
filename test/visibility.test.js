@@ -361,3 +361,16 @@ test('4.3 all six pending paths preserve actor choices and omit non-actor privat
     }
   }
 });
+
+test('4.3 corrective: shared secret journal is absent for owners and all other viewers', () => {
+  const source=room();
+  const secrets=['SECRET_CHARACTER_LOG','SECRET_ASSIGNMENT_LOG','SECRET_EXPEDITION_LOG','SECRET_HIDDEN_CARD_LOG'];
+  source.log=secrets.map(text=>({t:1,text}));
+  const before=structuredClone(source);
+  for(const viewerId of ['p1','p2',null]) {
+    const out=projectOpponentFacingRoomView(source,{viewerId});
+    assert.equal(has(out,'log'),false);
+    for(const secret of secrets) assert.equal(JSON.stringify(out).includes(secret),false);
+  }
+  assert.deepEqual(source,before);
+});

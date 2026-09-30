@@ -195,7 +195,7 @@ test('stage 6.1: Observatory resolves one sailing card before feud, Embassy assi
   assert.equal(state.pendingAssignmentChoice.kind, 'embassy');
   assert.equal(state.pendingAssignmentChoice.options.length, 2);
 
-  const texts = state.log.map(entry => entry.text);
+  const texts = JSON.parse(fs.readFileSync(file,'utf8')).game_rooms[0].state.log.map(entry => entry.text);
   const opened = texts.findIndex(text => text.includes('открывает «Первое событие»'));
   const replaced = texts.findIndex(text => text.includes('Обсерватория сбрасывает «Первое событие»'));
   const feud = texts.findIndex(text => text.includes('получает карту вражды') && text.includes('Кадингир'));
@@ -212,7 +212,7 @@ test('stage 6.1: Observatory resolves one sailing card before feud, Embassy assi
   assert.equal(afterAssignment.actionsLeft, rules.session.actionsPerTurn);
   assert.equal(afterAssignment.activeAssignment.id, choice.id);
   assert.equal(afterAssignment.activeTurnEffects.moveBonus, 2);
-  const finalTexts = state.log.map(entry => entry.text);
+  const finalTexts = JSON.parse(fs.readFileSync(file,'utf8')).game_rooms[0].state.log.map(entry => entry.text);
   const embassyChosen = finalTexts.findIndex(text => text.includes('выбирает через Посольство'));
   const ordinaryTurn = finalTexts.findIndex(text => text.includes(`Ход: ${afterAssignment.name}. Навигация.`) && text.includes('попутный ветер +2'));
   assert.ok(embassyChosen >= 0 && ordinaryTurn > embassyChosen);

@@ -85,6 +85,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   await new Promise(resolve=>setTimeout(resolve,50));
   for(const [view,ownerId] of [[firstView,created.playerId],[secondView,joinedSecond.playerId]]) {
     assert.ok(view);
+    assert.equal(Object.hasOwn(view,'log'),false);
     for(const p of view.players) {
       if(p.id===ownerId) {
         assert.equal(p.ducats,canonical.session.startingDucats);
@@ -221,6 +222,8 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   oldPlayer.activeAssignment = { factionId:'mori', card:legacyMoriCard, issuedRound:3 };
   oldPlayer.replacedAssignmentConditions = ['old-paid-condition'];
   legacyRoom.pendingAssignmentChoice = { id:'old-paid-assignment-choice', playerId:oldPlayer.id, factionId:'mori' };
+  const logSecrets=['SECRET_CHARACTER_LOG','SECRET_ASSIGNMENT_LOG','SECRET_EXPEDITION_LOG','SECRET_HIDDEN_CARD_LOG'];
+  legacyRoom.log.push(...logSecrets.map(text=>({t:Date.now(),text})));
   fs.writeFileSync(file,JSON.stringify(savedDatabase));
   beforeRestart = structuredClone(legacyRoom);
   await start();
@@ -229,6 +232,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(health.databaseReady, true); assert.equal(health.roomPersistence.restored, 1);
   const newDevice = await connect(); const restoredWatcher = await connect();
   const restored = await emit(restoredWatcher, 'adminWatchRoom', { code, accountToken: admin.token });
+  for(const secret of logSecrets) assert.equal(restored.room.log.some(entry=>entry.text===secret),true);
   assert.equal(restored.room.players.every(p => !p.connected), true);
   const restoredPlayer = restored.room.players.find(p => p.id === created.playerId);
   assert.equal(restoredPlayer.level,7);
@@ -239,9 +243,21 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(restored.room.anchorDecks.red.remaining,legacyRoom.anchorDecks.red.drawPile.length);
   assert.equal(restored.room.ruleset.rulesetVersion,canonical.metadata.rulesetVersion);
   assert.equal((await emit(newDevice, 'resumeRoom', { code, accountToken: stranger.token, playerToken: created.playerToken })).ok, false);
+  const ownerDelivery=once(newDevice,'roomState');
   const resumed = await emit(newDevice, 'resumeRoom', { code, accountToken: a.token });
   assert.equal(resumed.ok, true); assert.equal(resumed.playerId, created.playerId);
+  const [ownerState]=await ownerDelivery;
+  const secondDevice=await connect();
+  const secondDelivery=once(secondDevice,'roomState');
+  assert.equal((await emit(secondDevice,'resumeRoom',{code,accountToken:b.token})).ok,true);
+  const [secondState]=await secondDelivery;
+  for(const view of [ownerState,secondState]) {
+    assert.equal(Object.hasOwn(view,'log'),false);
+    for(const secret of logSecrets) assert.equal(JSON.stringify(view).includes(secret),false);
+  }
   const afterRestart = rows()[0].state;
+  assert.equal(Object.hasOwn(afterRestart,'log'),true);
+  for(const secret of logSecrets) assert.equal(afterRestart.log.some(entry=>entry.text===secret),true);
   const afterOldPlayer = afterRestart.players.find(p => p.id === created.playerId);
   const restartPendingFeudKey = `${restartPendingFeudCard.masterCardId || restartPendingFeudCard.id}:${restartPendingFeudCard.copy ?? 'legacy'}`;
   assert.equal(afterRestart.pendingFeud.id, 'restart-pending-feud');

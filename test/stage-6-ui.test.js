@@ -33,3 +33,8 @@ test('stage 6.7 UI exposes events, discoveries, expeditions and legendary reacti
   assert.match(styles, /\.active-expedition/);
   assert.match(styles, /\.expedition-destination/);
 });
+
+test('ordinary player UI has no journal dependency or journal navigation', () => {
+  assert.doesNotMatch(app, /state\.room\.log|renderLog|Журнал партии/);
+  assert.doesNotMatch(index, /id="logPanel"|id="log"|data-mobile-nav="log"/);
+});

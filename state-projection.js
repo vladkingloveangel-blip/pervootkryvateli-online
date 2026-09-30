@@ -141,6 +141,8 @@ function projectRoomForViewer(roomView, viewerContext=null){
 function projectOpponentFacingRoomView(legacyRoomView, viewerContext=null){
   if(!legacyRoomView || typeof legacyRoomView!=='object' || Array.isArray(legacyRoomView)) return {};
   const c=ctx(viewerContext), out=structuredClone(legacyRoomView);
+  // Shared journal can contain secrets even for the owner of this view.
+  delete out.log;
   const isOwner=id=>c.viewerId!==null && id!=null && String(id)===c.viewerId;
   if(Array.isArray(out.players)) out.players=out.players.map(v=>isOwner(v.id)?v:projectPlayerForViewer(v,c));
   if(Array.isArray(out.islands)) out.islands=out.islands.map(v=>isOwner(v.ownerId)?v:projectIslandForViewer(v,c));
