@@ -20,6 +20,7 @@ const {
 } = require('../digital-random-sources');
 const { BALANCE, TREASURE_CARDS, LEGENDARY_CARDS } = require('../game-data');
 const { drawTreasureCard, drawLegendaryCard } = require('../game-logic');
+const { createSeaEncounterStorage, seaEncounterSource } = require('../sea-encounter-source');
 
 function sequenceRng(values) {
   let index = 0;
@@ -222,4 +223,133 @@ test('treasure and legendary results are detached clones of canonical definition
 
   assert.deepEqual(TREASURE_CARDS[0], treasureCanonical);
   assert.deepEqual(legendaryDefinition, legendaryCanonical);
+});
+
+
+test('SeaEncounterSource peek is stable, non-consuming, and next consume returns the peeked occurrence', () => {
+  const room = {
+    anchorDecks: {
+      blue: { drawPile: [{ id: 'first' }, { id: 'second' }], discard: [] },
+      yellow: { drawPile: [{ id: 'yellow' }], discard: [] },
+      red: { drawPile: [{ id: 'red' }], discard: [] },
+    },
+  };
+  const source = seaEncounterSource(room, 'blue', () => 0.5);
+  const before = JSON.stringify(room.anchorDecks.blue);
+  const firstPeek = source.peekNext();
+  const secondPeek = source.peekNext();
+
+  assert.strictEqual(firstPeek, secondPeek);
+  assert.equal(firstPeek.id, 'first');
+  assert.equal(JSON.stringify(room.anchorDecks.blue), before);
+  assert.strictEqual(source.consumeNext(), firstPeek);
+  assert.equal(source.remainingCount(), 1);
+  assert.equal(room.anchorDecks.blue.discard.length, 0);
+});
+
+test('SeaEncounterSource operations are isolated by anchor color', () => {
+  const room = {
+    anchorDecks: {
+      blue: { drawPile: [{ id: 'blue' }], discard: [] },
+      yellow: { drawPile: [{ id: 'yellow' }], discard: [] },
+      red: { drawPile: [{ id: 'red' }], discard: [] },
+    },
+  };
+  const yellowBefore = JSON.stringify(room.anchorDecks.yellow);
+  const redBefore = JSON.stringify(room.anchorDecks.red);
+  assert.equal(seaEncounterSource(room, 'blue').consumeNext().id, 'blue');
+  assert.equal(JSON.stringify(room.anchorDecks.yellow), yellowBefore);
+  assert.equal(JSON.stringify(room.anchorDecks.red), redBefore);
+});
+
+test('SeaEncounterSource first cycle preserves occurrence multiplicities without repeats', () => {
+  const room = { anchorDecks: createSeaEncounterStorage(() => 0.5) };
+  const source = seaEncounterSource(room, 'blue', () => 0.5);
+  const occurrences = [];
+  while (source.remainingCount()) {
+    const occurrence = source.consumeNext();
+    occurrences.push(occurrence);
+    source.markUsed(occurrence);
+  }
+  assert.equal(occurrences.length, 10);
+  assert.equal(new Set(occurrences.map(item => `${item.id}:${item.copy}`)).size, 10);
+  assert.equal(occurrences.filter(item => item.id === 'smugglers').length, 2);
+  assert.equal(room.anchorDecks.blue.discard.length, 10);
+});
+
+test('SeaEncounterSource refresh preserves the exact color multiset', () => {
+  const room = { anchorDecks: createSeaEncounterStorage(() => 0.25) };
+  const source = seaEncounterSource(room, 'yellow', () => 0.25);
+  while (source.remainingCount()) {
+    const occurrence = source.consumeNext();
+    source.markUsed(occurrence);
+  }
+  const before = room.anchorDecks.yellow.discard
+    .map(item => `${item.id}:${item.copy}`)
+    .sort();
+  assert.equal(source.peekNext() != null, true);
+  const after = room.anchorDecks.yellow.drawPile
+    .map(item => `${item.id}:${item.copy}`)
+    .sort();
+  assert.deepEqual(after, before);
+  assert.deepEqual(room.anchorDecks.yellow.discard, []);
+});
+
+test('SeaEncounterSource boundary peek materializes one stable next occurrence in legacy backing storage', () => {
+  const room = {
+    anchorDecks: {
+      blue: {
+        drawPile: [],
+        discard: [{ id: 'a', copy: 1 }, { id: 'b', copy: 1 }, { id: 'c', copy: 1 }],
+      },
+    },
+  };
+  const rng = sequenceRng([0, 0]);
+  const source = seaEncounterSource(room, 'blue', rng);
+  const firstPeek = source.peekNext();
+  const serializedAfterPeek = JSON.stringify(room);
+  const secondPeek = source.peekNext();
+
+  assert.strictEqual(secondPeek, firstPeek);
+  assert.equal(room.anchorDecks.blue.drawPile.length, 3);
+  assert.equal(room.anchorDecks.blue.discard.length, 0);
+
+  const restored = JSON.parse(serializedAfterPeek);
+  const restoredSource = seaEncounterSource(restored, 'blue', () => {
+    throw new Error('restored consume must not need RNG after boundary peek');
+  });
+  assert.deepEqual(restoredSource.consumeNext(), firstPeek);
+});
+
+test('SeaEncounterSource adds no new room state fields', () => {
+  const room = {
+    marker: 'same',
+    anchorDecks: {
+      blue: { drawPile: [{ id: 'a' }], discard: [] },
+      yellow: { drawPile: [], discard: [] },
+      red: { drawPile: [], discard: [] },
+    },
+  };
+  const keysBefore = Object.keys(room).sort();
+  const source = seaEncounterSource(room, 'blue');
+  source.peekNext();
+  source.consumeNext();
+  source.markUsed({ id: 'used' });
+  assert.deepEqual(Object.keys(room).sort(), keysBefore);
+  assert.equal(Object.hasOwn(room, 'seaEncounterSources'), false);
+  assert.equal(room.marker, 'same');
+});
+
+test('drawAnchorCard keeps legacy return shape while delegating consume lifecycle to SeaEncounterSource', () => {
+  const room = {
+    anchorDecks: {
+      blue: { drawPile: [{ id: 'legacy-shape' }], discard: [] },
+    },
+  };
+  const drawn = require('../game-logic').drawAnchorCard(room, 'blue', () => 0.5);
+  assert.deepEqual(Object.keys(drawn).sort(), ['card', 'deck']);
+  assert.equal(drawn.card.id, 'legacy-shape');
+  assert.strictEqual(drawn.deck, room.anchorDecks.blue);
+  assert.equal(room.anchorDecks.blue.drawPile.length, 0);
+  assert.equal(room.anchorDecks.blue.discard.length, 0);
 });

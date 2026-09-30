@@ -1,5 +1,6 @@
 const { BALANCE, MAP_META } = require('./game-data');
 const { selectTreasureOutcome, selectLegendaryAbility } = require('./digital-random-sources');
+const { createSeaEncounterStorage, seaEncounterSource } = require('./sea-encounter-source');
 const {
   SHIPS,
   SHIP_LEVELS,
@@ -112,29 +113,14 @@ function shuffleCards(cards, rng = Math.random) {
 }
 
 function createAnchorDecks(rng = Math.random) {
-  const decks = {};
-  for (const [color, defs] of Object.entries(ANCHOR_CARDS)) {
-    const cards = [];
-    for (const def of defs) {
-      const count = Math.max(1, Number(def.quantity) || 1);
-      for (let i = 0; i < count; i++) cards.push({ ...def, copy: i + 1 });
-    }
-    decks[color] = { drawPile: shuffleCards(cards, rng), discard: [] };
-  }
-  return decks;
+  return createSeaEncounterStorage(rng);
 }
 
 function drawAnchorCard(room, color, rng = Math.random) {
-  if (!ANCHOR_CARDS[color]) return null;
-  room.anchorDecks ||= createAnchorDecks(rng);
-  room.anchorDecks[color] ||= { drawPile: [], discard: [] };
-  const deck = room.anchorDecks[color];
-  if (!deck.drawPile.length && deck.discard.length) {
-    deck.drawPile = shuffleCards(deck.discard, rng);
-    deck.discard = [];
-  }
-  const card = deck.drawPile.shift() || null;
-  return card ? { card, deck } : null;
+  const source = seaEncounterSource(room, color, rng);
+  if (!source) return null;
+  const card = source.consumeNext();
+  return card ? { card, deck: source.compatibilityStorage() } : null;
 }
 
 
@@ -1581,7 +1567,7 @@ function resolveAnchorEncounter(room, player, rng = Math.random) {
     }
   }
 
-  drawn.deck.discard.push(card);
+  seaEncounterSource(room, anchor.color, rng).markUsed(card);
   player.lastAnchorEncounter = {
     round: room.round,
     row: player.row,

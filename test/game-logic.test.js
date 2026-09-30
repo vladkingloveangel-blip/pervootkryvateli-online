@@ -77,6 +77,7 @@ const {
   jointAssaultIsland,
   anchorAt,
   createAnchorDecks,
+  drawAnchorCard,
   resolveAnchorEncounter,
   creditDucats,
   createSailingEventDeck,
@@ -1164,6 +1165,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(p.fleetPoints, 1);
   assert.equal(result.fleetPoints, 1);
   assert.equal(room.anchorDecks.blue.discard.length, 1);
+  assert.deepEqual(room.anchorDecks.blue.discard.map(c => c.id), ['test']);
   assert.equal(p.visitedAnchors.includes('5,11'), true);
   const second = resolveAnchorEncounter(room, p);
   assert.equal(second.triggered, false);
