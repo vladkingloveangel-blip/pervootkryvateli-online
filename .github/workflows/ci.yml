@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - "rules-sync/**"
+      - "digital-native/**"
   pull_request:
     branches:
       - main
