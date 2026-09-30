@@ -343,7 +343,7 @@
 
 **Файлы:** domain-state, game-logic/server, expedition tests/UI contract.
 
-**Adapter:** old active/history/round/count fields.
+**Adapter:** old `player.activeExpedition`, `player.expeditionHistory`, `player.expeditionDrawRound`, `player.expeditionsDrawnThisRound` remain backing fields.
 
 **Инварианты:** leave-return, pool reservation/release, per-round limit, history eligibility.
 
@@ -403,7 +403,7 @@
 
 **Файлы:** domain-state, server/game-logic, event/feud/legendary/assignment tests.
 
-**API:** tagged variants over current four pending fields.
+**API:** tagged variants over current `room.pendingEvent`, `room.pendingFeud`, `room.pendingAssignmentChoice`, `room.pendingLegendaryReaction` fields.
 
 **Adapter:** physical fields remain separate until block 6.
 
