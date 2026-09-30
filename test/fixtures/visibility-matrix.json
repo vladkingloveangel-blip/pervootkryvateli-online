@@ -1,0 +1,403 @@
+{
+  "schemaVersion": 1,
+  "canonicalFor": "digital-native migration block 4 visibility",
+  "securityInvariant": "hidden means omitted from unauthorized payload, not merely hidden in UI",
+  "viewerRoles": {
+    "owner": "Owner of the private player state, or island owner for island-private state.",
+    "opponent": "Another ordinary game participant with no owner/private grant.",
+    "scout": "An opponent with one active Scout reveal grant for one selected entity/property only.",
+    "pendingActor": "The player who must resolve the specific pending decision.",
+    "publicObserver": "Observer with public-only access; never inherits another player's Scout grant."
+  },
+  "roleComposition": [
+    "owner is entity-scoped and grants only that owner's private state",
+    "scout adds only the exact selected Scout grant and otherwise has opponent visibility",
+    "pendingActor adds only the exact private pending-resolution content for that decision",
+    "publicObserver is public-only"
+  ],
+  "accessValues": {
+    "visible": "Property/group may be present.",
+    "omitted": "Property/group must not be present in the unauthorized projection.",
+    "conditional": "Property/group may be present only when the row's condition is satisfied."
+  },
+  "policies": [
+    {
+      "key": "island.publicState",
+      "entity": "island",
+      "propertyGroup": "public world state",
+      "privacySensitive": false,
+      "properties": [
+        "identity/position",
+        "ownerId",
+        "name/ordinary island info",
+        "resources",
+        "status:settlement|city|large-port",
+        "buildings",
+        "building types",
+        "building levels/stages/state",
+        "public building effects",
+        "values directly derivable from public buildings"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "visible",
+        "scout": "visible",
+        "pendingActor": "visible",
+        "publicObserver": "visible"
+      },
+      "notes": "Visible fort, bastion and other public fortification buildings remain public."
+    },
+    {
+      "key": "island.garrison",
+      "entity": "island",
+      "propertyGroup": "hidden garrison",
+      "privacySensitive": true,
+      "properties": [
+        "garrisonType",
+        "garrison existence",
+        "garrison strength",
+        "private defense breakdown",
+        "derived defense total that reveals the garrison"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "omitted",
+        "scout": "conditional",
+        "pendingActor": "omitted",
+        "publicObserver": "omitted"
+      },
+      "scoutOverride": "selected-garrison",
+      "conditions": {
+        "scout": "Only the one selected island within Manhattan distance <= 4 while that Scout grant remains active."
+      },
+      "notes": "Scout reveals only this selected island's garrison, not any other private owner property."
+    },
+    {
+      "key": "ship.publicState",
+      "entity": "ship",
+      "propertyGroup": "ordinary ship state",
+      "privacySensitive": false,
+      "properties": [
+        "position",
+        "class/level",
+        "main characteristics",
+        "combat strength",
+        "public combat characteristics",
+        "installed ship upgrades",
+        "escorts",
+        "escort active/inactive state",
+        "ordinary non-private ship characteristics"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "visible",
+        "scout": "visible",
+        "pendingActor": "visible",
+        "publicObserver": "visible"
+      }
+    },
+    {
+      "key": "ship.cargo",
+      "entity": "ship",
+      "propertyGroup": "cargo and holds",
+      "privacySensitive": false,
+      "properties": [
+        "cargo",
+        "hold contents",
+        "cargo parameters",
+        "escort cargo where applicable"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "visible",
+        "scout": "visible",
+        "pendingActor": "visible",
+        "publicObserver": "visible"
+      }
+    },
+    {
+      "key": "player.ducats",
+      "entity": "player",
+      "propertyGroup": "money",
+      "privacySensitive": true,
+      "properties": [
+        "ducats",
+        "derived exact-money fields"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "omitted",
+        "scout": "conditional",
+        "pendingActor": "omitted",
+        "publicObserver": "omitted"
+      },
+      "scoutOverride": "selected-player-ducats",
+      "conditions": {
+        "scout": "Only the current ducat amount of one selected other player whose ship is within Manhattan distance <= 4 while that Scout grant remains active."
+      }
+    },
+    {
+      "key": "player.character",
+      "entity": "player",
+      "propertyGroup": "held character",
+      "privacySensitive": true,
+      "properties": [
+        "current character identity",
+        "private held-character state",
+        "derived identity-revealing fields"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "omitted",
+        "scout": "omitted",
+        "pendingActor": "omitted",
+        "publicObserver": "omitted"
+      },
+      "notes": "Scout never reveals character. Public character catalog/rules remain public."
+    },
+    {
+      "key": "politics.suzerainRelation",
+      "entity": "politics",
+      "propertyGroup": "public vassalage relation",
+      "privacySensitive": false,
+      "properties": [
+        "isVassal/derivable vassal status",
+        "suzerainId",
+        "ordinary public political relations"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "visible",
+        "scout": "visible",
+        "pendingActor": "visible",
+        "publicObserver": "visible"
+      }
+    },
+    {
+      "key": "player.activeAssignment",
+      "entity": "player",
+      "propertyGroup": "active assignment details",
+      "privacySensitive": true,
+      "properties": [
+        "activeAssignment",
+        "card/task",
+        "condition",
+        "target",
+        "progress",
+        "reward",
+        "instanceId",
+        "required action",
+        "private assignment hints"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "omitted",
+        "scout": "omitted",
+        "pendingActor": "omitted",
+        "publicObserver": "omitted"
+      },
+      "notes": "Scout never reveals an active assignment."
+    },
+    {
+      "key": "player.activeAssignmentExistenceAndSignals",
+      "entity": "player",
+      "propertyGroup": "active assignment existence/count/derived signals",
+      "privacySensitive": true,
+      "properties": [
+        "hasActiveAssignment",
+        "assignment count",
+        "assignment existence flags",
+        "progress counters",
+        "reward counters",
+        "derived hints that reveal assignment existence/details"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "omitted",
+        "scout": "omitted",
+        "pendingActor": "omitted",
+        "publicObserver": "omitted"
+      },
+      "notes": "The only related public political knowledge is suzerainId."
+    },
+    {
+      "key": "player.privateAbilities",
+      "entity": "player",
+      "propertyGroup": "personal consumable/private abilities",
+      "privacySensitive": true,
+      "properties": [
+        "specialCards",
+        "legendaryCards",
+        "analogous private consumable abilities",
+        "ability ids/types/effects",
+        "private ability counts"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "omitted",
+        "scout": "omitted",
+        "pendingActor": "omitted",
+        "publicObserver": "omitted"
+      },
+      "notes": "Scout never reveals these inventories. Static definitions/catalogs remain public."
+    },
+    {
+      "key": "player.savedBenefits",
+      "entity": "player",
+      "propertyGroup": "saved event/stored benefits",
+      "privacySensitive": true,
+      "properties": [
+        "savedEventCards",
+        "analogous stored benefits",
+        "benefit ids/types/effects",
+        "saved benefit counts"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "omitted",
+        "scout": "omitted",
+        "pendingActor": "omitted",
+        "publicObserver": "omitted"
+      },
+      "notes": "Scout never reveals these inventories."
+    },
+    {
+      "key": "player.activeExpedition",
+      "entity": "player",
+      "propertyGroup": "current active expedition",
+      "privacySensitive": true,
+      "properties": [
+        "activeExpedition",
+        "hasActiveExpedition",
+        "card id/name",
+        "target/place",
+        "progress/state",
+        "acceptedRound",
+        "leave-and-return state",
+        "derived existence/progress flags"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "omitted",
+        "scout": "omitted",
+        "pendingActor": "omitted",
+        "publicObserver": "omitted"
+      },
+      "notes": "Scout never reveals the current active expedition."
+    },
+    {
+      "key": "discoveries.completedHistory",
+      "entity": "discoveries",
+      "propertyGroup": "completed public discoveries/achievements",
+      "privacySensitive": false,
+      "properties": [
+        "completed first discoveries",
+        "explored legendary places",
+        "completed achievements/discoveries already established in the shared world"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "visible",
+        "scout": "visible",
+        "pendingActor": "visible",
+        "publicObserver": "visible"
+      },
+      "notes": "Does not include a current hidden active expedition."
+    },
+    {
+      "key": "pending.privateContent",
+      "entity": "pendingResolution",
+      "propertyGroup": "private pending-resolution content",
+      "privacySensitive": true,
+      "properties": [
+        "private kind when it reveals hidden mechanics",
+        "hidden card/source",
+        "options",
+        "specific choice",
+        "hidden target data",
+        "assignment details",
+        "legendary/saved-event details",
+        "other private pending context"
+      ],
+      "visibility": {
+        "owner": "omitted",
+        "opponent": "omitted",
+        "scout": "omitted",
+        "pendingActor": "conditional",
+        "publicObserver": "omitted"
+      },
+      "conditions": {
+        "pendingActor": "Only for the exact pending resolution for which this viewer is the required actor."
+      },
+      "notes": "Scout never reveals pending-resolution private content."
+    },
+    {
+      "key": "pending.publicEnvelope",
+      "entity": "pendingResolution",
+      "propertyGroup": "minimal public waiting envelope",
+      "privacySensitive": false,
+      "properties": [
+        "game is waiting for a decision",
+        "actor player id when required for shared UI"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "visible",
+        "scout": "visible",
+        "pendingActor": "visible",
+        "publicObserver": "visible"
+      },
+      "notes": "Public facts of an already-public battle/alliance/event remain public; the envelope must not include private decision context."
+    },
+    {
+      "key": "catalogs.publicDefinitions",
+      "entity": "catalog",
+      "propertyGroup": "static public rule definitions",
+      "privacySensitive": false,
+      "properties": [
+        "character catalog/rules",
+        "legendary ability definitions",
+        "assignment definitions when already public static definitions",
+        "other public static rules/catalogs"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "visible",
+        "scout": "visible",
+        "pendingActor": "visible",
+        "publicObserver": "visible"
+      },
+      "notes": "Private instance state must not be confused with public definitions."
+    }
+  ],
+  "scoutRule": {
+    "ruleId": "R29",
+    "range": 4,
+    "distance": "Manhattan",
+    "useActionCost": 1,
+    "consumesCharacterAfterUse": true,
+    "exactlyOneRevealModePerUse": true,
+    "revealModes": [
+      "selected-garrison",
+      "selected-player-ducats"
+    ],
+    "garrisonTarget": "one selected island in range",
+    "moneyTarget": "one selected other player whose ship is in range",
+    "grantAudience": "only the player who used Scout",
+    "duration": "until end of that player's current personal turn",
+    "reconnectWithinSamePersonalTurnPreservesGrant": true,
+    "endOfPersonalTurnExpiresGrant": true,
+    "excludedPrivateCategories": [
+      "character",
+      "activeAssignment",
+      "assignment progress/reward",
+      "legendary/private abilities",
+      "specialCards",
+      "savedEventCards",
+      "activeExpedition",
+      "pending options/content",
+      "all other private properties"
+    ],
+    "implementationStatus": "documented only in step 4.1; no runtime reveal fields or lifecycle implementation"
+  }
+}
