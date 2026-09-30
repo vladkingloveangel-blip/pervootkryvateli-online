@@ -1547,10 +1547,10 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(result.changes.some(change => change.beforeName.includes('Рынок') && change.removed), true);
 }
 
-// Каждая из пяти политических фракций имеет колоду вражды из 10 карт.
+// Каждая из шести политических фракций имеет колоду вражды из 10 карт.
 {
   const decks = createFeudDecks(() => 0.5);
-  assert.deepEqual(Object.keys(decks).sort(), ['kadingir', 'lionia', 'mayo', 'pirates', 'suniksiya']);
+  assert.deepEqual(Object.keys(decks).sort(), ['kadingir', 'lionia', 'mayo', 'mori', 'pirates', 'suniksiya']);
   for (const deck of Object.values(decks)) assert.equal(deck.drawPile.length, 10);
 }
 
