@@ -574,7 +574,7 @@ Current effect `choose-treasure { draw:2, keep:1 }`. Целевой смысл: 
 - не создавать draw/discard state;
 - actual source samples следуют canonical independent uniform random-with-replacement semantics.
 
-Gameplay handler не активировать, пока не закрыт вопрос раздела 16 о совпадающих двух candidates.
+Два candidate outcomes одного использования — два независимых selection из `TreasureOutcomeSource`; они могут совпасть. Distinct-selection запрещён. Ни операция, ни её UI не должны создавать `treasureDeck` или состояние draw/discard.
 
 Блок: 3 + 5.
 
@@ -715,15 +715,9 @@ Compatibility-only scheduled effects old event timing. Не удалять до 
 
 Решение требуется перед блоком 4. Блок 3 оно не блокирует.
 
-### 16.2. Искатель сокровищ — могут ли два предложенных результата совпасть
+### 16.2. Искатель сокровищ — решение зафиксировано
 
-Правила фиксируют `choose-treasure { draw:2, keep:1 }`, а общий treasure source — independent uniform random-with-replacement. Физическая `treasureDeck` точно не нужна, но отдельно не зафиксировано, обязаны ли **два candidates одного использования** быть различными.
-
-Возможны две разные механики:
-- два независимых source samples → совпадение возможно;
-- два разных outcome types → совпадение запрещено.
-
-Это даёт разные распределения. До авторского решения архитектура может предусмотреть операцию, но gameplay handler Искателя не должен самостоятельно выбирать одну трактовку.
+Это больше не открытый вопрос. `choose-treasure { draw:2, keep:1 }` означает два независимых равновероятных selection из `TreasureOutcomeSource` с возвращением. Два предложенных outcome могут совпасть. Операция не использует distinct-selection и не создаёт `treasureDeck`.
 
 Других новых авторских решений, необходимых для этого mapping, аудит шага 1 и текущие master rules не выявили.
 
@@ -766,7 +760,7 @@ Compatibility-only scheduled effects old event timing. Не удалять до 
 | Observatory | sailing source operation | reject first, mandatory second | Да | 3 → 5 |
 | Embassy | assignment pool operation | up to 2 eligible, keep 1 | Да | 3 → 5 |
 | Cartographer | peek-next encounter operation | stable non-consuming next | Да | 3 → 4 → 5 |
-| Treasure Hunter | digital treasure choose operation | no deck; duplicate rule pending | Да | 3 after decision |
+| Treasure Hunter | digital treasure choose operation | два независимых selection; совпадение допустимо; no deck | Да | 3 → 5 |
 | Scout | visibility inspection ability | R29-defined properties | Да | 4 after R29 |
 | island “cards” | static island definitions/world entities | map state unchanged | Да | 5 optional |
 | CSS/DOM `*-card` | presentation-only | no gameplay meaning | Не требуется | post-6 cosmetic |
