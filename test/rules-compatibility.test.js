@@ -51,9 +51,7 @@ test('legacy profile references remain valid while canonical master data stays s
   assert.equal(runtime.FACTIONS.kadingir.fullConquestPrize.amountUnresolved,undefined);
   assert.equal(Object.hasOwn(runtime.MILITARY_REWARDS.kadingir,'preserveBuildings'),false);
   assert.equal(runtime.MILITARY_REWARDS.kisalinia,undefined);
-  assert.deepEqual(runtime.TREASURE_CARDS.map(c => c.id),[
-    ...rules.legends.treasures.filter(c => c.effect.type === 'income-multiple').map(c => c.id),legacy.treasure.id,
-  ]);
+  assert.deepEqual(runtime.TREASURE_CARDS.map(c => c.id),rules.legends.treasures.map(c => c.id));
   assert.deepEqual(rules.legends.treasures.find(c => c.id === 'full-diamonds-hold').effect,{type:'fill-hold',goodId:'diamonds'});
   assert.deepEqual(runtime.BALANCE.legendaryPool,rules.legends.legendaryPool);
   assert.deepEqual(runtime.LEGENDARY_CARDS,rules.legends.legendary);
