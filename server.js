@@ -106,6 +106,11 @@ const {
   createAssignmentDecks,
   normalizeStage6Compatibility,
   getActiveAssignmentTask,
+  getActiveExpeditionTask,
+  getExpeditionHistoryRecords,
+  expeditionHistoryRecordToLegacy,
+  expeditionTakenThisRound,
+  resetExpeditionRoundUsage,
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,
@@ -713,6 +718,8 @@ function publicRoom(room, viewerId = null) {
       const level = readableShipLevel(p);
       const nextLevel = level < BALANCE.maxShipLevel ? SHIP_LEVELS[level + 1] : null;
       const activeAssignmentTask = getActiveAssignmentTask(p);
+      const activeExpeditionTask = getActiveExpeditionTask(p);
+      const expeditionHistoryRecords = getExpeditionHistoryRecords(p) || [];
       return {
         id: p.id,
         name: p.name,
@@ -743,19 +750,19 @@ function publicRoom(room, viewerId = null) {
         specialCardCount: (p.specialCards || []).length,
         namedPlaceCards: (p.namedPlaceCards || []).map(card => ({ id: card.id, name: card.name, placeId: card.placeId })),
         namedPlaceCardCount: (p.namedPlaceCards || []).length,
-        activeExpedition: p.activeExpedition ? {
-          cardId: p.activeExpedition.cardId,
-          name: p.activeExpedition.name,
-          placeId: p.activeExpedition.placeId,
-          acceptedRound: Number(p.activeExpedition.acceptedRound) || null,
+        activeExpedition: activeExpeditionTask ? {
+          cardId: activeExpeditionTask.id,
+          name: activeExpeditionTask.source?.name || activeExpeditionTask.payload?.name,
+          placeId: activeExpeditionTask.source?.placeId || activeExpeditionTask.payload?.placeId,
+          acceptedRound: Number(activeExpeditionTask.source?.acceptedRound) || null,
           requiresLeaveAndReturn: p.id === viewerId
-            ? Boolean(p.activeExpedition.startedAtTarget && !p.activeExpedition.departedAfterIssue)
+            ? Boolean(activeExpeditionTask.progress?.startedAtTarget && !activeExpeditionTask.progress?.departedAfterIssue)
             : undefined,
         } : null,
-        hasActiveExpedition: Boolean(p.activeExpedition),
-        expeditionHistory: (p.expeditionHistory || []).map(item => ({ ...item })),
-        expeditionHistoryCount: (p.expeditionHistory || []).length,
-        expeditionTakenThisRound: p.id === viewerId ? Number(p.expeditionDrawRound) === Number(room.round) : false,
+        hasActiveExpedition: Boolean(activeExpeditionTask),
+        expeditionHistory: expeditionHistoryRecords.map(expeditionHistoryRecordToLegacy),
+        expeditionHistoryCount: expeditionHistoryRecords.length,
+        expeditionTakenThisRound: p.id === viewerId ? expeditionTakenThisRound(p, room.round) > 0 : false,
         canTakeExpedition: p.id === viewerId && active?.id === p.id && room.phase === 'actions' && (Number(room.actionsLeft) || 0) > 0 && !room.eventPhase?.active && !hasPendingDecision(room)
           ? canTakeExpedition(room, p).ok : false,
         legendaryCards: p.id === viewerId ? (p.legendaryCards || []).map((c, handIndex) => ({ id: c.id, name: c.name, handIndex })) : [],
@@ -2378,7 +2385,7 @@ function advanceRound(room) {
     player.armyPointOpponentIds = [];
     player.attackLimitRound = room.round;
     player.attackCountsThisRound = {};
-    player.expeditionsDrawnThisRound = 0;
+    resetExpeditionRoundUsage(player);
   }
   refreshFactionExistence(room);
   log(room, `Начинается раунд ${room.round}: ограничения погрузки, отметки посещённых якорей и пары нападений «нападающий — игрок-цель» сброшены.`);

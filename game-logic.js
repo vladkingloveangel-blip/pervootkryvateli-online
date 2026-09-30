@@ -1,5 +1,22 @@
 const domainState = require('./domain-state');
-const { Task, getActiveAssignmentTask, assignTask, completeAssignmentTask } = domainState;
+const {
+  Task,
+  HistoryRecord,
+  getActiveAssignmentTask,
+  assignTask,
+  completeAssignmentTask,
+  getActiveExpeditionTask,
+  assignExpeditionTask,
+  completeExpeditionTask,
+  getExpeditionHistoryRecords,
+  expeditionHistoryRecordToLegacy,
+  addCompletedExpeditionRecord,
+  countExpeditionCompletions,
+  getExpeditionUsage,
+  expeditionTakenThisRound,
+  recordExpeditionTaken,
+  resetExpeditionRoundUsage,
+} = domainState;
 const { BALANCE, MAP_META } = require('./game-data');
 const { selectTreasureOutcome, selectLegendaryAbility, selectTreasureCandidates } = require('./digital-random-sources');
 const { createSeaEncounterStorage, seaEncounterSource } = require('./sea-encounter-source');
@@ -608,7 +625,7 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
     }
   }
 
-  const reservedExpeditionIds = new Set(room.players.map(player => player.activeExpedition?.cardId).filter(Boolean));
+  const reservedExpeditionIds = new Set(room.players.map(player => getActiveExpeditionTask(player)?.id).filter(Boolean));
   if (!room.expeditionDeck || !Array.isArray(room.expeditionDeck.drawPile)) {
     room.expeditionDeck = createExpeditionDeck(rng);
     room.expeditionDeck.drawPile = room.expeditionDeck.drawPile.filter(card => !reservedExpeditionIds.has(card.id));
@@ -1013,13 +1030,8 @@ function claimLegendaryPlaceDiscovery(room, player, placeId, rng = Math.random) 
   };
 }
 
-function expeditionHistory(player) {
-  player.expeditionHistory ||= [];
-  return player.expeditionHistory;
-}
-
 function expeditionCompletionCount(player, placeId) {
-  return expeditionHistory(player).filter(item => item.placeId === String(placeId || '')).length;
+  return countExpeditionCompletions(player, String(placeId || ''));
 }
 
 function playerAtExpeditionPlace(room, player, placeId) {
@@ -1052,12 +1064,11 @@ function canTakeExpedition(room, player) {
   if (BUILDINGS.cartography?.effect?.type !== 'expedition-access' || !cartographyIsland) {
     return { ok: false, error: 'Экспедицию берут на клетке своего острова с Картографической палатой.' };
   }
-  if (player.activeExpedition) return { ok: false, error: 'Сначала завершите текущую экспедицию.' };
+  if (getActiveExpeditionTask(player)) return { ok: false, error: 'Сначала завершите текущую экспедицию.' };
   const perRound = Math.max(1, Number(BALANCE.expeditionLimits?.drawsPerRound) || 1);
-  const takenThisRound = Number(player.expeditionDrawRound) === Number(room.round)
-    ? Math.max(1, Number(player.expeditionsDrawnThisRound) || 1)
-    : 0;
-  if (takenThisRound >= perRound) return { ok: false, error: 'В текущем общем раунде экспедиция уже получалась.' };
+  if (expeditionTakenThisRound(player, room.round) >= perRound) {
+    return { ok: false, error: 'В текущем общем раунде экспедиция уже получалась.' };
+  }
   const pool = expeditionPoolFor(room);
   if (!pool?.hasEligible(player)) {
     return { ok: false, error: 'В колоде нет доступной экспедиции на ещё не завершённое вами место.' };
@@ -1072,46 +1083,58 @@ function takeExpedition(room, player, rng = Math.random) {
   if (!card) return { ok: false, error: 'В колоде нет доступной экспедиции.' };
 
   const startedAtTarget = playerAtExpeditionPlace(room, player, card.placeId);
-  player.activeExpedition = {
-    card: { ...card },
-    cardId: card.id,
-    name: card.name,
-    placeId: card.placeId,
-    acceptedRound: Number(room.round) || 1,
-    startedAtTarget,
-    departedAfterIssue: false,
-  };
-  player.expeditionDrawRound = Number(room.round) || 1;
-  player.expeditionsDrawnThisRound = 1;
-  return { ok: true, expedition: player.activeExpedition, requiresLeaveAndReturn: startedAtTarget, actionCost: 1, islandId: allowed.islandId };
+  const task = Task.view({
+    kind: 'expedition',
+    id: card.id,
+    ownerId: player.id,
+    state: 'active',
+    source: {
+      name: card.name,
+      placeId: card.placeId,
+      acceptedRound: Number(room.round) || 1,
+    },
+    payload: { ...card },
+    progress: {
+      startedAtTarget,
+      departedAfterIssue: false,
+    },
+  });
+  const legacyExpedition = assignExpeditionTask(player, task);
+  recordExpeditionTaken(player, room.round);
+  return { ok: true, expedition: legacyExpedition, requiresLeaveAndReturn: startedAtTarget, actionCost: 1, islandId: allowed.islandId };
 }
 
 function completeExpeditionAtArrival(room, player, rng = Math.random) {
-  const active = player?.activeExpedition;
-  if (!room || !player || !active) return { ok: true, active: false, completed: false };
-  const atTarget = playerAtExpeditionPlace(room, player, active.placeId);
+  const task = getActiveExpeditionTask(player);
+  if (!room || !player || !task) return { ok: true, active: false, completed: false };
+  const placeId = task.source?.placeId || task.payload?.placeId;
+  const atTarget = playerAtExpeditionPlace(room, player, placeId);
   if (!atTarget) {
-    if (active.startedAtTarget) active.departedAfterIssue = true;
-    return { ok: true, active: true, completed: false, departedAfterIssue: Boolean(active.departedAfterIssue) };
+    if (task.progress?.startedAtTarget && !task.progress?.departedAfterIssue) {
+      task.progress.departedAfterIssue = true;
+      assignExpeditionTask(player, task);
+    }
+    return { ok: true, active: true, completed: false, departedAfterIssue: Boolean(task.progress?.departedAfterIssue) };
   }
-  if (active.startedAtTarget && !active.departedAfterIssue) {
+  if (task.progress?.startedAtTarget && !task.progress?.departedAfterIssue) {
     return { ok: true, active: true, completed: false, requiresLeaveAndReturn: true };
   }
 
-  const card = active.card || EXPEDITION_CARDS.find(item => item.id === active.cardId);
+  const card = task.payload || EXPEDITION_CARDS.find(item => item.id === task.id);
   if (!card) return { ok: false, active: true, completed: false, error: 'Карта активной экспедиции не найдена.' };
-  const place = legendaryPlaceRule(active.placeId);
-  const history = expeditionHistory(player);
-  if (!history.some(item => item.placeId === active.placeId)) {
-    history.push({
-      placeId: active.placeId,
-      name: place?.name || card.name,
-      cardId: card.id,
-      completedRound: Number(room.round) || 1,
-    });
+  const place = legendaryPlaceRule(placeId);
+  if (expeditionCompletionCount(player, placeId) === 0) {
+    addCompletedExpeditionRecord(player, HistoryRecord.view({
+      kind: 'expedition-completion',
+      ownerId: player.id,
+      state: 'completed',
+      source: { placeId, cardId: card.id },
+      payload: { name: place?.name || card.name },
+      completedAt: { round: Number(room.round) || 1 },
+    }));
   }
   expeditionPoolFor(room, rng)?.returnCompleted(card);
-  player.activeExpedition = null;
+  completeExpeditionTask(player);
   return { ok: true, active: false, completed: true, card: { ...card }, place, reward: card.reward ? { ...card.reward } : null };
 }
 
@@ -3654,6 +3677,17 @@ module.exports = {
   getActiveAssignmentTask,
   assignTask,
   completeAssignmentTask,
+  getActiveExpeditionTask,
+  assignExpeditionTask,
+  completeExpeditionTask,
+  getExpeditionHistoryRecords,
+  expeditionHistoryRecordToLegacy,
+  addCompletedExpeditionRecord,
+  countExpeditionCompletions,
+  getExpeditionUsage,
+  expeditionTakenThisRound,
+  recordExpeditionTaken,
+  resetExpeditionRoundUsage,
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,
@@ -3667,6 +3701,8 @@ module.exports = {
   legendaryPlaceRule,
   legendaryPlaceForIsland,
   claimLegendaryPlaceDiscovery,
+  expeditionCompletionCount,
+  expeditionCardEligibleForPlayer,
   canTakeExpedition,
   takeExpedition,
   completeExpeditionAtArrival,
