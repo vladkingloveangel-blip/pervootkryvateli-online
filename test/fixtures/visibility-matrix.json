@@ -137,6 +137,24 @@
       }
     },
     {
+      "key": "player.debt",
+      "entity": "player",
+      "propertyGroup": "exact debt / financial liability",
+      "privacySensitive": true,
+      "properties": [
+        "debt",
+        "derived exact-debt fields"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "omitted",
+        "scout": "omitted",
+        "pendingActor": "omitted",
+        "publicObserver": "omitted"
+      },
+      "notes": "Scout money reveal applies only to ducats and never reveals debt. PendingActor gains no debt access from the pending role alone."
+    },
+    {
       "key": "player.character",
       "entity": "player",
       "propertyGroup": "held character",
@@ -286,6 +304,64 @@
       "notes": "Scout never reveals the current active expedition."
     },
     {
+      "key": "player.activeTemporaryEffects",
+      "entity": "player",
+      "propertyGroup": "already-applied active temporary effects/status",
+      "privacySensitive": false,
+      "properties": [
+        "legendaryStatus",
+        "already-applied protection/status",
+        "already-applied penalty/curse/status",
+        "remaining duration of an already-active public effect"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "visible",
+        "scout": "visible",
+        "pendingActor": "visible",
+        "publicObserver": "visible"
+      },
+      "notes": "Only the active world-state effect/status is public. Do not expose the originating hidden held card, ability instance, saved benefit, or source detail beyond what is necessary to describe the active effect."
+    },
+    {
+      "key": "player.landCompany",
+      "entity": "player",
+      "propertyGroup": "current land company / public combat state",
+      "privacySensitive": false,
+      "properties": [
+        "landCompany presence",
+        "landCompany current state",
+        "landCompany contribution to public assault/combat strength"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "visible",
+        "scout": "visible",
+        "pendingActor": "visible",
+        "publicObserver": "visible"
+      },
+      "notes": "Land company is part of the current public combat state."
+    },
+    {
+      "key": "player.anchorHistory",
+      "entity": "player",
+      "propertyGroup": "current player-visible anchor/history fields",
+      "privacySensitive": false,
+      "properties": [
+        "visitedAnchors",
+        "lastAnchorEncounter"
+      ],
+      "visibility": {
+        "owner": "visible",
+        "opponent": "visible",
+        "scout": "visible",
+        "pendingActor": "visible",
+        "publicObserver": "visible"
+      },
+      "transitionStatus": "current-public/transitional",
+      "notes": "Preserve current player-visible behavior through 4.3. A future removal of player-facing history in favor of internal/developer history is explicitly outside this visibility switch."
+    },
+    {
       "key": "discoveries.completedHistory",
       "entity": "discoveries",
       "propertyGroup": "completed public discoveries/achievements",
@@ -388,6 +464,7 @@
     "reconnectWithinSamePersonalTurnPreservesGrant": true,
     "endOfPersonalTurnExpiresGrant": true,
     "excludedPrivateCategories": [
+      "debt",
       "character",
       "activeAssignment",
       "assignment progress/reward",
@@ -398,6 +475,6 @@
       "pending options/content",
       "all other private properties"
     ],
-    "implementationStatus": "documented only in step 4.1; no runtime reveal fields or lifecycle implementation"
+    "implementationStatus": "documented policy through pre-4.3 addendum; no runtime reveal fields or lifecycle implementation"
   }
 }

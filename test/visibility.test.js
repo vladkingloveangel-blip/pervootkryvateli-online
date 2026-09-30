@@ -307,10 +307,23 @@ test('20. Scout grants are absent in 4.2 and reveal no Scout-only private state'
   assert.equal(has(projectedIsland, 'garrisonType'), false);
 });
 
-test('21. implementation policy coverage agrees with canonical 4.1 fixture', () => {
+test('21. 4.2 implementation coverage plus approved pre-4.3 addendum accounts for canonical fixture', () => {
   const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
   const fixtureKeys = fixture.policies.map(row => row.key).sort();
-  assert.deepEqual([...IMPLEMENTED_POLICY_KEYS].sort(), fixtureKeys);
+  const approvedButNotYetImplemented = [
+    'player.debt',
+    'player.activeTemporaryEffects',
+    'player.landCompany',
+    'player.anchorHistory',
+  ].sort();
+  const implemented = [...IMPLEMENTED_POLICY_KEYS].sort();
+  const notYetImplemented = fixtureKeys.filter(key => !IMPLEMENTED_POLICY_KEYS.includes(key)).sort();
+
+  assert.deepEqual(notYetImplemented, approvedButNotYetImplemented);
+  assert.deepEqual([...implemented, ...approvedButNotYetImplemented].sort(), fixtureKeys);
+  for (const key of approvedButNotYetImplemented) {
+    assert.equal(IMPLEMENTED_POLICY_KEYS.includes(key), false, `${key} must remain unimplemented until 4.3`);
+  }
   assert.equal(SCOUT_RUNTIME_ENABLED, false);
   assert.equal(fixture.scoutRule.implementationStatus.includes('no runtime reveal fields'), true);
 });

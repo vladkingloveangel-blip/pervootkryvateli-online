@@ -58,6 +58,7 @@ test('fixture covers all approved visibility categories', () => {
     'ship.publicState',
     'ship.cargo',
     'player.ducats',
+    'player.debt',
     'player.character',
     'politics.suzerainRelation',
     'player.activeAssignment',
@@ -65,6 +66,9 @@ test('fixture covers all approved visibility categories', () => {
     'player.privateAbilities',
     'player.savedBenefits',
     'player.activeExpedition',
+    'player.activeTemporaryEffects',
+    'player.landCompany',
+    'player.anchorHistory',
     'discoveries.completedHistory',
     'pending.privateContent',
     'pending.publicEnvelope',
@@ -83,6 +87,7 @@ test('opponent and public observer receive no approved private player/island cat
   const privateKeys = [
     'island.garrison',
     'player.ducats',
+    'player.debt',
     'player.character',
     'player.activeAssignment',
     'player.activeAssignmentExistenceAndSignals',
@@ -120,6 +125,7 @@ test('Scout override exists only for one selected garrison or one selected other
   assert.match(rows.get('player.ducats').conditions.scout, /one selected other player/i);
 
   const scoutMustNotReveal = [
+    'player.debt',
     'player.character',
     'player.activeAssignment',
     'player.activeAssignmentExistenceAndSignals',
@@ -146,6 +152,7 @@ test('owner sees own private categories and pendingActor sees only its exact pri
   const ownerPrivateKeys = [
     'island.garrison',
     'player.ducats',
+    'player.debt',
     'player.character',
     'player.activeAssignment',
     'player.activeAssignmentExistenceAndSignals',
@@ -181,6 +188,9 @@ test('approved public world, ship, cargo, politics, discoveries, waiting envelop
     'island.publicState',
     'ship.publicState',
     'ship.cargo',
+    'player.activeTemporaryEffects',
+    'player.landCompany',
+    'player.anchorHistory',
     'politics.suzerainRelation',
     'discoveries.completedHistory',
     'pending.publicEnvelope',
@@ -194,4 +204,31 @@ test('approved public world, ship, cargo, politics, discoveries, waiting envelop
       assert.equal(row.visibility[role], 'visible', `${key} must remain public for ${role}`);
     }
   }
+});
+
+test('pre-4.3 addendum fixes debt, applied effects, land company and anchor history semantics', () => {
+  const rows = byKey(loadFixture());
+
+  const debt = rows.get('player.debt');
+  assert.deepEqual(debt.visibility, {
+    owner: 'visible',
+    opponent: 'omitted',
+    scout: 'omitted',
+    pendingActor: 'omitted',
+    publicObserver: 'omitted',
+  });
+  assert.ok(debt.properties.includes('debt'));
+  assert.match(debt.notes, /Scout money reveal applies only to ducats/i);
+
+  for (const key of ['player.activeTemporaryEffects', 'player.landCompany', 'player.anchorHistory']) {
+    const row = rows.get(key);
+    assert.equal(row.privacySensitive, false);
+    for (const role of VIEWER_ROLES) {
+      assert.equal(row.visibility[role], 'visible', `${key} must remain public for ${role}`);
+    }
+  }
+
+  assert.match(rows.get('player.activeTemporaryEffects').notes, /originating hidden held card/i);
+  assert.equal(rows.get('player.anchorHistory').transitionStatus, 'current-public/transitional');
+  assert.match(rows.get('player.anchorHistory').notes, /outside this visibility switch/i);
 });

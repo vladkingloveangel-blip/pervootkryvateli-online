@@ -1,4 +1,4 @@
-# Visibility matrix — author-approved policy (Block 4.1)
+# Visibility matrix — author-approved policy (Block 4.1 + pre-4.3 addendum)
 
 Дата фиксации: 2026-09-30  
 Ветка: `digital-native/refactor`  
@@ -6,7 +6,7 @@
 
 ## 1. Статус документа
 
-Этот документ фиксирует утверждённую policy видимости для Block 4. Он не меняет runtime и не вводит projection engine.
+Этот документ фиксирует утверждённую policy видимости для Block 4. Базовая матрица принята на шаге 4.1; перед production switch 4.3 добавлены author-approved уточнения по debt, уже применённым temporary effects, landCompany и anchor/history fields. Addendum не меняет runtime и не переключает production payload.
 
 Canonical machine-readable fixture для реализации шагов 4.2–4.7:
 
@@ -64,6 +64,28 @@ Active assignment полностью private для owner: карточка/за
 
 Текущая active expedition private: скрыты факт наличия, card id/name, target/place, progress/state, `acceptedRound`, leave-and-return state и `hasActiveExpedition`/аналогичные existence flags. Scout active expedition не раскрывает. Уже завершённая публичная история открытий остаётся публичной.
 
+### 6.1. Debt — private financial state
+
+Точная сумма `player.debt` и directly-derived exact-debt information private. Owner видит свой debt. Opponent и publicObserver debt не получают. PendingActor не получает чужой debt только из-за pending role.
+
+Scout debt не раскрывает. Scout money reveal относится только к `ducats`; он не даёт доступ к `debt`.
+
+### 6.2. Уже применённые temporary effects — public active state
+
+Уже применённые temporary effects/statuses, которые реально изменяют или описывают текущее состояние корабля/игрока в общем игровом мире, public. Это включает существующий `legendaryStatus` и аналогичные уже активированные protection/penalty/curse/status и их remaining duration, когда эффект уже действует.
+
+Нужно различать private held capability и public applied state. `legendaryCards`, `specialCards`, saved benefits и ещё не использованные скрытые способности остаются private. После применения публичным становится только необходимое описание действующего эффекта/status; исходная скрытая карта, held-instance или лишние source details через active status не раскрываются.
+
+### 6.3. Land company — public combat state
+
+Текущее наличие и состояние `landCompany` public. Его вклад в открытую боевую силу/assault army также public. Это часть уже утверждённого правила об открытых характеристиках и боевой силе корабля/игрока.
+
+### 6.4. Anchor/history fields — current-public transitional
+
+`visitedAnchors` и `lastAnchorEncounter` на текущем этапе сохраняют существующую player-visible visibility и считаются current-public/transitional. Шаг 4.3 не должен удалить их случайно.
+
+Отдельное будущее решение — убрать player-facing history и оставить её только как internal/developer history — не входит в Block 4.3 и этим addendum не реализуется. UI/runtime history сейчас не меняются.
+
 ## 7. Pending resolutions
 
 Полный private content конкретного личного pending decision видит только соответствующий `pendingActor`.
@@ -97,6 +119,10 @@ Lifecycle semantics на шаге 4.1 только документируютс�
 
 - `game-logic.js/publicIsland()` сейчас включает `garrisonType`, `garrisonName` и `garrisonDefense` в обычный island view. `server.js/publicRoom()` дополнительно публикует `defenseArmy` и `defenseBreakdown` для каждого острова.
 - `publicRoom()` сейчас безусловно включает `player.ducats`.
+- `publicRoom()` сейчас безусловно включает `player.debt`; по addendum это private owner-only financial state и будущий 4.3 projection должен omit его для unauthorized viewers.
+- Уже применённый `legendaryStatus` остаётся public active state; 4.3 не должен скрыть его только из-за private origin-card inventory.
+- `landCompany` и его вклад в public combat strength остаются public.
+- `visitedAnchors` и `lastAnchorEncounter` сохраняются как current-public/transitional на 4.3; будущая отдельная cleanup-задача history не входит в этот switch.
 - `activeAssignment` для не-owner сейчас присутствует как `null`, а `hasActiveAssignment` публикуется безусловно. Оба поведения не соответствуют omission invariant.
 - `specialCards`, `legendaryCards` и `savedEventCards` для не-owner сейчас маскируются пустыми массивами, а `specialCardCount`, `legendaryCardCount`, `savedEventCardCount` публикуются безусловно.
 - `activeExpedition` и `hasActiveExpedition` сейчас публикуются для всех viewers; только отдельный leave-and-return detail частично owner-gated.
@@ -105,10 +131,10 @@ Lifecycle semantics на шаге 4.1 только документируютс�
 
 Шаг 4.1 намеренно не исправляет ни один из этих пунктов.
 
-## 10. Scope boundary 4.1
+## 10. Scope boundary 4.1 + pre-4.3 addendum
 
-На этом шаге не меняются `server.js`, `game-logic.js`, `public/app.js`, `publicRoom()`, socket payloads, UI, persisted room/player state, save format, Scout runtime, source adapters или random sources.
+В этом policy addendum не меняются `server.js`, `state-projection.js`, `game-logic.js`, `public/app.js`, `publicRoom()`, socket payloads, UI, persisted room/player state, save format, Scout runtime, source adapters или random sources.
 
-Не создаются projection engine, `state-projection.js`, reveal grants или новые room/player fields.
+Projection engine шага 4.2 остаётся без изменений; его `IMPLEMENTED_POLICY_KEYS` намеренно не расширяются этим commit. Несоответствие новых approved rows текущему implementation coverage должно быть закрыто при реализации 4.3.
 
-Следующий шаг 4.2 не является частью этого commit.
+Production switch 4.3 не является частью этого commit.
