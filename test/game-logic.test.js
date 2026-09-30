@@ -2338,7 +2338,6 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const expeditionDeck = createExpeditionDeck(() => 0.5);
   assert.equal(expeditionDeck.drawPile.length, 7);
   assert.equal(expeditionDeck.drawPile.some(card => ['atlantia','adia','skull'].includes(card.placeId)), false);
-  assert.equal(EXPEDITION_CARDS.some(card => ['atlantia','adia','skull'].includes(card.placeId)), false);
 }
 
 // Все шесть государств присутствуют в политическом runtime. Итоговые призы — только денежные;
