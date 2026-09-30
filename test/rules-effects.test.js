@@ -11,7 +11,7 @@ test('appendix D: each feud row has the structured effect stated by the table', 
   const income = { type:'skip-income', timing:'current-personal-turn', buildingTypes:['market','bank'] };
   const percent = percent => ({ type:'treasury-percent', percent });
   const upgrade = branch => ({ type:'remove-upgrade', count:1, ...(branch && { branch }) });
-  const held = { type:'discard-random-held', count:1, targetZone:null, unresolved:'R29' };
+  const held = { type:'discard-random-held', count:1, targetZone:'closed-hand-except-active-assignment' };
   const cargo = { type:'remove-cargo', holds:1 };
   const none = { type:'none' };
   const ship = { type:'ship-level-loss', levels:1 };
