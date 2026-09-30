@@ -4,6 +4,7 @@ const { createSeaEncounterStorage, seaEncounterSource } = require('./sea-encount
 const { createSailingEventStorage, canonicalizeSailingEventOccurrence, sailingEventSource } = require('./sailing-event-source');
 const { createPoliticalEffectStorage, politicalEffectSource } = require('./political-effect-source');
 const { createAssignmentStorage, assignmentPool } = require('./assignment-pool');
+const { createExpeditionStorage, expeditionPool } = require('./expedition-pool');
 const {
   SHIPS,
   SHIP_LEVELS,
@@ -139,7 +140,7 @@ function createSailingEventDeck(rng = Math.random) {
 }
 
 function createExpeditionDeck(rng = Math.random) {
-  return { drawPile: shuffleCards(expandCardDefinitions(EXPEDITION_CARDS), rng) };
+  return createExpeditionStorage(rng);
 }
 
 function drawCyclingDeckCard(deck, rng = Math.random) {
@@ -1019,6 +1020,10 @@ function expeditionCardEligibleForPlayer(player, card) {
   return Boolean(card?.placeId) && expeditionCompletionCount(player, card.placeId) < limit;
 }
 
+function expeditionPoolFor(room, rng = Math.random) {
+  return expeditionPool(room, rng, { isEligible: expeditionCardEligibleForPlayer });
+}
+
 function canTakeExpedition(room, player) {
   if (!room || !player) return { ok: false, error: 'Игрок экспедиции не найден.' };
   const cartographyIsland = (room.islands || []).find(island =>
@@ -1035,8 +1040,8 @@ function canTakeExpedition(room, player) {
     ? Math.max(1, Number(player.expeditionsDrawnThisRound) || 1)
     : 0;
   if (takenThisRound >= perRound) return { ok: false, error: 'В текущем общем раунде экспедиция уже получалась.' };
-  room.expeditionDeck ||= createExpeditionDeck();
-  if (!(room.expeditionDeck.drawPile || []).some(card => expeditionCardEligibleForPlayer(player, card))) {
+  const pool = expeditionPoolFor(room);
+  if (!pool?.hasEligible(player)) {
     return { ok: false, error: 'В колоде нет доступной экспедиции на ещё не завершённое вами место.' };
   }
   return { ok: true, islandId: cartographyIsland.id };
@@ -1045,15 +1050,7 @@ function canTakeExpedition(room, player) {
 function takeExpedition(room, player, rng = Math.random) {
   const allowed = canTakeExpedition(room, player);
   if (!allowed.ok) return allowed;
-  const deck = room.expeditionDeck;
-  const skipped = [];
-  let card = null;
-  while (deck.drawPile.length) {
-    const candidate = deck.drawPile.shift();
-    if (expeditionCardEligibleForPlayer(player, candidate)) { card = candidate; break; }
-    skipped.push(candidate);
-  }
-  if (skipped.length) deck.drawPile = shuffleCards([...deck.drawPile, ...skipped], rng);
+  const card = expeditionPoolFor(room, rng)?.takeEligible(player) || null;
   if (!card) return { ok: false, error: 'В колоде нет доступной экспедиции.' };
 
   const startedAtTarget = playerAtExpeditionPlace(room, player, card.placeId);
@@ -1095,9 +1092,7 @@ function completeExpeditionAtArrival(room, player, rng = Math.random) {
       completedRound: Number(room.round) || 1,
     });
   }
-  room.expeditionDeck ||= createExpeditionDeck(rng);
-  room.expeditionDeck.drawPile ||= [];
-  room.expeditionDeck.drawPile = shuffleCards([...room.expeditionDeck.drawPile, { ...card }], rng);
+  expeditionPoolFor(room, rng)?.returnCompleted(card);
   player.activeExpedition = null;
   return { ok: true, active: false, completed: true, card: { ...card }, place, reward: card.reward ? { ...card.reward } : null };
 }
