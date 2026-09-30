@@ -643,14 +643,6 @@
       "buildable": true,
       "fixedName": true,
       "resourceId": "exotic",
-      "levels": {
-        "1": {
-          "level": 1,
-          "price": 20,
-          "area": 1,
-          "foodStage": 1
-        }
-      },
       "iconKey": "building.exotic",
       "singleStage": true
     },
@@ -666,14 +658,6 @@
       "buildable": true,
       "fixedName": true,
       "resourceId": "slaves",
-      "levels": {
-        "1": {
-          "level": 1,
-          "price": 20,
-          "area": 1,
-          "foodStage": 1
-        }
-      },
       "iconKey": "building.slaves",
       "singleStage": true
     },
@@ -689,14 +673,6 @@
       "buildable": true,
       "fixedName": true,
       "resourceId": "gold",
-      "levels": {
-        "1": {
-          "level": 1,
-          "price": 20,
-          "area": 1,
-          "foodStage": 1
-        }
-      },
       "iconKey": "building.gold",
       "singleStage": true
     },
@@ -712,14 +688,6 @@
       "buildable": true,
       "fixedName": true,
       "resourceId": "diamonds",
-      "levels": {
-        "1": {
-          "level": 1,
-          "price": 20,
-          "area": 1,
-          "foodStage": 1
-        }
-      },
       "iconKey": "building.diamonds",
       "singleStage": true
     },

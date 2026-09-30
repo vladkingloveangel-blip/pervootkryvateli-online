@@ -116,7 +116,7 @@ test('every economic table row, building chain, price, income and defense matche
   for (const row of fixture.tables.rare) {
     const building=Object.values(rules.economy.buildings).find(b=>b.name===row[0]);
     assert.equal(building.price,n(row[2])); assert.equal(building.singleStage,true);
-    assert.deepEqual(Object.keys(building.levels),['1']);
+    assert.equal(Object.hasOwn(building,'levels'),false);
     assert.equal(Object.hasOwn(building,'futureLevels'),false);
     assert.equal(Object.hasOwn(building,'futureLevelsPurchasable'),false);
   }
@@ -302,7 +302,7 @@ test('runtime consumers use canonical prices, characteristics, income and safe m
   for(const [id,b] of Object.entries(rules.economy.buildings)) {
     assert.equal(data.BUILDINGS[id].price,b.price);
     assert.equal(data.BUILDINGS[id].area,b.area);
-    for(const [level,levelData] of Object.entries(b.levels)) {
+    for(const [level,levelData] of Object.entries(b.levels || {})) {
       assert.equal(levelData.area,1,`${id} ${level} must occupy exactly one area cell`);
     }
     for(const [level,next] of Object.entries(data.BUILDING_UPGRADES[id] || {})) {

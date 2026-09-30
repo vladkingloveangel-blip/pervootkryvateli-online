@@ -188,7 +188,12 @@ function validateRules(rules, map) {
   unique(listedBuildingTypes, 'buildingBranches.types');
   for (const b of Object.values(economy.buildings)) {
     integer(b.price, b.id); check(b.area === 1, b.id, 'building must occupy one area');
-    check(b.price === b.levels?.[1]?.price, b.id, 'price differs from level I');
+    const singleStage = b.singleStage === true;
+    if (singleStage) {
+      check(!Object.hasOwn(b, 'levels'), `${b.id}.levels`, 'single-stage building must not define levels');
+    } else {
+      check(b.price === b.levels?.[1]?.price, b.id, 'price differs from level I');
+    }
     if (branches.has(b.branch)) check(listedBuildingTypes.includes(b.id), b.id, 'missing from building branch');
     if (b.produces) ref(b.produces, goods, b.id);
     if (b.resourceId) {
@@ -196,27 +201,31 @@ function validateRules(rules, map) {
       check(b.resource === economy.resources[b.resourceId]?.name, b.id, 'resource label/id mismatch');
       check(b.produces === economy.resources[b.resourceId]?.goodId, b.id, 'resource/product mismatch');
     }
-    for (const key of ['defense','income']) if (b[key] !== undefined) check(b[key] === b.levels?.[1]?.[key], b.id, `${key} differs from level I`);
-    if (b.limitPerIsland !== undefined) positive(b.limitPerIsland, `${b.id}.limitPerIsland`);
-    check(Object.keys(b.levels || {}).length > 0, b.id, 'missing levels');
-    const levels = Object.keys(b.levels || {}).map(Number).sort((a,c) => a-c);
-    const branch = economy.buildingBranches.find(item => item.types.includes(b.id));
-    const nextType = branch?.types[branch.types.indexOf(b.id) + 1];
-    for (const [level, d] of Object.entries(b.levels || {})) {
-      check(d.level === +level, b.id, 'invalid level');
-      for (const key of ['price','foodStage','area']) integer(d[key], `${b.id}.${level}.${key}`);
-      check(d.area === b.area, `${b.id}.${level}`, 'level/overview area mismatch');
-      if (d.next) {
-        const target = economy.buildings[d.next.type]?.levels[d.next.level];
-        check(Boolean(target), b.id, 'invalid next level');
-        check(d.next.type !== b.id || d.next.level > d.level, b.id, 'cyclic level chain');
-      }
-      const index = levels.indexOf(+level);
-      const expected = levels[index + 1] ? {type:b.id,level:levels[index + 1]} : nextType ? {type:nextType,level:1} : null;
-      check(expected ? d.next?.type === expected.type && d.next?.level === expected.level : d.next === undefined,
-        `${b.id}.${level}.next`, 'incomplete or incorrect level chain');
+    for (const key of ['defense','income']) {
+      if (b[key] !== undefined && !singleStage) check(b[key] === b.levels?.[1]?.[key], b.id, `${key} differs from level I`);
     }
-    for (const [index, level] of levels.entries()) check(level === index + 1, `${b.id}.levels`, 'missing level');
+    if (b.limitPerIsland !== undefined) positive(b.limitPerIsland, `${b.id}.limitPerIsland`);
+    if (!singleStage) {
+      check(Object.keys(b.levels || {}).length > 0, b.id, 'missing levels');
+      const levels = Object.keys(b.levels || {}).map(Number).sort((a,c) => a-c);
+      const branch = economy.buildingBranches.find(item => item.types.includes(b.id));
+      const nextType = branch?.types[branch.types.indexOf(b.id) + 1];
+      for (const [level, d] of Object.entries(b.levels || {})) {
+        check(d.level === +level, b.id, 'invalid level');
+        for (const key of ['price','foodStage','area']) integer(d[key], `${b.id}.${level}.${key}`);
+        check(d.area === b.area, `${b.id}.${level}`, 'level/overview area mismatch');
+        if (d.next) {
+          const target = economy.buildings[d.next.type]?.levels?.[d.next.level];
+          check(Boolean(target), b.id, 'invalid next level');
+          check(d.next.type !== b.id || d.next.level > d.level, b.id, 'cyclic level chain');
+        }
+        const index = levels.indexOf(+level);
+        const expected = levels[index + 1] ? {type:b.id,level:levels[index + 1]} : nextType ? {type:nextType,level:1} : null;
+        check(expected ? d.next?.type === expected.type && d.next?.level === expected.level : d.next === undefined,
+          `${b.id}.${level}.next`, 'incomplete or incorrect level chain');
+      }
+      for (const [index, level] of levels.entries()) check(level === index + 1, `${b.id}.levels`, 'missing level');
+    }
     if (b.effect) effect(b.effect, b.id);
   }
   unique(politics.order, 'politics.order');
@@ -365,6 +374,7 @@ function validateRules(rules, map) {
   for (const id of ['exotic','slaves','gold','diamonds']) {
     const building = economy.buildings[id];
     check(building?.singleStage === true, 'economy.buildings.' + id + '.singleStage', 'rare industry must be single-stage');
+    check(!Object.hasOwn(building || {}, 'levels'), 'economy.buildings.' + id + '.levels', 'rare industry must not define levels');
     check(!Object.hasOwn(building || {}, 'futureLevels'), 'economy.buildings.' + id + '.futureLevels', 'future rare levels are not canonical');
     check(!Object.hasOwn(building || {}, 'futureLevelsPurchasable'), 'economy.buildings.' + id + '.futureLevelsPurchasable', 'future rare level flag is not canonical');
   }

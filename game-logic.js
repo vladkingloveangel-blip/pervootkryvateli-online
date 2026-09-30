@@ -1470,7 +1470,7 @@ function buildFree(room, player, islandId, type) {
   const allowed = canBuildFree(room, player, island, type);
   if (!allowed.ok) return allowed;
   const def = BUILDINGS[type];
-  const building = { type, level: 1, createdAt: Date.now(), freeCard: true };
+  const building = { type, ...(def.singleStage ? {} : { level: 1 }), createdAt: Date.now(), freeCard: true };
   island.buildings.push(building);
   return { ok: true, island, building: { ...def, displayName: buildingDisplayName(building) } };
 }
@@ -1988,8 +1988,10 @@ function additionalTradeFortificationError(room, island, buildingIndex, target) 
 }
 
 function buildingStage(building) {
+  const def = BUILDINGS[building?.type];
+  if (def?.singleStage) return 1;
   const level = Math.max(1, Math.min(3, Number(building?.level) || 1));
-  const stage = BUILDINGS[building?.type]?.levels?.[level]?.foodStage;
+  const stage = def?.levels?.[level]?.foodStage;
   return Math.max(1, Number(stage) || level);
 }
 
@@ -2079,15 +2081,18 @@ function islandConstraintReport(island) {
 
 function islandCorrectionOptions(island) {
   if (!island) return [];
-  return (island.buildings || []).map((building, buildingIndex) => ({
-    buildingIndex,
-    name: buildingDisplayName(building),
-    type: building.type,
-    level: Number(building.level) || 1,
-    area: buildingArea(building),
-    branch: BUILDINGS[building.type]?.branch || null,
-    branchName: BUILDING_BRANCH_NAMES[BUILDINGS[building.type]?.branch] || null,
-  }));
+  return (island.buildings || []).map((building, buildingIndex) => {
+    const def = BUILDINGS[building.type];
+    return {
+      buildingIndex,
+      name: buildingDisplayName(building),
+      type: building.type,
+      ...(def?.singleStage ? {} : { level: Number(building.level) || 1 }),
+      area: buildingArea(building),
+      branch: def?.branch || null,
+      branchName: BUILDING_BRANCH_NAMES[def?.branch] || null,
+    };
+  });
 }
 
 function removeIslandBuildingForCorrection(room, player, islandId, buildingIndex) {
@@ -2430,14 +2435,15 @@ function canBuild(room, player, island, type) {
     return { ok: false, error: 'Дворец можно строить только в уже существующем городе или крупном порту.' };
   }
 
-  const candidate = cloneIslandWithBuildings(island, [...island.buildings, { type, level: 1 }]);
+  const candidateBuilding = { type, ...(def.singleStage ? {} : { level: 1 }) };
+  const candidate = cloneIslandWithBuildings(island, [...island.buildings, candidateBuilding]);
   if (usedArea(candidate) > effectiveArea(candidate)) return { ok: false, error: 'На острове не хватает свободной площади.' };
 
   if (!def.unique && branchCount(candidate, def.branch) > branchLimitFor(candidate)) {
     return { ok: false, error: `Для статуса «${islandStatus(candidate)}» превышен предел построек этой ветви.` };
   }
 
-  const fortificationError = additionalTradeFortificationError(room, island, null, { type, level: 1 });
+  const fortificationError = additionalTradeFortificationError(room, island, null, candidateBuilding);
   if (fortificationError) return { ok: false, error: fortificationError };
 
   return { ok: true };
@@ -2450,7 +2456,7 @@ function build(room, player, islandId, type) {
   if (!allowed.ok) return allowed;
   const def = BUILDINGS[type];
   player.ducats -= def.price;
-  const building = { type, level: 1, createdAt: Date.now() };
+  const building = { type, ...(def.singleStage ? {} : { level: 1 }), createdAt: Date.now() };
   island.buildings.push(building);
   return { ok: true, island, building: { ...def, displayName: buildingDisplayName(building) } };
 }
@@ -2503,7 +2509,8 @@ function marketIncomeForPlayer(room, playerId) {
   for (const island of room.islands) {
     if (island.ownerId !== playerId) continue;
     for (const b of island.buildings) {
-      income += BUILDINGS[b.type]?.levels[Number(b.level) || 1]?.income || 0;
+      const def = BUILDINGS[b.type];
+      income += Number(def?.levels?.[Number(b.level) || 1]?.income ?? def?.income) || 0;
     }
   }
   return income;
@@ -3002,8 +3009,9 @@ function fleetArtillery(room, player) {
 }
 
 function buildingDefenseValue(building) {
+  const def = BUILDINGS[building?.type];
   const level = Math.max(1, Math.min(3, Number(building?.level) || 1));
-  return BUILDINGS[building?.type]?.levels[level]?.defense || 0;
+  return Number(def?.levels?.[level]?.defense ?? def?.defense) || 0;
 }
 
 function islandDefenseArmy(room, island) {
@@ -3581,7 +3589,7 @@ function publicIsland(island, room = null) {
       return {
         index,
         type: b.type,
-        level: b.level,
+        ...(BUILDINGS[b.type]?.singleStage ? {} : { level: b.level }),
         name: buildingDisplayName(b),
         supported: b.type === 'bastion' ? supportedBastions.has(island.id) : null,
         nextUpgrade: next ? { type: next.type, level: next.level, price: next.price, name: buildingDisplayName({ type: next.type, level: next.level }) } : null,

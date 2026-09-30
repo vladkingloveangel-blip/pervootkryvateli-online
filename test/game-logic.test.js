@@ -1600,7 +1600,6 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const room = {
     islands: cloneIslands(),
     eventDeck: { drawPile: [], discard: [] },
-    treasureDeck: { drawPile: [], discard: [] },
   };
   const island = room.islands.find(i => i.id === 'bogamia');
   island.ownerId = 'p1';
@@ -2536,8 +2535,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   }
 }
 
-// Четыре редких промысла доступны только на I уровне, требуют свой ресурс и ферму/
-// поместье, стоят по данным rules/ и не получают выдуманные уровни II–III при открытом R07.
+// Четыре редких промысла вообще не имеют уровней: требуют свой ресурс и ферму/
+// поместье, стоят по данным rules/ и существуют как одноэтапные постройки без I/II/III.
 {
   const room = { islands: cloneIslands(), players: [] };
   const island = room.islands.find(i => i.id === 'maikan');
@@ -2559,6 +2558,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
     assert.equal(built.ok, true);
     assert.equal(before - p.ducats, BUILDINGS[type].price);
     const index = island.buildings.findIndex(b => b.type === type);
+    assert.equal(Object.hasOwn(island.buildings[index], 'level'), false);
     assert.equal(canUpgradeBuilding(room, p, island, index).ok, false);
     assert.equal(build(room, p, island.id, type).ok, false);
     island.buildings = [{ type: 'farm', level: 1 }];

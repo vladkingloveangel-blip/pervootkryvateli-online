@@ -16,7 +16,7 @@ const BRANCH_LIMITS = Object.fromEntries(Object.entries(rules.economy.ranks)
 const BUILDING_UPGRADES = {};
 for (const [id, building] of Object.entries(BUILDINGS)) {
   if (building.category === 'public' && id !== 'admiralty') continue;
-  for (const [level, data] of Object.entries(building.levels)) {
+  for (const [level, data] of Object.entries(building.levels || {})) {
     if (!data.next || data.next.type === 'bastion') continue;
     const next = data.next;
     (BUILDING_UPGRADES[id] ||= {})[level] = { ...next, price: BUILDINGS[next.type].levels[next.level].price };
