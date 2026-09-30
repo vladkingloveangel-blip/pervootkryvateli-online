@@ -1502,7 +1502,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 
   assert.equal(applySeaVeilHostileReactionToIsland(island,target,source.id).ok,true);
   assert.equal(isIslandProtected(island),true);
-  assert.equal(island.legendaryVeil,undefined);
+  assert.equal(island.legendaryVeil,null);
   assert.equal(island.legendaryVeilReaction.expiry,'end-of-current-turn');
 
   const expired = clearSeaVeilHostileReactionsAtTurnEnd(room,source.id);
