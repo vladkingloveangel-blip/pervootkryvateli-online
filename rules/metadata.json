@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "rulesetVersion": "master-2026-09-28-author-2026-09-30-data-v1",
+  "rulesetVersion": "master-2026-09-28-author-2026-09-30-digital-block1-v1",
   "source": {
     "title": "Первооткрыватели — мастер-версия книги правил",
     "baseEdition": "0.10",
@@ -9,18 +9,23 @@
   },
   "precedence": "Appendix numeric tables override examples and descriptive prose.",
   "unresolved": [
-    "R07",
-    "R21",
-    "R29",
-    "treasure-copies"
+    "R29"
   ],
   "implementationStage": 2,
   "authorOverrides": {
     "date": "2026-09-30",
     "resolved": [
       "R05",
-      "R06"
+      "R06",
+      "R07",
+      "R21",
+      "treasure-copies"
     ],
-    "summary": "Digital/mobile rule: legendary rewards are independent uniform random selections with replacement from the four legendary card types; sea legendary places grant one such card plus the named place card on first visit, while Atlantia, Adia and Skull do so only on first military conquest; Cartographic Chamber expeditions exist only for the seven sea legendary places and grant one random treasure."
+    "summary": "Digital/mobile canon: legendary and treasure rewards use independent uniform random selection with replacement; rare industries are single-stage buildings with no levels; contracts do not exist and delivery assignments receive no sale bonus; the current online map is the canonical map; Atlantia, Adia and Skull unlock their legendary reward only on first military conquest; expeditions exist only for the seven sea legendary places."
+  },
+  "mapCanon": {
+    "status": "author-approved",
+    "canonical": true,
+    "source": "current-online-map"
   }
 }

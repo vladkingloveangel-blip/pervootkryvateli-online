@@ -51,7 +51,6 @@ const {
   availableGoodsOnIsland,
   canUpgradeBuilding,
   cargoSaleValue,
-  contractBonusForRevenue,
   isCitadelCell,
   isCitadelPeaceCell,
   seaAttackPositionAllowed,
@@ -82,7 +81,6 @@ const {
   creditDucats,
   createSailingEventDeck,
   drawSailingEventCard,
-  createTreasureDeck,
   drawTreasureCard,
   createExpeditionDeck,
   drawLegendaryCard,
@@ -1263,14 +1261,14 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(room.eventDeck.discard.length, 1);
 }
 
-// Пока число физических копий сокровищ не разрешено источником, runtime не придумывает
-// дополнительные экземпляры: по одному каноническому виду. Грузовое сокровище — алмазы.
+// Сокровище в мобильной версии — независимый равновероятный цифровой результат.
 {
-  const room = { islands: cloneIslands(), treasureDeck: createTreasureDeck(() => 0.5) };
-  assert.equal(room.treasureDeck.drawPile.length, 4);
-  assert.deepEqual(room.treasureDeck.drawPile.map(c => c.id).sort(),
-    ['full-diamonds-hold', 'income-x1', 'income-x2', 'income-x3']);
-  const diamonds = room.treasureDeck.drawPile.find(c => c.id === 'full-diamonds-hold');
+  const room = { islands: cloneIslands() };
+  assert.equal(drawTreasureCard(room, () => 0.00).id, 'income-x1');
+  assert.equal(drawTreasureCard(room, () => 0.25).id, 'income-x2');
+  assert.equal(drawTreasureCard(room, () => 0.50).id, 'income-x3');
+  const diamonds = drawTreasureCard(room, () => 0.75);
+  assert.equal(diamonds.id, 'full-diamonds-hold');
   assert.equal(diamonds.cargoGoodId, 'diamonds');
 
   const island = room.islands.find(i => i.id === 'bogamia');
@@ -1286,12 +1284,6 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(loaded.ok, true);
   assert.equal(p.cargo.goodId, 'diamonds');
   assert.equal(p.cargo.quantity, 2);
-}
-
-// Контрактная премия равна половине обычной выручки с округлением вниз.
-{
-  assert.equal(contractBonusForRevenue(6), 3);
-  assert.equal(contractBonusForRevenue(5), 2);
 }
 
 // Цифровой легендарный пул содержит четыре типа и выбирает независимо с возвращением.

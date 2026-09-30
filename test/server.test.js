@@ -112,7 +112,6 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.deepEqual(watch.room.balanceCatalog.landCompany, canonical.economy.landCompany);
   assert.deepEqual(watch.room.balanceCatalog.garrisons, canonical.economy.garrisons);
   assert.equal(watch.room.balanceCatalog.loadingLimitPerIslandPerRound, canonical.economy.loadingLimitPerIslandPerRound);
-  assert.equal(watch.room.balanceCatalog.contractBonusRatio, canonical.economy.contractBonusRatio);
   assert.deepEqual(watch.room.balanceCatalog.expeditionLimits, canonical.legends.expeditionLimits);
   assert.equal(watch.room.balanceCatalog.combat.attacksPerOpponentPerRound, canonical.scoring.combat.attacksPerOpponentPerRound);
   assert.deepEqual(watch.room.balanceCatalog.fleetScoring, canonical.scoring.fleet);
@@ -180,7 +179,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   const oldIsland = legacyRoom.islands.find(i => i.id === 'asigoriy');
   Object.assign(oldIsland,{area:4,army:12,resources:['Рудная жила']});
   legacyRoom.anchorDecks.red.drawPile[0].artillery = 23;
-  legacyRoom.treasureDeck.drawPile[0] = {id:'full-ore-hold',name:'Полный трюм руды',cargoGoodId:'ore',copy:1};
+  legacyRoom.treasureDeck = {drawPile:[{id:'full-ore-hold',name:'Полный трюм руды',cargoGoodId:'ore',copy:1}],discard:[]};
   legacyRoom.pendingFleetAdjustment = {id:'old-choice',playerId:oldPlayer.id,stage:'landin-replace',required:1,
     options:[{id:'old-landin',name:'Особое сопровождение Ландина'}]};
   // Stage 5.8 compatibility: emulate an old assignment save without Mori deck/progress

@@ -1277,7 +1277,6 @@
 
     const decks = r.eventDecks || {};
     const sailing = decks.sailing || { remaining: 0, discard: 0 };
-    const treasure = decks.treasure || { remaining: 0, discard: 0 };
     const phase = r.eventPhase;
     const pending = r.pendingEvent;
     const nextEffects = mine.nextTurnEffects || {};
@@ -1295,7 +1294,7 @@
     const stageLabel = phase?.stage === 'feud' ? 'вражда' : phase?.stage === 'assignment' ? 'поручения' : phase?.stage === 'assignment-replace' ? 'замена поручений' : 'плавание';
     badge.textContent = phase?.active ? (phase.stage === 'feud' ? `вражда ${(phase.feudIndex || 0) + 1}/${phase.feudTotal || 0}` : phase.stage === 'assignment' ? `поручения ${(phase.assignmentIndex || 0) + 1}/${phase.assignmentTotal || 0}` : phase.stage === 'assignment-replace' ? `замена ${(phase.replacementIndex || 0) + 1}/${phase.replacementTotal || 0}` : `${(phase.playerIndex || 0) + 1}/${phase.totalPlayers || r.players.length}`) : `${sailing.remaining}`;
     const feudCounts = Object.entries(r.feudDecks || {}).map(([id,d]) => `${r.factions?.find(f => f.id === id)?.name || id}: ${d.remaining}`).join(' · ');
-    let html = `<div class="event-decks">События: ${sailing.remaining} / сброс ${sailing.discard} · сокровища: ${treasure.remaining} / ${treasure.discard} · экспедиции: ${decks.expeditions?.remaining || 0}</div><div class="event-decks">Легендарные карты: цифровой случайный пул из ${r.legendaryPool?.typeIds?.length || 4} видов, без отдельной колоды и сброса.</div>${feudCounts ? `<div class="event-decks">Вражда: ${escapeHtml(feudCounts)}</div>` : ''}`;
+    let html = `<div class="event-decks">События: ${sailing.remaining} / сброс ${sailing.discard} · экспедиции: ${decks.expeditions?.remaining || 0}</div><div class="event-decks">Сокровища: цифровой случайный пул из ${r.treasurePool?.typeIds?.length || 4} равновероятных результатов, независимый выбор.</div><div class="event-decks">Легендарные карты: цифровой случайный пул из ${r.legendaryPool?.typeIds?.length || 4} видов, без отдельной колоды и сброса.</div>${feudCounts ? `<div class="event-decks">Вражда: ${escapeHtml(feudCounts)}</div>` : ''}`;
     if (phase?.active) {
       const currentName = playerName(phase.currentPlayerId);
       html += `<div class="event-current"><strong>${phase.personalTurn ? 'Шестой круг' : 'Фаза событий'} · ${escapeHtml(stageLabel)}</strong><br>Текущий игрок: ${escapeHtml(currentName)}.</div>`;
@@ -1728,7 +1727,7 @@
           html += `<div class="assignment-progress"><strong>Служба Мори:</strong> ${completed}/${total}. Завершите навигацию на береговой клетке указанного острова.</div>`;
         }
       }
-      if (assignment.type === 'delivery') html += `<div class="cargo-meta">Засчитывается только полный трюм, полученный после выдачи этого поручения. Продажа в Цитадели получает обычную контрактную премию +${r.balanceCatalog.contractBonusRatio * 100}% отдельно от награды поручения.</div>`;
+      if (assignment.type === 'delivery') html += '<div class="cargo-meta">Засчитывается только полный трюм, полученный после выдачи этого поручения. Продажа идёт по обычной цене; отдельная награда выдаётся за выполнение поручения.</div>';
     } else {
       html = `<div class="event-current"><strong>${escapeHtml(suzerain.name)}</strong><br>Активного поручения нет. Если в начале вашего следующего личного хода шестого круга вы всё ещё вассал без поручения, карта будет выдана тогда.</div>`;
     }

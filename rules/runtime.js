@@ -64,12 +64,12 @@ module.exports = {
     maxEscorts: rules.fleet.escortPrices.length,
     garrisons: rules.economy.garrisons, branchLimits: BRANCH_LIMITS, ranks: rules.economy.ranks,
     landCompany: rules.economy.landCompany, combat: rules.scoring.combat, fleetScoring: rules.scoring.fleet, armyScoring: rules.scoring.army,
-    contractBonusRatio: rules.economy.contractBonusRatio,
     loadingLimitPerIslandPerRound: rules.economy.loadingLimitPerIslandPerRound,
     gloryCapture: legacy.gloryCapture, treasuryLossRatio: legacy.treasuryLossRatio,
     reclaimIslandFallback: rules.events.feud.lionia.find(c => c.effect.type === 'reclaim-island').effect.fallbackDucats,
     legendaryEffects: Object.fromEntries(rules.legends.legendary.map(c => [c.id, c.effect])),
     legendaryPool: copy(rules.legends.legendaryPool),
+    treasurePool: copy(rules.legends.treasurePool),
     expeditionLimits: copy(rules.legends.expeditionLimits),
   },
   SHIPS: rules.fleet.ships, SHIP_LEVELS, SHIP_UPGRADES,
@@ -87,8 +87,7 @@ module.exports = {
   NAMED_PLACE_CARDS: rules.legends.namedCards.map(card => copy(card)),
   EXPEDITION_CARDS: rules.legends.expeditions.map(card => copy(card)),
   LEGENDARY_CARDS: rules.legends.legendary.map(card => copy(card)),
-  // Physical treasure copy counts are unresolved in the source. Runtime keeps one
-  // instance of each canonical treasure kind without inventing additional copies.
+  // Digital treasure results: four canonical outcomes, selected independently.
   TREASURE_CARDS: rules.legends.treasures.map(card => copy(card)),
   ANCHOR_GLORY: legacy.anchorGlory,
 };

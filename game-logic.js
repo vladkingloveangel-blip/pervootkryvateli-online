@@ -152,10 +152,6 @@ function createSailingEventDeck(rng = Math.random) {
   return { drawPile: shuffleCards(expandCardDefinitions(SAILING_EVENT_CARDS), rng), discard: [] };
 }
 
-function createTreasureDeck(rng = Math.random) {
-  return { drawPile: shuffleCards(expandCardDefinitions(TREASURE_CARDS), rng), discard: [] };
-}
-
 function createExpeditionDeck(rng = Math.random) {
   return { drawPile: shuffleCards(expandCardDefinitions(EXPEDITION_CARDS), rng) };
 }
@@ -182,9 +178,12 @@ function drawSailingEventCard(room, rng = Math.random) {
   return canonicalSailingEventCard(drawCyclingDeckCard(room.eventDeck, rng));
 }
 
-function drawTreasureCard(room, rng = Math.random) {
-  room.treasureDeck ||= createTreasureDeck(rng);
-  return drawCyclingDeckCard(room.treasureDeck, rng);
+function drawTreasureCard(_room, rng = Math.random) {
+  const candidates = TREASURE_CARDS;
+  if (!candidates.length) return null;
+  const raw = Number(rng());
+  const roll = Number.isFinite(raw) ? Math.min(0.999999999999, Math.max(0, raw)) : 0;
+  return { ...candidates[Math.floor(roll * candidates.length)] };
 }
 
 function drawLegendaryCard(_room, rng = Math.random) {
@@ -1394,9 +1393,8 @@ function discardRandomHeldCard(room, player, rng = Math.random) {
     player.legendaryCards.splice(ref.index, 1);
   } else {
     const [card] = player.savedEventCards.splice(ref.index, 1);
-    if (card?.sourceCard) {
-      if (card.sourceDeck === 'treasure') discardDeckCard(room.treasureDeck, card.sourceCard);
-      else discardDeckCard(room.eventDeck, card.sourceCard);
+    if (card?.sourceCard && card.sourceDeck === 'event') {
+      discardDeckCard(room.eventDeck, card.sourceCard);
     }
   }
   return { ok: true, discarded: ref };
@@ -2958,11 +2956,6 @@ function cargoSaleValue(player, holdId = 'main') {
   return good.price * cargo.quantity;
 }
 
-function contractBonusForRevenue(revenue) {
-  const base = Math.max(0, Math.floor(Number(revenue) || 0));
-  return Math.floor(base * Math.max(0, Number(BALANCE.contractBonusRatio) || 0));
-}
-
 function canSellCargo(room, player, holdId = 'main') {
   if (!isCitadelCell(player.row, player.col)) return { ok: false, error: 'Продать груз можно только в Цитадели.' };
   const hold = holdFor(room, player, holdId);
@@ -3694,7 +3687,6 @@ module.exports = {
   canLoadCargo,
   loadCargo,
   cargoSaleValue,
-  contractBonusForRevenue,
   canSellCargo,
   sellCargo,
   isCitadelPeaceCell,
@@ -3704,7 +3696,6 @@ module.exports = {
   resolveAnchorEncounter,
   createSailingEventDeck,
   drawSailingEventCard,
-  createTreasureDeck,
   drawTreasureCard,
   createExpeditionDeck,
   createFeudDecks,

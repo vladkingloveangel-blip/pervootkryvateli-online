@@ -447,7 +447,6 @@
       "name": "Доход ×1",
       "multiplier": 1,
       "minimum": 2,
-      "quantity": null,
       "effect": {
         "type": "income-multiple",
         "multiplier": 1,
@@ -460,7 +459,6 @@
       "name": "Доход ×2",
       "multiplier": 2,
       "minimum": 4,
-      "quantity": null,
       "effect": {
         "type": "income-multiple",
         "multiplier": 2,
@@ -473,7 +471,6 @@
       "name": "Доход ×3",
       "multiplier": 3,
       "minimum": 6,
-      "quantity": null,
       "effect": {
         "type": "income-multiple",
         "multiplier": 3,
@@ -484,9 +481,8 @@
     {
       "id": "full-diamonds-hold",
       "name": "Полный трюм алмазов",
-      "quantity": null,
       "cargoGoodId": "diamonds",
-      "onNoEmptyHold": "discard",
+      "onNoEmptyHold": "no-effect",
       "effect": {
         "type": "fill-hold",
         "goodId": "diamonds"
@@ -498,15 +494,6 @@
       "iconKey": "card.treasure"
     }
   ],
-  "treasureDeck": {
-    "total": null,
-    "copiesByKind": null,
-    "unresolved": "treasure-copies",
-    "sourceClaims": {
-      "setupTotal": 4,
-      "fullDiamondsCopies": 3
-    }
-  },
   "legendaryPool": {
     "mode": "random-with-replacement",
     "selection": "uniform",
@@ -517,5 +504,15 @@
       "sea-curse"
     ],
     "consumedOnUse": true
+  },
+  "treasurePool": {
+    "mode": "random-with-replacement",
+    "selection": "uniform",
+    "typeIds": [
+      "income-x1",
+      "income-x2",
+      "income-x3",
+      "full-diamonds-hold"
+    ]
   }
 }

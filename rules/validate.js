@@ -354,6 +354,20 @@ function validateRules(rules, map) {
     check(legends.legendaryPool.typeIds.length === legends.legendary.length, 'legendaryPool.typeIds', 'pool/type count mismatch');
     for (const id of legends.legendaryPool.typeIds) ref(id, new Set(legends.legendary.map(c=>c.id)), 'legendaryPool.typeIds');
   }
+  check(legends.treasurePool?.mode === 'random-with-replacement', 'treasurePool.mode', 'expected random-with-replacement');
+  check(legends.treasurePool?.selection === 'uniform', 'treasurePool.selection', 'expected uniform selection');
+  check(Array.isArray(legends.treasurePool?.typeIds), 'treasurePool.typeIds', 'missing treasure type ids');
+  if (Array.isArray(legends.treasurePool?.typeIds)) {
+    unique(legends.treasurePool.typeIds, 'treasurePool.typeIds');
+    check(legends.treasurePool.typeIds.length === legends.treasures.length, 'treasurePool.typeIds', 'pool/type count mismatch');
+    for (const id of legends.treasurePool.typeIds) ref(id, new Set(legends.treasures.map(c=>c.id)), 'treasurePool.typeIds');
+  }
+  for (const id of ['exotic','slaves','gold','diamonds']) {
+    const building = economy.buildings[id];
+    check(building?.singleStage === true, 'economy.buildings.' + id + '.singleStage', 'rare industry must be single-stage');
+    check(!Object.hasOwn(building || {}, 'futureLevels'), 'economy.buildings.' + id + '.futureLevels', 'future rare levels are not canonical');
+    check(!Object.hasOwn(building || {}, 'futureLevelsPurchasable'), 'economy.buildings.' + id + '.futureLevelsPurchasable', 'future rare level flag is not canonical');
+  }
   for (const c of [...legends.legendary,...legends.treasures]) effect(c.effect, c.id);
   for (const c of legends.treasures) {
     if (c.effect.type === 'income-multiple') check(c.multiplier === c.effect.multiplier && c.minimum === c.effect.minimum, c.id, 'treasure overview/effect mismatch');

@@ -74,7 +74,6 @@ const {
   loadCargo,
   sellCargo,
   cargoSaleValue,
-  contractBonusForRevenue,
   isCitadelCell,
   isCitadelPeaceCell,
   seaAttackPositionAllowed,
@@ -98,7 +97,6 @@ const {
   creditDucats,
   createSailingEventDeck,
   drawSailingEventCard,
-  createTreasureDeck,
   drawTreasureCard,
   createExpeditionDeck,
   createFeudDecks,
@@ -549,8 +547,12 @@ function publicRoom(room, viewerId = null) {
     } : null,
     eventDecks: {
       sailing: { remaining: room.eventDeck?.drawPile?.length || 0, discard: room.eventDeck?.discard?.length || 0 },
-      treasure: { remaining: room.treasureDeck?.drawPile?.length || 0, discard: room.treasureDeck?.discard?.length || 0 },
       expeditions: { remaining: room.expeditionDeck?.drawPile?.length || 0 },
+    },
+    treasurePool: {
+      mode: BALANCE.treasurePool?.mode || 'random-with-replacement',
+      selection: BALANCE.treasurePool?.selection || 'uniform',
+      typeIds: [...(BALANCE.treasurePool?.typeIds || [])],
     },
     legendaryPool: {
       mode: BALANCE.legendaryPool?.mode || 'random-with-replacement',
@@ -671,7 +673,7 @@ function publicRoom(room, viewerId = null) {
     balanceCatalog: { session: BALANCE.session, maxShipLevel: BALANCE.maxShipLevel,
       combat: BALANCE.combat, fleetScoring: BALANCE.fleetScoring, armyScoring: BALANCE.armyScoring,
       garrisons: BALANCE.garrisons, bastion: { price: BUILDINGS.bastion.price, defense: BUILDINGS.bastion.defense },
-      maxEscorts: BALANCE.maxEscorts, contractBonusRatio: BALANCE.contractBonusRatio,
+      maxEscorts: BALANCE.maxEscorts,
       loadingLimitPerIslandPerRound: BALANCE.loadingLimitPerIslandPerRound,
       landCompany: BALANCE.landCompany, legendaryEffects: BALANCE.legendaryEffects,
       expeditionLimits: { ...BALANCE.expeditionLimits } },
@@ -1827,12 +1829,11 @@ function resolveSailingEventCard(room, player, card) {
     const treasure = drawTreasureCard(room);
     const treasureAssignmentInstanceId = player.activeAssignment?.instanceId || null;
     if (!treasure) {
-      log(room, `${player.name}: «${card.name}», но колода сокровищ пуста.`);
+      log(room, `${player.name}: «${card.name}», но случайный результат сокровища недоступен.`);
       return resultBase;
     }
     if (treasure.multiplier) {
       const result = resolveMoneyTreasure(room, player, treasure);
-      discardDeckCard(room.treasureDeck, treasure);
       trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: treasureAssignmentInstanceId });
       const debtText = result.credit.debtPaid ? `; ${result.credit.debtPaid} ушло в погашение долга` : '';
       log(room, `${player.name}: «${card.name}» → сокровище «${treasure.name}». Доход рынков/банков ${result.income}; получено ${result.amount} дукатов${debtText}.`);
@@ -1840,14 +1841,12 @@ function resolveSailingEventCard(room, player, card) {
     }
     const holds = emptyCargoHolds(room, player);
     if (!holds.length) {
-      discardDeckCard(room.treasureDeck, treasure);
       trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: treasureAssignmentInstanceId });
-      log(room, `${player.name}: «${card.name}» → «${treasure.name}». Все трюмы заняты; карта сокровища сброшена без эффекта.`);
+      log(room, `${player.name}: «${card.name}» → «${treasure.name}». Все трюмы заняты; сокровище не даёт эффекта.`);
       return resultBase;
     }
     if (holds.length === 1) {
       const loaded = fillCargoDirect(room, player, treasure.cargoGoodId, holds[0].id);
-      discardDeckCard(room.treasureDeck, treasure);
       trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: treasureAssignmentInstanceId });
       log(room, `${player.name}: «${card.name}» → «${treasure.name}». ${loaded.holdName} заполнен товаром «${loaded.good.name}» ×${loaded.quantity}.`);
       return resultBase;
@@ -2512,7 +2511,6 @@ function completePendingEvent(room, pending) {
     const result = fillCargoDirect(room, player, pending.goodId, choice.holdId);
     if (!result.ok) return result;
     if (pending.treasureCard) {
-      discardDeckCard(room.treasureDeck, pending.treasureCard);
       trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: pending.treasureAssignmentInstanceId || null });
     }
     log(room, `${player.name}: «${pending.cardName}». ${result.holdName} заполнен товаром «${result.good.name}» ×${result.quantity}.`);
@@ -2540,9 +2538,8 @@ function completePendingEvent(room, pending) {
 }
 
 function discardSavedCardToDeck(room, saved) {
-  if (!saved?.sourceCard) return;
-  if (saved.sourceDeck === 'treasure') discardDeckCard(room.treasureDeck, saved.sourceCard);
-  else discardDeckCard(room.eventDeck, saved.sourceCard);
+  if (!saved?.sourceCard || saved.sourceDeck !== 'event') return;
+  discardDeckCard(room.eventDeck, saved.sourceCard);
 }
 
 function takeSavedCard(player, savedCardId) {
@@ -2688,12 +2685,11 @@ function resolveExpeditionTreasureReward(room, player, reward) {
   const treasureAssignmentInstanceId = reward?.treasureAssignmentInstanceId || null;
   const treasure = drawTreasureCard(room);
   if (!treasure) {
-    log(room, `${player.name}: экспедиция «${label}» завершена, но колода сокровищ пуста.`);
+    log(room, `${player.name}: экспедиция «${label}» завершена, но случайный результат сокровища недоступен.`);
     return { pending: false, empty: true };
   }
   if (treasure.multiplier) {
     const result = resolveMoneyTreasure(room, player, treasure);
-    discardDeckCard(room.treasureDeck, treasure);
     trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: treasureAssignmentInstanceId });
     log(room, `${player.name}: экспедиция «${label}» даёт сокровище «${treasure.name}», получено ${result.amount} дукатов.`);
     return { pending: false, treasure };
@@ -2701,14 +2697,12 @@ function resolveExpeditionTreasureReward(room, player, reward) {
 
   const holds = emptyCargoHolds(room, player);
   if (!holds.length) {
-    discardDeckCard(room.treasureDeck, treasure);
     trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: treasureAssignmentInstanceId });
-    log(room, `${player.name}: экспедиция «${label}» даёт «${treasure.name}». Все трюмы заняты; карта сокровища сброшена без эффекта.`);
+    log(room, `${player.name}: экспедиция «${label}» даёт «${treasure.name}». Все трюмы заняты; сокровище не даёт эффекта.`);
     return { pending: false, treasure };
   }
   if (holds.length === 1) {
     const loaded = fillCargoDirect(room, player, treasure.cargoGoodId, holds[0].id);
-    discardDeckCard(room.treasureDeck, treasure);
     trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId: treasureAssignmentInstanceId });
     log(room, `${player.name}: экспедиция «${label}» даёт «${treasure.name}». ${loaded.holdName} заполнен товаром «${loaded.good.name}» ×${loaded.quantity}.`);
     return { pending: false, treasure };
@@ -2958,7 +2952,6 @@ io.on('connection', socket => {
       eventPhase: null,
       anchorDecks: createAnchorDecks(),
       eventDeck: createSailingEventDeck(),
-      treasureDeck: createTreasureDeck(),
       expeditionDeck: createExpeditionDeck(),
       pendingExpeditionRewards: [],
       feudDecks: createFeudDecks(),
@@ -3159,7 +3152,6 @@ io.on('connection', socket => {
     room.eventPhase = null;
     room.anchorDecks = createAnchorDecks();
     room.eventDeck = createSailingEventDeck();
-    room.treasureDeck = createTreasureDeck();
     room.expeditionDeck = createExpeditionDeck();
     room.pendingExpeditionRewards = [];
     room.feudDecks = createFeudDecks();
@@ -3601,18 +3593,11 @@ io.on('connection', socket => {
     const result = sellCargo(room, p, String(_data?.holdId || 'main'));
     if (!result.ok) return ackSafe(ack, result);
     room.actionsLeft -= 1;
-    const isContract = deliveryAssignmentMatch(p, result);
-    let contractBonus = 0;
-    let contractCredit = null;
-    if (isContract) {
-      contractBonus = contractBonusForRevenue(result.revenue);
-      contractCredit = creditDucats(p, contractBonus);
-    }
+    const matchesDeliveryAssignment = deliveryAssignmentMatch(p, result);
     const debtText = result.credit?.debtPaid ? ` Из обычной выручки ${result.credit.debtPaid} уходит в погашение долга; в казну ${result.credit.net}.` : '';
-    const contractText = isContract ? ` Контракт сюзерена: премия +${contractBonus} дукатов${contractCredit?.debtPaid ? ` (${contractCredit.debtPaid} в погашение долга)` : ''}.` : '';
-    log(room, `${p.name} продаёт в Цитадели из ${result.holdName.toLowerCase()}: ${result.good.name} × ${result.quantity} за ${result.revenue} дукатов.${debtText}${contractText} Осталось действий: ${room.actionsLeft}.`);
-    if (isContract) trackAssignment(room, p, { type: 'delivery', goodId: result.good.id, assignmentInstanceId: result.assignmentInstanceId, fullHold: true });
-    ackSafe(ack, { ok: true, revenue: result.revenue, contractBonus });
+    log(room, `${p.name} продаёт в Цитадели из ${result.holdName.toLowerCase()}: ${result.good.name} ×${result.quantity} за ${result.revenue} дукатов.${debtText} Осталось действий: ${room.actionsLeft}.`);
+    if (matchesDeliveryAssignment) trackAssignment(room, p, { type: 'delivery', goodId: result.good.id, assignmentInstanceId: result.assignmentInstanceId, fullHold: true });
+    ackSafe(ack, { ok: true, revenue: result.revenue });
     emitRoom(room);
   });
 

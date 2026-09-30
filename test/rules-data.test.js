@@ -115,9 +115,10 @@ test('every economic table row, building chain, price, income and defense matche
   for (const row of fixture.tables.goods) assert.equal(Object.values(rules.economy.goods).find(g=>g.name===row[0]).price,n(row[1]));
   for (const row of fixture.tables.rare) {
     const building=Object.values(rules.economy.buildings).find(b=>b.name===row[0]);
-    assert.equal(building.price,n(row[2])); assert.equal(building.futureLevelsPurchasable,false);
+    assert.equal(building.price,n(row[2])); assert.equal(building.singleStage,true);
     assert.deepEqual(Object.keys(building.levels),['1']);
-    assert.deepEqual(building.futureLevels,{2:null,3:null});
+    assert.equal(Object.hasOwn(building,'futureLevels'),false);
+    assert.equal(Object.hasOwn(building,'futureLevelsPurchasable'),false);
   }
   for (const row of fixture.tables.publicBuildings) {
     const b=Object.values(rules.economy.buildings).find(b=>b.name===row[0]);
@@ -261,11 +262,11 @@ test('stage 6.7 finalizes stage 6 while stage 7 consumers remain pending', () =>
   ]) assert.equal(rules.implementation.pendingConsumers.some(item => item.path === resolved),false,resolved);
 });
 
-test('author decisions R05/R06 are resolved digitally while unrelated unknowns stay explicit', () => {
-  for (const id of ['R07','R21','R29','treasure-copies']) assert.ok(rules.metadata.unresolved.includes(id));
-  assert.equal(rules.metadata.unresolved.includes('R05'),false);
-  assert.equal(rules.metadata.unresolved.includes('R06'),false);
-  assert.deepEqual(rules.metadata.authorOverrides.resolved,['R05','R06']);
+test('author decisions through digital block 1 are explicit while R29 stays open', () => {
+  assert.deepEqual(rules.metadata.unresolved,['R29']);
+  assert.deepEqual(rules.metadata.authorOverrides.resolved,['R05','R06','R07','R21','treasure-copies']);
+  assert.equal(rules.metadata.mapCanon.canonical,true);
+  assert.equal(rules.metadata.mapCanon.source,'current-online-map');
   assert.equal(rules.legends.legendaryPool.mode,'random-with-replacement');
   assert.equal(rules.legends.legendaryPool.selection,'uniform');
   assert.deepEqual(rules.legends.legendaryPool.typeIds,['sea-veil','hellfire','mist-path','sea-curse']);
@@ -278,8 +279,11 @@ test('author decisions R05/R06 are resolved digitally while unrelated unknowns s
     assert.equal(place.unresolved,undefined);
     assert.equal(place.rewardStatus,undefined);
   }
-  assert.equal(rules.legends.treasureDeck.copiesByKind,null);
-  assert.equal(rules.legends.treasures.at(-1).onNoEmptyHold,'discard');
+  assert.equal(Object.hasOwn(rules.legends,'treasureDeck'),false);
+  assert.equal(rules.legends.treasurePool.mode,'random-with-replacement');
+  assert.equal(rules.legends.treasurePool.selection,'uniform');
+  assert.deepEqual(rules.legends.treasurePool.typeIds,['income-x1','income-x2','income-x3','full-diamonds-hold']);
+  assert.equal(rules.legends.treasures.at(-1).onNoEmptyHold,'no-effect');
   assert.equal(rules.legends.treasures.at(-1).cargoGoodId,'diamonds');
   assert.equal(rules.politics.paidAssignmentReplacement,false);
   assert.equal(rules.fleet.escorts.landin,undefined);

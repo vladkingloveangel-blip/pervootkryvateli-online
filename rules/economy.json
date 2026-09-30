@@ -651,12 +651,8 @@
           "foodStage": 1
         }
       },
-      "futureLevels": {
-        "2": null,
-        "3": null
-      },
-      "futureLevelsPurchasable": false,
-      "iconKey": "building.exotic"
+      "iconKey": "building.exotic",
+      "singleStage": true
     },
     "slaves": {
       "id": "slaves",
@@ -678,12 +674,8 @@
           "foodStage": 1
         }
       },
-      "futureLevels": {
-        "2": null,
-        "3": null
-      },
-      "futureLevelsPurchasable": false,
-      "iconKey": "building.slaves"
+      "iconKey": "building.slaves",
+      "singleStage": true
     },
     "gold": {
       "id": "gold",
@@ -705,12 +697,8 @@
           "foodStage": 1
         }
       },
-      "futureLevels": {
-        "2": null,
-        "3": null
-      },
-      "futureLevelsPurchasable": false,
-      "iconKey": "building.gold"
+      "iconKey": "building.gold",
+      "singleStage": true
     },
     "diamonds": {
       "id": "diamonds",
@@ -732,12 +720,8 @@
           "foodStage": 1
         }
       },
-      "futureLevels": {
-        "2": null,
-        "3": null
-      },
-      "futureLevelsPurchasable": false,
-      "iconKey": "building.diamonds"
+      "iconKey": "building.diamonds",
+      "singleStage": true
     },
     "lighthouse": {
       "id": "lighthouse",
@@ -991,7 +975,6 @@
       "defense": 3
     }
   },
-  "contractBonusRatio": 0.5,
   "loadingLimitPerIslandPerRound": 1,
   "landCompany": {
     "limit": 1,
