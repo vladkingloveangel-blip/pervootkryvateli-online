@@ -1,5 +1,5 @@
 const { BALANCE, MAP_META } = require('./game-data');
-const { selectTreasureOutcome, selectLegendaryAbility } = require('./digital-random-sources');
+const { selectTreasureOutcome, selectLegendaryAbility, selectTreasureCandidates } = require('./digital-random-sources');
 const { createSeaEncounterStorage, seaEncounterSource } = require('./sea-encounter-source');
 const { createSailingEventStorage, canonicalizeSailingEventOccurrence, sailingEventSource } = require('./sailing-event-source');
 const { createPoliticalEffectStorage, politicalEffectSource } = require('./political-effect-source');
@@ -162,6 +162,11 @@ function drawSailingEventCard(room, rng = Math.random) {
 
 function drawTreasureCard(_room, rng = Math.random) {
   return selectTreasureOutcome(rng);
+}
+
+function treasureHunterCandidates(rng = Math.random) {
+  const count = CHARACTERS.treasureHunter?.effect?.draw;
+  return selectTreasureCandidates(count, rng);
 }
 
 function drawLegendaryCard(_room, rng = Math.random) {
@@ -3618,6 +3623,7 @@ module.exports = {
   createSailingEventDeck,
   drawSailingEventCard,
   drawTreasureCard,
+  treasureHunterCandidates,
   createExpeditionDeck,
   createFeudDecks,
   drawFeudCard,

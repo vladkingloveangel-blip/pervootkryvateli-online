@@ -18,8 +18,8 @@ const {
   selectLegendaryAbility,
   selectTreasureCandidates,
 } = require('../digital-random-sources');
-const { BALANCE, TREASURE_CARDS, LEGENDARY_CARDS, SAILING_EVENT_CARDS, FEUD_CARDS, POLITICAL_FACTION_ORDER } = require('../game-data');
-const { drawTreasureCard, drawLegendaryCard, drawSailingEventCard, discardRandomHeldCard, createFeudDecks, drawFeudCard } = require('../game-logic');
+const { BALANCE, CHARACTERS, TREASURE_CARDS, LEGENDARY_CARDS, SAILING_EVENT_CARDS, FEUD_CARDS, POLITICAL_FACTION_ORDER } = require('../game-data');
+const { drawTreasureCard, treasureHunterCandidates, drawLegendaryCard, drawSailingEventCard, discardRandomHeldCard, createFeudDecks, drawFeudCard } = require('../game-logic');
 const { createSeaEncounterStorage, seaEncounterSource } = require('../sea-encounter-source');
 const {
   createSailingEventStorage,
@@ -171,6 +171,85 @@ test('treasure candidates are independent with replacement and may repeat', () =
 
   const independent = selectTreasureCandidates(2, sequenceRng([0, 0.75]));
   assert.deepEqual(independent.map(item => item.id), [TREASURE_CARDS[0].id, TREASURE_CARDS[3].id]);
+});
+
+test('Treasure Hunter domain operation follows effect.draw and keeps duplicate independent samples', () => {
+  const effect = CHARACTERS.treasureHunter.effect;
+  let calls = 0;
+  const rolls = [0, 0.75];
+  const candidates = treasureHunterCandidates(() => {
+    const value = rolls[calls];
+    calls += 1;
+    return value;
+  });
+
+  assert.equal(candidates.length, effect.draw);
+  assert.equal(calls, effect.draw);
+  assert.deepEqual(candidates.map(item => item.id), [TREASURE_CARDS[0].id, TREASURE_CARDS[3].id]);
+
+  const repeated = treasureHunterCandidates(sequenceRng([0, 0]));
+  assert.deepEqual(repeated.map(item => item.id), [TREASURE_CARDS[0].id, TREASURE_CARDS[0].id]);
+  assert.equal(effect.keep, 1);
+});
+
+test('Treasure Hunter candidates are detached canonical clones and previous selections do not affect them', () => {
+  selectTreasureOutcome(() => 0.75);
+  selectTreasureCandidates(2, sequenceRng([0.5, 0.25]));
+
+  const candidates = treasureHunterCandidates(sequenceRng([0, 0.75]));
+  assert.deepEqual(candidates[0], TREASURE_CARDS[0]);
+  assert.deepEqual(candidates[1], TREASURE_CARDS[3]);
+  assert.notStrictEqual(candidates[0], TREASURE_CARDS[0]);
+  assert.notStrictEqual(candidates[1], TREASURE_CARDS[3]);
+
+  const duplicates = treasureHunterCandidates(sequenceRng([0, 0]));
+  assert.notStrictEqual(duplicates[0], duplicates[1]);
+  const canonicalName = TREASURE_CARDS[0].name;
+  duplicates[0].name = 'mutated candidate';
+  assert.equal(TREASURE_CARDS[0].name, canonicalName);
+  assert.equal(duplicates[1].name, canonicalName);
+});
+
+test('Treasure Hunter operation is pure and has no legacy treasureDeck or keep-one filtering dependency', () => {
+  let reads = 0;
+  const room = { marker: 'unchanged' };
+  const player = { id: 'p1', marker: 'unchanged' };
+  Object.defineProperty(room, 'treasureDeck', {
+    enumerable: true,
+    get() { reads += 1; return { drawPile: [{ id: 'legacy' }], discard: [] }; },
+  });
+  const roomKeys = Object.keys(room);
+  const playerBefore = { ...player };
+
+  const candidates = treasureHunterCandidates(sequenceRng([0, 0]));
+
+  assert.deepEqual(candidates.map(item => item.id), [TREASURE_CARDS[0].id, TREASURE_CARDS[0].id]);
+  assert.equal(reads, 0);
+  assert.deepEqual(Object.keys(room), roomKeys);
+  assert.equal(room.marker, 'unchanged');
+  assert.deepEqual(player, playerBefore);
+
+  const operationSource = treasureHunterCandidates.toString();
+  assert.match(operationSource, /CHARACTERS\.treasureHunter\?\.effect\?\.draw/);
+  assert.match(operationSource, /selectTreasureCandidates\(count, rng\)/);
+  assert.doesNotMatch(operationSource, /treasureDeck|distinct|filter|\.keep|room|player/);
+});
+
+test('ordinary drawTreasureCard remains one independent treasure outcome', () => {
+  let calls = 0;
+  const room = {};
+  Object.defineProperty(room, 'treasureDeck', {
+    get() { throw new Error('legacy treasureDeck must not be read'); },
+  });
+
+  const outcome = drawTreasureCard(room, () => {
+    calls += 1;
+    return 0.5;
+  });
+
+  assert.equal(calls, 1);
+  assert.deepEqual(outcome, TREASURE_CARDS[2]);
+  assert.notStrictEqual(outcome, TREASURE_CARDS[2]);
 });
 
 test('treasure selection ignores legacy room.treasureDeck and wrapper delegates to stateless selector', () => {
