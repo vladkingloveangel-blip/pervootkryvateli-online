@@ -205,6 +205,63 @@ test('forged client fields cannot expand the server-built grant scope', () => {
   assert.deepEqual(r.scoutRevealGrants[0], { viewerPlayerId: 'p1', mode: 'money', targetPlayerId: 'p2', personalTurnNo: 7 });
 });
 
+test('successful Scout use replaces the same viewer money grant with one garrison grant and preserves another viewer grant', () => {
+  const r = room();
+  assert.equal(use(r, { mode: 'money', targetPlayerId: 'p2' }).ok, true);
+
+  const otherViewerGrant = { viewerPlayerId: 'p3', mode: 'money', targetPlayerId: 'p2', personalTurnNo: 3 };
+  r.scoutRevealGrants.push(structuredClone(otherViewerGrant));
+  r.players[0].character = { id: 'scout', name: 'Scout' };
+  r.actionsLeft = 2;
+
+  const second = use(r, { mode: 'garrison', islandId: 'i2' });
+  assert.equal(second.ok, true);
+  assert.deepEqual(r.scoutRevealGrants, [
+    otherViewerGrant,
+    { viewerPlayerId: 'p1', mode: 'garrison', islandId: 'i2', personalTurnNo: 7 },
+  ]);
+  assert.equal(r.scoutRevealGrants.filter(grant => grant.viewerPlayerId === 'p1').length, 1);
+
+  const out = projectOpponentFacingRoomView(r, scoutViewerContext(r, 'p1'));
+  assert.equal(has(out.players.find(p => p.id === 'p2'), 'ducats'), false);
+  assert.equal(has(out.islands.find(i => i.id === 'i1'), 'garrisonType'), false);
+  assert.equal(out.islands.find(i => i.id === 'i2').garrisonType, 'SECRET_SECOND_GARRISON');
+  assert.deepEqual(r.scoutRevealGrants.find(grant => grant.viewerPlayerId === 'p3'), otherViewerGrant);
+});
+
+test('successful Scout use replaces the same viewer garrison grant with one money grant', () => {
+  const r = room();
+  assert.equal(use(r, { mode: 'garrison', islandId: 'i1' }).ok, true);
+  r.players[0].character = { id: 'scout', name: 'Scout' };
+  r.actionsLeft = 2;
+
+  const second = use(r, { mode: 'money', targetPlayerId: 'p2' });
+  assert.equal(second.ok, true);
+  assert.deepEqual(r.scoutRevealGrants, [
+    { viewerPlayerId: 'p1', mode: 'money', targetPlayerId: 'p2', personalTurnNo: 7 },
+  ]);
+
+  const out = projectOpponentFacingRoomView(r, scoutViewerContext(r, 'p1'));
+  assert.equal(out.players.find(p => p.id === 'p2').ducats, 'SECRET_SCOUT_DUCATS');
+  for (const target of out.islands) {
+    for (const key of ['garrisonType','garrisonName','garrisonDefense','defenseArmy','defenseBreakdown']) {
+      assert.equal(has(target, key), false, key);
+    }
+  }
+});
+
+test('failed Scout replacement leaves the existing grant, actions and held character unchanged', () => {
+  const r = room();
+  assert.equal(use(r, { mode: 'money', targetPlayerId: 'p2' }).ok, true);
+  r.players[0].character = { id: 'scout', name: 'Scout' };
+  r.actionsLeft = 2;
+  const before = structuredClone(r);
+
+  const failed = use(r, { mode: 'garrison', islandId: 'missing' });
+  assert.equal(failed.ok, false);
+  assert.deepEqual(r, before);
+});
+
 test('selected garrison grant reveals exactly one island privateGarrison contract and no money/private owner state', () => {
   const r = room();
   assert.equal(use(r, { mode: 'garrison', islandId: 'i1' }).ok, true);

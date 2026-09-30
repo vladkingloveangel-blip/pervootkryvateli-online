@@ -94,7 +94,10 @@ function applyScoutUse({ room, playerId, request, characterRule, hasBlockingPend
 
   room.actionsLeft = (Number(room.actionsLeft) || 0) - actionCost;
   const existing = Array.isArray(room.scoutRevealGrants) ? room.scoutRevealGrants : [];
-  room.scoutRevealGrants = [...existing, reveal.grant];
+  room.scoutRevealGrants = [
+    ...existing.filter(grant => String(grant?.viewerPlayerId || '') !== String(player.id)),
+    reveal.grant,
+  ];
   return { ok: true, mode: reveal.grant.mode, actionCost, actionsLeft: room.actionsLeft };
 }
 
