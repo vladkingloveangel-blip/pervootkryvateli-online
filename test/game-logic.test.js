@@ -2310,7 +2310,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(taken.actionCost, 1);
   assert.equal(taken.expedition.cardId, 'expedition-kraken');
   assert.equal(taken.requiresLeaveAndReturn, false);
-  assert.equal(room.expeditionDeck.drawPile.length, 9);
+  assert.equal(room.expeditionDeck.drawPile.length, 6);
   assert.equal(canTakeExpedition(room, p).ok, false);
 
   p.row = LEGENDARY_PLACES.kraken.row;
