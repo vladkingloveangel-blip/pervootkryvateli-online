@@ -1,3 +1,4 @@
+const domainState = require('./domain-state');
 const { BALANCE, MAP_META } = require('./game-data');
 const { selectTreasureOutcome, selectLegendaryAbility, selectTreasureCandidates } = require('./digital-random-sources');
 const { createSeaEncounterStorage, seaEncounterSource } = require('./sea-encounter-source');
@@ -3521,6 +3522,7 @@ function publicIsland(island, room = null) {
 }
 
 module.exports = {
+  domainState,
   cloneIslands,
   islandAt,
   reachableCells,
