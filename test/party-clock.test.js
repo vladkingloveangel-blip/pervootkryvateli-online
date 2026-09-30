@@ -55,7 +55,8 @@ test('leader, clockwise order and six complete personal circles', { timeout: 300
   assert.equal(room.players.every(p=>p.row===0 && p.col===0 && p.level===1),true);
   assert.equal((await emit(players[0],'setLeader',{playerId:ids[0]})).ok,false);
   assert.equal((await emit(players[0],'setSeatingOrder',{playerIds:ids})).ok,false);
-  assert.equal(room.players.every(p=>p.ducats===rules.session.startingDucats),true);
+  assert.equal(room.players.find(p=>p.isYou).ducats,rules.session.startingDucats);
+  assert.equal(room.players.filter(p=>!p.isYou).every(p=>!Object.hasOwn(p,'ducats')),true);
   assert.deepEqual([room.round,room.circle,room.players.find(p=>p.id===order[0]).actionsLeft],[1,1,rules.session.actionsPerTurn]);
   const socketFor=id=>players[ids.indexOf(id)];
   for(let turn=0;turn<20;turn++){
@@ -103,5 +104,6 @@ test('leader, clockwise order and six complete personal circles', { timeout: 300
   assert.equal(fullRoom.players.length,6);
   assert.equal(new Set(fullRoom.players.map(p=>p.color)).size,6);
   assert.equal(fullRoom.order[0],full.playerId);
-  assert.equal(fullRoom.players.every(p=>p.ducats===rules.session.startingDucats),true);
+  assert.equal(fullRoom.players.find(p=>p.isYou).ducats,rules.session.startingDucats);
+  assert.equal(fullRoom.players.filter(p=>!p.isYou).every(p=>!Object.hasOwn(p,'ducats')),true);
 });

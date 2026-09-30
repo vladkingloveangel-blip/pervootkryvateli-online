@@ -951,7 +951,7 @@
       const suzerainName = p.suzerainId ? state.room.factions?.find(f => f.id === p.suzerainId)?.name : null;
       const politicalLabel = suzerainName ? ` · вассал ${suzerainName}` : (p.enemyFactionIds?.length ? ` · вражда ${p.enemyFactionIds.length}` : '');
       const readyLabel = !r.started ? (p.ready ? ' · ✓ готов' : ' · не готов') : '';
-      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${p.id === r.leaderId ? ' · ведущий' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level} · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''} · армия ${p.armyPoints || 0} · флот ${p.fleetPoints || 0} · слава ${p.glory || 0} · островов ${p.islandCount} · именных ${p.namedPlaceCardCount || 0} · экспедиций ${p.expeditionHistoryCount || 0} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
+      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${p.id === r.leaderId ? ' · ведущий' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level}${p.isYou ? ` · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''}` : ''} · армия ${p.armyPoints || 0} · флот ${p.fleetPoints || 0} · слава ${p.glory || 0} · островов ${p.islandCount} · именных ${p.namedPlaceCardCount || 0} · экспедиций ${p.expeditionHistoryCount || 0} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
       if (!isSpectator && isHost && !r.started) {
         const actions = el.querySelector('.player-side-actions');
         if (p.id !== r.leaderId) {
@@ -1245,9 +1245,9 @@
     $('dockEndTurnBtn').classList.toggle('hidden', !myTurn || phase !== 'actions' || blocked);
 
     if (!r.started) $('moveResult').textContent = 'Выберите корабль. Организатор назначает ведущего и порядок мест; затем все нажимают «Готов».';
-    else if (r.eventPhase?.active) $('moveResult').textContent = r.pendingIslandCorrection?.viewerCanRespond ? `Остров ${r.pendingIslandCorrection.islandName} нужно исправить перед продолжением.` : r.pendingIslandCorrection ? `${playerName(r.pendingIslandCorrection.playerId)} исправляет остров ${r.pendingIslandCorrection.islandName}.` : r.pendingAssignmentChoice?.viewerCanRespond ? 'Нужно решить, оставить или заменить поручение сюзерена.' : r.pendingFeud?.viewerCanRespond ? 'Нужно разрешить вашу карту вражды.' : r.pendingEvent?.viewerCanRespond ? 'Нужно принять решение по вашей карте события.' : `Карты получает ${playerName(r.eventPhase.currentPlayerId)}.`;
+    else if (r.eventPhase?.active) $('moveResult').textContent = r.pendingIslandCorrection?.viewerCanRespond ? `Остров ${r.pendingIslandCorrection.islandName} нужно исправить перед продолжением.` : r.pendingIslandCorrection ? `${playerName(r.pendingIslandCorrection.playerId)} исправляет остров.` : r.pendingAssignmentChoice?.viewerCanRespond ? 'Нужно решить, оставить или заменить поручение сюзерена.' : r.pendingFeud?.viewerCanRespond ? 'Нужно разрешить вашу карту вражды.' : r.pendingEvent?.viewerCanRespond ? 'Нужно принять решение по вашей карте события.' : `Карты получает ${playerName(r.eventPhase.currentPlayerId)}.`;
     else if (r.pendingIslandCorrection?.viewerCanRespond) $('moveResult').textContent = `Остров ${r.pendingIslandCorrection.islandName} нужно немедленно привести к допустимым ограничениям.`;
-    else if (r.pendingIslandCorrection) $('moveResult').textContent = `Ожидается исправление острова ${r.pendingIslandCorrection.islandName} игроком ${playerName(r.pendingIslandCorrection.playerId)}.`;
+    else if (r.pendingIslandCorrection) $('moveResult').textContent = `Ожидается исправление острова игроком ${playerName(r.pendingIslandCorrection.playerId)}.`;
     else if (!myTurn) $('moveResult').textContent = aText();
     else if (phase === 'navigation' && mine.roll === null) $('moveResult').textContent = 'Можно бросить d6 или остаться на месте.';
     else if (phase === 'navigation') $('moveResult').textContent = `d6 = ${mine.roll}. Дальность ${mine.movePoints}; подсвечены только клетки, куда реально можно доплыть.`;
@@ -1773,16 +1773,6 @@
     badge.textContent = `${claimedCount}/${namedCards.length || 10}`;
 
     let html = '<div class="legendary-journey-summary"><strong>Первое открытие</strong><br>Морское легендарное место открывается первым посещением. Атлантия, Адия и Череп открываются только первым военным завоеванием. Первое открытие даёт открытую именную карту и одну случайную легендарную карту.</div>';
-
-    const openExpeditions = (r.players || []).filter(player => player.activeExpedition);
-    if (openExpeditions.length) {
-      html += '<div class="expedition-public"><strong>Открытые экспедиции</strong>';
-      for (const player of openExpeditions) {
-        const active = player.activeExpedition;
-        html += `<div class="expedition-public-row"><span>${escapeHtml(player.name)}</span><strong>${escapeHtml(active.name || placeById[active.placeId]?.name || active.placeId)}</strong></div>`;
-      }
-      html += '</div>';
-    }
 
     const activeExpedition = mine.activeExpedition;
     if (activeExpedition) {

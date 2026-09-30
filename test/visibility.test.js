@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const {
+  projectOpponentFacingRoomView,
   IMPLEMENTED_POLICY_KEYS,
   SCOUT_RUNTIME_ENABLED,
   projectRoomForViewer,
@@ -142,7 +143,7 @@ function room() {
 
 function assertPrivatePlayerKeysAbsent(view) {
   for (const key of [
-    'ducats', 'character', 'activeAssignment', 'hasActiveAssignment', 'assignmentPriority',
+    'ducats', 'debt', 'nextTurnEffects', 'character', 'activeAssignment', 'hasActiveAssignment', 'assignmentPriority',
     'specialCards', 'specialCardCount', 'legendaryCards', 'legendaryCardCount',
     'playableLegendaryCards', 'savedEventCards', 'savedEventCardCount',
     'activeExpedition', 'hasActiveExpedition',
@@ -307,23 +308,56 @@ test('20. Scout grants are absent in 4.2 and reveal no Scout-only private state'
   assert.equal(has(projectedIsland, 'garrisonType'), false);
 });
 
-test('21. 4.2 implementation coverage plus approved pre-4.3 addendum accounts for canonical fixture', () => {
+test('21. implemented policy exactly covers canonical fixture', () => {
   const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
-  const fixtureKeys = fixture.policies.map(row => row.key).sort();
-  const approvedButNotYetImplemented = [
-    'player.debt',
-    'player.activeTemporaryEffects',
-    'player.landCompany',
-    'player.anchorHistory',
-  ].sort();
-  const implemented = [...IMPLEMENTED_POLICY_KEYS].sort();
-  const notYetImplemented = fixtureKeys.filter(key => !IMPLEMENTED_POLICY_KEYS.includes(key)).sort();
-
-  assert.deepEqual(notYetImplemented, approvedButNotYetImplemented);
-  assert.deepEqual([...implemented, ...approvedButNotYetImplemented].sort(), fixtureKeys);
-  for (const key of approvedButNotYetImplemented) {
-    assert.equal(IMPLEMENTED_POLICY_KEYS.includes(key), false, `${key} must remain unimplemented until 4.3`);
-  }
+  assert.deepEqual([...IMPLEMENTED_POLICY_KEYS].sort(), fixture.policies.map(row=>row.key).sort());
   assert.equal(SCOUT_RUNTIME_ENABLED, false);
-  assert.equal(fixture.scoutRule.implementationStatus.includes('no runtime reveal fields'), true);
+});
+
+function enrichedRoom() {
+  const source=room();
+  for(const item of source.players) Object.assign(item, {
+    debt:'SECRET_DEBT', nextTurnEffects:{ noIncome:true, sourceCard:'SECRET_NEXT_SOURCE' },
+    characterAcquisitionOptions:[{id:'SECRET_CHARACTER_OPTION'}], actionHint:'SECRET_OWNER_ACTION',
+    legendaryStatus:{shipVeilTurns:2,seaCurseTurns:[1],seaCursePenalty:1,sourceCard:'SECRET_STATUS_SOURCE'},
+    activeTurnEffects:{noIncome:true,noNavigation:true,moveBonus:2,movePenalty:1,bestOfTwo:true,sourceCard:'SECRET_EFFECT_SOURCE'},
+    landCompany:{army:4,arsenalLevel:2,sourceIslandId:'island-1',formedAt:100,unknown:'SECRET_COMPANY'},
+    visitedAnchors:['4:red:5:7'], lastAnchorEncounter:{round:4,color:'red',outcome:'win',reward:{gross:4,debtRemaining:'SECRET_HISTORY_DEBT'},unknown:'SECRET_HISTORY'},
+  });
+  return source;
+}
+test('4.3 transitional boundary keeps owner legacy contract and filters every other identity',()=>{
+  const source=enrichedRoom(), before=structuredClone(source);
+  for(const viewerId of ['p1','p2',null,'unknown']) {
+    const out=projectOpponentFacingRoomView(source,{viewerId,scoutGrant:{playerId:'p1'}});
+    for(let i=0;i<source.players.length;i++) {
+      if(source.players[i].id===viewerId) assert.deepEqual(out.players[i],source.players[i]);
+      else {
+        const view=out.players[i]; assertPrivatePlayerKeysAbsent(view);
+        assert.equal(view.legendaryStatus.shipVeilTurns,2);
+        assert.deepEqual(view.activeTurnEffects,{noIncome:true,noNavigation:true,moveBonus:2,movePenalty:1,bestOfTwo:true});
+        assert.equal(view.landCompany.army,4); assert.equal(view.assaultArmy,3);
+        assert.deepEqual(view.visitedAnchors,['4:red:5:7']); assert.equal(view.lastAnchorEncounter.outcome,'win');
+        assert.equal(JSON.stringify(view).includes('SECRET_'),false);
+      }
+    }
+    if(viewerId==='p1') assert.deepEqual(out.islands[0],source.islands[0]);
+    else for(const key of ['garrisonType','garrisonName','garrisonDefense','defenseArmy','defenseBreakdown']) assert.equal(has(out.islands[0],key),false);
+    assert.equal(out.unknownRootField,source.unknownRootField); // current root presentation contract
+    out.players[0].name='Changed';
+  }
+  assert.deepEqual(source,before);
+});
+test('4.3 all six pending paths preserve actor choices and omit non-actor private context',()=>{
+  for(const [key,actorField] of [['pendingEvent','playerId'],['pendingFeud','playerId'],['pendingAssignmentChoice','playerId'],['pendingIslandCorrection','playerId'],['pendingFleetAdjustment','playerId'],['pendingLegendaryReaction','targetPlayerId']]) {
+    const pending={id:'waiting', [actorField]:'p1',kind:'SECRET_KIND',cardName:'SECRET_CARD',options:[{id:'SECRET_CHOICE'}],veilOptions:[{id:'SECRET_VEIL'}],factionId:'SECRET_FACTION',islandId:'SECRET_TARGET',context:'SECRET_CONTEXT',sourcePlayerId:'p2'};
+    const source={players:[],islands:[],[key]:pending,eventPhase:{lastCard:{playerId:'p1',pending:true,cardName:'SECRET_CARD'}}};
+    assert.deepEqual(projectOpponentFacingRoomView(source,{viewerId:'p1'})[key],pending);
+    for(const viewerId of ['p2',null]) {
+      const out=projectOpponentFacingRoomView(source,{viewerId});
+      assert.deepEqual(out[key],{id:'waiting',[actorField]:'p1',viewerCanRespond:false});
+      assert.equal(has(out.eventPhase,'lastCard'),false);
+      assert.equal(JSON.stringify(out).includes('SECRET_'),false);
+    }
+  }
 });

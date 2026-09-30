@@ -155,7 +155,7 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   assert.equal(state.pendingLegendaryReaction.kind, 'sea-curse');
   assert.equal(state.pendingLegendaryReaction.targetPlayerId, targetId);
   assert.equal(Object.hasOwn(state.eventDecks,'legendary'), false);
-  assert.equal(state.players.find(player => player.id === sourceId).legendaryCardCount, 0);
+  assert.equal(Object.hasOwn(state.players.find(player => player.id === sourceId),'legendaryCardCount'), false);
 
   changed = await change(targetSocket, 'respondLegendaryReaction', {
     reactionId: state.pendingLegendaryReaction.id,
@@ -167,7 +167,7 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   const targetView = state.players.find(player => player.id === targetId);
   assert.equal(state.pendingLegendaryReaction, null);
   assert.equal(Object.hasOwn(state.eventDecks,'legendary'), false);
-  assert.equal(targetView.legendaryCardCount, 0);
+  assert.equal(Object.hasOwn(targetView,'legendaryCardCount'), false);
   assert.equal(targetView.legendaryStatus.shipVeilTurns, 0);
   assert.deepEqual(targetView.legendaryStatus.seaCurseTurns, []);
   assert.equal(targetView.legendaryStatus.seaCursePenalty, 0);
@@ -238,7 +238,7 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   const protectedSourceView = state.players.find(player => player.id === sourceId);
   const protectedTargetView = state.players.find(player => player.id === targetId);
   assert.equal(protectedSourceView.actionsLeft, rules.session.actionsPerTurn - 1);
-  assert.equal(protectedSourceView.legendaryCardCount, 0);
+  assert.equal(Object.hasOwn(protectedSourceView,'legendaryCardCount'), false);
   assert.equal(Object.hasOwn(state.eventDecks,'legendary'), false);
   assert.equal(state.pendingLegendaryReaction, null);
   assert.equal(protectedTargetView.legendaryStatus.shipVeilTurns, 0);

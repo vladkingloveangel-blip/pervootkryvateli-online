@@ -63,6 +63,9 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal((await api('/api/auth/change-password', a.token, { oldPassword: 'password1', newPassword: 'password1b' })).data.ok, true);
   assert.equal((await api('/api/auth/login', null, { username: 'playerone', password: 'password1b' })).data.ok, true);
   const first = await connect(); const second = await connect(); const third = await connect(); const fourth = await connect(); const watcher = await connect();
+  let firstView, secondView;
+  first.on('roomState', view => { firstView=view; });
+  second.on('roomState', view => { secondView=view; });
   const created = await emit(first, 'createRoom', { accountToken: a.token, name: 'One' });
   assert.equal(created.ok, true); assert.equal(rows().length, 1); // ack means durable
   const code = created.code;
@@ -79,6 +82,17 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal((await emit(third, 'setReady', { ready: true })).ok, true);
   assert.equal((await emit(fourth, 'setReady', { ready: true })).ok, true);
   assert.equal((await emit(first, 'startGame')).ok, true);
+  await new Promise(resolve=>setTimeout(resolve,50));
+  for(const [view,ownerId] of [[firstView,created.playerId],[secondView,joinedSecond.playerId]]) {
+    assert.ok(view);
+    for(const p of view.players) {
+      if(p.id===ownerId) {
+        assert.equal(p.ducats,canonical.session.startingDucats);
+        assert.ok(Object.hasOwn(p,'characterAcquisitionOptions'));
+        assert.ok(Object.hasOwn(p,'nextTurnEffects'));
+      } else for(const key of ['ducats','debt','character','activeAssignment','hasActiveAssignment','assignmentPriority','specialCards','specialCardCount','legendaryCards','legendaryCardCount','playableLegendaryCards','savedEventCards','savedEventCardCount','activeExpedition','hasActiveExpedition','nextTurnEffects']) assert.equal(Object.hasOwn(p,key),false,key);
+    }
+  }
   const started = rows()[0].state;
   assert.equal(started.started, true);
   assert.equal(started.players.find(p=>p.id===joinedSecond.playerId).shipClass,'carrack');

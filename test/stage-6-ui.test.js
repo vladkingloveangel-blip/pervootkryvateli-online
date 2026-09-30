@@ -17,7 +17,9 @@ test('stage 6.7 UI exposes events, discoveries, expeditions and legendary reacti
   assert.match(app, /renderLegendaryPlaces\(\);/);
   assert.match(app, /r\.namedPlaceCards \|\| \[\]/);
   assert.match(app, /mine\.expeditionHistory \|\| \[\]/);
-  assert.match(app, /filter\(player => player\.activeExpedition\)/);
+  assert.doesNotMatch(app, /filter\(player => player\.activeExpedition\)/);
+  assert.match(app, /const activeExpedition = mine\.activeExpedition/);
+  assert.match(app, /p\.isYou \? ` · \$\{p\.ducats\}/);
   assert.match(app, /socket\.emit\('takeExpedition'/);
   assert.match(app, /expedition-destination/);
 

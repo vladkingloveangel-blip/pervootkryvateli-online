@@ -1,3 +1,4 @@
+const { projectOpponentFacingRoomView } = require('./state-projection');
 const { BALANCE, RULESET, RUNTIME_PROFILE } = require('./game-data');
 const path = require('path');
 const crypto = require('crypto');
@@ -748,7 +749,7 @@ function publicRoom(room, viewerId = null) {
             : undefined,
         } : null,
         hasActiveExpedition: Boolean(p.activeExpedition),
-        expeditionHistory: p.id === viewerId ? (p.expeditionHistory || []).map(item => ({ ...item })) : [],
+        expeditionHistory: (p.expeditionHistory || []).map(item => ({ ...item })),
         expeditionHistoryCount: (p.expeditionHistory || []).length,
         expeditionTakenThisRound: p.id === viewerId ? Number(p.expeditionDrawRound) === Number(room.round) : false,
         canTakeExpedition: p.id === viewerId && active?.id === p.id && room.phase === 'actions' && (Number(room.actionsLeft) || 0) > 0 && !room.eventPhase?.active && !hasPendingDecision(room)
@@ -764,7 +765,7 @@ function publicRoom(room, viewerId = null) {
         savedEventCards: p.id === viewerId ? (p.savedEventCards || []).map(c => ({ id: c.id, kind: c.kind, name: c.name, goodId: c.goodId || null })) : [],
         savedEventCardCount: (p.savedEventCards || []).length,
         nextTurnEffects: p.id === viewerId ? { ...(p.nextTurnEffects || {}) } : {},
-        activeTurnEffects: p.id === viewerId ? { ...(p.activeTurnEffects || {}) } : {},
+        activeTurnEffects: { ...(p.activeTurnEffects || {}) },
         landCompany: p.landCompany ? { ...p.landCompany } : null,
         canDismissLandCompanyHere: p.id === viewerId ? canDismissLandCompany(room, p).ok : false,
         character: p.id === viewerId && p.character ? { ...(CHARACTERS[typeof p.character === 'string' ? p.character : p.character.id] || {}), id: typeof p.character === 'string' ? p.character : p.character.id } : null,
@@ -865,7 +866,7 @@ function emitRoom(room) {
   queueEscortCapacityDecisionsIfNeeded(room);
   persistRoom(roomStore.save(room));
   for (const p of room.players) {
-    if (p.socketId) io.to(p.socketId).emit('roomState', publicRoom(room, p.id));
+    if (p.socketId) io.to(p.socketId).emit('roomState', projectOpponentFacingRoomView(publicRoom(room, p.id), { viewerId: p.id }));
   }
   io.to(`admin-watch:${room.code}`).emit('adminRoomState', adminRoomState(room));
 }

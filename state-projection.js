@@ -10,6 +10,7 @@ const IMPLEMENTED_POLICY_KEYS = Object.freeze([
   'island.publicState','island.garrison','ship.publicState','ship.cargo','player.ducats','player.character',
   'politics.suzerainRelation','player.activeAssignment','player.activeAssignmentExistenceAndSignals',
   'player.privateAbilities','player.savedBenefits','player.activeExpedition','discoveries.completedHistory',
+  'player.debt','player.activeTemporaryEffects','player.landCompany','player.anchorHistory',
   'pending.privateContent','pending.publicEnvelope','catalogs.publicDefinitions',
 ]);
 const SCOUT_RUNTIME_ENABLED = false;
@@ -32,12 +33,16 @@ const expedition = o(f('cardId id name placeId acceptedRound requiresLeaveAndRet
 const character = o(f('id name admiraltyLevel acquireActionCost useActionCost'));
 const publicPlayer = o({
   ...f('id name color shipClass glory fleetPoints armyPoints level row col connected ready islandCount suzerainId vassalGiftIslandId namedPlaceCardCount expeditionHistoryCount bastionSupportCapacity bastionCount bastionSupportChoiceRequired cargoCapacity assaultArmy fleetArtillery totalCargoCapacity upgradeSlots shipyardSlots escortUseLimit nextEscortPrice atCitadel inPeaceZone skipTurns phase roll movePoints actionsLeft'),
+  legendaryStatus:o({ ...f('shipVeilTurns seaCursePenalty'), seaCurseTurns:a(S) }),
+  activeTurnEffects:o(f('noIncome noNavigation moveBonus movePenalty bestOfTwo')),
+  landCompany:o(f('army arsenalLevel sourceIslandId formedAt')),
+  visitedAnchors:a(S), lastAnchorEncounter:o({ ...f('round row col color anchorName cardName cardArtillery rewardValue fleetPower outcome fleetPoints'), reward:o(f('gross net')), penalty:o(f('required paid')) }),
   enemyFactionIds:a(S), namedPlaceCards:a(discovery), expeditionHistory:a(history), supportedBastionIslandIds:a(S),
   cargo, stats, upgrades:a(upgrade), disabledUpgradeIds:a(S), escorts:a(escort), levelInactiveEscortIds:a(S),
   nextLevel:o(f('level price')), allyIds:a(S),
 });
 const ownerPlayer = o({
-  ducats:S, character, activeAssignment:assignment, hasActiveAssignment:S, assignmentPriority:o(f('kind text')),
+  ducats:S, debt:S, character, activeAssignment:assignment, hasActiveAssignment:S, assignmentPriority:o(f('kind text')),
   specialCards:a(S), specialCardCount:S, legendaryCards:a(legendaryCard), legendaryCardCount:S,
   playableLegendaryCards:a(legendaryRef), savedEventCards:a(savedEvent), savedEventCardCount:S,
   activeExpedition:expedition, hasActiveExpedition:S,
@@ -104,7 +109,7 @@ function projectIslandForViewer(island, viewerContext=null){
 }
 function actorId(pending, actorField){
   if(!pending || typeof pending!=='object') return null;
-  for(const key of [actorField,'playerId','actorId','targetPlayerId']) if(key && pending[key]!=null) return String(pending[key]);
+  for(const key of actorField ? [actorField] : ['playerId','actorId','targetPlayerId']) if(key && pending[key]!=null) return String(pending[key]);
   return null;
 }
 function projectPendingForViewer(pending, viewerContext=null, options={}){
@@ -130,4 +135,22 @@ function projectRoomForViewer(roomView, viewerContext=null){
   return out;
 }
 
-module.exports={IMPLEMENTED_POLICY_KEYS,SCOUT_RUNTIME_ENABLED,projectRoomForViewer,projectPlayerForViewer,projectIslandForViewer,projectPendingForViewer};
+
+// 4.3 boundary: preserve legacy owner/action contracts until the 4.4 cutover.
+// Input is the presentation view from publicRoom, never authoritative storage.
+function projectOpponentFacingRoomView(legacyRoomView, viewerContext=null){
+  if(!legacyRoomView || typeof legacyRoomView!=='object' || Array.isArray(legacyRoomView)) return {};
+  const c=ctx(viewerContext), out=structuredClone(legacyRoomView);
+  const isOwner=id=>c.viewerId!==null && id!=null && String(id)===c.viewerId;
+  if(Array.isArray(out.players)) out.players=out.players.map(v=>isOwner(v.id)?v:projectPlayerForViewer(v,c));
+  if(Array.isArray(out.islands)) out.islands=out.islands.map(v=>isOwner(v.ownerId)?v:projectIslandForViewer(v,c));
+  for(const [key,actorField] of [['pendingEvent','playerId'],['pendingFeud','playerId'],['pendingAssignmentChoice','playerId'],['pendingIslandCorrection','playerId'],['pendingFleetAdjustment','playerId'],['pendingLegendaryReaction','targetPlayerId']]) {
+    if(own(out,key) && !isOwner(actorId(out[key],actorField))) {
+      out[key]=projectPendingForViewer(out[key],c,{actorField});
+      if(out[key] && out.eventPhase?.lastCard?.pending && !isOwner(out.eventPhase.lastCard.playerId)) delete out.eventPhase.lastCard;
+    }
+  }
+  return out;
+}
+
+module.exports={projectOpponentFacingRoomView,IMPLEMENTED_POLICY_KEYS,SCOUT_RUNTIME_ENABLED,projectRoomForViewer,projectPlayerForViewer,projectIslandForViewer,projectPendingForViewer};
