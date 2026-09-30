@@ -112,6 +112,14 @@ function assignmentPool(room, factionId, rng = Math.random, options = {}) {
       });
     },
 
+    chooseOffered(occurrences, cardId) {
+      const cards = (occurrences || []).filter(Boolean).map(occurrence => ({ ...occurrence }));
+      const chosen = cards.find(occurrence => occurrenceId(occurrence) === cardId) || null;
+      if (!chosen) return { chosen: null, returned: 0 };
+      const returned = returnOccurrences(cards.filter(occurrence => occurrenceId(occurrence) !== occurrenceId(chosen)));
+      return { chosen, returned };
+    },
+
     reserve(occurrence) {
       const storage = backing({ create: true });
       if (!storage || !occurrence || containsOccurrence(storage.removed, occurrence)) return null;

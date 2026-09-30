@@ -60,11 +60,18 @@ function sailingEventSource(room, rng = Math.random) {
     return true;
   }
 
+  function consumeNext() {
+    refreshCycle();
+    const storage = backing({ create: true });
+    return canonicalizeSailingEventOccurrence(storage.drawPile.shift() || null);
+  }
+
   return {
-    consumeNext() {
-      refreshCycle();
-      const storage = backing({ create: true });
-      return canonicalizeSailingEventOccurrence(storage.drawPile.shift() || null);
+    consumeNext,
+
+    replaceObserved(first) {
+      if (first) returnToRecyclable(first);
+      return consumeNext();
     },
 
     markUsed(outcome) {

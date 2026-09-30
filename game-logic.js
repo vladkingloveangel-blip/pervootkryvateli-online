@@ -640,20 +640,18 @@ function issueAssignment(room, player, factionId, rng = Math.random) {
 function offerAssignmentCards(room, player, factionId, count = 2, rng = Math.random) {
   ensureAssignmentPlayer(player);
   if (player.activeAssignment) return { ok: false, error: 'У игрока уже есть активное поручение.', cards: [] };
-  return { ok: true, cards: drawAssignmentCandidates(room, player, factionId, count, rng) };
+  const pool = assignmentPoolFor(room, factionId, rng);
+  return { ok: true, cards: pool?.offerEligible(player, count) || [] };
 }
 
 function chooseAssignmentOffer(room, player, factionId, offeredCards, cardId, rng = Math.random) {
   ensureAssignmentPlayer(player);
   if (player.activeAssignment) return { ok: false, error: 'У игрока уже есть активное поручение.' };
-  const cards = (offeredCards || []).map(card => ({ ...card }));
-  const chosen = cards.find(card => card.id === cardId);
-  if (!chosen) return { ok: false, error: 'Выберите одно из предложенных поручений.' };
   const pool = assignmentPoolFor(room, factionId, rng);
   if (!pool) return { ok: false, error: 'Колода поручений не найдена.' };
-  const returned = cards.filter(card => card.id !== chosen.id);
-  if (returned.length) pool.returnUnchosen(returned);
-  return assignAssignmentCard(room, player, factionId, chosen, rng);
+  const choice = pool.chooseOffered(offeredCards, cardId);
+  if (!choice.chosen) return { ok: false, error: 'Выберите одно из предложенных поручений.' };
+  return assignAssignmentCard(room, player, factionId, choice.chosen, rng);
 }
 
 

@@ -144,6 +144,7 @@ const {
   applyBoardingLoss,
   stormCellOptions,
 } = require('./game-logic');
+const { seaEncounterSource } = require('./sea-encounter-source');
 const { sailingEventSource } = require('./sailing-event-source');
 const { canonicalizePoliticalEffectOccurrence, politicalEffectSource } = require('./political-effect-source');
 
@@ -3342,7 +3343,7 @@ io.on('connection', socket => {
     const color = String(data?.color || '');
     const option = cartographerAnchorOptions(p).find(item => item.color === color);
     if (!option) return ackSafe(ack, { ok: false, error: 'Эта колода якоря находится дальше четырёх клеток.' });
-    const card = room.anchorDecks?.[color]?.drawPile?.[0] || null;
+    const card = seaEncounterSource(room, color)?.peekNext() || null;
     if (!card) return ackSafe(ack, { ok: false, error: 'В выбранной колоде якоря сейчас нет верхней карты.' });
     room.actionsLeft -= character.useActionCost;
     consumeCharacter(p, 'cartographer');
@@ -3614,8 +3615,7 @@ io.on('connection', socket => {
       room.pendingEvent = null;
       let card = first;
       if (choice === 'replace') {
-        if (first) sailingEventSource(room).markUsed(first);
-        card = drawSailingEventCard(room);
+        card = sailingEventSource(room).replaceObserved(first);
         log(room, card ? `${player.name}: Обсерватория сбрасывает «${first?.name || 'первую карту'}» и обязательно разыгрывает «${card.name}».`
           : `${player.name}: Обсерватория сбрасывает первую карту, но колода событий пуста.`);
       } else {
