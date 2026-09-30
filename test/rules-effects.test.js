@@ -62,7 +62,7 @@ test('master sections 6.6, 6.7 and 10.5 keep exact public, character and legenda
   ]);
   assert.deepEqual(rules.characters.characters.map(c => [c.admiraltyLevel,c.effect]), [
     [1,{type:'reroll-navigation',rerolls:1,secondResultMandatory:true}],
-    [1,{type:'inspect-hidden-cards',range:4,distance:'manhattan',assignmentVisibility:null,unresolved:'R29'}],
+    [1,{type:'inspect-hidden-cards',range:4,distance:'manhattan',modes:['garrison','money'],revealCount:1,duration:'current-personal-turn'}],
     [2,{type:'peek-sea-deck',range:4,distance:'manhattan',count:1}],
     [2,{type:'choose-treasure',draw:2,keep:1}],
     [3,{type:'extra-action',count:1}],
@@ -165,7 +165,7 @@ test('validator rejects malformed effect values and broken cross-catalog referen
     x => x.legends.expeditions[0].placeId = 'atlantia',
     x => x.legends.places.find(p => p.id === 'kraken').reward.count = 0,
     x => delete x.characters.characters[0].effect.rerolls,
-    x => x.characters.characters[1].effect.assignmentVisibility = true,
+    x => x.characters.characters[1].effect.modes = ['money'],
     x => x.characters.characters[3].effect.keep = 3,
   ];
   for (const [index,mutate] of mutations.entries()) {

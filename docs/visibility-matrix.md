@@ -111,7 +111,7 @@ Embassy/pending assignment options доступны только соответ�
 
 Scout не раскрывает character, active assignment и его progress/reward, legendary/private abilities, `specialCards`, `savedEventCards`, active expedition, pending options/context или другие private properties.
 
-Lifecycle semantics на шаге 4.1 только документируются. Никакие reveal grants, room/player fields или runtime handlers здесь не создаются.
+На шаге 4.5 Scout runtime активирован: server-authoritative viewer-scoped grant создаётся только после успешного `useScout`, projection раскрывает только выбранный `garrison` ИЛИ выбранные `ducats`, а `endTurnInternal(room)` очищает grant заканчивающего игрока. Отдельное reconnect/restart/save hardening и migration остаются задачей шага 4.6.
 
 ## 9. Current runtime audit notes — future migration targets
 

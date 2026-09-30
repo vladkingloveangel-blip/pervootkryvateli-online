@@ -13,7 +13,7 @@ const IMPLEMENTED_POLICY_KEYS = Object.freeze([
   'player.debt','player.activeTemporaryEffects','player.landCompany','player.anchorHistory',
   'pending.privateContent','pending.publicEnvelope','catalogs.publicDefinitions',
 ]);
-const SCOUT_RUNTIME_ENABLED = false;
+const SCOUT_RUNTIME_ENABLED = true;
 
 const cargo = o(f('id goodId name quantity price value'));
 const stats = o(f('artillery army cargo moveMod'));
@@ -31,7 +31,10 @@ const legendaryRef = o(f('source index id kind name'));
 const savedEvent = o(f('id kind name goodId'));
 const expedition = o(f('cardId name placeId acceptedRound requiresLeaveAndReturn'));
 const turnEffects = o(f('noIncome noNavigation moveBonus movePenalty bestOfTwo'));
-const characterEffect = o(f('type rerolls secondResultMandatory range distance assignmentVisibility unresolved count draw keep levels anchorPenaltyExcluded'));
+const characterEffect = o({
+  ...f('type rerolls secondResultMandatory range distance revealCount duration count draw keep levels anchorPenaltyExcluded'),
+  modes:a(S),
+});
 const character = o({ ...f('id name admiraltyLevel acquireActionCost useActionCost'), effect: characterEffect });
 const characterOption = o({ ...f('id name admiraltyLevel'), effect: characterEffect });
 const constraintReport = o({
@@ -121,19 +124,35 @@ function p(src, schema) {
   return undefined;
 }
 function merge(out,src,schema){ const v=p(src,schema); if(v && typeof v==='object' && !Array.isArray(v)) Object.assign(out,v); return out; }
-function ctx(viewerContext){ return { viewerId: viewerContext && typeof viewerContext==='object' && viewerContext.viewerId!=null ? String(viewerContext.viewerId) : null }; }
+function ctx(viewerContext){
+  const viewerId=viewerContext && typeof viewerContext==='object' && viewerContext.viewerId!=null ? String(viewerContext.viewerId) : null;
+  const scoutRevealGrants=[];
+  if(SCOUT_RUNTIME_ENABLED && viewerId!==null && Array.isArray(viewerContext?.scoutRevealGrants)) {
+    for(const raw of viewerContext.scoutRevealGrants) {
+      if(!raw || String(raw.viewerPlayerId)!==viewerId) continue;
+      if(raw.mode==='money' && raw.targetPlayerId!=null) scoutRevealGrants.push({viewerPlayerId:viewerId,mode:'money',targetPlayerId:String(raw.targetPlayerId)});
+      else if(raw.mode==='garrison' && raw.islandId!=null) scoutRevealGrants.push({viewerPlayerId:viewerId,mode:'garrison',islandId:String(raw.islandId)});
+    }
+  }
+  return { viewerId, scoutRevealGrants };
+}
+function hasScoutGrant(c, mode, targetKey, targetId){
+  if(!SCOUT_RUNTIME_ENABLED || c.viewerId===null || targetId==null) return false;
+  return c.scoutRevealGrants.some(grant => grant.mode===mode && grant.viewerPlayerId===c.viewerId && String(grant[targetKey])===String(targetId));
+}
 
 function projectPlayerForViewer(player, viewerContext=null){
   if(!player || typeof player!=='object' || Array.isArray(player)) return null;
   const c=ctx(viewerContext), out=merge({},player,publicPlayer), owner=c.viewerId!==null && String(player.id)===c.viewerId;
   if(owner) merge(out,player,ownerPlayer);
+  else if(hasScoutGrant(c,'money','targetPlayerId',player.id)) put(out,player,'ducats',S);
   if(own(player,'id')) out.isYou=owner;
   return out;
 }
 function projectIslandForViewer(island, viewerContext=null){
   if(!island || typeof island!=='object' || Array.isArray(island)) return null;
   const c=ctx(viewerContext), out=merge({},island,publicIsland), owner=c.viewerId!==null && island.ownerId!=null && String(island.ownerId)===c.viewerId;
-  if(owner) merge(out,island,privateGarrison);
+  if(owner || hasScoutGrant(c,'garrison','islandId',island.id)) merge(out,island,privateGarrison);
   return out;
 }
 function actorId(pending, actorField){
@@ -204,6 +223,7 @@ function projectOpponentFacingRoomView(legacyRoomView, viewerContext=null){
   delete out.eventDecks;
   delete out.feudDecks;
   delete out.assignmentDecks;
+  delete out.scoutRevealGrants;
   if(Array.isArray(out.players)) out.players=out.players.map(v=>projectPlayerForViewer(v,c));
   if(Array.isArray(out.islands)) out.islands=out.islands.map(v=>projectIslandForViewer(v,c));
   projectPersonalPendingFamilies(out,legacyRoomView,c);

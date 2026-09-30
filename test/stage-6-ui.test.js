@@ -19,7 +19,7 @@ test('stage 6.7 UI exposes events, discoveries, expeditions and legendary reacti
   assert.match(app, /mine\.expeditionHistory \|\| \[\]/);
   assert.doesNotMatch(app, /filter\(player => player\.activeExpedition\)/);
   assert.match(app, /const activeExpedition = mine\.activeExpedition/);
-  assert.match(app, /p\.isYou \? ` · \$\{p\.ducats\}/);
+  assert.match(app, /Object\.hasOwn\(p, 'ducats'\)/);
   assert.match(app, /socket\.emit\('takeExpedition'/);
   assert.match(app, /expedition-destination/);
 
@@ -129,4 +129,33 @@ test('4.4 character options, abilities and expedition eligibility survive owner 
   assert.match(h.nodes.get('legendaryPlacesContent').innerHTML,/Voyage/);
   assert.match(h.nodes.get('legendaryPlacesContent').innerHTML,/Сначала покиньте место/);
   assert.deepEqual(click(h,'legendaryPlacesActions'),{event:'takeExpedition',payload:{}});
+});
+
+
+test('4.5 Scout UI offers only public-coordinate targets and emits one scoped mode/target',()=>{
+  const base={
+    started:true,round:2,activePlayerId:'p1',
+    players:[
+      {id:'p1',name:'Alice',row:10,col:10,level:1,phase:'actions',actionsLeft:2,atCitadel:false,character:{id:'scout',name:'Scout',effect:{type:'inspect-hidden-cards',range:4,distance:'manhattan',modes:['garrison','money'],revealCount:1,duration:'current-personal-turn'}}},
+      {id:'p2',name:'Bob',row:10,col:14,level:1,ducats:'SECRET_SCOUT_DUCATS'},
+      {id:'p3',name:'Carol',row:10,col:15,level:1,ducats:'SECRET_SECOND_DUCATS'},
+    ],
+    islands:[
+      {id:'i1',name:'Near',ownerId:'p2',cells:[[10,14]],resources:[],buildings:[],area:4,army:1,usedArea:0,effectiveArea:4,status:'Поселение',garrisonName:'SECRET_SCOUT_GARRISON'},
+      {id:'i2',name:'Far',ownerId:'p3',cells:[[10,15]],resources:[],buildings:[],area:4,army:1,usedArea:0,effectiveArea:4,status:'Поселение',garrisonName:'SECRET_SECOND_GARRISON'},
+    ],
+  };
+  const h=uiHarness(base,'renderFleet');
+  const buttons=h.nodes.get('fleetActions').children.filter(node=>node.tag==='button');
+  const garrison=buttons.find(button=>/Гарнизон: Near/.test(button.textContent));
+  const money=buttons.find(button=>/Деньги: Bob/.test(button.textContent));
+  assert.ok(garrison);assert.ok(money);
+  assert.equal(buttons.some(button=>/Far|Carol/.test(button.textContent)),false);
+  garrison.events.click();
+  assert.deepEqual(JSON.parse(JSON.stringify(h.calls.at(-1))),{event:'useScout',payload:{mode:'garrison',islandId:'i1'}});
+  money.events.click();
+  assert.deepEqual(JSON.parse(JSON.stringify(h.calls.at(-1))),{event:'useScout',payload:{mode:'money',targetPlayerId:'p2'}});
+  assert.match(app,/Object\.hasOwn\(p, 'ducats'\)/);
+  assert.match(app,/Object\.hasOwn\(island, 'defenseArmy'\)/);
+  assert.doesNotMatch(app,/Разведчик сохранён на корабле, но просмотр закрытых карт не включён/);
 });

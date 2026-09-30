@@ -26,8 +26,12 @@
         "type": "inspect-hidden-cards",
         "range": 4,
         "distance": "manhattan",
-        "assignmentVisibility": null,
-        "unresolved": "R29"
+        "modes": [
+          "garrison",
+          "money"
+        ],
+        "revealCount": 1,
+        "duration": "current-personal-turn"
       },
       "acquireActionCost": 1,
       "useActionCost": 1,

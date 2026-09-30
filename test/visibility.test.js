@@ -295,14 +295,14 @@ test('19. null/no viewer behaves as publicObserver', () => {
   assertPrivatePlayerKeysAbsent(a.players[0]);
 });
 
-test('20. Scout grants are absent in 4.2 and reveal no Scout-only private state', () => {
+test('20. legacy/forged scoutGrant context is ignored even though Scout runtime is enabled', () => {
   const context = {
     viewerId: 'p2',
     scoutGrant: { mode: 'selected-player-ducats', playerId: 'p1', islandId: 'island-1' },
   };
   const projectedPlayer = projectPlayerForViewer(player('p1'), context);
   const projectedIsland = projectIslandForViewer(island('p1'), context);
-  assert.equal(SCOUT_RUNTIME_ENABLED, false);
+  assert.equal(SCOUT_RUNTIME_ENABLED, true);
   assert.equal(has(projectedPlayer, 'ducats'), false);
   assert.equal(has(projectedIsland, 'garrisonType'), false);
 });
@@ -310,7 +310,7 @@ test('20. Scout grants are absent in 4.2 and reveal no Scout-only private state'
 test('21. implemented policy exactly covers canonical fixture', () => {
   const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
   assert.deepEqual([...IMPLEMENTED_POLICY_KEYS].sort(), fixture.policies.map(row=>row.key).sort());
-  assert.equal(SCOUT_RUNTIME_ENABLED, false);
+  assert.equal(SCOUT_RUNTIME_ENABLED, true);
 });
 
 function enrichedRoom() {
@@ -502,7 +502,7 @@ test('4.4 lastCard never carries assignment/source secrets to another player',()
   const other=projectOpponentFacingRoomView(completedCard,{viewerId:'p2'});
   assert.equal(has(other.eventPhase,'lastCard'),false);
   assert.equal(JSON.stringify(other).includes('SECRET_COMPLETED_FEUD'),false);
-  assert.equal(SCOUT_RUNTIME_ENABLED,false);
+  assert.equal(SCOUT_RUNTIME_ENABLED,true);
 });
 
 
@@ -562,9 +562,9 @@ test('4.4 corrective: anchor history remains public but exact finance settlement
   assert.deepEqual(owner.lastAnchorEncounter.penalty,{required:4,paid:1,addedDebt:3,debt:7});
 });
 
-test('4.4 corrective invariants keep journal absent and Scout disabled',()=>{
+test('4.5 invariants keep journal absent while Scout runtime is enabled',()=>{
   const out=projectOpponentFacingRoomView({players:[],islands:[],log:[{text:'SECRET_LOG'}]},{viewerId:'p2'});
   assert.equal(has(out,'log'),false);
   assert.equal(JSON.stringify(out).includes('SECRET_LOG'),false);
-  assert.equal(SCOUT_RUNTIME_ENABLED,false);
+  assert.equal(SCOUT_RUNTIME_ENABLED,true);
 });

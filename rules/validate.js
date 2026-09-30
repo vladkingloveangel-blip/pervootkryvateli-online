@@ -70,7 +70,7 @@ function validateRules(rules, map) {
       'downgrade-all-buildings': [['steps']], 'relocate-reachable': [[]],
       'income-multiple': [['minimum','multiplier']], 'fill-hold': [['goodId']],
       'reroll-navigation': [['rerolls','secondResultMandatory']],
-      'inspect-hidden-cards': [['range','distance','assignmentVisibility','unresolved']],
+      'inspect-hidden-cards': [['range','distance','modes','revealCount','duration']],
       'peek-sea-deck': [['range','distance','count']],
       'choose-treasure': [['draw','keep']], 'extra-action': [['count']],
       'prevent-battle-level-loss': [['levels','anchorPenaltyExcluded']],
@@ -79,7 +79,7 @@ function validateRules(rules, map) {
     required(e, needed.filter(key => !['targetZone','assignmentVisibility'].includes(key)), path);
     for (const key of needed.filter(key => ['targetZone','assignmentVisibility'].includes(key))) check(Object.hasOwn(e,key), `${path}.${key}`, 'missing required field');
     only(e, ['type',...needed,...optional], path);
-    for (const key of ['amount','count','steps','levels','durationPersonalTurns','range','draw','keep','minimum','multiplier','usesPerGame','holds','rerolls','limit']) if (key in e) positive(e[key], `${path}.${key}`);
+    for (const key of ['amount','count','steps','levels','durationPersonalTurns','range','draw','keep','minimum','multiplier','usesPerGame','holds','rerolls','limit','revealCount']) if (key in e) positive(e[key], `${path}.${key}`);
     for (const key of ['fallbackDucats','reactionActionCost']) if (key in e) integer(e[key], `${path}.${key}`);
     if ('percent' in e) check(Number.isInteger(e.percent) && e.percent >= 0 && e.percent <= 100, `${path}.percent`, 'expected percentage 0..100');
     for (const key of ['keepBuildings','secondResultMandatory','anchorPenaltyExcluded']) if (key in e) boolean(e[key], `${path}.${key}`);
@@ -93,7 +93,11 @@ function validateRules(rules, map) {
     if (e.type === 'movement-penalty') check((e.timing === 'current-personal-turn') !== Number.isInteger(e.durationPersonalTurns), path, 'expected exactly one duration');
     if (e.type === 'reclaim-island') check(rules.islands.some(i => i.factionId === e.factionId), path, 'faction has no original island');
     if (e.type === 'discard-random-held') check(e.targetZone === 'closed-hand-except-active-assignment', path, 'random discard must target the closed hand while protecting the active assignment');
-    if (e.type === 'inspect-hidden-cards') check(e.assignmentVisibility === null && e.unresolved === 'R29', path, 'unresolved visibility must stay neutral');
+    if (e.type === 'inspect-hidden-cards') {
+      check(Array.isArray(e.modes) && e.modes.length === 2 && new Set(e.modes).size === 2 && e.modes.includes('garrison') && e.modes.includes('money'), path, 'Scout modes must be exactly garrison and money');
+      check(e.revealCount === 1, path, 'Scout must reveal exactly one target per use');
+      check(e.duration === 'current-personal-turn', path, 'Scout reveal must expire at end of current personal turn');
+    }
     if (e.type === 'protect') check(e.hostileCardReactionExpiry === 'end-of-current-turn', path, 'invalid reaction expiry');
   }
   integer(rules.metadata.schemaVersion, 'metadata.schemaVersion', 1);

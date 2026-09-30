@@ -133,7 +133,11 @@ test('every economic table row, building chain, price, income and defense matche
   assert.deepEqual(data.BUILDING_UPGRADES.admiralty[1],{type:'admiralty',level:2,price:15});
   assert.deepEqual(data.BUILDING_UPGRADES.admiralty[2],{type:'admiralty',level:3,price:20});
   assert.equal(Object.keys(data.CHARACTERS).length,6);
-  assert.equal(data.CHARACTERS.scout.effect.unresolved,'R29');
+  assert.deepEqual(data.CHARACTERS.scout.effect,{
+    type:'inspect-hidden-cards',range:4,distance:'manhattan',
+    modes:['garrison','money'],revealCount:1,duration:'current-personal-turn',
+  });
+  assert.equal(data.CHARACTERS.scout.useActionCost,1);
 });
 
 test('all 28 island cards match appendix A, including resources and one-time rewards', () => {
@@ -262,9 +266,9 @@ test('stage 6.7 finalizes stage 6 while stage 7 consumers remain pending', () =>
   ]) assert.equal(rules.implementation.pendingConsumers.some(item => item.path === resolved),false,resolved);
 });
 
-test('author decisions through digital block 1 are explicit while R29 stays open', () => {
-  assert.deepEqual(rules.metadata.unresolved,['R29']);
-  assert.deepEqual(rules.metadata.authorOverrides.resolved,['R05','R06','R07','R21','treasure-copies']);
+test('author decisions include the closed R29 Scout visibility rule', () => {
+  assert.deepEqual(rules.metadata.unresolved,[]);
+  assert.deepEqual(rules.metadata.authorOverrides.resolved,['R05','R06','R07','R21','treasure-copies','R29']);
   assert.equal(rules.metadata.mapCanon.canonical,true);
   assert.equal(rules.metadata.mapCanon.source,'current-online-map');
   assert.equal(rules.legends.legendaryPool.mode,'random-with-replacement');

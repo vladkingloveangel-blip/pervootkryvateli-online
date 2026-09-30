@@ -1,4 +1,5 @@
 const { projectOpponentFacingRoomView } = require('./state-projection');
+const { applyScoutUse, scoutViewerContext, clearScoutRevealGrants } = require('./scout-runtime');
 const { BALANCE, RULESET, RUNTIME_PROFILE } = require('./game-data');
 const path = require('path');
 const crypto = require('crypto');
@@ -866,7 +867,7 @@ function emitRoom(room) {
   queueEscortCapacityDecisionsIfNeeded(room);
   persistRoom(roomStore.save(room));
   for (const p of room.players) {
-    if (p.socketId) io.to(p.socketId).emit('roomState', projectOpponentFacingRoomView(publicRoom(room, p.id), { viewerId: p.id }));
+    if (p.socketId) io.to(p.socketId).emit('roomState', projectOpponentFacingRoomView(publicRoom(room, p.id), scoutViewerContext(room, p.id)));
   }
   io.to(`admin-watch:${room.code}`).emit('adminRoomState', adminRoomState(room));
 }
@@ -2620,6 +2621,7 @@ function endTurnInternal(room) {
   if (!n) return;
   const ending = currentPlayer(room);
   if (ending) {
+    clearScoutRevealGrants(room, ending.id);
     ending.activeTurnEffects = {};
     clearSeaVeilHostileReactionsAtTurnEnd(room, ending.id);
     const tick = tickLegendaryEffectsForPlayer(room, ending);
@@ -2945,6 +2947,7 @@ io.on('connection', socket => {
       pendingFleetAdjustment: null,
       fleetAdjustmentQueue: [],
       pendingLegendaryReaction: null,
+      scoutRevealGrants: [],
       eventPhase: null,
       anchorDecks: createAnchorDecks(),
       eventDeck: createSailingEventDeck(),
@@ -3347,6 +3350,23 @@ io.on('connection', socket => {
     consumeCharacter(p, 'cartographer');
     log(room, `${p.name} использует Картографа и смотрит верхнюю карту колоды «${option.name}», не меняя порядок.`);
     ackSafe(ack, { ok: true, anchorName: option.name, card: { name: card.name, artillery: card.artillery, reward: card.reward, quiet: Boolean(card.quiet) } });
+    emitRoom(room);
+  });
+
+  onSocketEvent(socket, 'useScout', (data, ack) => {
+    const room = getRoom(socket.data.roomCode);
+    const result = applyScoutUse({
+      room,
+      playerId: socket.data.playerId,
+      request: data,
+      characterRule: CHARACTERS.scout,
+      hasBlockingPending: hasPendingDecision(room),
+      consumeCharacter,
+    });
+    if (!result.ok) return ackSafe(ack, result);
+    const p = room.players.find(player => player.id === socket.data.playerId);
+    log(room, `${p.name} использует Разведчика в режиме «${result.mode === 'garrison' ? 'гарнизон' : 'деньги'}». Осталось действий: ${result.actionsLeft}.`);
+    ackSafe(ack, { ok: true, mode: result.mode, actionCost: result.actionCost, actionsLeft: result.actionsLeft });
     emitRoom(room);
   });
 

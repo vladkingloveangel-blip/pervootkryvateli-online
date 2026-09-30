@@ -949,7 +949,8 @@
       const suzerainName = p.suzerainId ? state.room.factions?.find(f => f.id === p.suzerainId)?.name : null;
       const politicalLabel = suzerainName ? ` · вассал ${suzerainName}` : (p.enemyFactionIds?.length ? ` · вражда ${p.enemyFactionIds.length}` : '');
       const readyLabel = !r.started ? (p.ready ? ' · ✓ готов' : ' · не готов') : '';
-      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${p.id === r.leaderId ? ' · ведущий' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level}${p.isYou ? ` · ${p.ducats} дукатов${p.debt ? ` · долг ${p.debt}` : ''}` : ''} · армия ${p.armyPoints || 0} · флот ${p.fleetPoints || 0} · слава ${p.glory || 0} · островов ${p.islandCount} · именных ${p.namedPlaceCardCount || 0} · экспедиций ${p.expeditionHistoryCount || 0} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
+      const moneyLabel = Object.hasOwn(p, 'ducats') ? ` · ${p.ducats} дукатов${Object.hasOwn(p, 'debt') && p.debt ? ` · долг ${p.debt}` : ''}` : '';
+      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${p.id === r.leaderId ? ' · ведущий' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level}${moneyLabel} · армия ${p.armyPoints || 0} · флот ${p.fleetPoints || 0} · слава ${p.glory || 0} · островов ${p.islandCount} · именных ${p.namedPlaceCardCount || 0} · экспедиций ${p.expeditionHistoryCount || 0} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
       if (!isSpectator && isHost && !r.started) {
         const actions = el.querySelector('.player-side-actions');
         if (p.id !== r.leaderId) {
@@ -2020,7 +2021,7 @@
       const effectNote = document.createElement('div');
       effectNote.className = 'cargo-meta';
       const deferred = {
-        scout: 'Разведчик сохранён на корабле, но просмотр закрытых карт не включён до решения Р29 о зонах видимости.',
+        scout: 'Разведчик готов раскрыть один гарнизон или точные дукаты одного другого игрока в радиусе 4 до конца текущего личного хода.',
         treasureHunter: 'Искатель сокровищ сохранён на корабле; его выбор из двух сокровищ будет подключён вместе с синхронизацией колоды сокровищ.',
         shipCarpenter: 'Корабельный плотник может предотвратить одну потерю уровня в бою. При объявлении своей атаки заранее отметьте его применение; дополнительное действие списывается только если уровень действительно сохранён.',
       };
@@ -2045,6 +2046,49 @@
         }
         if (state.characterPeek) {
           const peek = document.createElement('div'); peek.className = 'event-effect'; peek.textContent = state.characterPeek; actions.appendChild(peek);
+        }
+      } else if (character.id === 'scout') {
+        const range = Math.max(0, Number(character.effect?.range) || 4);
+        const islandDistance = island => Math.min(...(island.cells || []).map(([row, col]) => Math.abs(Number(mine.row) - Number(row)) + Math.abs(Number(mine.col) - Number(col))));
+        const garrisonTargets = (state.room.islands || [])
+          .filter(island => island.ownerId && island.ownerId !== state.myId)
+          .map(island => ({ island, distance: islandDistance(island) }))
+          .filter(item => Number.isFinite(item.distance) && item.distance <= range)
+          .sort((a, b) => a.distance - b.distance || String(a.island.name).localeCompare(String(b.island.name)));
+        const moneyTargets = (state.room.players || [])
+          .filter(player => player.id !== state.myId)
+          .map(player => ({ player, distance: Math.abs(Number(mine.row) - Number(player.row)) + Math.abs(Number(mine.col) - Number(player.col)) }))
+          .filter(item => Number.isFinite(item.distance) && item.distance <= range)
+          .sort((a, b) => a.distance - b.distance || String(a.player.name).localeCompare(String(b.player.name)));
+
+        const garrisonLabel = document.createElement('div');
+        garrisonLabel.className = 'cargo-meta';
+        garrisonLabel.textContent = 'Разведка гарнизона';
+        actions.appendChild(garrisonLabel);
+        for (const { island, distance } of garrisonTargets) {
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
+          b.textContent = `Гарнизон: ${island.name} · ${distance} кл. · 1 действие`;
+          b.disabled = !canAct;
+          b.addEventListener('click', () => socket.emit('useScout', { mode: 'garrison', islandId: island.id }, handleGameAck));
+          actions.appendChild(b);
+        }
+        if (!garrisonTargets.length) {
+          const note = document.createElement('div'); note.className = 'cargo-meta'; note.textContent = 'Чужих островов в радиусе разведки нет.'; actions.appendChild(note);
+        }
+
+        const moneyLabel = document.createElement('div');
+        moneyLabel.className = 'cargo-meta';
+        moneyLabel.textContent = 'Разведка денег';
+        actions.appendChild(moneyLabel);
+        for (const { player, distance } of moneyTargets) {
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
+          b.textContent = `Деньги: ${player.name} · ${distance} кл. · 1 действие`;
+          b.disabled = !canAct;
+          b.addEventListener('click', () => socket.emit('useScout', { mode: 'money', targetPlayerId: player.id }, handleGameAck));
+          actions.appendChild(b);
+        }
+        if (!moneyTargets.length) {
+          const note = document.createElement('div'); note.className = 'cargo-meta'; note.textContent = 'Других кораблей в радиусе разведки нет.'; actions.appendChild(note);
         }
       } else if (character.id === 'firstMate') {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
@@ -2350,8 +2394,17 @@
       : '';
     const resources = island.resources.length ? island.resources.join(', ') : 'нет специальных ресурсов';
     const buildings = island.buildings.length ? island.buildings.map(b => b.type === 'bastion' ? `${b.name}${b.supported ? ' (поддерживается)' : ' (без поддержки)'}` : b.name).join(', ') : 'нет';
-    const defense = Number(island.defenseArmy) || 0;
-    const defenseParts = island.defenseBreakdown || {};
+    const hasPrivateDefense = Object.hasOwn(island, 'defenseArmy') && Object.hasOwn(island, 'defenseBreakdown');
+    const defense = hasPrivateDefense ? (Number(island.defenseArmy) || 0) : null;
+    const defenseParts = hasPrivateDefense ? (island.defenseBreakdown || {}) : {};
+    const defenseRows = hasPrivateDefense
+      ? `<span>Текущая защита</span><strong>${defense}</strong>
+        <span>Исходный / нанятый / укрепления / бастион / корабль</span><strong>${defenseParts.garrison || 0} / ${defenseParts.hiredGarrison || 0} / ${defenseParts.fortifications || 0} / ${defenseParts.bastions || 0} / ${defenseParts.ownerShip || 0}</strong>`
+      : '';
+    const hasPrivateGarrison = Object.hasOwn(island, 'garrisonType') || Object.hasOwn(island, 'garrisonName') || Object.hasOwn(island, 'garrisonDefense');
+    const garrisonLine = hasPrivateGarrison
+      ? `<div class="building-line"><span class="muted">Городской отряд:</span> ${escapeHtml(island.garrisonName ? `${island.garrisonName} (+${island.garrisonDefense || 0})` : 'нет')}</div>`
+      : '';
 
     box.innerHTML = `${switcher}<div class="island-name">${escapeHtml(island.name)}</div>
       <div class="island-grid">
@@ -2360,10 +2413,9 @@
         <span>Площадь</span><strong>${island.usedArea}/${island.effectiveArea}</strong>
         <span>Ресурсы</span><strong>${escapeHtml(resources)}</strong>
         <span>Исходное войско</span><strong>${island.army}</strong>
-        <span>Текущая защита</span><strong>${defense}</strong>
-        <span>Исходный / нанятый / укрепления / бастион / корабль</span><strong>${defenseParts.garrison || 0} / ${defenseParts.hiredGarrison || 0} / ${defenseParts.fortifications || 0} / ${defenseParts.bastions || 0} / ${defenseParts.ownerShip || 0}</strong>
+        ${defenseRows}
       </div>
-      <div class="building-line"><span class="muted">Городской отряд:</span> ${escapeHtml(island.garrisonName ? `${island.garrisonName} (+${island.garrisonDefense || 0})` : 'нет')}</div>
+      ${garrisonLine}
       <div class="building-line"><span class="muted">Постройки:</span> ${escapeHtml(buildings)}</div>
       <div class="building-line"><span class="muted">Погрузка в раунде ${state.room.round}:</span> ${island.loadedRound === state.room.round ? 'уже выполнена' : 'доступна'}</div>
       ${island.reward ? `<div class="reward-note"><span class="muted">Разовая награда:</span> ${escapeHtml(island.reward)}</div>` : ''}`;

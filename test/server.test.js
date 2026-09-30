@@ -106,7 +106,18 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal((await emit(first, 'changeShip', { shipClass: attemptedClass })).ok, false);
   assert.equal(rows()[0].state.players.find(p=>p.id===created.playerId).shipClass, lockedClass);
   const active = second;
+  const navigationScout = await emit(active, 'useScout', { mode: 'money', targetPlayerId: created.playerId });
+  assert.equal(navigationScout.ok, false);
+  const wrongTurnScout = await emit(first, 'useScout', { mode: 'money', targetPlayerId: joinedSecond.playerId });
+  assert.equal(wrongTurnScout.ok, false);
   assert.equal((await emit(active, 'skipNavigation')).ok, true);
+  const beforeScoutFailure = structuredClone(rows()[0].state);
+  const missingScout = await emit(active, 'useScout', { mode: 'money', targetPlayerId: created.playerId, viewerPlayerId: created.playerId, debt: true });
+  assert.equal(missingScout.ok, false);
+  const afterScoutFailure = rows()[0].state;
+  assert.equal(afterScoutFailure.actionsLeft, beforeScoutFailure.actionsLeft);
+  assert.deepEqual(afterScoutFailure.players.find(p=>p.id===joinedSecond.playerId).character, beforeScoutFailure.players.find(p=>p.id===joinedSecond.playerId).character);
+  assert.deepEqual(afterScoutFailure.scoutRevealGrants, beforeScoutFailure.scoutRevealGrants);
   assert.equal((await emit(active, 'endTurn')).ok, true);
   let beforeRestart = rows()[0].state;
   const list = await api('/api/my-games?accountId=' + b.user.id, a.token);
@@ -183,7 +194,11 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.buildingCatalog.admiralty.price, canonical.economy.buildings.admiralty.price);
   assert.equal(watch.room.buildingCatalog.lighthouse.price, canonical.economy.buildings.lighthouse.price);
   assert.equal(watch.room.characterCatalog.navigator.admiraltyLevel, 1);
-  assert.equal(watch.room.characterCatalog.scout.effect.unresolved, 'R29');
+  assert.deepEqual(watch.room.characterCatalog.scout.effect, {
+    type: 'inspect-hidden-cards', range: 4, distance: 'manhattan',
+    modes: ['garrison', 'money'], revealCount: 1, duration: 'current-personal-turn',
+  });
+  assert.equal(watch.room.characterCatalog.scout.useActionCost, 1);
   await stop(); // Abrupt restart: pending state must survive without disconnect handlers.
   // Emulate a persisted room created before rulesDataVersion existed. Keep the complete
   // pre-stage-1 decks and an unfinished fleet decision instead of rebuilding them.

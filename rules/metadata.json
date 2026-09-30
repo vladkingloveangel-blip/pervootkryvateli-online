@@ -8,20 +8,19 @@
     "sha256": "5274f5ecb03606c4fd4b20c9950edbd159222a223a00dabf438eba93b154f0e1"
   },
   "precedence": "Appendix numeric tables override examples and descriptive prose.",
-  "unresolved": [
-    "R29"
-  ],
+  "unresolved": [],
   "implementationStage": 2,
   "authorOverrides": {
-    "date": "2026-09-30",
+    "date": "2026-10-01",
     "resolved": [
       "R05",
       "R06",
       "R07",
       "R21",
-      "treasure-copies"
+      "treasure-copies",
+      "R29"
     ],
-    "summary": "Digital/mobile canon: legendary and treasure rewards use independent uniform random selection with replacement; rare industries are single-stage buildings with no levels; contracts do not exist and delivery assignments receive no sale bonus; the current online map is the canonical map; Atlantia, Adia and Skull unlock their legendary reward only on first military conquest; expeditions exist only for the seven sea legendary places."
+    "summary": "Digital/mobile canon: legendary and treasure rewards use independent uniform random selection with replacement; rare industries are single-stage buildings with no levels; contracts do not exist and delivery assignments receive no sale bonus; the current online map is the canonical map; Atlantia, Adia and Skull unlock their legendary reward only on first military conquest; expeditions exist only for the seven sea legendary places. R29 закрыт: Разведчик за одно применение раскрывает либо гарнизон одного острова, либо точные дукаты одного другого игрока в радиусе 4 по Manhattan; раскрытие действует до конца текущего личного хода."
   },
   "mapCanon": {
     "status": "author-approved",
