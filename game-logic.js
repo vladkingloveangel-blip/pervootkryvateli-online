@@ -2,6 +2,7 @@ const { BALANCE, MAP_META } = require('./game-data');
 const { selectTreasureOutcome, selectLegendaryAbility } = require('./digital-random-sources');
 const { createSeaEncounterStorage, seaEncounterSource } = require('./sea-encounter-source');
 const { createSailingEventStorage, canonicalizeSailingEventOccurrence, sailingEventSource } = require('./sailing-event-source');
+const { createPoliticalEffectStorage, politicalEffectSource } = require('./political-effect-source');
 const {
   SHIPS,
   SHIP_LEVELS,
@@ -25,7 +26,6 @@ const {
   ASSIGNMENT_CARDS,
   FACTIONS,
   POLITICAL_FACTION_ORDER,
-  FEUD_CARDS,
   SPECIAL_LAND,
   CITADEL_CELLS,
   LAND_CELLS,
@@ -175,17 +175,11 @@ function discardDeckCard(deck, card) {
 
 
 function createFeudDecks(rng = Math.random) {
-  const out = {};
-  for (const factionId of POLITICAL_FACTION_ORDER) {
-    out[factionId] = { drawPile: shuffleCards(expandCardDefinitions(FEUD_CARDS[factionId] || []), rng), discard: [] };
-  }
-  return out;
+  return createPoliticalEffectStorage(rng);
 }
 
 function drawFeudCard(room, factionId, rng = Math.random) {
-  room.feudDecks ||= createFeudDecks(rng);
-  const deck = room.feudDecks[factionId];
-  return deck ? drawCyclingDeckCard(deck, rng) : null;
+  return politicalEffectSource(room, factionId, rng)?.consumeNext() || null;
 }
 
 

@@ -18,14 +18,19 @@ const {
   selectLegendaryAbility,
   selectTreasureCandidates,
 } = require('../digital-random-sources');
-const { BALANCE, TREASURE_CARDS, LEGENDARY_CARDS, SAILING_EVENT_CARDS } = require('../game-data');
-const { drawTreasureCard, drawLegendaryCard, drawSailingEventCard, discardRandomHeldCard } = require('../game-logic');
+const { BALANCE, TREASURE_CARDS, LEGENDARY_CARDS, SAILING_EVENT_CARDS, FEUD_CARDS, POLITICAL_FACTION_ORDER } = require('../game-data');
+const { drawTreasureCard, drawLegendaryCard, drawSailingEventCard, discardRandomHeldCard, createFeudDecks, drawFeudCard } = require('../game-logic');
 const { createSeaEncounterStorage, seaEncounterSource } = require('../sea-encounter-source');
 const {
   createSailingEventStorage,
   canonicalizeSailingEventOccurrence,
   sailingEventSource,
 } = require('../sailing-event-source');
+const {
+  createPoliticalEffectStorage,
+  canonicalizePoliticalEffectOccurrence,
+  politicalEffectSource,
+} = require('../political-effect-source');
 
 function sequenceRng(values) {
   let index = 0;
@@ -539,4 +544,149 @@ test('SailingEventSource adds no persisted room fields and keeps legacy eventDec
   assert.deepEqual(Object.keys(room.eventDeck).sort(), deckKeys);
   assert.equal(Object.hasOwn(room, 'sailingEventSource'), false);
   assert.equal(room.marker, 'same');
+});
+
+
+function politicalOccurrenceKey(occurrence) {
+  return `${occurrence.masterCardId || occurrence.id}:${occurrence.copy ?? 'legacy'}`;
+}
+
+test('PoliticalEffectSource initial sources preserve each faction canonical 10-occurrence multiset', () => {
+  const storage = createPoliticalEffectStorage(() => 0.5);
+  assert.deepEqual(Object.keys(storage), POLITICAL_FACTION_ORDER);
+  for (const factionId of POLITICAL_FACTION_ORDER) {
+    const definitions = FEUD_CARDS[factionId] || [];
+    assert.equal(storage[factionId].drawPile.length, 10, factionId);
+    assert.equal(storage[factionId].discard.length, 0, factionId);
+    for (const definition of definitions) {
+      assert.equal(
+        storage[factionId].drawPile.filter(occurrence => occurrence.id === definition.id).length,
+        Math.max(1, Number(definition.quantity) || 1),
+        `${factionId}:${definition.id}`
+      );
+    }
+  }
+});
+
+test('PoliticalEffectSource faction sources are independent', () => {
+  const room = { feudDecks: createPoliticalEffectStorage(() => 0.5) };
+  const lioniaBefore = JSON.stringify(room.feudDecks.lionia);
+  const kadingir = politicalEffectSource(room, 'kadingir', () => 0);
+  const drawn = kadingir.consumeNext();
+  assert.ok(drawn);
+  assert.equal(kadingir.remainingCount(), 9);
+  assert.equal(JSON.stringify(room.feudDecks.lionia), lioniaBefore);
+});
+
+test('PoliticalEffectSource consume keeps occurrence outside recyclable state until markUsed', () => {
+  const room = { feudDecks: { kadingir: { drawPile: [{ id: 'a', copy: 1 }, { id: 'b', copy: 1 }], discard: [] } } };
+  const source = politicalEffectSource(room, 'kadingir', () => 0);
+  const first = source.consumeNext();
+  assert.equal(first.id, 'a');
+  assert.deepEqual(room.feudDecks.kadingir.drawPile, [{ id: 'b', copy: 1 }]);
+  assert.deepEqual(room.feudDecks.kadingir.discard, []);
+});
+
+test('PoliticalEffectSource markUsed returns an occurrence exactly once', () => {
+  const room = { feudDecks: { kadingir: { drawPile: [{ id: 'a', copy: 1 }], discard: [] } } };
+  const source = politicalEffectSource(room, 'kadingir', () => 0);
+  const outcome = source.consumeNext();
+  assert.equal(source.markUsed(outcome), true);
+  assert.equal(source.markUsed(outcome), false);
+  assert.equal(room.feudDecks.kadingir.discard.length, 1);
+  assert.equal(politicalOccurrenceKey(room.feudDecks.kadingir.discard[0]), politicalOccurrenceKey(outcome));
+});
+
+test('PoliticalEffectSource does not reissue an occurrence before cycle refresh', () => {
+  const room = { feudDecks: { kadingir: { drawPile: [{ id: 'a', copy: 1 }, { id: 'b', copy: 1 }, { id: 'c', copy: 1 }], discard: [] } } };
+  const source = politicalEffectSource(room, 'kadingir', () => 0);
+  const firstCycle = [];
+  for (let i = 0; i < 3; i++) {
+    const occurrence = source.consumeNext();
+    firstCycle.push(politicalOccurrenceKey(occurrence));
+    source.markUsed(occurrence);
+  }
+  assert.equal(new Set(firstCycle).size, 3);
+  const refreshed = source.consumeNext();
+  assert.ok(firstCycle.includes(politicalOccurrenceKey(refreshed)));
+});
+
+test('PoliticalEffectSource refresh preserves the exact canonical multiset', () => {
+  const room = { feudDecks: createPoliticalEffectStorage(() => 0.25) };
+  const source = politicalEffectSource(room, 'kadingir', () => 0.25);
+  const firstCycle = [];
+  while (source.remainingCount()) {
+    const occurrence = source.consumeNext();
+    firstCycle.push(politicalOccurrenceKey(occurrence));
+    source.markUsed(occurrence);
+  }
+  assert.equal(firstCycle.length, 10);
+  const refreshedFirst = source.consumeNext();
+  const refreshed = [politicalOccurrenceKey(refreshedFirst), ...room.feudDecks.kadingir.drawPile.map(politicalOccurrenceKey)].sort();
+  assert.deepEqual(refreshed, [...firstCycle].sort());
+  assert.equal(room.feudDecks.kadingir.discard.length, 0);
+});
+
+test('pending feud occurrence stays outside PoliticalEffectSource across JSON restart', () => {
+  const room = {
+    feudDecks: { kadingir: { drawPile: [{ id: 'pending', copy: 1 }, { id: 'next', copy: 1 }], discard: [] } },
+    pendingFeud: null,
+  };
+  const source = politicalEffectSource(room, 'kadingir', () => 0);
+  const pending = source.consumeNext();
+  room.pendingFeud = { factionId: 'kadingir', feudCard: { ...pending } };
+  assert.equal(room.feudDecks.kadingir.drawPile.some(item => politicalOccurrenceKey(item) === politicalOccurrenceKey(pending)), false);
+  assert.equal(room.feudDecks.kadingir.discard.some(item => politicalOccurrenceKey(item) === politicalOccurrenceKey(pending)), false);
+
+  const restored = JSON.parse(JSON.stringify(room));
+  const before = JSON.stringify(restored.feudDecks.kadingir);
+  const restoredSource = politicalEffectSource(restored, 'kadingir', () => { throw new Error('restart must not consume or refresh pending feud'); });
+  assert.equal(restored.pendingFeud.feudCard.id, 'pending');
+  assert.equal(restoredSource.remainingCount(), 1);
+  assert.equal(JSON.stringify(restored.feudDecks.kadingir), before);
+});
+
+test('resolved pending feud occurrence returns to recyclable state exactly once', () => {
+  const room = { feudDecks: { kadingir: { drawPile: [{ id: 'next', copy: 1 }], discard: [] } } };
+  const pending = { id: 'pending', copy: 1 };
+  const source = politicalEffectSource(room, 'kadingir', () => 0);
+  assert.equal(source.markUsed(pending), true);
+  assert.equal(source.markUsed(pending), false);
+  assert.deepEqual(room.feudDecks.kadingir.discard.map(politicalOccurrenceKey), ['pending:1']);
+});
+
+test('drawFeudCard remains a compatibility wrapper with consume-only semantics', () => {
+  const room = { feudDecks: { kadingir: { drawPile: [{ id: 'legacy-draw', copy: 1 }], discard: [] } } };
+  const drawn = drawFeudCard(room, 'kadingir', () => 0.5);
+  assert.equal(drawn.id, 'legacy-draw');
+  assert.equal(room.feudDecks.kadingir.drawPile.length, 0);
+  assert.equal(room.feudDecks.kadingir.discard.length, 0);
+});
+
+test('PoliticalEffectSource preserves legacy masterCardId canonicalization', () => {
+  const canonical = FEUD_CARDS.kadingir[0];
+  const raw = { id: 'legacy-instance', masterCardId: canonical.id, name: 'legacy name', type: 'none', copy: 1 };
+  const normalized = canonicalizePoliticalEffectOccurrence('kadingir', raw);
+  assert.equal(normalized.id, canonical.id);
+  assert.equal(normalized.masterCardId, canonical.id);
+  assert.equal(normalized.name, canonical.name);
+  assert.equal(normalized.type, canonical.type);
+  assert.equal(normalized.copy, 1);
+});
+
+test('PoliticalEffectSource adds no new room fields and keeps legacy feudDeck save shape', () => {
+  const room = { marker: 'same', feudDecks: createFeudDecks(() => 0.5) };
+  const roomKeys = Object.keys(room).sort();
+  const factionShapes = Object.fromEntries(Object.entries(room.feudDecks).map(([id, deck]) => [id, Object.keys(deck).sort()]));
+  const source = politicalEffectSource(room, 'kadingir', () => 0);
+  const outcome = source.consumeNext();
+  source.markUsed(outcome);
+
+  assert.deepEqual(Object.keys(room).sort(), roomKeys);
+  assert.equal(Object.hasOwn(room, 'politicalEffectSources'), false);
+  assert.equal(room.marker, 'same');
+  for (const factionId of POLITICAL_FACTION_ORDER) {
+    assert.deepEqual(Object.keys(room.feudDecks[factionId]).sort(), factionShapes[factionId]);
+    assert.deepEqual(Object.keys(room.feudDecks[factionId]).sort(), ['discard', 'drawPile']);
+  }
 });

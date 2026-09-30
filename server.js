@@ -6,7 +6,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { Pool } = require('pg');
 const { RoomStore, isUnfinished } = require('./room-store');
-const { MAP_META, CITADEL, HAZARDS, SHIPS, SHIP_LEVELS, SHIP_UPGRADES, ESCORTS, COLORS, BUILDINGS, CHARACTERS, GOODS, CITADEL_CELLS, ANCHORS, FACTIONS, POLITICAL_FACTION_ORDER, ASSIGNMENT_CARDS, FEUD_CARDS, LEGENDARY_PLACES, LEGENDARY_PLACE_RULES, NAMED_PLACE_CARDS } = require('./game-data');
+const { MAP_META, CITADEL, HAZARDS, SHIPS, SHIP_LEVELS, SHIP_UPGRADES, ESCORTS, COLORS, BUILDINGS, CHARACTERS, GOODS, CITADEL_CELLS, ANCHORS, FACTIONS, POLITICAL_FACTION_ORDER, ASSIGNMENT_CARDS, LEGENDARY_PLACES, LEGENDARY_PLACE_RULES, NAMED_PLACE_CARDS } = require('./game-data');
 const {
   cloneIslands,
   reachableCells,
@@ -132,7 +132,6 @@ const {
   politicalCargoOptions,
   discardRandomHeldCard,
   drawLegendaryCard,
-  discardDeckCard,
   emptyCargoHolds,
   fillCargoDirect,
   resolveMoneyTreasure,
@@ -146,6 +145,7 @@ const {
   stormCellOptions,
 } = require('./game-logic');
 const { sailingEventSource } = require('./sailing-event-source');
+const { canonicalizePoliticalEffectOccurrence, politicalEffectSource } = require('./political-effect-source');
 
 const app = express();
 const server = http.createServer(app);
@@ -2022,11 +2022,7 @@ function removeCargoByHold(player, holdId) {
 }
 
 function canonicalFeudCard(factionId, rawCard) {
-  if (!rawCard) return null;
-  const canonical = (FEUD_CARDS[factionId] || []).find(card =>
-    card.id === rawCard.masterCardId || card.id === rawCard.id
-  );
-  return canonical ? { ...rawCard, ...canonical, masterCardId: canonical.id } : rawCard;
+  return canonicalizePoliticalEffectOccurrence(factionId, rawCard);
 }
 
 function feudBuildingOptions(room, player, card, excludedOptions = []) {
@@ -2265,7 +2261,7 @@ function processEventPhase(room) {
       log(room, `Фаза событий: ${player.name} получает карту вражды от ${FACTIONS[item.factionId]?.name}: «${card.name}».`);
       const resolved = resolveFeudCard(room, player, item.factionId, card);
       if (resolved.pending) return;
-      discardDeckCard(room.feudDecks[item.factionId], card);
+      politicalEffectSource(room, item.factionId).markUsed(card);
       room.eventPhase.feudIndex += 1;
       if (queueFleetAdjustment(room, player, `Карта вражды ${FACTIONS[item.factionId]?.name || item.factionId}: «${card.name}».`)) return;
       if (queueIslandCorrectionIfNeeded(room, null, `карта вражды ${FACTIONS[item.factionId]?.name || item.factionId}: «${card.name}»`)) return;
@@ -2386,7 +2382,7 @@ function advanceRound(room) {
 }
 
 function finishPendingFeudCard(room, pending) {
-  discardDeckCard(room.feudDecks[pending.factionId], pending.feudCard);
+  politicalEffectSource(room, pending.factionId).markUsed(pending.feudCard);
   const player = playerById(room, pending.playerId);
   room.eventPhase.lastCard = { playerId: pending.playerId, playerName: player?.name || 'Игрок', cardName: pending.cardName, factionId: pending.factionId, factionName: FACTIONS[pending.factionId]?.name, pending: false, source: 'feud' };
   room.pendingFeud = null;

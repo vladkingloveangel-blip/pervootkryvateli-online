@@ -180,6 +180,20 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   Object.assign(oldIsland,{area:4,army:12,resources:['Рудная жила']});
   legacyRoom.anchorDecks.red.drawPile[0].artillery = 23;
   legacyRoom.treasureDeck = {drawPile:[{id:'full-ore-hold',name:'Полный трюм руды',cargoGoodId:'ore',copy:1}],discard:[]};
+  const restartPendingFeudCard = legacyRoom.feudDecks.kadingir.drawPile.shift();
+  const restartNextFeudKey = legacyRoom.feudDecks.kadingir.drawPile[0]
+    ? `${legacyRoom.feudDecks.kadingir.drawPile[0].masterCardId || legacyRoom.feudDecks.kadingir.drawPile[0].id}:${legacyRoom.feudDecks.kadingir.drawPile[0].copy ?? 'legacy'}`
+    : null;
+  legacyRoom.pendingFeud = {
+    id:'restart-pending-feud',
+    playerId:oldPlayer.id,
+    factionId:'kadingir',
+    cardName:restartPendingFeudCard.name,
+    kind:'remove-building',
+    options:[],
+    feudCard:{...restartPendingFeudCard},
+  };
+  assert.equal(legacyRoom.feudDecks.kadingir.discard.length,0);
   legacyRoom.pendingFleetAdjustment = {id:'old-choice',playerId:oldPlayer.id,stage:'landin-replace',required:1,
     options:[{id:'old-landin',name:'Особое сопровождение Ландина'}]};
   // Stage 5.8 compatibility: emulate an old assignment save without Mori deck/progress
@@ -215,6 +229,20 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(resumed.ok, true); assert.equal(resumed.playerId, created.playerId);
   const afterRestart = rows()[0].state;
   const afterOldPlayer = afterRestart.players.find(p => p.id === created.playerId);
+  const restartPendingFeudKey = `${restartPendingFeudCard.masterCardId || restartPendingFeudCard.id}:${restartPendingFeudCard.copy ?? 'legacy'}`;
+  assert.equal(afterRestart.pendingFeud.id, 'restart-pending-feud');
+  assert.equal(afterRestart.pendingFeud.feudCard.id, restartPendingFeudCard.id);
+  assert.equal(afterRestart.feudDecks.kadingir.drawPile.length, 9);
+  assert.equal(afterRestart.feudDecks.kadingir.discard.length, 0);
+  assert.equal(
+    afterRestart.feudDecks.kadingir.drawPile[0]
+      ? `${afterRestart.feudDecks.kadingir.drawPile[0].masterCardId || afterRestart.feudDecks.kadingir.drawPile[0].id}:${afterRestart.feudDecks.kadingir.drawPile[0].copy ?? 'legacy'}`
+      : null,
+    restartNextFeudKey
+  );
+  assert.equal(afterRestart.feudDecks.kadingir.drawPile.some(card =>
+    `${card.masterCardId || card.id}:${card.copy ?? 'legacy'}` === restartPendingFeudKey
+  ), false);
   assert.deepEqual(Object.keys(afterRestart.assignmentDecks), ['lionia','kadingir','suniksiya','pirates','mori']);
   assert.equal(afterRestart.assignmentDecks.mori.drawPile.length, 9); // активная карта не возвращается в восстановленную колоду
   assert.deepEqual(afterRestart.assignmentDecks.lionia.removed, []);
