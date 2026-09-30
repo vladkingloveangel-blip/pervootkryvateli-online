@@ -3,6 +3,7 @@ const { selectTreasureOutcome, selectLegendaryAbility } = require('./digital-ran
 const { createSeaEncounterStorage, seaEncounterSource } = require('./sea-encounter-source');
 const { createSailingEventStorage, canonicalizeSailingEventOccurrence, sailingEventSource } = require('./sailing-event-source');
 const { createPoliticalEffectStorage, politicalEffectSource } = require('./political-effect-source');
+const { createAssignmentStorage, assignmentPool } = require('./assignment-pool');
 const {
   SHIPS,
   SHIP_LEVELS,
@@ -185,15 +186,7 @@ function drawFeudCard(room, factionId, rng = Math.random) {
 
 
 function createAssignmentDecks(rng = Math.random) {
-  const out = {};
-  for (const factionId of Object.keys(ASSIGNMENT_CARDS)) {
-    out[factionId] = {
-      drawPile: shuffleCards(expandCardDefinitions(ASSIGNMENT_CARDS[factionId] || []), rng),
-      discard: [],
-      removed: [],
-    };
-  }
-  return out;
+  return createAssignmentStorage(rng);
 }
 
 function assignmentBranchAtMaximum(island, branch) {
@@ -278,45 +271,12 @@ function assignmentCardEligibility(room, player, card) {
   return 'remove';
 }
 
-function prepareAssignmentDeck(room, factionId, rng = Math.random) {
-  room.assignmentDecks ||= createAssignmentDecks(rng);
-  const deck = room.assignmentDecks[factionId];
-  if (!deck) return null;
-  deck.drawPile ||= [];
-  deck.discard ||= [];
-  deck.removed ||= [];
-  return deck;
+function assignmentPoolFor(room, factionId, rng = Math.random) {
+  return assignmentPool(room, factionId, rng, { classify: assignmentCardEligibility });
 }
 
 function drawAssignmentCandidates(room, player, factionId, count = 1, rng = Math.random) {
-  const deck = prepareAssignmentDeck(room, factionId, rng);
-  if (!deck) return [];
-  const wanted = Math.max(1, Number(count) || 1);
-  const cards = [];
-  const skipped = [];
-  let recycledDiscard = false;
-
-  while (cards.length < wanted) {
-    if (!deck.drawPile.length) {
-      if (!recycledDiscard && deck.discard.length) {
-        deck.drawPile = shuffleCards(deck.discard, rng);
-        deck.discard = [];
-        recycledDiscard = true;
-      } else {
-        break;
-      }
-    }
-
-    const candidate = deck.drawPile.shift();
-    if (!candidate) continue;
-    const eligibility = assignmentCardEligibility(room, player, candidate);
-    if (eligibility === 'eligible') cards.push(candidate);
-    else if (eligibility === 'skip') skipped.push(candidate);
-    else deck.removed.push(candidate);
-  }
-
-  if (skipped.length) deck.drawPile = shuffleCards([...(deck.drawPile || []), ...skipped], rng);
-  return cards;
+  return assignmentPoolFor(room, factionId, rng)?.offerEligible(player, count) || [];
 }
 
 function drawAssignmentCard(room, player, factionId, rng = Math.random) {
@@ -324,8 +284,8 @@ function drawAssignmentCard(room, player, factionId, rng = Math.random) {
 }
 
 function discardAssignmentCard(room, factionId, card) {
-  if (!room?.assignmentDecks?.[factionId] || !card) return;
-  discardDeckCard(room.assignmentDecks[factionId], card);
+  if (!card) return false;
+  return assignmentPoolFor(room, factionId)?.recycleCompleted(card) || false;
 }
 
 function ensureAssignmentPlayer(player) {
@@ -688,10 +648,10 @@ function chooseAssignmentOffer(room, player, factionId, offeredCards, cardId, rn
   const cards = (offeredCards || []).map(card => ({ ...card }));
   const chosen = cards.find(card => card.id === cardId);
   if (!chosen) return { ok: false, error: 'Выберите одно из предложенных поручений.' };
-  const deck = prepareAssignmentDeck(room, factionId, rng);
-  if (!deck) return { ok: false, error: 'Колода поручений не найдена.' };
+  const pool = assignmentPoolFor(room, factionId, rng);
+  if (!pool) return { ok: false, error: 'Колода поручений не найдена.' };
   const returned = cards.filter(card => card.id !== chosen.id);
-  if (returned.length) deck.drawPile = shuffleCards([...(deck.drawPile || []), ...returned], rng);
+  if (returned.length) pool.returnUnchosen(returned);
   return assignAssignmentCard(room, player, factionId, chosen, rng);
 }
 
