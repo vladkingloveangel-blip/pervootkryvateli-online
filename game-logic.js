@@ -1,4 +1,5 @@
 const { BALANCE, MAP_META } = require('./game-data');
+const { selectTreasureOutcome, selectLegendaryAbility } = require('./digital-random-sources');
 const {
   SHIPS,
   SHIP_LEVELS,
@@ -16,8 +17,6 @@ const {
   ANCHOR_CARDS,
   ANCHOR_BY_CELL,
   SAILING_EVENT_CARDS,
-  TREASURE_CARDS,
-  LEGENDARY_CARDS,
   LEGENDARY_PLACES,
   LEGENDARY_PLACE_RULES,
   NAMED_PLACE_CARDS,
@@ -179,25 +178,11 @@ function drawSailingEventCard(room, rng = Math.random) {
 }
 
 function drawTreasureCard(_room, rng = Math.random) {
-  const candidates = TREASURE_CARDS;
-  if (!candidates.length) return null;
-  const raw = Number(rng());
-  const roll = Number.isFinite(raw) ? Math.min(0.999999999999, Math.max(0, raw)) : 0;
-  return { ...candidates[Math.floor(roll * candidates.length)] };
+  return selectTreasureOutcome(rng);
 }
 
 function drawLegendaryCard(_room, rng = Math.random) {
-  const ids = Array.isArray(BALANCE.legendaryPool?.typeIds) && BALANCE.legendaryPool.typeIds.length
-    ? BALANCE.legendaryPool.typeIds
-    : LEGENDARY_CARDS.map(card => card.id);
-  const candidates = ids
-    .map(id => LEGENDARY_CARDS.find(card => card.id === id))
-    .filter(Boolean);
-  if (!candidates.length) return null;
-  const raw = Number(rng());
-  const roll = Number.isFinite(raw) ? Math.min(0.999999999999, Math.max(0, raw)) : 0;
-  const chosen = candidates[Math.floor(roll * candidates.length)];
-  return JSON.parse(JSON.stringify(chosen));
+  return selectLegendaryAbility(rng);
 }
 
 function discardDeckCard(deck, card) {
