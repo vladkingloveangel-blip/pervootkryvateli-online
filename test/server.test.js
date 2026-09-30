@@ -219,6 +219,9 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   const legacyMoriIsland = legacyRoom.islands.find(i => i.id === legacyMoriCard.islandId);
   oldPlayer.row = legacyMoriIsland.cells[0][0]; oldPlayer.col = legacyMoriIsland.cells[0][1];
   oldPlayer.suzerainId = 'mori';
+  oldPlayer.character = 'cartographer';
+  oldPlayer.nextTurnEffects = { moveBonus:1, sourceCard:'SECRET_NEXT_TURN_SOURCE' };
+  oldPlayer.ownerFutureField = 'SECRET_OWNER_FUTURE';
   oldPlayer.activeAssignment = { factionId:'mori', card:legacyMoriCard, issuedRound:3 };
   oldPlayer.replacedAssignmentConditions = ['old-paid-condition'];
   legacyRoom.pendingAssignmentChoice = { id:'old-paid-assignment-choice', playerId:oldPlayer.id, factionId:'mori' };
@@ -251,6 +254,23 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   const secondDelivery=once(secondDevice,'roomState');
   assert.equal((await emit(secondDevice,'resumeRoom',{code,accountToken:b.token})).ok,true);
   const [secondState]=await secondDelivery;
+  const ownerContract=ownerState.players.find(p=>p.id===created.playerId);
+  assert.equal(ownerContract.isYou,true);
+  assert.equal(ownerContract.character.id,'cartographer');
+  assert.equal(ownerContract.character.effect.type,'peek-sea-deck');
+  assert.equal(ownerContract.character.effect.range,4);
+  assert.deepEqual(ownerContract.nextTurnEffects,{moveBonus:1});
+  assert.equal(ownerContract.activeAssignment.factionId,'mori');
+  assert.equal(ownerContract.activeAssignment.progress.kind,'mori-service');
+  assert.ok(Array.isArray(ownerContract.characterReplacementOptions));
+  assert.ok(Array.isArray(ownerContract.cartographerAnchorOptions));
+  assert.ok(Object.hasOwn(ownerContract,'canTakeExpedition'));
+  assert.ok(Object.hasOwn(ownerContract,'attackedPlayerIdsThisRound'));
+  assert.ok(Object.hasOwn(ownerContract,'palaceUsed'));
+  assert.equal(Object.hasOwn(ownerContract,'ownerFutureField'),false);
+  const opponentContract=secondState.players.find(p=>p.id===created.playerId);
+  for(const key of ['character','activeAssignment','hasActiveAssignment','nextTurnEffects','characterReplacementOptions']) assert.equal(Object.hasOwn(opponentContract,key),false,key);
+  for(const view of [ownerState,secondState]) for(const secret of ['SECRET_NEXT_TURN_SOURCE','SECRET_OWNER_FUTURE']) assert.equal(JSON.stringify(view).includes(secret),false);
   for(const view of [ownerState,secondState]) {
     assert.equal(Object.hasOwn(view,'log'),false);
     for(const secret of logSecrets) assert.equal(JSON.stringify(view).includes(secret),false);

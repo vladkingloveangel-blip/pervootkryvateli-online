@@ -21,7 +21,7 @@ const upgrade = o(f('id name branch active disabledByLevel missingRequirement'))
 const escort = o({ ...f('id type special active inactiveReason'), cargo });
 const discovery = o(f('id name placeId claimedBy exploredBy'));
 const history = o(f('id cardId name placeId completedRound round result'));
-const stop = o(f('id islandId placeId label row col'));
+const stop = o(f('index islandId mapObjectId label'));
 const assignment = o({
   ...f('instanceId factionId id conditionKey text reward type issuedRound'),
   progress: o({ ...f('kind nextStopIndex completedStopCount totalStops departureRequired departureSatisfied'), completedStops: a(stop) }),
@@ -29,16 +29,25 @@ const assignment = o({
 const legendaryCard = o(f('id name handIndex'));
 const legendaryRef = o(f('source index id kind name'));
 const savedEvent = o(f('id kind name goodId'));
-const expedition = o(f('cardId id name placeId acceptedRound requiresLeaveAndReturn progress state'));
-const character = o(f('id name admiraltyLevel acquireActionCost useActionCost'));
+const expedition = o(f('cardId name placeId acceptedRound requiresLeaveAndReturn'));
+const turnEffects = o(f('noIncome noNavigation moveBonus movePenalty bestOfTwo'));
+const characterEffect = o(f('type rerolls secondResultMandatory range distance assignmentVisibility unresolved count draw keep levels anchorPenaltyExcluded'));
+const character = o({ ...f('id name admiraltyLevel acquireActionCost useActionCost'), effect: characterEffect });
+const characterOption = o({ ...f('id name admiraltyLevel'), effect: characterEffect });
+const constraintReport = o({
+  ...f('legal status usedArea effectiveArea overArea branchLimit'),
+  branchViolations:a(o(f('branch name count limit'))),
+});
+const anchorEncounter = o({ ...f('round row col color anchorName cardName cardArtillery rewardValue fleetPower outcome fleetPoints'), reward:o(f('gross net')), penalty:o(f('required paid')) });
+const ownerAnchorEncounter = o({ ...anchorEncounter.fields, reward:o(f('gross debtPaid net debtRemaining')), penalty:o(f('required paid addedDebt debt')) });
 const publicPlayer = o({
   ...f('id name color shipClass glory fleetPoints armyPoints level row col connected ready islandCount suzerainId vassalGiftIslandId namedPlaceCardCount expeditionHistoryCount bastionSupportCapacity bastionCount bastionSupportChoiceRequired cargoCapacity assaultArmy fleetArtillery totalCargoCapacity upgradeSlots shipyardSlots escortUseLimit nextEscortPrice atCitadel inPeaceZone skipTurns phase roll movePoints actionsLeft'),
   legendaryStatus:o({ ...f('shipVeilTurns seaCursePenalty'), seaCurseTurns:a(S) }),
-  activeTurnEffects:o(f('noIncome noNavigation moveBonus movePenalty bestOfTwo')),
+  activeTurnEffects:turnEffects,
   landCompany:o(f('army arsenalLevel sourceIslandId formedAt')),
-  visitedAnchors:a(S), lastAnchorEncounter:o({ ...f('round row col color anchorName cardName cardArtillery rewardValue fleetPower outcome fleetPoints'), reward:o(f('gross net')), penalty:o(f('required paid')) }),
+  visitedAnchors:a(S), lastAnchorEncounter:anchorEncounter,
   enemyFactionIds:a(S), namedPlaceCards:a(discovery), expeditionHistory:a(history), supportedBastionIslandIds:a(S),
-  cargo, stats, upgrades:a(upgrade), disabledUpgradeIds:a(S), escorts:a(escort), levelInactiveEscortIds:a(S),
+  cargo, stats, upgrades:a(upgrade), escorts:a(escort),
   nextLevel:o(f('level price')), allyIds:a(S),
 });
 const ownerPlayer = o({
@@ -46,21 +55,41 @@ const ownerPlayer = o({
   specialCards:a(S), specialCardCount:S, legendaryCards:a(legendaryCard), legendaryCardCount:S,
   playableLegendaryCards:a(legendaryRef), savedEventCards:a(savedEvent), savedEventCardCount:S,
   activeExpedition:expedition, hasActiveExpedition:S,
+  ...f('nextActionLimit expeditionTakenThisRound canTakeExpedition canDismissLandCompanyHere characterReplacedThisRound admiraltyLevelHere palaceUsed pendingLandinEscort'),
+  attackedPlayerIdsThisRound:a(S), nextTurnEffects:turnEffects, lastAnchorEncounter:ownerAnchorEncounter,
+  characterAcquisitionOptions:a(characterOption), characterReplacementOptions:a(characterOption),
+  cartographerAnchorOptions:a(o(f('id color name distance'))),
+  inactiveBastionIslandIds:a(S), disabledUpgradeIds:a(S), levelInactiveEscortIds:a(S), brokenAlliesThisTurn:a(S),
 });
 const building = o({ ...f('index type level name supported'), nextUpgrade:o(f('type level price name')) });
 const publicIsland = o({
   ...f('id name kind faction area army reward ownerId loadedRound rewardClaimed firstMilitaryConquered usedArea effectiveArea status'),
   resources:a(S), cells:a(a(S)), availableGoods:a(S), buildings:a(building),
+  constraints:constraintReport, legendaryVeil:o(f('remaining sourcePlayerId')),
 });
 const privateGarrison = o({
   ...f('garrisonType garrisonName garrisonDefense defenseArmy'),
   defenseBreakdown:o(f('total garrison hiredGarrison fortifications bastions ownerShip ownerShipPresent')),
 });
-const pendingOption = o(f('id text label name kind type reward value goodId islandId buildingType buildingIndex playerId escortId source index'));
-const pendingPrivate = o({
-  ...f('kind cardName factionId factionName remaining goodId islandId islandName reason stage required sourcePlayerId targetPlayerId initialBuildingCount keepCount remainingRemovals'),
-  options:a(pendingOption), veilOptions:a(legendaryRef), removed:a(S),
-});
+// Schemas describe the six existing presentation contracts, not raw resolution state.
+const pendingSchemas = {
+  pendingEvent:o({ ...f('kind cardName goodId islandId'), options:a(o(f('id name capacity islandId islandName buildingIndex row col'))) }),
+  pendingFeud:o({ ...f('kind cardName factionId factionName remaining'), options:a(o(f('id name islandId islandName buildingIndex canDowngrade goodId quantity'))) }),
+  pendingAssignmentChoice:o({ ...f('kind factionId factionName'), options:a(o(f('id text reward type'))) }),
+  pendingIslandCorrection:o({
+    ...f('kind islandId islandName reason initialBuildingCount keepCount remainingRemovals'),
+    report:constraintReport, removed:a(S), options:a(o(f('buildingIndex name type level area branch branchName'))),
+  }),
+  pendingFleetAdjustment:o({
+    ...f('stage reason required'), options:a(o(f('id name type missingRequirement special artillery cargoCapacity hasCargo cargoText'))),
+  }),
+  pendingLegendaryReaction:o({ ...f('kind sourcePlayerId targetPlayerId islandId'), veilOptions:a(legendaryRef) }),
+};
+const pendingFamilies = [
+  ['pendingEvent','playerId'], ['pendingFeud','playerId'], ['pendingAssignmentChoice','playerId'],
+  ['pendingIslandCorrection','playerId'], ['pendingFleetAdjustment','playerId'], ['pendingLegendaryReaction','targetPlayerId'],
+];
+const lastCard = o(f('playerId playerName cardName factionId factionName pending source'));
 const eventPhase = o(f('active personalTurn currentPlayerId playerIndex totalPlayers stage observatoryReplacementsUsed feudIndex feudTotal assignmentIndex assignmentTotal replacementIndex replacementTotal'));
 const pool = o({ ...f('mode selection'), typeIds:a(S) });
 const legendaryPlace = o(f('id name kind mapPlaceId islandId reward rewardCount rewardStatus unresolved exploredBy'));
@@ -119,39 +148,47 @@ function projectPendingForViewer(pending, viewerContext=null, options={}){
   const key=options.actorField || (own(pending,'playerId')?'playerId':own(pending,'targetPlayerId')?'targetPlayerId':own(pending,'actorId')?'actorId':null);
   if(key && own(pending,key)){ const v=p(pending[key],S); if(v!==undefined) out[key]=v; }
   out.viewerCanRespond=actor;
-  if(actor) merge(out,pending,pendingPrivate);
+  if(actor) merge(out,pending,pendingSchemas[options.family || 'pendingEvent']);
   return out;
 }
 function put(out,src,key,schema){ if(own(src,key)){ const v=p(src[key],schema); if(v!==undefined) out[key]=v; } }
+function projectEventPhaseForViewer(phase, viewerContext=null){
+  const out=p(phase,eventPhase), c=ctx(viewerContext), card=phase?.lastCard;
+  const actor=card && c.viewerId!==null && String(card.playerId)===c.viewerId;
+  // Completed sailing/feud facts stay public; assignment and unresolved source stay actor-only.
+  if(card && (actor || (card.pending===false && ['sailing','feud'].includes(card.source)))) put(out,phase,'lastCard',lastCard);
+  return out;
+}
 function projectRoomForViewer(roomView, viewerContext=null){
   if(!roomView || typeof roomView!=='object' || Array.isArray(roomView)) return {};
   const c=ctx(viewerContext), out={};
   for(const key of 'version code started hostId leaderId round circle turnIndex activePlayerId'.split(' ')) put(out,roomView,key,S);
   for(const key of ['seatingOrder','order']) put(out,roomView,key,a(S));
   for(const [key,schema] of [['eventPhase',eventPhase],['treasurePool',pool],['legendaryPool',pool],['legendaryPlaces',a(legendaryPlace)],['namedPlaceCards',a(namedPlace)],['alliances',a(a(S))],['pendingBattle',battle],['pendingAlliance',alliance],['characterCatalog',characterCatalog],['buildingCatalog',simpleCatalog],['goodsCatalog',simpleCatalog],['shipUpgradeCatalog',simpleCatalog]]) put(out,roomView,key,schema);
-  for(const [key,actorField] of [['pendingEvent','playerId'],['pendingFeud','playerId'],['pendingAssignmentChoice','playerId'],['pendingIslandCorrection','playerId'],['pendingFleetAdjustment','playerId'],['pendingLegendaryReaction','targetPlayerId']]) if(own(roomView,key)) out[key]=projectPendingForViewer(roomView[key],c,{actorField});
+  for(const [key,actorField] of pendingFamilies) if(own(roomView,key)) out[key]=projectPendingForViewer(roomView[key],c,{actorField,family:key});
+  if(own(roomView,'eventPhase')) out.eventPhase=projectEventPhaseForViewer(roomView.eventPhase,c);
   if(Array.isArray(roomView.players)) out.players=roomView.players.map(v=>projectPlayerForViewer(v,c));
   if(Array.isArray(roomView.islands)) out.islands=roomView.islands.map(v=>projectIslandForViewer(v,c));
   return out;
 }
 
 
-// 4.3 boundary: preserve legacy owner/action contracts until the 4.4 cutover.
+// Transitional root contract; every entity, including owner and actor, uses explicit schemas.
 // Input is the presentation view from publicRoom, never authoritative storage.
 function projectOpponentFacingRoomView(legacyRoomView, viewerContext=null){
   if(!legacyRoomView || typeof legacyRoomView!=='object' || Array.isArray(legacyRoomView)) return {};
   const c=ctx(viewerContext), out=structuredClone(legacyRoomView);
   // Shared journal can contain secrets even for the owner of this view.
   delete out.log;
-  const isOwner=id=>c.viewerId!==null && id!=null && String(id)===c.viewerId;
-  if(Array.isArray(out.players)) out.players=out.players.map(v=>isOwner(v.id)?v:projectPlayerForViewer(v,c));
-  if(Array.isArray(out.islands)) out.islands=out.islands.map(v=>isOwner(v.ownerId)?v:projectIslandForViewer(v,c));
-  for(const [key,actorField] of [['pendingEvent','playerId'],['pendingFeud','playerId'],['pendingAssignmentChoice','playerId'],['pendingIslandCorrection','playerId'],['pendingFleetAdjustment','playerId'],['pendingLegendaryReaction','targetPlayerId']]) {
-    if(own(out,key) && !isOwner(actorId(out[key],actorField))) {
-      out[key]=projectPendingForViewer(out[key],c,{actorField});
-      if(out[key] && out.eventPhase?.lastCard?.pending && !isOwner(out.eventPhase.lastCard.playerId)) delete out.eventPhase.lastCard;
-    }
+  if(Array.isArray(out.players)) out.players=out.players.map(v=>projectPlayerForViewer(v,c));
+  if(Array.isArray(out.islands)) out.islands=out.islands.map(v=>projectIslandForViewer(v,c));
+  for(const [key,actorField] of pendingFamilies) {
+    if(own(out,key)) out[key]=projectPendingForViewer(out[key],c,{actorField,family:key});
   }
+  for(const [key,schema] of [['pendingBattle',battle],['pendingAlliance',alliance]]) {
+    if(own(out,key)) out[key]=p(out[key],schema);
+  }
+  if(own(out,'eventPhase')) out.eventPhase=projectEventPhaseForViewer(legacyRoomView.eventPhase,c);
   return out;
 }
 

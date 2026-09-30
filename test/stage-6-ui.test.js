@@ -38,3 +38,83 @@ test('ordinary player UI has no journal dependency or journal navigation', () =>
   assert.doesNotMatch(app, /state\.room\.log|renderLog|Журнал партии/);
   assert.doesNotMatch(index, /id="logPanel"|id="log"|data-mobile-nav="log"/);
 });
+
+// Execute existing renderers against projected data and click their actual callbacks.
+// A minimal DOM suffices here: these actions create nodes, labels and click handlers.
+const vm = require('node:vm');
+const { projectOpponentFacingRoomView } = require('../state-projection');
+function uiHarness(legacy, renderer) {
+  const nodes=new Map(), calls=[];
+  function node(tag='div') {
+    return {tag,children:[],events:{},textContent:'',disabled:false,
+      set innerHTML(value) {this.html=value;this.children=[];}, get innerHTML(){return this.html || '';},
+      appendChild(child){this.children.push(child);},addEventListener(event,callback){this.events[event]=callback;},
+    };
+  }
+  const room=projectOpponentFacingRoomView(legacy,{viewerId:'p1'});
+  const context=vm.createContext({
+    state:{room,myId:'p1'}, ROMAN:['','I','II'], document:{createElement:node},
+    $:id=>{if(!nodes.has(id))nodes.set(id,node());return nodes.get(id);},
+    me:()=>room.players.find(p=>p.id==='p1'), playerName:id=>id,
+    escapeHtml:value=>String(value), handleGameAck:()=>{},
+    isDecisionPending:()=>false, currentIslands:()=>room.islands || [],
+    areAlliesClient:()=>false, socket:{emit:(event,payload)=>calls.push({event,payload})},
+  });
+  const start=app.indexOf(`  function ${renderer}(`), end=app.indexOf('\n  function ',start+1);
+  assert.ok(start>=0 && end>start);
+  vm.runInContext(app.slice(start,end)+`\n${renderer}();`,context);
+  return {nodes,calls,room};
+}
+function uiRoom(pendingKey,pending) {
+  return {started:true,round:2,activePlayerId:'p1',players:[{id:'p1',suzerainId:'mori',phase:'actions',actionsLeft:2}],islands:[],factions:[{id:'mori',name:'Mori'}],[pendingKey]:{id:'choice',playerId:'p1',...pending}};
+}
+function click(harness,panel,index=0) {
+  const buttons=harness.nodes.get(panel).children.filter(node=>node.tag==='button');
+  assert.ok(buttons[index],panel+' button exists');
+  assert.equal(buttons[index].disabled,false);
+  buttons[index].events.click();
+  return harness.calls.length ? JSON.parse(JSON.stringify(harness.calls.at(-1))) : undefined;
+}
+
+test('4.4 projected pending choices render buttons with working command identifiers',()=>{
+  let h=uiHarness(uiRoom('pendingEvent',{kind:'storm',cardName:'Storm',options:[{row:3,col:4}]}),'renderEvents');
+  assert.deepEqual(click(h,'eventActions'),{event:'respondEvent',payload:{eventId:'choice',row:3,col:4}});
+  h=uiHarness(uiRoom('pendingFeud',{kind:'building-choice',options:[{islandId:'port',islandName:'Port',buildingIndex:2,name:'Fort',canDowngrade:true}]}),'renderEvents');
+  const feud=h.nodes.get('eventActions').children.find(n=>n.children.length).children;
+  assert.equal(feud[1].disabled,false);feud[1].events.click();
+  assert.deepEqual(JSON.parse(JSON.stringify(h.calls.at(-1))),{event:'respondFeud',payload:{feudId:'choice',islandId:'port',buildingIndex:2,mode:'downgrade'}});
+  h=uiHarness(uiRoom('pendingAssignmentChoice',{kind:'embassy',factionId:'mori',options:[{id:'task',text:'Visit Port',reward:12,type:'visit-island'}]}),'renderAssignments');
+  assert.deepEqual(click(h,'assignmentActions'),{event:'respondAssignmentChoice',payload:{choiceId:'choice',assignmentId:'task'}});
+  h=uiHarness(uiRoom('pendingIslandCorrection',{kind:'constraints',islandName:'Port',report:{status:'city',usedArea:6,effectiveArea:4,overArea:2,branchViolations:[{name:'Trade',count:2,limit:1}]},options:[{buildingIndex:1,name:'Farm',area:2,branchName:'Trade'}]}),'renderIslandCorrection');
+  assert.match(h.nodes.get('islandCorrectionContent').innerHTML,/6\/4/);
+  assert.match(h.nodes.get('islandCorrectionContent').innerHTML,/Trade: 2\/1/);
+  assert.deepEqual(click(h,'islandCorrectionActions'),{event:'resolveIslandCorrection',payload:{correctionId:'choice',buildingIndex:1}});
+  h=uiHarness(uiRoom('pendingFleetAdjustment',{stage:'escorts',required:1,options:[{id:'escort',name:'Merchant',cargoCapacity:3,hasCargo:true,cargoText:'Tea ×2'}]}),'renderFleetAdjustment');
+  assert.match(h.nodes.get('fleetAdjustmentActions').children[0].textContent,/Tea ×2/);
+  click(h,'fleetAdjustmentActions',0);
+  assert.deepEqual(click(h,'fleetAdjustmentActions',1),{event:'resolveFleetAdjustment',payload:{adjustmentId:'choice',ids:['escort']}});
+  h=uiHarness(uiRoom('pendingLegendaryReaction',{targetPlayerId:'p1',sourcePlayerId:'p2',kind:'sea-curse',veilOptions:[{source:'legendary',index:0,id:'sea-veil'}]}),'renderLegendary');
+  assert.deepEqual(click(h,'legendaryActions'),{event:'respondLegendaryReaction',payload:{reactionId:'choice',useVeil:true,source:'legendary',index:0}});
+});
+
+test('4.4 character options, abilities and expedition eligibility survive owner cutover',()=>{
+  const base={started:true,round:2,activePlayerId:'p1',players:[{id:'p1',name:'Alice',level:1,phase:'actions',actionsLeft:2,atCitadel:false,characterAcquisitionOptions:[{id:'navigator',name:'Navigator',admiraltyLevel:1,effect:{type:'reroll-navigation'}}]}],islands:[]};
+  let h=uiHarness(base,'renderFleet');
+  const fleetPanel=[...h.nodes.keys()].find(key=>key==='fleetActions');
+  assert.deepEqual(click(h,fleetPanel),{event:'takeCharacter',payload:{characterId:'navigator'}});
+  base.players[0].character={id:'cartographer',name:'Cartographer',effect:{type:'peek-sea-deck',range:4}};
+  base.players[0].characterAcquisitionOptions=[];
+  base.players[0].characterReplacementOptions=[{id:'navigator',name:'Navigator',admiraltyLevel:1}];
+  base.players[0].cartographerAnchorOptions=[{id:'red',color:'red',name:'Red',distance:2}];
+  base.players[0].phase='navigation';base.players[0].roll=null;
+  h=uiHarness(base,'renderFleet');
+  assert.deepEqual(click(h,'fleetActions'),{event:'useCartographer',payload:{color:'red'}});
+  base.players[0].phase='actions';h=uiHarness(base,'renderFleet');
+  assert.deepEqual(click(h,'fleetActions',1),{event:'replaceCharacter',payload:{characterId:'navigator'}});
+  base.players[0].canTakeExpedition=true;
+  base.players[0].activeExpedition={cardId:'exp',name:'Voyage',placeId:'place',acceptedRound:2,requiresLeaveAndReturn:true};
+  h=uiHarness(base,'renderLegendaryPlaces');
+  assert.match(h.nodes.get('legendaryPlacesContent').innerHTML,/Voyage/);
+  assert.match(h.nodes.get('legendaryPlacesContent').innerHTML,/Сначала покиньте место/);
+  assert.deepEqual(click(h,'legendaryPlacesActions'),{event:'takeExpedition',payload:{}});
+});

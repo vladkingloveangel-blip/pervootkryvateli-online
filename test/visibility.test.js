@@ -131,7 +131,7 @@ function room() {
       kind: 'SECRET_PENDING_KIND',
       cardName: 'SECRET_PENDING_CARD',
       goodId: 'SECRET_PENDING_GOOD',
-      options: [{ id: 'choice-1', text: 'SECRET_PENDING_OPTION', secretNested: 'SECRET_PENDING_NESTED' }],
+      options: [{ id: 'choice-1', name: 'SECRET_PENDING_OPTION', secretNested: 'SECRET_PENDING_NESTED' }],
       unknownPendingField: { deeper: 'SECRET_PENDING_UNKNOWN' },
     },
     legendaryPlaces: [{ id: 'place-a', name: 'Legendary Place', exploredBy: 'p2' }],
@@ -253,7 +253,7 @@ test('14. pendingActor receives private content only for own pending resolution'
   const other = projectPendingForViewer(source, { viewerId: 'p2' }, { actorField: 'playerId' });
   assert.equal(actor.kind, 'SECRET_PENDING_KIND');
   assert.equal(actor.cardName, 'SECRET_PENDING_CARD');
-  assert.equal(actor.options[0].text, 'SECRET_PENDING_OPTION');
+  assert.equal(actor.options[0].name, 'SECRET_PENDING_OPTION');
   assert.equal(has(other, 'kind'), false);
   assert.equal(has(other, 'options'), false);
 });
@@ -326,12 +326,17 @@ function enrichedRoom() {
   });
   return source;
 }
-test('4.3 transitional boundary keeps owner legacy contract and filters every other identity',()=>{
+test('4.4 boundary projects owner contract and filters every other identity',()=>{
   const source=enrichedRoom(), before=structuredClone(source);
   for(const viewerId of ['p1','p2',null,'unknown']) {
     const out=projectOpponentFacingRoomView(source,{viewerId,scoutGrant:{playerId:'p1'}});
     for(let i=0;i<source.players.length;i++) {
-      if(source.players[i].id===viewerId) assert.deepEqual(out.players[i],source.players[i]);
+      if(source.players[i].id===viewerId) {
+        assert.equal(out.players[i].ducats,'SECRET_DUCATS');
+        assert.equal(out.players[i].debt,'SECRET_DEBT');
+        assert.equal(has(out.players[i],'unknownPlayerField'),false);
+        assert.equal(has(out.players[i],'actionHint'),false);
+      }
       else {
         const view=out.players[i]; assertPrivatePlayerKeysAbsent(view);
         assert.equal(view.legendaryStatus.shipVeilTurns,2);
@@ -341,7 +346,10 @@ test('4.3 transitional boundary keeps owner legacy contract and filters every ot
         assert.equal(JSON.stringify(view).includes('SECRET_'),false);
       }
     }
-    if(viewerId==='p1') assert.deepEqual(out.islands[0],source.islands[0]);
+    if(viewerId==='p1') {
+      assert.equal(out.islands[0].garrisonName,'SECRET_GARRISON_NAME');
+      assert.equal(has(out.islands[0],'unknownIslandField'),false);
+    }
     else for(const key of ['garrisonType','garrisonName','garrisonDefense','defenseArmy','defenseBreakdown']) assert.equal(has(out.islands[0],key),false);
     assert.equal(out.unknownRootField,source.unknownRootField); // current root presentation contract
     out.players[0].name='Changed';
@@ -352,7 +360,12 @@ test('4.3 all six pending paths preserve actor choices and omit non-actor privat
   for(const [key,actorField] of [['pendingEvent','playerId'],['pendingFeud','playerId'],['pendingAssignmentChoice','playerId'],['pendingIslandCorrection','playerId'],['pendingFleetAdjustment','playerId'],['pendingLegendaryReaction','targetPlayerId']]) {
     const pending={id:'waiting', [actorField]:'p1',kind:'SECRET_KIND',cardName:'SECRET_CARD',options:[{id:'SECRET_CHOICE'}],veilOptions:[{id:'SECRET_VEIL'}],factionId:'SECRET_FACTION',islandId:'SECRET_TARGET',context:'SECRET_CONTEXT',sourcePlayerId:'p2'};
     const source={players:[],islands:[],[key]:pending,eventPhase:{lastCard:{playerId:'p1',pending:true,cardName:'SECRET_CARD'}}};
-    assert.deepEqual(projectOpponentFacingRoomView(source,{viewerId:'p1'})[key],pending);
+    const actor=projectOpponentFacingRoomView(source,{viewerId:'p1'})[key];
+    assert.equal(actor.viewerCanRespond,true);
+    assert.equal(has(actor,'context'),false);
+    if(key==='pendingLegendaryReaction') assert.equal(actor.veilOptions[0].id,'SECRET_VEIL');
+    else if(key==='pendingIslandCorrection') assert.equal(has(actor.options[0],'id'),false);
+    else assert.equal(actor.options[0].id,'SECRET_CHOICE');
     for(const viewerId of ['p2',null]) {
       const out=projectOpponentFacingRoomView(source,{viewerId});
       assert.deepEqual(out[key],{id:'waiting',[actorField]:'p1',viewerCanRespond:false});
@@ -373,4 +386,113 @@ test('4.3 corrective: shared secret journal is absent for owners and all other v
     for(const secret of secrets) assert.equal(JSON.stringify(out).includes(secret),false);
   }
   assert.deepEqual(source,before);
+});
+
+function ownerActionContract() {
+  const source=player();
+  Object.assign(source, {
+    debt:7, attackedPlayerIdsThisRound:['p2'], nextActionLimit:2,
+    nextTurnEffects:{moveBonus:2,bestOfTwo:true,sourceCard:'SECRET_EFFECT_ORIGIN'},
+    expeditionTakenThisRound:true,canTakeExpedition:false,canDismissLandCompanyHere:true,
+    characterReplacedThisRound:false,admiraltyLevelHere:3,palaceUsed:true,pendingLandinEscort:true,
+    characterAcquisitionOptions:[{id:'navigator',name:'Navigator',admiraltyLevel:1,effect:{type:'reroll-navigation',rerolls:1,secondResultMandatory:true,unknown:'SECRET_OPTION_EFFECT'},unknown:'SECRET_OPTION'}],
+    characterReplacementOptions:[{id:'cartographer',name:'Cartographer',admiraltyLevel:2,effect:{type:'peek-sea-deck',range:4,distance:'manhattan',count:1,unknown:'SECRET_REPLACE_EFFECT'}}],
+    cartographerAnchorOptions:[{id:'red',color:'red',name:'Red anchor',distance:2,unknown:'SECRET_CARTOGRAPHER'}],
+    inactiveBastionIslandIds:['island-2'],disabledUpgradeIds:['guns-1'],levelInactiveEscortIds:['escort-1'],brokenAlliesThisTurn:['p2'],
+  });
+  source.playableLegendaryCards[0].secretNested='SECRET_PLAYABLE_REF';
+  source.lastAnchorEncounter={outcome:'win',reward:{gross:4,debtPaid:2,net:2,debtRemaining:1,unknown:'SECRET_OWNER_REWARD'},penalty:null};
+  source.character.effect={type:'reroll-navigation',rerolls:1,secondResultMandatory:true,sourceCard:'SECRET_CHARACTER_EFFECT'};
+  source.activeAssignment.progress.completedStops=[{index:0,islandId:'island-1',mapObjectId:null,label:'Port',unknown:'SECRET_STOP'}];
+  return source;
+}
+
+test('4.4 owner action contract is explicit and nested private objects omit unknown keys',()=>{
+  const source=ownerActionContract(), before=structuredClone(source);
+  const owner=projectOpponentFacingRoomView({players:[source],log:[{text:'SECRET_JOURNAL'}]},{viewerId:'p1'}).players[0];
+  assert.equal(owner.ducats,'SECRET_DUCATS'); assert.equal(owner.debt,7);
+  assert.deepEqual(owner.character,{id:'scout',name:'SECRET_CHARACTER',admiraltyLevel:2,effect:{type:'reroll-navigation',rerolls:1,secondResultMandatory:true}});
+  assert.equal(owner.activeAssignment.instanceId,'SECRET_ASSIGNMENT_INSTANCE');
+  assert.equal(owner.activeAssignment.progress.completedStopCount,1);
+  assert.deepEqual(owner.activeAssignment.progress.completedStops,[{index:0,islandId:'island-1',mapObjectId:null,label:'Port'}]);
+  assert.equal(owner.assignmentPriority.text,'SECRET_ASSIGNMENT_HINT');
+  assert.equal(owner.hasActiveAssignment,true); assert.equal(owner.hasActiveExpedition,true);
+  assert.equal(owner.activeExpedition.name,'SECRET_EXPEDITION');
+  assert.equal(has(owner.activeExpedition,'secretNested'),false);
+  for(const key of ['specialCardCount','legendaryCardCount','savedEventCardCount']) assert.equal(owner[key],1);
+  assert.equal(owner.specialCards[0],'SECRET_SPECIAL_CARD');
+  assert.equal(owner.legendaryCards[0].name,'SECRET_LEGENDARY');
+  assert.equal(owner.playableLegendaryCards[0].source,'legendary');
+  assert.equal(owner.savedEventCards[0].goodId,'spice');
+  for(const [key,value] of Object.entries({nextActionLimit:2,expeditionTakenThisRound:true,canTakeExpedition:false,canDismissLandCompanyHere:true,characterReplacedThisRound:false,admiraltyLevelHere:3,palaceUsed:true,pendingLandinEscort:true})) assert.equal(owner[key],value,key);
+  for(const key of ['attackedPlayerIdsThisRound','inactiveBastionIslandIds','disabledUpgradeIds','levelInactiveEscortIds','brokenAlliesThisTurn']) assert.deepEqual(owner[key],source[key]);
+  assert.deepEqual(owner.nextTurnEffects,{moveBonus:2,bestOfTwo:true});
+  assert.deepEqual(owner.lastAnchorEncounter.reward,{gross:4,debtPaid:2,net:2,debtRemaining:1});
+  assert.deepEqual(owner.characterAcquisitionOptions[0],{id:'navigator',name:'Navigator',admiraltyLevel:1,effect:{type:'reroll-navigation',rerolls:1,secondResultMandatory:true}});
+  assert.equal(owner.characterReplacementOptions[0].effect.range,4);
+  assert.deepEqual(owner.cartographerAnchorOptions[0],{id:'red',color:'red',name:'Red anchor',distance:2});
+  for(const key of ['unknownPlayerField']) assert.equal(has(owner,key),false);
+  for(const object of [owner.character,owner.activeAssignment,owner.activeAssignment.progress,owner.legendaryCards[0],owner.playableLegendaryCards[0],owner.savedEventCards[0]]) assert.equal(has(object,'secretNested'),false);
+  for(const secret of ['SECRET_EFFECT_ORIGIN','SECRET_CHARACTER_EFFECT','SECRET_STOP','SECRET_OPTION_EFFECT','SECRET_OPTION','SECRET_REPLACE_EFFECT','SECRET_CARTOGRAPHER','SECRET_OWNER_REWARD','SECRET_PLAYABLE_REF']) assert.equal(JSON.stringify(owner).includes(secret),false);
+  const other=projectPlayerForViewer(source,{viewerId:'p2'});
+  assertPrivatePlayerKeysAbsent(other);
+  for(const key of ['characterAcquisitionOptions','characterReplacementOptions','cartographerAnchorOptions','attackedPlayerIdsThisRound','canTakeExpedition']) assert.equal(has(other,key),false);
+  assert.deepEqual(source,before);
+  assert.deepEqual(owner,projectPlayerForViewer(source,{viewerId:'p1'}));
+});
+
+const actorContracts = [
+  ['pendingEvent','playerId',{kind:'storm',cardName:'Storm',options:[{row:3,col:4}]}],
+  ['pendingFeud','playerId',{kind:'building-choice',factionId:'mori',factionName:'Mori',remaining:1,options:[{islandId:'island-1',islandName:'Port',buildingIndex:0,name:'Farm',canDowngrade:true}]}],
+  ['pendingAssignmentChoice','playerId',{kind:'embassy',factionId:'mori',factionName:'Mori',options:[{id:'task-1',text:'Visit Port',reward:12,type:'visit-island'}]}],
+  ['pendingIslandCorrection','playerId',{kind:'constraints',islandId:'island-1',islandName:'Port',reason:'Area',initialBuildingCount:2,keepCount:1,remainingRemovals:1,removed:['Farm'],report:{legal:false,status:'settlement',usedArea:6,effectiveArea:4,overArea:2,branchLimit:1,branchViolations:[{branch:'money',name:'Trade',count:2,limit:1}]},options:[{buildingIndex:0,name:'Farm',type:'farm',level:1,area:2,branch:'money',branchName:'Trade'}]}],
+  ['pendingFleetAdjustment','playerId',{stage:'escorts',reason:'Capacity',required:1,options:[{id:'escort-1',name:'Merchant',type:'merchant',missingRequirement:false,special:false,artillery:0,cargoCapacity:3,hasCargo:true,cargoText:'Tea ×2'}]}],
+  ['pendingLegendaryReaction','targetPlayerId',{kind:'sea-curse',sourcePlayerId:'p2',islandId:null,veilOptions:[{id:'sea-veil',name:'Sea Veil',kind:'sea-veil',source:'legendary',index:0}]}],
+];
+
+test('4.4 all actor families retain their UI choices and deny unknown fields at every nested level',()=>{
+  for(const [family,actorField,contract] of actorContracts) {
+    const pending={id:'decision',[actorField]:'p1',...structuredClone(contract),unknown:'SECRET_PENDING_ROOT'};
+    for(const option of pending.options || pending.veilOptions || []) option.unknown='SECRET_PENDING_OPTION';
+    if(pending.report) {pending.report.unknown='SECRET_REPORT';pending.report.branchViolations[0].unknown='SECRET_BRANCH';}
+    const source={players:[],islands:[],[family]:pending}, before=structuredClone(source);
+    const actor=projectOpponentFacingRoomView(source,{viewerId:'p1'})[family];
+    assert.deepEqual(actor,{id:'decision',[actorField]:'p1',viewerCanRespond:true,...contract});
+    assert.equal(JSON.stringify(actor).includes('SECRET_'),false);
+    for(const viewerId of ['p2',null]) assert.deepEqual(projectOpponentFacingRoomView(source,{viewerId})[family],{id:'decision',[actorField]:'p1',viewerCanRespond:false});
+    assert.deepEqual(source,before);
+    assert.deepEqual(actor,projectOpponentFacingRoomView(source,{viewerId:'p1'})[family]);
+  }
+});
+
+test('4.4 owner islands preserve visible buildings/status and private defense without nested bypass',()=>{
+  const source=island();
+  source.constraints={legal:true,status:'city',usedArea:2,effectiveArea:8,branchViolations:[],unknown:'SECRET_CONSTRAINT'};
+  source.legendaryVeil={remaining:2,sourcePlayerId:'p1',unknown:'SECRET_VEIL'};
+  const out=projectOpponentFacingRoomView({islands:[source]},{viewerId:'p1'}).islands[0];
+  assert.equal(out.garrisonDefense,4);assert.equal(out.defenseArmy,11);
+  assert.equal(out.defenseBreakdown.hiredGarrison,4);
+  assert.equal(out.buildings[0].nextUpgrade.price,20);
+  assert.deepEqual(out.legendaryVeil,{remaining:2,sourcePlayerId:'p1'});
+  for(const object of [out,out.defenseBreakdown,out.buildings[0],out.buildings[0].nextUpgrade,out.constraints]) assert.equal(has(object,'secretNested') || has(object,'unknownIslandField') || has(object,'unknown'),false);
+  const other=projectIslandForViewer(source,{viewerId:'p2'});
+  for(const key of ['garrisonType','garrisonName','garrisonDefense','defenseArmy','defenseBreakdown']) assert.equal(has(other,key),false);
+  assert.equal(other.legendaryVeil.remaining,2);
+});
+
+test('4.4 lastCard never carries assignment/source secrets to another player',()=>{
+  for(const card of [{playerId:'p1',cardName:'SECRET_ASSIGNMENT',source:'assignment',pending:false},{playerId:'p1',cardName:'SECRET_PENDING_CARD',source:'sailing',pending:true}]) {
+    const source={eventPhase:{active:true,lastCard:{...card,unknown:'SECRET_LAST_CARD'}}};
+    const actor=projectOpponentFacingRoomView(source,{viewerId:'p1'});
+    assert.equal(actor.eventPhase.lastCard.cardName,card.cardName);
+    assert.equal(has(actor.eventPhase.lastCard,'unknown'),false);
+    for(const viewerId of ['p2',null]) {
+      const out=projectOpponentFacingRoomView(source,{viewerId});
+      assert.equal(has(out.eventPhase,'lastCard'),false);
+      assert.equal(JSON.stringify(out).includes('SECRET_'),false);
+    }
+  }
+  const publicCard={eventPhase:{lastCard:{playerId:'p1',source:'feud',pending:false,cardName:'Public feud'}}};
+  assert.equal(projectOpponentFacingRoomView(publicCard,{viewerId:'p2'}).eventPhase.lastCard.cardName,'Public feud');
+  assert.equal(SCOUT_RUNTIME_ENABLED,false);
 });

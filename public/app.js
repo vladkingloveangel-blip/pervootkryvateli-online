@@ -1554,6 +1554,12 @@
       return;
     }
 
+    if (!pending.viewerCanRespond) {
+      badge.textContent = 'ожидание';
+      content.textContent = `${playerName(pending.playerId)} принимает обязательное решение по острову.`;
+      return;
+    }
+
     const report = pending.report || {};
     const branches = (report.branchViolations || []).map(v => `${escapeHtml(v.name)}: ${v.count}/${v.limit}`).join(' · ');
     const area = report.overArea > 0 ? `Площадь: <strong>${report.usedArea}/${report.effectiveArea}</strong> — нужно освободить минимум ${report.overArea}.` : `Площадь: ${report.usedArea}/${report.effectiveArea}.`;
@@ -1561,17 +1567,9 @@
 
     if ((pending.kind || 'constraints') === 'capture-retention') {
       const remaining = Math.max(0, Number(pending.remainingRemovals) || 0);
-      if (!pending.viewerCanRespond) {
-        content.innerHTML = `<div class="event-current"><strong>${escapeHtml(pending.islandName)}</strong><br>${escapeHtml(playerName(pending.playerId))} выбирает постройки, которые будут уничтожены после захвата.</div><div class="event-effect">Сохранится ${pending.keepCount} из ${pending.initialBuildingCount} существовавших построек · осталось выбрать: ${remaining}.</div>`;
-        return;
-      }
       const removed = pending.removed?.length ? `<div class="cargo-meta">Уже выбрано для уничтожения: ${pending.removed.map(escapeHtml).join(', ')}.</div>` : '';
       content.innerHTML = `<div class="event-current"><strong>${escapeHtml(pending.islandName)}</strong><br>${escapeHtml(pending.reason || '')}</div><div class="event-effect">Сохранится ${pending.keepCount} из ${pending.initialBuildingCount} существовавших построек · осталось выбрать: ${remaining}.</div><div class="cargo-meta">Награды, появившиеся уже после штурма, в этот выбор не входят.</div>${removed}`;
     } else {
-      if (!pending.viewerCanRespond) {
-        content.innerHTML = `<div class="event-current"><strong>${escapeHtml(pending.islandName)}</strong><br>${escapeHtml(playerName(pending.playerId))} должен удалить лишние постройки.</div><div class="event-effect">Статус: ${escapeHtml(report.status || '—')} · ${area}${branches ? `<br>Превышение ветвей: ${branches}.` : ''}</div>`;
-        return;
-      }
       const removed = pending.removed?.length ? `<div class="cargo-meta">Уже удалено: ${pending.removed.map(escapeHtml).join(', ')}.</div>` : '';
       content.innerHTML = `<div class="event-current"><strong>${escapeHtml(pending.islandName)}</strong> · статус «${escapeHtml(report.status || '—')}»<br>${escapeHtml(pending.reason || '')}</div><div class="event-effect">${area}${branches ? `<br>Превышение ветвей: ${branches}.` : ''}</div><div class="cargo-meta">Удаляйте выбранные постройки без компенсации, пока одновременно не будут соблюдены площадь и предел каждой обычной ветви.</div>${removed}`;
     }
