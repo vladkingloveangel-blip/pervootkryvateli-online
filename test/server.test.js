@@ -141,7 +141,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(watch.room.map.legendaryPlaces.length,7);
   assert.equal(watch.room.namedPlaceCards.length,10);
   assert.equal(watch.room.namedPlaceCards.every(card=>card.visibility==='public' && card.claimedBy===null),true);
-  assert.equal(watch.room.eventDecks.expeditions.remaining,10);
+  assert.equal(watch.room.eventDecks.expeditions.remaining,7);
   assert.equal(Object.hasOwn(watch.room.eventDecks,'legendary'),false);
   assert.deepEqual(watch.room.legendaryPool,{
     mode:'random-with-replacement',
