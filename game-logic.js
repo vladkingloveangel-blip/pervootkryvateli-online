@@ -1004,7 +1004,7 @@ function settleVassalTax(player, factionId) {
   if (underpaid) {
     const normalLimit = Math.max(0, Math.floor(Number(BALANCE.session.actionsPerTurn) || 0));
     const penaltyLimit = Math.max(0, Math.floor(Number(BALANCE.session.taxUnderpaymentActionLimit) || 0));
-    const existing = Number(player.nextActionLimit);
+    const existing = player.nextActionLimit == null ? NaN : Number(player.nextActionLimit);
     const baseLimit = Number.isFinite(existing) && existing >= 0 ? existing : normalLimit;
     actionLimit = Math.min(baseLimit, penaltyLimit);
     player.nextActionLimit = actionLimit;
