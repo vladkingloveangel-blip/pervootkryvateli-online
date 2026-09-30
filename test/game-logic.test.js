@@ -1258,9 +1258,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const room = { eventDeck: deck };
   const card = drawSailingEventCard(room, () => 0.5);
   assert.ok(card);
-  discardDeckCard(room.eventDeck, card);
   assert.equal(room.eventDeck.drawPile.length, 25);
-  assert.equal(room.eventDeck.discard.length, 1);
+  assert.equal(room.eventDeck.discard.length, 0);
 }
 
 // Сокровище в мобильной версии — независимый равновероятный цифровой результат.

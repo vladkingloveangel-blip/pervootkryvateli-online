@@ -187,8 +187,9 @@ test('stage 6.1: Observatory resolves one sailing card before feud, Embassy assi
   assert.equal(state.pendingEvent, null);
   assert.equal(state.eventPhase.stage, 'assignment');
   assert.equal(state.eventPhase.observatoryReplacementsUsed, 1);
-  assert.equal(targetView.activeTurnEffects.moveBonus, 2);
-  assert.equal(state.eventDecks.sailing.discard, 2);
+  assert.equal(targetView.activeTurnEffects.moveBonus, 2); // first (+1) was not applied; mandatory second (+2) was.
+  assert.equal(state.eventDecks.sailing.remaining, 0);
+  assert.equal(state.eventDecks.sailing.discard, 2); // first rejected + second resolved, each returned exactly once.
   assert.equal(state.feudDecks.kadingir.discard, 1);
   assert.equal(state.pendingAssignmentChoice.kind, 'embassy');
   assert.equal(state.pendingAssignmentChoice.options.length, 2);
@@ -266,5 +267,5 @@ test('stage 6.1: Observatory resolves one sailing card before feud, Embassy assi
   assert.equal(keptTarget.phase, 'navigation');
   assert.equal(keptTarget.activeTurnEffects.moveBonus, 1);
   assert.equal(state.eventDecks.sailing.discard, 1);
-  assert.equal(state.eventDecks.sailing.remaining, 1);
+  assert.equal(state.eventDecks.sailing.remaining, 1); // keep must not consume the second outcome.
 });

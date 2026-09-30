@@ -145,6 +145,7 @@ const {
   applyBoardingLoss,
   stormCellOptions,
 } = require('./game-logic');
+const { sailingEventSource } = require('./sailing-event-source');
 
 const app = express();
 const server = http.createServer(app);
@@ -2238,7 +2239,7 @@ function processEventPhase(room) {
       }
       const resolved = resolveSailingEventCard(room, player, card);
       if (resolved.pending) return;
-      if (!resolved.holdEventCard) discardDeckCard(room.eventDeck, card);
+      if (!resolved.holdEventCard) sailingEventSource(room).markUsed(card);
       room.eventPhase.playerIndex += 1;
       continue;
     }
@@ -2480,7 +2481,7 @@ function continueAfterObservedSailingCard(room, player, card) {
   room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: card.name, pending: false, source: 'sailing' };
   const resolved = resolveSailingEventCard(room, player, card);
   if (resolved.pending) return { ok: true, pending: true };
-  if (!resolved.holdEventCard) discardDeckCard(room.eventDeck, card);
+  if (!resolved.holdEventCard) sailingEventSource(room).markUsed(card);
   room.pendingEvent = null;
   room.eventPhase.playerIndex += 1;
   processEventPhase(room);
@@ -2490,7 +2491,7 @@ function continueAfterObservedSailingCard(room, player, card) {
 function finishPendingEvent(room, pending) {
   const origin = pending.origin || 'event-phase';
   if (origin === 'event-phase') {
-    if (pending.eventCard) discardDeckCard(room.eventDeck, pending.eventCard);
+    if (pending.eventCard) sailingEventSource(room).markUsed(pending.eventCard);
     room.pendingEvent = null;
     if (room.eventPhase?.active) {
       room.eventPhase.lastCard = { playerId: pending.playerId, playerName: playerById(room, pending.playerId)?.name || 'Игрок', cardName: pending.cardName, pending: false, source: 'sailing' };
@@ -2539,7 +2540,7 @@ function completePendingEvent(room, pending) {
 
 function discardSavedCardToDeck(room, saved) {
   if (!saved?.sourceCard || saved.sourceDeck !== 'event') return;
-  discardDeckCard(room.eventDeck, saved.sourceCard);
+  sailingEventSource(room).releaseReserved(saved.sourceCard);
 }
 
 function takeSavedCard(player, savedCardId) {
@@ -3617,7 +3618,7 @@ io.on('connection', socket => {
       room.pendingEvent = null;
       let card = first;
       if (choice === 'replace') {
-        if (first) discardDeckCard(room.eventDeck, first);
+        if (first) sailingEventSource(room).markUsed(first);
         card = drawSailingEventCard(room);
         log(room, card ? `${player.name}: Обсерватория сбрасывает «${first?.name || 'первую карту'}» и обязательно разыгрывает «${card.name}».`
           : `${player.name}: Обсерватория сбрасывает первую карту, но колода событий пуста.`);

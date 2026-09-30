@@ -1,6 +1,7 @@
 const { BALANCE, MAP_META } = require('./game-data');
 const { selectTreasureOutcome, selectLegendaryAbility } = require('./digital-random-sources');
 const { createSeaEncounterStorage, seaEncounterSource } = require('./sea-encounter-source');
+const { createSailingEventStorage, canonicalizeSailingEventOccurrence, sailingEventSource } = require('./sailing-event-source');
 const {
   SHIPS,
   SHIP_LEVELS,
@@ -17,7 +18,6 @@ const {
   ANCHORS,
   ANCHOR_CARDS,
   ANCHOR_BY_CELL,
-  SAILING_EVENT_CARDS,
   LEGENDARY_PLACES,
   LEGENDARY_PLACE_RULES,
   NAMED_PLACE_CARDS,
@@ -134,7 +134,7 @@ function expandCardDefinitions(defs) {
 }
 
 function createSailingEventDeck(rng = Math.random) {
-  return { drawPile: shuffleCards(expandCardDefinitions(SAILING_EVENT_CARDS), rng), discard: [] };
+  return createSailingEventStorage(rng);
 }
 
 function createExpeditionDeck(rng = Math.random) {
@@ -151,16 +151,11 @@ function drawCyclingDeckCard(deck, rng = Math.random) {
 }
 
 function canonicalSailingEventCard(rawCard) {
-  if (!rawCard) return null;
-  const canonical = SAILING_EVENT_CARDS.find(card =>
-    card.id === rawCard.masterCardId || card.id === rawCard.id
-  );
-  return canonical ? { ...rawCard, ...canonical, masterCardId: canonical.id } : rawCard;
+  return canonicalizeSailingEventOccurrence(rawCard);
 }
 
 function drawSailingEventCard(room, rng = Math.random) {
-  room.eventDeck ||= createSailingEventDeck(rng);
-  return canonicalSailingEventCard(drawCyclingDeckCard(room.eventDeck, rng));
+  return sailingEventSource(room, rng)?.consumeNext() || null;
 }
 
 function drawTreasureCard(_room, rng = Math.random) {
@@ -1365,7 +1360,7 @@ function discardRandomHeldCard(room, player, rng = Math.random) {
   } else {
     const [card] = player.savedEventCards.splice(ref.index, 1);
     if (card?.sourceCard && card.sourceDeck === 'event') {
-      discardDeckCard(room.eventDeck, card.sourceCard);
+      sailingEventSource(room)?.releaseReserved(card.sourceCard);
     }
   }
   return { ok: true, discarded: ref };

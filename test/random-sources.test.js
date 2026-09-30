@@ -18,9 +18,14 @@ const {
   selectLegendaryAbility,
   selectTreasureCandidates,
 } = require('../digital-random-sources');
-const { BALANCE, TREASURE_CARDS, LEGENDARY_CARDS } = require('../game-data');
-const { drawTreasureCard, drawLegendaryCard } = require('../game-logic');
+const { BALANCE, TREASURE_CARDS, LEGENDARY_CARDS, SAILING_EVENT_CARDS } = require('../game-data');
+const { drawTreasureCard, drawLegendaryCard, drawSailingEventCard, discardRandomHeldCard } = require('../game-logic');
 const { createSeaEncounterStorage, seaEncounterSource } = require('../sea-encounter-source');
+const {
+  createSailingEventStorage,
+  canonicalizeSailingEventOccurrence,
+  sailingEventSource,
+} = require('../sailing-event-source');
 
 function sequenceRng(values) {
   let index = 0;
@@ -352,4 +357,186 @@ test('drawAnchorCard keeps legacy return shape while delegating consume lifecycl
   assert.strictEqual(drawn.deck, room.anchorDecks.blue);
   assert.equal(room.anchorDecks.blue.drawPile.length, 0);
   assert.equal(room.anchorDecks.blue.discard.length, 0);
+});
+
+
+function eventOccurrenceKey(occurrence) {
+  return `${occurrence.masterCardId || occurrence.id}:${occurrence.copy ?? 'legacy'}`;
+}
+
+test('SailingEventSource initial cycle preserves all 26 canonical occurrences and multiplicities', () => {
+  const storage = createSailingEventStorage(() => 0.5);
+  const expectedCount = SAILING_EVENT_CARDS.reduce((sum, definition) => sum + Math.max(1, Number(definition.quantity) || 1), 0);
+  assert.equal(expectedCount, 26);
+  assert.equal(storage.drawPile.length, 26);
+  assert.equal(storage.discard.length, 0);
+  for (const definition of SAILING_EVENT_CARDS) {
+    assert.equal(
+      storage.drawPile.filter(occurrence => occurrence.id === definition.id).length,
+      Math.max(1, Number(definition.quantity) || 1),
+      definition.id
+    );
+  }
+});
+
+test('SailingEventSource consume keeps occurrence outside recyclable state until markUsed', () => {
+  const room = { eventDeck: { drawPile: [{ id: 'a', copy: 1 }, { id: 'b', copy: 1 }], discard: [] } };
+  const source = sailingEventSource(room, () => 0);
+  const first = source.consumeNext();
+  assert.equal(first.id, 'a');
+  assert.equal(room.eventDeck.drawPile.length, 1);
+  assert.equal(room.eventDeck.discard.length, 0);
+
+  assert.equal(source.markUsed(first), true);
+  assert.equal(room.eventDeck.discard.length, 1);
+  assert.equal(eventOccurrenceKey(room.eventDeck.discard[0]), eventOccurrenceKey(first));
+  assert.equal(source.consumeNext().id, 'b');
+});
+
+test('SailingEventSource does not reissue a used occurrence before refresh', () => {
+  const room = {
+    eventDeck: {
+      drawPile: [{ id: 'a', copy: 1 }, { id: 'b', copy: 1 }, { id: 'c', copy: 1 }],
+      discard: [],
+    },
+  };
+  const source = sailingEventSource(room, () => 0);
+  const first = source.consumeNext();
+  source.markUsed(first);
+  assert.equal(source.consumeNext().id, 'b');
+  assert.equal(source.consumeNext().id, 'c');
+  assert.equal(room.eventDeck.drawPile.length, 0);
+  assert.equal(room.eventDeck.discard.length, 1);
+  assert.equal(source.consumeNext().id, 'a');
+});
+
+test('SailingEventSource refresh preserves the exact occurrence multiset', () => {
+  const room = { eventDeck: createSailingEventStorage(() => 0.25) };
+  const source = sailingEventSource(room, () => 0.25);
+  const firstCycle = [];
+  while (source.remainingCount()) {
+    const occurrence = source.consumeNext();
+    firstCycle.push(eventOccurrenceKey(occurrence));
+    source.markUsed(occurrence);
+  }
+  const expected = [...firstCycle].sort();
+  const refreshedFirst = source.consumeNext();
+  const refreshedKeys = [eventOccurrenceKey(refreshedFirst), ...room.eventDeck.drawPile.map(eventOccurrenceKey)].sort();
+  assert.deepEqual(refreshedKeys, expected);
+  assert.equal(room.eventDeck.discard.length, 0);
+});
+
+test('pending sailing event remains outside source across JSON restart and does not trigger a redraw', () => {
+  const room = {
+    eventDeck: {
+      drawPile: [{ id: 'tailwind-2', copy: 1 }, { id: 'calm', copy: 1 }],
+      discard: [],
+    },
+    pendingEvent: null,
+  };
+  const source = sailingEventSource(room, () => 0);
+  const pendingOccurrence = source.consumeNext();
+  room.pendingEvent = { kind: 'cargo', eventCard: { ...pendingOccurrence } };
+  assert.equal(room.eventDeck.drawPile.some(item => eventOccurrenceKey(item) === eventOccurrenceKey(pendingOccurrence)), false);
+  assert.equal(room.eventDeck.discard.some(item => eventOccurrenceKey(item) === eventOccurrenceKey(pendingOccurrence)), false);
+
+  const restored = JSON.parse(JSON.stringify(room));
+  const restoredSource = sailingEventSource(restored, () => {
+    throw new Error('pending restart must not need RNG while available outcomes remain');
+  });
+  assert.equal(restored.pendingEvent.eventCard.id, pendingOccurrence.id);
+  assert.equal(restoredSource.remainingCount(), 1);
+  assert.equal(restoredSource.consumeNext().id, 'calm');
+});
+
+test('saved found-cargo and save-card occurrences stay reserved outside source until release', () => {
+  for (const kind of ['found-cargo', 'ship-master']) {
+    const room = {
+      eventDeck: {
+        drawPile: [{ id: kind === 'found-cargo' ? 'found-wood' : 'ship-master', copy: 1 }, { id: 'other', copy: 1 }],
+        discard: [],
+      },
+    };
+    const source = sailingEventSource(room, () => 0);
+    const occurrence = source.consumeNext();
+    const player = {
+      savedEventCards: [{
+        id: 'saved',
+        kind,
+        sourceDeck: 'event',
+        sourceCard: { ...occurrence },
+      }],
+    };
+
+    assert.equal(room.eventDeck.drawPile.some(item => eventOccurrenceKey(item) === eventOccurrenceKey(occurrence)), false);
+    assert.equal(room.eventDeck.discard.length, 0);
+    assert.equal(player.savedEventCards[0].sourceCard.id, occurrence.id);
+
+    const [saved] = player.savedEventCards.splice(0, 1);
+    assert.equal(source.releaseReserved(saved.sourceCard), true);
+    assert.equal(room.eventDeck.discard.length, 1);
+    assert.equal(eventOccurrenceKey(room.eventDeck.discard[0]), eventOccurrenceKey(occurrence));
+    assert.equal(player.savedEventCards.length, 0);
+  }
+});
+
+test('random held-card discard releases a saved sailing occurrence exactly once', () => {
+  const sourceCard = { id: 'ship-master', masterCardId: 'ship-master', copy: 1, name: 'Судовой мастер' };
+  const room = { eventDeck: { drawPile: [{ id: 'other', copy: 1 }], discard: [] } };
+  const player = {
+    specialCards: [],
+    legendaryCards: [],
+    savedEventCards: [{
+      id: 'saved-1',
+      kind: 'ship-master',
+      name: 'Судовой мастер',
+      sourceDeck: 'event',
+      sourceCard: { ...sourceCard },
+    }],
+  };
+
+  const first = discardRandomHeldCard(room, player, () => 0);
+  assert.equal(first.discarded.source, 'saved-event');
+  assert.equal(player.savedEventCards.length, 0);
+  assert.equal(room.eventDeck.discard.length, 1);
+  assert.equal(eventOccurrenceKey(room.eventDeck.discard[0]), eventOccurrenceKey(sourceCard));
+
+  const second = discardRandomHeldCard(room, player, () => 0);
+  assert.equal(second.discarded, null);
+  assert.equal(room.eventDeck.discard.length, 1);
+});
+
+test('drawSailingEventCard delegates to source and preserves legacy canonicalization', () => {
+  const room = {
+    eventDeck: {
+      drawPile: [{ id: 'tailwind-1', name: 'legacy', type: 'next-turn', effect: 'moveBonus', value: 99, timing: 'next-personal-turn', copy: 1 }],
+      discard: [],
+    },
+  };
+  const drawn = drawSailingEventCard(room, () => 0.5);
+  const canonical = canonicalizeSailingEventOccurrence({ id: 'tailwind-1', copy: 1 });
+  assert.equal(drawn.masterCardId, 'tailwind-1');
+  assert.equal(drawn.type, canonical.type);
+  assert.equal(drawn.effect, canonical.effect);
+  assert.equal(drawn.value, canonical.value);
+  assert.equal(drawn.timing, canonical.timing);
+  assert.equal(room.eventDeck.drawPile.length, 0);
+  assert.equal(room.eventDeck.discard.length, 0);
+});
+
+test('SailingEventSource adds no persisted room fields and keeps legacy eventDeck shape', () => {
+  const room = {
+    marker: 'same',
+    eventDeck: { drawPile: [{ id: 'a', copy: 1 }], discard: [] },
+  };
+  const roomKeys = Object.keys(room).sort();
+  const deckKeys = Object.keys(room.eventDeck).sort();
+  const source = sailingEventSource(room, () => 0);
+  const outcome = source.consumeNext();
+  source.markUsed(outcome);
+
+  assert.deepEqual(Object.keys(room).sort(), roomKeys);
+  assert.deepEqual(Object.keys(room.eventDeck).sort(), deckKeys);
+  assert.equal(Object.hasOwn(room, 'sailingEventSource'), false);
+  assert.equal(room.marker, 'same');
 });
