@@ -87,6 +87,78 @@ const TemporaryEffect = defineContract('TemporaryEffect', ['kind', 'id', 'ownerI
 const PendingResolution = defineContract('PendingResolution', ['kind', 'id', 'actorId', 'state', 'source', 'payload', 'options']);
 const HistoryRecord = defineContract('HistoryRecord', ['kind', 'id', 'ownerId', 'state', 'source', 'payload', 'completedAt']);
 
+const ACTIVE_ASSIGNMENT_LEGACY_SNAPSHOT = Symbol('domain-state.active-assignment-legacy-snapshot');
+
+function activeAssignmentTaskFromLegacy(player, legacyAssignment) {
+  if (legacyAssignment === undefined || legacyAssignment === null) return legacyAssignment;
+  if (!legacyAssignment || typeof legacyAssignment !== 'object' || Array.isArray(legacyAssignment)) {
+    throw new TypeError('ActiveAssignmentTask expects a legacy assignment record, null, or undefined.');
+  }
+  const semantic = {
+    kind: 'assignment',
+    ownerId: player?.id,
+    state: 'active',
+    source: {},
+  };
+  if (hasOwn(legacyAssignment, 'instanceId')) semantic.id = cloneDetached(legacyAssignment.instanceId);
+  if (hasOwn(legacyAssignment, 'factionId')) semantic.source.factionId = cloneDetached(legacyAssignment.factionId);
+  if (hasOwn(legacyAssignment, 'issuedRound')) semantic.source.issuedRound = cloneDetached(legacyAssignment.issuedRound);
+  if (hasOwn(legacyAssignment, 'card')) semantic.payload = cloneDetached(legacyAssignment.card);
+  if (hasOwn(legacyAssignment, 'progress')) semantic.progress = cloneDetached(legacyAssignment.progress);
+  const task = Task.view(semantic);
+  Object.defineProperty(task, ACTIVE_ASSIGNMENT_LEGACY_SNAPSHOT, {
+    value: cloneDetached(legacyAssignment),
+    enumerable: false,
+  });
+  return task;
+}
+
+function getActiveAssignmentTask(player) {
+  if (!player || typeof player !== 'object' || !hasOwn(player, 'activeAssignment')) return undefined;
+  return activeAssignmentTaskFromLegacy(player, player.activeAssignment);
+}
+
+function activeAssignmentTaskToLegacy(task) {
+  if (task === undefined || task === null) return task;
+  if (!Task.is(task) || task.kind !== 'assignment' || task.state !== 'active') {
+    throw new TypeError('assignTask expects an active assignment Task.');
+  }
+  const snapshot = task[ACTIVE_ASSIGNMENT_LEGACY_SNAPSHOT];
+  const legacy = snapshot && typeof snapshot === 'object' ? cloneDetached(snapshot) : {};
+  if (hasOwn(task, 'id')) legacy.instanceId = cloneDetached(task.id);
+  else delete legacy.instanceId;
+  const source = task.source && typeof task.source === 'object' ? task.source : {};
+  if (hasOwn(source, 'factionId')) legacy.factionId = cloneDetached(source.factionId);
+  else delete legacy.factionId;
+  if (hasOwn(task, 'payload')) legacy.card = cloneDetached(task.payload);
+  else delete legacy.card;
+  if (hasOwn(source, 'issuedRound')) legacy.issuedRound = cloneDetached(source.issuedRound);
+  else delete legacy.issuedRound;
+  if (hasOwn(task, 'progress')) legacy.progress = cloneDetached(task.progress);
+  else delete legacy.progress;
+  return legacy;
+}
+
+function assignTask(player, task) {
+  if (!player || typeof player !== 'object') throw new TypeError('assignTask requires a player object.');
+  if (!Task.is(task) || task.kind !== 'assignment' || task.state !== 'active') {
+    throw new TypeError('assignTask expects an active assignment Task.');
+  }
+  if (task.ownerId != null && player.id != null && String(task.ownerId) !== String(player.id)) {
+    throw new TypeError('Assignment Task ownerId does not match the target player.');
+  }
+  player.activeAssignment = activeAssignmentTaskToLegacy(task);
+  return player.activeAssignment;
+}
+
+function completeAssignmentTask(player) {
+  if (!player || typeof player !== 'object') throw new TypeError('completeAssignmentTask requires a player object.');
+  const task = getActiveAssignmentTask(player);
+  const legacy = task === undefined || task === null ? task : activeAssignmentTaskToLegacy(task);
+  player.activeAssignment = null;
+  return legacy;
+}
+
 function createLegacyFieldAdapter(target, key, contract, options = {}) {
   if (!target || typeof target !== 'object') throw new TypeError('Legacy field adapter requires a target object.');
   if (!contract || typeof contract.view !== 'function' || typeof contract.toLegacy !== 'function') {
@@ -125,6 +197,11 @@ module.exports = {
   TemporaryEffect,
   PendingResolution,
   HistoryRecord,
+  activeAssignmentTaskFromLegacy,
+  activeAssignmentTaskToLegacy,
+  getActiveAssignmentTask,
+  assignTask,
+  completeAssignmentTask,
   presenceOf,
   createLegacyFieldAdapter,
 };

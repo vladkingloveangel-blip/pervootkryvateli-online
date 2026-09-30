@@ -105,6 +105,7 @@ const {
   drawFeudCard,
   createAssignmentDecks,
   normalizeStage6Compatibility,
+  getActiveAssignmentTask,
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,
@@ -711,6 +712,7 @@ function publicRoom(room, viewerId = null) {
       const cargoEscortCapacity = escorts.filter(e => e.active).reduce((sum, e) => sum + (Number(ESCORTS[e.type]?.cargo) || 0), 0);
       const level = readableShipLevel(p);
       const nextLevel = level < BALANCE.maxShipLevel ? SHIP_LEVELS[level + 1] : null;
+      const activeAssignmentTask = getActiveAssignmentTask(p);
       return {
         id: p.id,
         name: p.name,
@@ -731,8 +733,8 @@ function publicRoom(room, viewerId = null) {
         vassalGiftIslandId: p.vassalGiftIslandId || null,
         enemyFactionIds: [...(p.enemyFactionIds || [])],
         attackedPlayerIdsThisRound: p.id === viewerId ? attackTargetsThisRound(room, p) : [],
-        activeAssignment: p.id === viewerId ? assignmentPublic(p.activeAssignment) : null,
-        hasActiveAssignment: Boolean(p.activeAssignment),
+        activeAssignment: p.id === viewerId ? assignmentPublic(activeAssignmentTask) : null,
+        hasActiveAssignment: Boolean(activeAssignmentTask),
         assignmentPriority: p.id === viewerId && active?.id === p.id && room.phase === 'actions' && !hasPendingDecision(room)
           ? (() => { const required = assignmentRequiredAction(room, p, room.actionsLeft); return required ? { kind: required.kind, text: required.text } : null; })()
           : null,
@@ -884,32 +886,32 @@ function playerById(room, id) {
 
 
 
-function assignmentPublic(assignment) {
-  if (!assignment?.card) return null;
-  const card = assignment.card;
+function assignmentPublic(task) {
+  const card = task?.payload;
+  if (!task || !card) return null;
   return {
-    instanceId: assignment.instanceId,
-    factionId: assignment.factionId,
+    instanceId: task.id,
+    factionId: task.source?.factionId,
     id: card.id,
     conditionKey: card.conditionKey,
     text: card.text,
     reward: Number(card.reward) || 0,
     type: card.type,
-    issuedRound: Number(assignment.issuedRound) || null,
-    progress: assignment.progress ? {
-      kind: assignment.progress.kind || null,
-      nextStopIndex: Number(assignment.progress.nextStopIndex) || 0,
-      completedStopCount: Number(assignment.progress.completedStopCount) || 0,
+    issuedRound: Number(task.source?.issuedRound) || null,
+    progress: task.progress ? {
+      kind: task.progress.kind || null,
+      nextStopIndex: Number(task.progress.nextStopIndex) || 0,
+      completedStopCount: Number(task.progress.completedStopCount) || 0,
       totalStops: card.type === 'visit-route' ? Math.max(0, card.route?.length || 0) : (card.type === 'visit-island' ? 1 : 0),
-      departureRequired: Boolean(assignment.progress.departureRequired),
-      departureSatisfied: Boolean(assignment.progress.departureSatisfied),
-      completedStops: (assignment.progress.completedStops || []).filter(Boolean).map(stop => ({ ...stop })),
+      departureRequired: Boolean(task.progress.departureRequired),
+      departureSatisfied: Boolean(task.progress.departureSatisfied),
+      completedStops: (task.progress.completedStops || []).filter(Boolean).map(stop => ({ ...stop })),
     } : null,
   };
 }
 
 function trackAssignment(room, player, event) {
-  if (!room || !player?.activeAssignment) return null;
+  if (!room || !getActiveAssignmentTask(player)) return null;
   const result = completeAssignment(room, player, event);
   if (!result?.ok) return null;
   const factionName = FACTIONS[result.assignment.factionId]?.name || result.assignment.factionId;
@@ -941,7 +943,7 @@ function assignmentBuildingEvent(island, building, previousBuilding = null) {
 }
 
 function deliveryAssignmentMatch(player, result) {
-  if (!player?.activeAssignment || !result) return false;
+  if (!getActiveAssignmentTask(player) || !result) return false;
   return assignmentEventMatches(player, {
     type: 'delivery',
     goodId: result.good?.id,
@@ -1790,7 +1792,7 @@ function saveHeldEventCard(player, card, kind, extra = {}) {
     name: card?.name || 'Сохранённая карта',
     sourceDeck: 'event',
     sourceCard: card ? { ...card } : null,
-    assignmentInstanceId: kind === 'treasure-cargo' ? (player.activeAssignment?.instanceId || null) : undefined,
+    assignmentInstanceId: kind === 'treasure-cargo' ? (getActiveAssignmentTask(player)?.id || null) : undefined,
     ...extra,
   };
   player.savedEventCards.push(saved);
@@ -1829,7 +1831,7 @@ function resolveSailingEventCard(room, player, card) {
 
   if (card.type === 'treasure') {
     const treasure = drawTreasureCard(room);
-    const treasureAssignmentInstanceId = player.activeAssignment?.instanceId || null;
+    const treasureAssignmentInstanceId = getActiveAssignmentTask(player)?.id || null;
     if (!treasure) {
       log(room, `${player.name}: «${card.name}», но случайный результат сокровища недоступен.`);
       return resultBase;
@@ -1971,7 +1973,7 @@ function eventPoliticalSnapshot(room) {
     snapshot[player.id] = {
       suzerainId: player.suzerainId || null,
       enemyFactionIds: [...(player.enemyFactionIds || [])],
-      hadAssignment: Boolean(player.activeAssignment),
+      hadAssignment: Boolean(getActiveAssignmentTask(player)),
     };
   }
   return snapshot;
@@ -2280,7 +2282,7 @@ function processEventPhase(room) {
       const player = playerById(room, item.playerId);
       room.eventPhase.currentPlayerId = item.playerId;
       room.eventPhase.assignmentIndex += 1;
-      if (!player || player.suzerainId !== item.factionId || player.activeAssignment || !stateExists(room, item.factionId)) continue;
+      if (!player || player.suzerainId !== item.factionId || getActiveAssignmentTask(player) || !stateExists(room, item.factionId)) continue;
       if (hasOwnedBuilding(room, player.id, 'embassy')) {
         const offered = offerAssignmentCards(room, player, item.factionId, 2);
         if (!offered.ok || !offered.cards.length) {
@@ -2744,7 +2746,7 @@ function handleExpeditionArrival(room, player) {
   room.pendingExpeditionRewards.push({
     playerId: player.id,
     expeditionName: name,
-    treasureAssignmentInstanceId: player.activeAssignment?.instanceId || null,
+    treasureAssignmentInstanceId: getActiveAssignmentTask(player)?.id || null,
   });
   if (!room.pendingEvent) drainExpeditionTreasureRewards(room);
   return completion;

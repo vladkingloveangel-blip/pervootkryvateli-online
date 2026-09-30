@@ -1,4 +1,5 @@
 const domainState = require('./domain-state');
+const { Task, getActiveAssignmentTask, assignTask, completeAssignmentTask } = domainState;
 const { BALANCE, MAP_META } = require('./game-data');
 const { selectTreasureOutcome, selectLegendaryAbility, selectTreasureCandidates } = require('./digital-random-sources');
 const { createSeaEncounterStorage, seaEncounterSource } = require('./sea-encounter-source');
@@ -339,34 +340,40 @@ function createMoriAssignmentProgress(room, player, card) {
 }
 
 function ensureMoriAssignmentProgress(room, player) {
-  const assignment = player?.activeAssignment;
-  if (!assignment?.card || assignment.factionId !== 'mori') return null;
-  if (!['visit-island', 'visit-route'].includes(assignment.card.type)) return null;
-  if (!assignment.progress || assignment.progress.kind !== 'mori-service') {
-    assignment.progress = createMoriAssignmentProgress(room, player, assignment.card);
+  const task = getActiveAssignmentTask(player);
+  const card = task?.payload;
+  if (!task || !card || task.source?.factionId !== 'mori') return null;
+  if (!['visit-island', 'visit-route'].includes(card.type)) return null;
+  if (!task.progress || task.progress.kind !== 'mori-service') {
+    task.progress = createMoriAssignmentProgress(room, player, card);
   }
-  assignment.progress.completedStops ||= [];
-  assignment.progress.nextStopIndex = Math.max(0, Number(assignment.progress.nextStopIndex) || 0);
-  assignment.progress.completedStopCount = Math.max(0, Number(assignment.progress.completedStopCount) || assignment.progress.completedStops.length || 0);
-  return assignment.progress;
+  task.progress.completedStops ||= [];
+  task.progress.nextStopIndex = Math.max(0, Number(task.progress.nextStopIndex) || 0);
+  task.progress.completedStopCount = Math.max(0, Number(task.progress.completedStopCount) || task.progress.completedStops.length || 0);
+  assignTask(player, task);
+  return { task, progress: task.progress };
 }
 
 function noteMoriAssignmentDeparture(room, player) {
-  const assignment = player?.activeAssignment;
-  const progress = ensureMoriAssignmentProgress(room, player);
-  if (!assignment || !progress || progress.nextStopIndex !== 0 || !progress.departureRequired || progress.departureSatisfied) {
+  const ensured = ensureMoriAssignmentProgress(room, player);
+  const task = ensured?.task;
+  const progress = ensured?.progress;
+  if (!task || !progress || progress.nextStopIndex !== 0 || !progress.departureRequired || progress.departureSatisfied) {
     return { ok: Boolean(progress), changed: false, progress };
   }
-  const firstStop = moriAssignmentStops(assignment.card)[0];
+  const firstStop = moriAssignmentStops(task.payload)[0];
   if (!firstStop || moriStopMatches(room, player, firstStop)) return { ok: true, changed: false, progress };
   progress.departureSatisfied = true;
+  assignTask(player, task);
   return { ok: true, changed: true, progress };
 }
 function advanceMoriAssignmentNavigation(room, player, from = null) {
-  const assignment = player?.activeAssignment;
-  const progress = ensureMoriAssignmentProgress(room, player);
-  if (!assignment || !progress) return { ok: false, active: false };
-  const stops = moriAssignmentStops(assignment.card);
+  const ensured = ensureMoriAssignmentProgress(room, player);
+  const task = ensured?.task;
+  const progress = ensured?.progress;
+  const card = task?.payload;
+  if (!task || !card || !progress) return { ok: false, active: false };
+  const stops = moriAssignmentStops(card);
   if (!stops.length || progress.nextStopIndex >= stops.length) return { ok: false, active: true };
 
   const targetIndex = progress.nextStopIndex;
@@ -380,6 +387,7 @@ function advanceMoriAssignmentNavigation(room, player, from = null) {
     if (!fromAtTarget || !nowAtTarget) {
       progress.departureSatisfied = true;
       departureChanged = true;
+      assignTask(player, task);
     }
     if (!progress.departureSatisfied) {
       return { ok: true, active: true, departureChanged: false, progressed: false, completionEvent: null, progress };
@@ -399,13 +407,14 @@ function advanceMoriAssignmentNavigation(room, player, from = null) {
   progress.completedStops[targetIndex] = stopRecord;
   progress.completedStopCount = Math.max(progress.completedStopCount, targetIndex + 1);
   progress.nextStopIndex = targetIndex + 1;
+  assignTask(player, task);
 
   if (progress.nextStopIndex >= stops.length) {
     return {
       ok: true, active: true, departureChanged, progressed: true, completed: true, stop: stopRecord, progress,
       completionEvent: {
-        type: assignment.card.type === 'visit-island' ? 'mori-visit-island' : 'mori-visit-route',
-        assignmentInstanceId: assignment.instanceId,
+        type: card.type === 'visit-island' ? 'mori-visit-island' : 'mori-visit-route',
+        assignmentInstanceId: task.id,
         completedStopCount: stops.length,
         islandId: target.islandId || null,
         mapObjectId: target.mapObjectId || null,
@@ -446,9 +455,9 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
   for (const factionId of Object.keys(ASSIGNMENT_CARDS)) {
     if (!room.assignmentDecks[factionId]) {
       const reservedIds = new Set(room.players
-        .map(player => player.activeAssignment)
-        .filter(assignment => assignment?.factionId === factionId && assignment.card?.id)
-        .map(assignment => assignment.card.id));
+        .map(player => getActiveAssignmentTask(player))
+        .filter(task => task?.source?.factionId === factionId && task.payload?.id)
+        .map(task => task.payload.id));
       if (room.pendingAssignmentChoice?.kind === 'embassy' && room.pendingAssignmentChoice.factionId === factionId) {
         for (const card of room.pendingAssignmentChoice.options || []) if (card?.id) reservedIds.add(card.id);
       }
@@ -622,37 +631,41 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
 
 function assignAssignmentCard(room, player, factionId, card, rng = Math.random) {
   ensureAssignmentPlayer(player);
-  if (player.activeAssignment) return { ok: false, error: 'У игрока уже есть активное поручение.' };
+  if (getActiveAssignmentTask(player)) return { ok: false, error: 'У игрока уже есть активное поручение.' };
   if (!card) return { ok: false, empty: true, error: 'Подходящего поручения сейчас нет.' };
-  player.activeAssignment = {
-    instanceId: [factionId, card.id, Date.now(), Math.floor((Number(rng()) || 0) * 1e9)].join(':'),
-    factionId,
-    card: { ...card },
-    issuedRound: Number(room.round) || 1,
+  const issuedRound = Number(room.round) || 1;
+  const semantic = {
+    kind: 'assignment',
+    id: [factionId, card.id, Date.now(), Math.floor((Number(rng()) || 0) * 1e9)].join(':'),
+    ownerId: player.id,
+    state: 'active',
+    source: { factionId, issuedRound },
+    payload: { ...card },
   };
   if (factionId === 'mori' && ['visit-island', 'visit-route'].includes(card.type)) {
-    player.activeAssignment.progress = createMoriAssignmentProgress(room, player, card);
+    semantic.progress = createMoriAssignmentProgress(room, player, card);
   }
+  assignTask(player, Task.view(semantic));
   return { ok: true, assignment: player.activeAssignment };
 }
 
 function issueAssignment(room, player, factionId, rng = Math.random) {
   ensureAssignmentPlayer(player);
-  if (player.activeAssignment) return { ok: false, error: 'У игрока уже есть активное поручение.' };
+  if (getActiveAssignmentTask(player)) return { ok: false, error: 'У игрока уже есть активное поручение.' };
   const card = drawAssignmentCard(room, player, factionId, rng);
   return assignAssignmentCard(room, player, factionId, card, rng);
 }
 
 function offerAssignmentCards(room, player, factionId, count = 2, rng = Math.random) {
   ensureAssignmentPlayer(player);
-  if (player.activeAssignment) return { ok: false, error: 'У игрока уже есть активное поручение.', cards: [] };
+  if (getActiveAssignmentTask(player)) return { ok: false, error: 'У игрока уже есть активное поручение.', cards: [] };
   const pool = assignmentPoolFor(room, factionId, rng);
   return { ok: true, cards: pool?.offerEligible(player, count) || [] };
 }
 
 function chooseAssignmentOffer(room, player, factionId, offeredCards, cardId, rng = Math.random) {
   ensureAssignmentPlayer(player);
-  if (player.activeAssignment) return { ok: false, error: 'У игрока уже есть активное поручение.' };
+  if (getActiveAssignmentTask(player)) return { ok: false, error: 'У игрока уже есть активное поручение.' };
   const pool = assignmentPoolFor(room, factionId, rng);
   if (!pool) return { ok: false, error: 'Колода поручений не найдена.' };
   const choice = pool.chooseOffered(offeredCards, cardId);
@@ -661,8 +674,8 @@ function chooseAssignmentOffer(room, player, factionId, offeredCards, cardId, rn
 }
 
 
-function assignmentBuildingRequirement(room, player, assignment) {
-  const card = assignment?.card;
+function assignmentBuildingRequirement(room, player, task) {
+  const card = task?.payload;
   if (!card || !['build-branch', 'build-type'].includes(card.type)) return null;
 
   const targetBranch = card.type === 'build-branch'
@@ -731,7 +744,7 @@ function assignmentBuildingRequirement(room, player, assignment) {
   if (!buildOptions.length && !upgradeOptions.length && !bastionOptions.length && !blueprintOptions.length) return null;
   return {
     kind: 'building',
-    assignmentInstanceId: assignment.instanceId,
+    assignmentInstanceId: task.id,
     text: card.text,
     buildOptions,
     upgradeOptions,
@@ -758,8 +771,8 @@ function assignmentAssaultAvailable(room, player, island, playerOwnedOnly = fals
   return true;
 }
 
-function assignmentDeliveryHoldIds(room, player, assignment) {
-  const card = assignment?.card;
+function assignmentDeliveryHoldIds(room, player, task) {
+  const card = task?.payload;
   if (!card || card.type !== 'delivery') return [];
   const ids = ['main', ...(player.escorts || []).map(escort => escort.id)];
   const out = [];
@@ -767,7 +780,7 @@ function assignmentDeliveryHoldIds(room, player, assignment) {
     const allowed = canSellCargo(room, player, holdId);
     if (!allowed.ok) continue;
     const cargo = allowed.hold?.cargo;
-    if (!cargo || cargo.assignmentInstanceId !== assignment.instanceId) continue;
+    if (!cargo || cargo.assignmentInstanceId !== task.id) continue;
     if ((Number(cargo.quantity) || 0) !== (Number(allowed.hold.capacity) || 0)) continue;
     if (card.goodIds && !card.goodIds.includes(cargo.goodId)) continue;
     out.push(allowed.hold.id);
@@ -776,17 +789,17 @@ function assignmentDeliveryHoldIds(room, player, assignment) {
 }
 
 function assignmentRequiredAction(room, player, actionsLeft = 0) {
-  const assignment = player?.activeAssignment;
-  const card = assignment?.card;
-  if (!room || !player || !assignment || !card || (Number(actionsLeft) || 0) <= 0) return null;
+  const task = getActiveAssignmentTask(player);
+  const card = task?.payload;
+  if (!room || !player || !task || !card || (Number(actionsLeft) || 0) <= 0) return null;
 
   if (card.type === 'build-branch' || card.type === 'build-type') {
-    return assignmentBuildingRequirement(room, player, assignment);
+    return assignmentBuildingRequirement(room, player, task);
   }
 
   if (card.type === 'ship-level') {
     if (!canBuyShipLevel(player).ok) return null;
-    return { kind: 'ship-level', assignmentInstanceId: assignment.instanceId, text: card.text };
+    return { kind: 'ship-level', assignmentInstanceId: task.id, text: card.text };
   }
 
   if (card.type === 'stat-upgrade') {
@@ -807,7 +820,7 @@ function assignmentRequiredAction(room, player, actionsLeft = 0) {
     if (!upgradeIds.length && !(shipMasterIds.length && freeUpgradeIds.length)) return null;
     return {
       kind: 'ship-upgrade',
-      assignmentInstanceId: assignment.instanceId,
+      assignmentInstanceId: task.id,
       text: card.text,
       upgradeIds,
       shipMasterIds,
@@ -820,13 +833,13 @@ function assignmentRequiredAction(room, player, actionsLeft = 0) {
     const colors = card.colors?.length ? card.colors : ['blue', 'yellow'];
     const visitKey = cellKey(player.row, player.col);
     if (!anchor || !colors.includes(anchor.color) || (player.visitedAnchors || []).includes(visitKey)) return null;
-    return { kind: 'anchor', assignmentInstanceId: assignment.instanceId, text: card.text, color: anchor.color };
+    return { kind: 'anchor', assignmentInstanceId: task.id, text: card.text, color: anchor.color };
   }
 
   if (card.type === 'delivery') {
-    const holdIds = assignmentDeliveryHoldIds(room, player, assignment);
+    const holdIds = assignmentDeliveryHoldIds(room, player, task);
     if (!holdIds.length) return null;
-    return { kind: 'delivery', assignmentInstanceId: assignment.instanceId, text: card.text, holdIds };
+    return { kind: 'delivery', assignmentInstanceId: task.id, text: card.text, holdIds };
   }
 
   if (card.type === 'attack-player-island') {
@@ -834,22 +847,22 @@ function assignmentRequiredAction(room, player, actionsLeft = 0) {
       .filter(island => assignmentAssaultAvailable(room, player, island, true))
       .map(island => island.id);
     if (!islandIds.length) return null;
-    return { kind: 'assault', assignmentInstanceId: assignment.instanceId, text: card.text, islandIds };
+    return { kind: 'assault', assignmentInstanceId: task.id, text: card.text, islandIds };
   }
 
   if (card.type === 'capture-island') {
     const island = (room.islands || []).find(item => item.id === card.islandId);
     if (!assignmentAssaultAvailable(room, player, island, false)) return null;
-    return { kind: 'assault', assignmentInstanceId: assignment.instanceId, text: card.text, islandIds: [card.islandId] };
+    return { kind: 'assault', assignmentInstanceId: task.id, text: card.text, islandIds: [card.islandId] };
   }
 
   if (card.type === 'treasure-resolved') {
     if (!emptyCargoHolds(room, player).length) return null;
     const savedCardIds = (player.savedEventCards || [])
-      .filter(saved => saved.kind === 'treasure-cargo' && saved.assignmentInstanceId === assignment.instanceId)
+      .filter(saved => saved.kind === 'treasure-cargo' && saved.assignmentInstanceId === task.id)
       .map(saved => saved.id);
     if (!savedCardIds.length) return null;
-    return { kind: 'treasure', assignmentInstanceId: assignment.instanceId, text: card.text, savedCardIds };
+    return { kind: 'treasure', assignmentInstanceId: task.id, text: card.text, savedCardIds };
   }
 
   // Visits are resolved on arrival. Mori island/route progress is activated separately in 5.8.4.
@@ -857,9 +870,9 @@ function assignmentRequiredAction(room, player, actionsLeft = 0) {
 }
 
 function assignmentEventMatches(player, event) {
-  const assignment = player?.activeAssignment;
-  const card = assignment?.card;
-  if (!assignment || !card || !event) return false;
+  const task = getActiveAssignmentTask(player);
+  const card = task?.payload;
+  if (!task || !card || !event) return false;
   if (card.type === 'capture-island') return event.type === 'capture-island' && event.islandId === card.islandId;
   if (card.type === 'build-branch') return event.type === 'building-action' && event.branch === card.branch && (!card.islandId || event.islandId === card.islandId);
   if (card.type === 'build-type') {
@@ -875,19 +888,19 @@ function assignmentEventMatches(player, event) {
   }
   if (card.type === 'visit-place') return event.type === 'visit-place' && event.placeId === card.placeId;
   if (card.type === 'visit-island') {
-    return event.type === 'mori-visit-island' && event.assignmentInstanceId === assignment.instanceId && event.islandId === card.islandId;
+    return event.type === 'mori-visit-island' && event.assignmentInstanceId === task.id && event.islandId === card.islandId;
   }
   if (card.type === 'visit-route') {
     const route = Array.isArray(card.route) ? card.route : [];
-    return event.type === 'mori-visit-route' && event.assignmentInstanceId === assignment.instanceId && event.completedStopCount === route.length;
+    return event.type === 'mori-visit-route' && event.assignmentInstanceId === task.id && event.completedStopCount === route.length;
   }
   if (card.type === 'attack-player-island') return event.type === 'attack-player-island';
   if (card.type === 'treasure-resolved') {
-    return event.type === 'treasure-resolved' && event.assignmentInstanceId === assignment.instanceId;
+    return event.type === 'treasure-resolved' && event.assignmentInstanceId === task.id;
   }
   if (card.type === 'delivery') {
     if (event.type !== 'delivery' || event.fullHold !== true) return false;
-    if (event.assignmentInstanceId !== assignment.instanceId) return false;
+    if (event.assignmentInstanceId !== task.id) return false;
     return !card.goodIds || card.goodIds.includes(event.goodId);
   }
   return false;
@@ -900,15 +913,16 @@ function assignmentRewardShare(factionId) {
 function completeAssignment(room, player, event) {
   ensureAssignmentPlayer(player);
   if (!assignmentEventMatches(player, event)) return { ok: false, matched: false };
-  const assignment = player.activeAssignment;
-  const card = assignment.card;
+  const task = getActiveAssignmentTask(player);
+  const card = task.payload;
+  const factionId = task.source?.factionId;
   const gross = Math.max(0, Math.floor(Number(card.reward) || 0));
-  const rewardShare = assignmentRewardShare(assignment.factionId);
+  const rewardShare = assignmentRewardShare(factionId);
   const withheld = Math.floor(gross * rewardShare);
   const paid = Math.max(0, gross - withheld);
   const credit = creditDucats(player, paid);
-  discardAssignmentCard(room, assignment.factionId, card);
-  player.activeAssignment = null;
+  discardAssignmentCard(room, factionId, card);
+  const assignment = completeAssignmentTask(player);
   return { ok: true, matched: true, assignment, gross, rewardShare, withheld, paid, credit };
 }
 
@@ -1137,10 +1151,11 @@ function clearCeasedStateRelations(room, factionId) {
     ensurePoliticalPlayer(player);
     player.enemyFactionIds = player.enemyFactionIds.filter(id => id !== factionId);
     if (player.suzerainId === factionId) {
-      if (player.activeAssignment?.card) discardAssignmentCard(room, factionId, player.activeAssignment.card);
+      const task = getActiveAssignmentTask(player);
+      if (task?.payload) discardAssignmentCard(room, factionId, task.payload);
       player.suzerainId = null;
       player.vassalGiftIslandId = null;
-      player.activeAssignment = null;
+      completeAssignmentTask(player);
     }
   }
 }
@@ -1250,10 +1265,11 @@ function rebelFromSuzerain(room, player) {
     gift.ownerId = null;
     returned = true;
   }
-  if (player.activeAssignment?.card) discardAssignmentCard(room, factionId, player.activeAssignment.card);
+  const task = getActiveAssignmentTask(player);
+  if (task?.payload) discardAssignmentCard(room, factionId, task.payload);
   player.suzerainId = null;
   player.vassalGiftIslandId = null;
-  player.activeAssignment = null;
+  completeAssignmentTask(player);
   if (!player.enemyFactionIds.includes(factionId)) player.enemyFactionIds.push(factionId);
   refreshFactionExistence(room);
   return { ok: true, faction, gift: returned ? gift : null, returned };
@@ -1299,8 +1315,8 @@ function politicalCargoOptions(room, player) {
 }
 
 function discardRandomHeldCard(room, player, rng = Math.random) {
-  // Активное поручение входит в закрытую руку, но по авторскому решению
-  // случайный сброс карты вражды не может выбрать или уничтожить поручение.
+  // Активное поручение — отдельная Task, а не held inventory; случайный сброс
+  // карты вражды выбирает только реальные held entries и не затрагивает поручение.
   const refs = [];
   (player?.specialCards || []).forEach((name, index) => refs.push({ source: 'special', index, name }));
   (player?.legendaryCards || []).forEach((card, index) => refs.push({ source: 'legendary', index, name: card.name, card }));
@@ -1339,7 +1355,8 @@ function fillCargoDirect(room, player, goodId, holdId = 'main') {
   if (hold.cargo) return { ok: false, error: 'Выбранный трюм уже занят.' };
   if (hold.capacity <= 0) return { ok: false, error: 'У выбранного судна нет грузового трюма.' };
   const cargo = { goodId, quantity: hold.capacity };
-  if (player.activeAssignment?.instanceId) cargo.assignmentInstanceId = player.activeAssignment.instanceId;
+  const activeTask = getActiveAssignmentTask(player);
+  if (activeTask?.id) cargo.assignmentInstanceId = activeTask.id;
   hold.setCargo(cargo);
   return { ok: true, good, holdId: hold.id, holdName: hold.name, quantity: hold.capacity };
 }
@@ -2863,7 +2880,8 @@ function loadCargo(room, player, islandId, goodId, holdId = 'main') {
   const allowed = canLoadCargo(room, player, island, goodId, holdId);
   if (!allowed.ok) return allowed;
   const cargo = { goodId, quantity: allowed.capacity };
-  if (player.activeAssignment?.instanceId) cargo.assignmentInstanceId = player.activeAssignment.instanceId;
+  const activeTask = getActiveAssignmentTask(player);
+  if (activeTask?.id) cargo.assignmentInstanceId = activeTask.id;
   allowed.hold.setCargo(cargo);
   island.loadedRound = room.round;
   return { ok: true, island, good: allowed.good, quantity: allowed.capacity, holdId: allowed.hold.id, holdName: allowed.hold.name };
@@ -3633,6 +3651,9 @@ module.exports = {
   normalizeAssignmentCompatibility,
   normalizeStage6Compatibility,
   drawAssignmentCard,
+  getActiveAssignmentTask,
+  assignTask,
+  completeAssignmentTask,
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,

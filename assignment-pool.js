@@ -2,6 +2,7 @@
 
 const { ASSIGNMENT_CARDS } = require('./game-data');
 const { ELIGIBILITY, selectFilteredTasks, shuffleWithRng } = require('./random-sources');
+const { getActiveAssignmentTask } = require('./domain-state');
 
 function expandAssignmentDefinitions(definitions) {
   const occurrences = [];
@@ -50,8 +51,8 @@ function takeOccurrence(items, occurrence) {
 function reservedOccurrences(room, factionId) {
   const reserved = [];
   for (const player of room?.players || []) {
-    const assignment = player?.activeAssignment;
-    if (assignment?.factionId === factionId && assignment.card) reserved.push(assignment.card);
+    const task = getActiveAssignmentTask(player);
+    if (task?.source?.factionId === factionId && task.payload) reserved.push(task.payload);
   }
   const pending = room?.pendingAssignmentChoice;
   if (pending?.kind === 'embassy' && pending.factionId === factionId) {
