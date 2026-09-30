@@ -154,7 +154,7 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   let state = changed.state;
   assert.equal(state.pendingLegendaryReaction.kind, 'sea-curse');
   assert.equal(state.pendingLegendaryReaction.targetPlayerId, targetId);
-  assert.equal(Object.hasOwn(state.eventDecks,'legendary'), false);
+  assert.equal(Object.hasOwn(state,'eventDecks'), false);
   assert.equal(Object.hasOwn(state.players.find(player => player.id === sourceId),'legendaryCardCount'), false);
 
   changed = await change(targetSocket, 'respondLegendaryReaction', {
@@ -165,8 +165,9 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   }, sourceSocket);
   state = changed.state;
   const targetView = state.players.find(player => player.id === targetId);
-  assert.equal(state.pendingLegendaryReaction, null);
-  assert.equal(Object.hasOwn(state.eventDecks,'legendary'), false);
+  assert.equal(Object.hasOwn(state,'pendingLegendaryReaction'), false);
+  assert.equal(Object.hasOwn(state,'pendingDecision'), false);
+  assert.equal(Object.hasOwn(state,'eventDecks'), false);
   assert.equal(Object.hasOwn(targetView,'legendaryCardCount'), false);
   assert.equal(targetView.legendaryStatus.shipVeilTurns, 0);
   assert.deepEqual(targetView.legendaryStatus.seaCurseTurns, []);
@@ -239,8 +240,8 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   const protectedTargetView = state.players.find(player => player.id === targetId);
   assert.equal(protectedSourceView.actionsLeft, rules.session.actionsPerTurn - 1);
   assert.equal(Object.hasOwn(protectedSourceView,'legendaryCardCount'), false);
-  assert.equal(Object.hasOwn(state.eventDecks,'legendary'), false);
-  assert.equal(state.pendingLegendaryReaction, null);
+  assert.equal(Object.hasOwn(state,'eventDecks'), false);
+  assert.equal(Object.hasOwn(state,'pendingLegendaryReaction'), false);
   assert.equal(protectedTargetView.legendaryStatus.shipVeilTurns, 0);
   assert.equal(protectedTargetView.legendaryStatus.seaCursePenalty, 0);
   const protectedPersisted = readDb().game_rooms[0].state.players.find(player => player.id === targetId);

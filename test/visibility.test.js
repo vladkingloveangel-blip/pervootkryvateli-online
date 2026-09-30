@@ -254,13 +254,12 @@ test('14. pendingActor receives private content only for own pending resolution'
   assert.equal(actor.kind, 'SECRET_PENDING_KIND');
   assert.equal(actor.cardName, 'SECRET_PENDING_CARD');
   assert.equal(actor.options[0].name, 'SECRET_PENDING_OPTION');
-  assert.equal(has(other, 'kind'), false);
-  assert.equal(has(other, 'options'), false);
+  assert.equal(other, null);
 });
 
-test('15. unrelated viewer receives only minimal public pending envelope', () => {
+test('15. unrelated viewer receives no typed private pending object', () => {
   const projected = projectPendingForViewer(room().pendingEvent, { viewerId: 'p2' }, { actorField: 'playerId' });
-  assert.deepEqual(projected, { id: 'pending-1', playerId: 'p1', viewerCanRespond: false });
+  assert.equal(projected, null);
 });
 
 test('16. projection does not mutate input', () => {
@@ -368,7 +367,9 @@ test('4.3 all six pending paths preserve actor choices and omit non-actor privat
     else assert.equal(actor.options[0].id,'SECRET_CHOICE');
     for(const viewerId of ['p2',null]) {
       const out=projectOpponentFacingRoomView(source,{viewerId});
-      assert.deepEqual(out[key],{id:'waiting',[actorField]:'p1',viewerCanRespond:false});
+      assert.equal(has(out,key),false);
+      assert.deepEqual(out.pendingDecision,{waiting:true,actorPlayerId:'p1'});
+      assert.deepEqual(Object.keys(out.pendingDecision).sort(),['actorPlayerId','waiting']);
       assert.equal(has(out.eventPhase,'lastCard'),false);
       assert.equal(JSON.stringify(out).includes('SECRET_'),false);
     }
@@ -459,7 +460,12 @@ test('4.4 all actor families retain their UI choices and deny unknown fields at 
     const actor=projectOpponentFacingRoomView(source,{viewerId:'p1'})[family];
     assert.deepEqual(actor,{id:'decision',[actorField]:'p1',viewerCanRespond:true,...contract});
     assert.equal(JSON.stringify(actor).includes('SECRET_'),false);
-    for(const viewerId of ['p2',null]) assert.deepEqual(projectOpponentFacingRoomView(source,{viewerId})[family],{id:'decision',[actorField]:'p1',viewerCanRespond:false});
+    for(const viewerId of ['p2',null]) {
+      const other=projectOpponentFacingRoomView(source,{viewerId});
+      assert.equal(has(other,family),false);
+      assert.deepEqual(other.pendingDecision,{waiting:true,actorPlayerId:'p1'});
+      assert.deepEqual(Object.keys(other.pendingDecision).sort(),['actorPlayerId','waiting']);
+    }
     assert.deepEqual(source,before);
     assert.deepEqual(actor,projectOpponentFacingRoomView(source,{viewerId:'p1'})[family]);
   }
@@ -492,7 +498,73 @@ test('4.4 lastCard never carries assignment/source secrets to another player',()
       assert.equal(JSON.stringify(out).includes('SECRET_'),false);
     }
   }
-  const publicCard={eventPhase:{lastCard:{playerId:'p1',source:'feud',pending:false,cardName:'Public feud'}}};
-  assert.equal(projectOpponentFacingRoomView(publicCard,{viewerId:'p2'}).eventPhase.lastCard.cardName,'Public feud');
+  const completedCard={eventPhase:{active:true,currentPlayerId:'p1',lastCard:{playerId:'p1',source:'feud',pending:false,cardName:'SECRET_COMPLETED_FEUD'}}};
+  const other=projectOpponentFacingRoomView(completedCard,{viewerId:'p2'});
+  assert.equal(has(other.eventPhase,'lastCard'),false);
+  assert.equal(JSON.stringify(other).includes('SECRET_COMPLETED_FEUD'),false);
+  assert.equal(SCOUT_RUNTIME_ENABLED,false);
+});
+
+
+test('4.4 corrective: non-actor personal eventPhase is minimal while actor keeps event UI details',()=>{
+  const source={
+    players:[],islands:[],
+    eventPhase:{
+      active:true,personalTurn:true,currentPlayerId:'p1',playerIndex:2,totalPlayers:4,
+      stage:'assignment',observatoryReplacementsUsed:1,feudIndex:1,feudTotal:3,
+      assignmentIndex:1,assignmentTotal:2,replacementIndex:1,replacementTotal:2,
+      lastCard:{playerId:'p1',playerName:'Alice',cardName:'SECRET_ASSIGNMENT_CARD',factionId:'mori',factionName:'SECRET_FACTION',pending:false,source:'assignment'},
+    },
+  };
+  const actor=projectOpponentFacingRoomView(source,{viewerId:'p1'});
+  assert.equal(actor.eventPhase.stage,'assignment');
+  assert.equal(actor.eventPhase.assignmentTotal,2);
+  assert.equal(actor.eventPhase.assignmentIndex,1);
+  assert.equal(actor.eventPhase.lastCard.cardName,'SECRET_ASSIGNMENT_CARD');
+  const other=projectOpponentFacingRoomView(source,{viewerId:'p2'});
+  assert.deepEqual(other.eventPhase,{active:true,personalTurn:true,currentPlayerId:'p1'});
+  for(const key of ['lastCard','stage','assignmentTotal','assignmentIndex','feudIndex','feudTotal','replacementIndex','replacementTotal','observatoryReplacementsUsed']) assert.equal(has(other.eventPhase,key),false,key);
+  assert.equal(JSON.stringify(other).includes('SECRET_'),false);
+});
+
+test('4.4 corrective: ordinary player boundary omits private-derived source counters regardless of source lengths',()=>{
+  const sourceA={players:[],islands:[],eventDecks:{sailing:{remaining:9,discard:1},expeditions:{remaining:7}},feudDecks:{mori:{remaining:8,discard:2}},assignmentDecks:{mori:{remaining:6,discard:3,removed:1}},anchorDecks:{red:{remaining:4,discard:1}}};
+  const sourceB=structuredClone(sourceA);
+  sourceB.eventDecks.sailing.remaining=1;sourceB.eventDecks.expeditions.remaining=2;
+  sourceB.feudDecks.mori.remaining=3;sourceB.assignmentDecks.mori.remaining=4;
+  const a=projectOpponentFacingRoomView(sourceA,{viewerId:'p2'});
+  const b=projectOpponentFacingRoomView(sourceB,{viewerId:'p2'});
+  for(const view of [a,b]) {
+    for(const key of ['eventDecks','feudDecks','assignmentDecks']) assert.equal(has(view,key),false,key);
+    assert.deepEqual(view.anchorDecks,{red:{remaining:4,discard:1}});
+  }
+  assert.deepEqual(a,b);
+});
+
+test('4.4 corrective: anchor history remains public but exact finance settlement is owner-only',()=>{
+  const source=player('p1');
+  source.visitedAnchors=['4:red:5:7'];
+  source.lastAnchorEncounter={
+    round:4,row:5,col:7,color:'red',anchorName:'Red',cardName:'Encounter',cardArtillery:3,rewardValue:8,
+    fleetPower:6,outcome:'win',fleetPoints:2,
+    reward:{gross:8,debtPaid:3,net:5,debtRemaining:4},
+    penalty:{required:4,paid:1,addedDebt:3,debt:7},
+  };
+  const roomView={players:[source],islands:[]};
+  const other=projectOpponentFacingRoomView(roomView,{viewerId:'p2'}).players[0];
+  assert.deepEqual(other.visitedAnchors,['4:red:5:7']);
+  assert.equal(other.lastAnchorEncounter.outcome,'win');
+  assert.equal(other.lastAnchorEncounter.fleetPower,6);
+  assert.equal(has(other.lastAnchorEncounter,'reward'),false);
+  assert.equal(has(other.lastAnchorEncounter,'penalty'),false);
+  const owner=projectOpponentFacingRoomView(roomView,{viewerId:'p1'}).players[0];
+  assert.deepEqual(owner.lastAnchorEncounter.reward,{gross:8,debtPaid:3,net:5,debtRemaining:4});
+  assert.deepEqual(owner.lastAnchorEncounter.penalty,{required:4,paid:1,addedDebt:3,debt:7});
+});
+
+test('4.4 corrective invariants keep journal absent and Scout disabled',()=>{
+  const out=projectOpponentFacingRoomView({players:[],islands:[],log:[{text:'SECRET_LOG'}]},{viewerId:'p2'});
+  assert.equal(has(out,'log'),false);
+  assert.equal(JSON.stringify(out).includes('SECRET_LOG'),false);
   assert.equal(SCOUT_RUNTIME_ENABLED,false);
 });

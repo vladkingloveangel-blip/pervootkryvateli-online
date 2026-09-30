@@ -91,7 +91,7 @@ test('stage 5.8 assignment UI exposes current rules and contains no paid-replace
   assert.match(app,/Поручение имеет приоритет/);
   assert.match(app,/Маршрут Мори/);
   assert.match(app,/Посольство: выберите одно из допустимых поручений/);
-  assert.match(app,/убрано как невыполнимые/);
+  assert.doesNotMatch(app,/Колода поручений:|убрано как невыполнимые/);
   assert.match(html,/личном ходу шестого круга/);
   assert.doesNotMatch(app,/assignmentReplacementPrice/);
   assert.doesNotMatch(app,/платно замен/iu);

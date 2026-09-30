@@ -747,7 +747,7 @@
   }
 
   function playerName(id) { return state.room?.players.find(p => p.id === id)?.name || 'Игрок'; }
-  function isDecisionPending() { return Boolean(state.room?.pendingAlliance || state.room?.pendingBattle || state.room?.pendingEvent || state.room?.pendingFeud || state.room?.pendingAssignmentChoice || state.room?.pendingIslandCorrection || state.room?.pendingFleetAdjustment || state.room?.pendingLegendaryReaction); }
+  function isDecisionPending() { return Boolean(state.room?.pendingDecision || state.room?.pendingAlliance || state.room?.pendingBattle || state.room?.pendingEvent || state.room?.pendingFeud || state.room?.pendingAssignmentChoice || state.room?.pendingIslandCorrection || state.room?.pendingFleetAdjustment || state.room?.pendingLegendaryReaction); }
   function areAlliesClient(aId, bId) {
     return (state.room?.alliances || []).some(pair => (pair[0] === aId && pair[1] === bId) || (pair[0] === bId && pair[1] === aId));
   }
@@ -1243,7 +1243,8 @@
     $('dockEndTurnBtn').classList.toggle('hidden', !myTurn || phase !== 'actions' || blocked);
 
     if (!r.started) $('moveResult').textContent = 'Выберите корабль. Организатор назначает ведущего и порядок мест; затем все нажимают «Готов».';
-    else if (r.eventPhase?.active) $('moveResult').textContent = r.pendingIslandCorrection?.viewerCanRespond ? `Остров ${r.pendingIslandCorrection.islandName} нужно исправить перед продолжением.` : r.pendingIslandCorrection ? `${playerName(r.pendingIslandCorrection.playerId)} исправляет остров.` : r.pendingAssignmentChoice?.viewerCanRespond ? 'Нужно решить, оставить или заменить поручение сюзерена.' : r.pendingFeud?.viewerCanRespond ? 'Нужно разрешить вашу карту вражды.' : r.pendingEvent?.viewerCanRespond ? 'Нужно принять решение по вашей карте события.' : `Карты получает ${playerName(r.eventPhase.currentPlayerId)}.`;
+    else if (r.pendingDecision?.waiting) $('moveResult').textContent = `Ожидается обязательное решение игрока ${playerName(r.pendingDecision.actorPlayerId)}.`;
+    else if (r.eventPhase?.active) $('moveResult').textContent = r.pendingIslandCorrection?.viewerCanRespond ? `Остров ${r.pendingIslandCorrection.islandName} нужно исправить перед продолжением.` : r.pendingAssignmentChoice?.viewerCanRespond ? 'Нужно решить, оставить или заменить поручение сюзерена.' : r.pendingFeud?.viewerCanRespond ? 'Нужно разрешить вашу карту вражды.' : r.pendingEvent?.viewerCanRespond ? 'Нужно принять решение по вашей карте события.' : `Карты получает ${playerName(r.eventPhase.currentPlayerId)}.`;
     else if (r.pendingIslandCorrection?.viewerCanRespond) $('moveResult').textContent = `Остров ${r.pendingIslandCorrection.islandName} нужно немедленно привести к допустимым ограничениям.`;
     else if (r.pendingIslandCorrection) $('moveResult').textContent = `Ожидается исправление острова игроком ${playerName(r.pendingIslandCorrection.playerId)}.`;
     else if (!myTurn) $('moveResult').textContent = aText();
@@ -1273,8 +1274,6 @@
       return;
     }
 
-    const decks = r.eventDecks || {};
-    const sailing = decks.sailing || { remaining: 0, discard: 0 };
     const phase = r.eventPhase;
     const pending = r.pendingEvent;
     const nextEffects = mine.nextTurnEffects || {};
@@ -1289,10 +1288,15 @@
       return out;
     };
 
-    const stageLabel = phase?.stage === 'feud' ? 'вражда' : phase?.stage === 'assignment' ? 'поручения' : phase?.stage === 'assignment-replace' ? 'замена поручений' : 'плавание';
-    badge.textContent = phase?.active ? (phase.stage === 'feud' ? `вражда ${(phase.feudIndex || 0) + 1}/${phase.feudTotal || 0}` : phase.stage === 'assignment' ? `поручения ${(phase.assignmentIndex || 0) + 1}/${phase.assignmentTotal || 0}` : phase.stage === 'assignment-replace' ? `замена ${(phase.replacementIndex || 0) + 1}/${phase.replacementTotal || 0}` : `${(phase.playerIndex || 0) + 1}/${phase.totalPlayers || r.players.length}`) : `${sailing.remaining}`;
-    const feudCounts = Object.entries(r.feudDecks || {}).map(([id,d]) => `${r.factions?.find(f => f.id === id)?.name || id}: ${d.remaining}`).join(' · ');
-    let html = `<div class="event-decks">События: ${sailing.remaining} / сброс ${sailing.discard} · экспедиции: ${decks.expeditions?.remaining || 0}</div><div class="event-decks">Сокровища: цифровой случайный пул из ${r.treasurePool?.typeIds?.length || 4} равновероятных результатов, независимый выбор.</div><div class="event-decks">Легендарные карты: цифровой случайный пул из ${r.legendaryPool?.typeIds?.length || 4} видов, без отдельной колоды и сброса.</div>${feudCounts ? `<div class="event-decks">Вражда: ${escapeHtml(feudCounts)}</div>` : ''}`;
+    const stageLabel = phase?.stage === 'feud' ? 'вражда' : phase?.stage === 'assignment' ? 'поручения' : phase?.stage === 'assignment-replace' ? 'замена поручений' : phase?.stage ? 'плавание' : 'личное событие';
+    badge.textContent = phase?.active
+      ? (phase.stage === 'feud' ? `вражда ${(phase.feudIndex || 0) + 1}/${phase.feudTotal || 0}`
+        : phase.stage === 'assignment' ? `поручения ${(phase.assignmentIndex || 0) + 1}/${phase.assignmentTotal || 0}`
+        : phase.stage === 'assignment-replace' ? `замена ${(phase.replacementIndex || 0) + 1}/${phase.replacementTotal || 0}`
+        : Number.isInteger(phase.playerIndex) ? `${phase.playerIndex + 1}/${phase.totalPlayers || r.players.length}`
+        : 'ожидание')
+      : 'события';
+    let html = `<div class="event-decks">Колоды событий, экспедиций, вражды и поручений скрыты.</div><div class="event-decks">Сокровища: цифровой случайный пул из ${r.treasurePool?.typeIds?.length || 4} равновероятных результатов, независимый выбор.</div><div class="event-decks">Легендарные карты: цифровой случайный пул из ${r.legendaryPool?.typeIds?.length || 4} видов, без отдельной колоды и сброса.</div>`;
     if (phase?.active) {
       const currentName = playerName(phase.currentPlayerId);
       html += `<div class="event-current"><strong>${phase.personalTurn ? 'Шестой круг' : 'Фаза событий'} · ${escapeHtml(stageLabel)}</strong><br>Текущий игрок: ${escapeHtml(currentName)}.</div>`;
@@ -1696,8 +1700,6 @@
     const assignmentFaction = assignment ? (r.factions?.find(f => f.id === assignment.factionId) || suzerain) : suzerain;
     const priority = mine.assignmentPriority || null;
     badge.textContent = pending?.viewerCanRespond ? 'выбор' : (priority ? 'обязательно' : assignment ? 'активно' : (suzerain ? 'ожидание' : 'нет'));
-    const deckFactionId = assignment?.factionId || suzerain?.id || pending?.factionId || null;
-    const deck = deckFactionId ? r.assignmentDecks?.[deckFactionId] : null;
     let html = '';
     if (!suzerain && !assignment) {
       html = '<div class="event-current">Вы не состоите в подданстве. Поручения получают вассалы Лионии, Кадингира, Мори, Вольной Суниксии и пиратов.</div>';
@@ -1727,7 +1729,6 @@
     } else {
       html = `<div class="event-current"><strong>${escapeHtml(suzerain.name)}</strong><br>Активного поручения нет. Если в начале вашего следующего личного хода шестого круга вы всё ещё вассал без поручения, карта будет выдана тогда.</div>`;
     }
-    if (deck) html += `<div class="event-decks">Колода поручений: ${deck.remaining} · сброс: ${deck.discard}${deck.removed ? ` · убрано как невыполнимые: ${deck.removed}` : ''}</div>`;
     content.innerHTML = html;
 
     if (pending?.viewerCanRespond && pending.kind === 'embassy') {

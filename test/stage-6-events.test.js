@@ -184,14 +184,15 @@ test('stage 6.1: Observatory resolves one sailing card before feud, Embassy assi
 
   state = await change(targetSocket, 'respondEvent', { eventId: state.pendingEvent.id, choice: 'replace' });
   const targetView = state.players.find(player => player.id === targetId);
-  assert.equal(state.pendingEvent, null);
+  assert.equal(Object.hasOwn(state,'pendingEvent'), false);
   assert.equal(state.eventPhase.stage, 'assignment');
   assert.equal(state.eventPhase.observatoryReplacementsUsed, 1);
   assert.equal(targetView.activeTurnEffects.moveBonus, 2); // first (+1) was not applied; mandatory second (+2) was.
-  assert.equal(state.eventDecks.sailing.remaining, 0);
-  assert.equal(state.eventDecks.sailing.discard, 2); // first rejected + second resolved, each returned exactly once.
-  assert.equal(state.feudDecks.kadingir.discard, 1);
-  assert.deepEqual(Object.keys(state.feudDecks.kadingir).sort(), ['discard', 'remaining']);
+  for(const key of ['eventDecks','feudDecks','assignmentDecks']) assert.equal(Object.hasOwn(state,key),false,key);
+  const persistedAfterEvent = JSON.parse(fs.readFileSync(file,'utf8')).game_rooms[0].state;
+  assert.equal(persistedAfterEvent.eventDeck.drawPile.length, 0);
+  assert.equal(persistedAfterEvent.eventDeck.discard.length, 2); // first rejected + second resolved, each returned exactly once.
+  assert.equal(persistedAfterEvent.feudDecks.kadingir.discard.length, 1);
   assert.equal(state.pendingAssignmentChoice.kind, 'embassy');
   assert.equal(state.pendingAssignmentChoice.options.length, 2);
 
@@ -206,7 +207,7 @@ test('stage 6.1: Observatory resolves one sailing card before feud, Embassy assi
   state = await change(targetSocket, 'respondAssignmentChoice', { choiceId: state.pendingAssignmentChoice.id, assignmentId: choice.id });
   const afterAssignment = state.players.find(player => player.id === targetId);
   assert.equal(state.eventPhase, null);
-  assert.equal(state.pendingAssignmentChoice, null);
+  assert.equal(Object.hasOwn(state,'pendingAssignmentChoice'), false);
   assert.equal(state.activePlayerId, targetId);
   assert.equal(afterAssignment.phase, 'navigation');
   assert.equal(afterAssignment.actionsLeft, rules.session.actionsPerTurn);
@@ -267,8 +268,10 @@ test('stage 6.1: Observatory resolves one sailing card before feud, Embassy assi
   assert.equal(state.activePlayerId, targetId);
   assert.equal(keptTarget.phase, 'navigation');
   assert.equal(keptTarget.activeTurnEffects.moveBonus, 1);
-  assert.equal(state.eventDecks.sailing.discard, 1);
-  assert.equal(state.eventDecks.sailing.remaining, 1); // keep must not consume the second outcome.
+  assert.equal(Object.hasOwn(state,'eventDecks'), false);
+  const persistedAfterKeep = JSON.parse(fs.readFileSync(file,'utf8')).game_rooms[0].state;
+  assert.equal(persistedAfterKeep.eventDeck.discard.length, 1);
+  assert.equal(persistedAfterKeep.eventDeck.drawPile.length, 1); // keep must not consume the second outcome.
 
 
 });

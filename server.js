@@ -1091,12 +1091,9 @@ function hasPendingDecision(room) {
 function pendingDecisionError(room) {
   if (room?.pendingAlliance) return 'Сначала завершите предложение союза.';
   if (room?.pendingBattle) return 'Сначала завершите текущий совместный бой.';
-  if (room?.pendingEvent) return 'Сначала разрешите карту события.';
-  if (room?.pendingFeud) return 'Сначала разрешите карту вражды.';
-  if (room?.pendingAssignmentChoice) return 'Сначала выберите поручение через Посольство.';
-  if (room?.pendingIslandCorrection) return room.pendingIslandCorrection.kind === 'capture-retention' ? 'Сначала выберите постройки, которые будут уничтожены после захвата острова.' : 'Сначала удалите лишние постройки с острова после потери статуса.';
-  if (room?.pendingFleetAdjustment) return 'Сначала завершите обязательный выбор по флотилии или поддержке бастионов.';
-  if (room?.pendingLegendaryReaction) return 'Сначала разрешите реакцию «Покров моря».';
+  if (room?.pendingEvent || room?.pendingFeud || room?.pendingAssignmentChoice || room?.pendingIslandCorrection || room?.pendingFleetAdjustment || room?.pendingLegendaryReaction) {
+    return 'Ожидается обязательное решение игрока.';
+  }
   return null;
 }
 

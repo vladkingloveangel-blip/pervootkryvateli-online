@@ -86,6 +86,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   for(const [view,ownerId] of [[firstView,created.playerId],[secondView,joinedSecond.playerId]]) {
     assert.ok(view);
     assert.equal(Object.hasOwn(view,'log'),false);
+    for(const key of ['eventDecks','feudDecks','assignmentDecks']) assert.equal(Object.hasOwn(view,key),false,key);
     for(const p of view.players) {
       if(p.id===ownerId) {
         assert.equal(p.ducats,canonical.session.startingDucats);
@@ -119,6 +120,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal((await emit(watcher, 'adminWatchRoom', { accountToken: stranger.token, code })).ok, false);
   const watch = await emit(watcher, 'adminWatchRoom', { accountToken: admin.token, code });
   assert.equal(watch.room.adminSpectator, true); assert.equal(watch.room.players.length, 4);
+  for(const key of ['eventDecks','feudDecks','assignmentDecks']) assert.ok(Object.hasOwn(watch.room,key),key);
   assert.equal(watch.room.ruleset.rulesetVersion, canonical.metadata.rulesetVersion);
   assert.equal(watch.room.balanceCatalog.bastion.price, canonical.economy.buildings.bastion.price);
   assert.equal(watch.room.balanceCatalog.bastion.defense, canonical.economy.buildings.bastion.defense);
@@ -333,4 +335,20 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(rows().length, 0);
   await stop(); await start();
   assert.equal((await api('/health')).data.rooms, 0);
+});
+
+
+test('4.4 corrective: general gameplay gate reports private pending generically',()=>{
+  const source=fs.readFileSync(path.join(__dirname,'..','server.js'),'utf8');
+  const match=source.match(/function pendingDecisionError\(room\) \{([\s\S]*?)\n\}/);
+  assert.ok(match,'pendingDecisionError source');
+  const pendingDecisionError=new Function('room',match[1]);
+  const families=['pendingEvent','pendingFeud','pendingAssignmentChoice','pendingIslandCorrection','pendingFleetAdjustment','pendingLegendaryReaction'];
+  for(const key of families) {
+    const error=pendingDecisionError({[key]:{kind:'SECRET_KIND'}});
+    assert.equal(error,'Ожидается обязательное решение игрока.');
+    assert.doesNotMatch(error,/Покров|Посольств|поручен|легендар|событ|вражд/i);
+  }
+  assert.equal(pendingDecisionError({pendingBattle:{}}),'Сначала завершите текущий совместный бой.');
+  assert.equal(pendingDecisionError({pendingAlliance:{}}),'Сначала завершите предложение союза.');
 });

@@ -42,6 +42,18 @@ test('ordinary player UI has no journal dependency or journal navigation', () =>
 // Execute existing renderers against projected data and click their actual callbacks.
 // A minimal DOM suffices here: these actions create nodes, labels and click handlers.
 const vm = require('node:vm');
+
+test('4.4 corrective UI treats generic waiting as pending and has no source-counter dependency',()=>{
+  assert.match(app,/state\.room\?\.pendingDecision/);
+  assert.doesNotMatch(app,/eventDecks|feudDecks|assignmentDecks/);
+  const start=app.indexOf('  function isDecisionPending()');
+  const end=app.indexOf('\n',start);
+  assert.ok(start>=0 && end>start);
+  const context=vm.createContext({state:{room:{pendingDecision:{waiting:true,actorPlayerId:'p2'}}}});
+  vm.runInContext(app.slice(start,end)+'\nresult=isDecisionPending();',context);
+  assert.equal(context.result,true);
+});
+
 const { projectOpponentFacingRoomView } = require('../state-projection');
 function uiHarness(legacy, renderer) {
   const nodes=new Map(), calls=[];

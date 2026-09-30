@@ -38,7 +38,7 @@ const constraintReport = o({
   ...f('legal status usedArea effectiveArea overArea branchLimit'),
   branchViolations:a(o(f('branch name count limit'))),
 });
-const anchorEncounter = o({ ...f('round row col color anchorName cardName cardArtillery rewardValue fleetPower outcome fleetPoints'), reward:o(f('gross net')), penalty:o(f('required paid')) });
+const anchorEncounter = o(f('round row col color anchorName cardName cardArtillery rewardValue fleetPower outcome fleetPoints'));
 const ownerAnchorEncounter = o({ ...anchorEncounter.fields, reward:o(f('gross debtPaid net debtRemaining')), penalty:o(f('required paid addedDebt debt')) });
 const publicPlayer = o({
   ...f('id name color shipClass glory fleetPoints armyPoints level row col connected ready islandCount suzerainId vassalGiftIslandId namedPlaceCardCount expeditionHistoryCount bastionSupportCapacity bastionCount bastionSupportChoiceRequired cargoCapacity assaultArmy fleetArtillery totalCargoCapacity upgradeSlots shipyardSlots escortUseLimit nextEscortPrice atCitadel inPeaceZone skipTurns phase roll movePoints actionsLeft'),
@@ -143,20 +143,41 @@ function actorId(pending, actorField){
 }
 function projectPendingForViewer(pending, viewerContext=null, options={}){
   if(!pending || typeof pending!=='object' || Array.isArray(pending)) return null;
-  const c=ctx(viewerContext), id=actorId(pending,options.actorField), actor=c.viewerId!==null && id!==null && c.viewerId===id, out={};
+  const c=ctx(viewerContext), id=actorId(pending,options.actorField), actor=c.viewerId!==null && id!==null && c.viewerId===id;
+  if(!actor) return null;
+  const out={ viewerCanRespond:true };
   if(own(pending,'id')) { const v=p(pending.id,S); if(v!==undefined) out.id=v; }
   const key=options.actorField || (own(pending,'playerId')?'playerId':own(pending,'targetPlayerId')?'targetPlayerId':own(pending,'actorId')?'actorId':null);
   if(key && own(pending,key)){ const v=p(pending[key],S); if(v!==undefined) out[key]=v; }
-  out.viewerCanRespond=actor;
-  if(actor) merge(out,pending,pendingSchemas[options.family || 'pendingEvent']);
+  merge(out,pending,pendingSchemas[options.family || 'pendingEvent']);
+  return out;
+}
+function projectPersonalPendingFamilies(out, src, viewerContext){
+  const c=ctx(viewerContext);
+  delete out.pendingDecision;
+  for(const [key,actorField] of pendingFamilies) {
+    const pending=own(src,key) ? src[key] : null;
+    if(!pending || typeof pending!=='object' || Array.isArray(pending)) { delete out[key]; continue; }
+    const id=actorId(pending,actorField);
+    const actor=c.viewerId!==null && id!==null && c.viewerId===id;
+    if(actor) out[key]=projectPendingForViewer(pending,c,{actorField,family:key});
+    else {
+      delete out[key];
+      if(id!==null && !out.pendingDecision) out.pendingDecision={waiting:true,actorPlayerId:id};
+    }
+  }
   return out;
 }
 function put(out,src,key,schema){ if(own(src,key)){ const v=p(src[key],schema); if(v!==undefined) out[key]=v; } }
 function projectEventPhaseForViewer(phase, viewerContext=null){
-  const out=p(phase,eventPhase), c=ctx(viewerContext), card=phase?.lastCard;
-  const actor=card && c.viewerId!==null && String(card.playerId)===c.viewerId;
-  // Completed sailing/feud facts stay public; assignment and unresolved source stay actor-only.
-  if(card && (actor || (card.pending===false && ['sailing','feud'].includes(card.source)))) put(out,phase,'lastCard',lastCard);
+  if(phase===undefined) return undefined;
+  if(phase===null) return null;
+  const c=ctx(viewerContext), card=phase?.lastCard;
+  const phaseActorId=phase?.currentPlayerId!=null ? String(phase.currentPlayerId) : card?.playerId!=null ? String(card.playerId) : null;
+  const actor=c.viewerId!==null && phaseActorId!==null && c.viewerId===phaseActorId;
+  if(phase?.active && !actor) return p(phase,o(f('active personalTurn currentPlayerId')));
+  const out=p(phase,eventPhase);
+  if(card && c.viewerId!==null && String(card.playerId)===c.viewerId) put(out,phase,'lastCard',lastCard);
   return out;
 }
 function projectRoomForViewer(roomView, viewerContext=null){
@@ -165,7 +186,7 @@ function projectRoomForViewer(roomView, viewerContext=null){
   for(const key of 'version code started hostId leaderId round circle turnIndex activePlayerId'.split(' ')) put(out,roomView,key,S);
   for(const key of ['seatingOrder','order']) put(out,roomView,key,a(S));
   for(const [key,schema] of [['eventPhase',eventPhase],['treasurePool',pool],['legendaryPool',pool],['legendaryPlaces',a(legendaryPlace)],['namedPlaceCards',a(namedPlace)],['alliances',a(a(S))],['pendingBattle',battle],['pendingAlliance',alliance],['characterCatalog',characterCatalog],['buildingCatalog',simpleCatalog],['goodsCatalog',simpleCatalog],['shipUpgradeCatalog',simpleCatalog]]) put(out,roomView,key,schema);
-  for(const [key,actorField] of pendingFamilies) if(own(roomView,key)) out[key]=projectPendingForViewer(roomView[key],c,{actorField,family:key});
+  projectPersonalPendingFamilies(out,roomView,c);
   if(own(roomView,'eventPhase')) out.eventPhase=projectEventPhaseForViewer(roomView.eventPhase,c);
   if(Array.isArray(roomView.players)) out.players=roomView.players.map(v=>projectPlayerForViewer(v,c));
   if(Array.isArray(roomView.islands)) out.islands=roomView.islands.map(v=>projectIslandForViewer(v,c));
@@ -178,13 +199,14 @@ function projectRoomForViewer(roomView, viewerContext=null){
 function projectOpponentFacingRoomView(legacyRoomView, viewerContext=null){
   if(!legacyRoomView || typeof legacyRoomView!=='object' || Array.isArray(legacyRoomView)) return {};
   const c=ctx(viewerContext), out=structuredClone(legacyRoomView);
-  // Shared journal can contain secrets even for the owner of this view.
+  // Shared journal and private-derived source counters never cross the ordinary player boundary.
   delete out.log;
+  delete out.eventDecks;
+  delete out.feudDecks;
+  delete out.assignmentDecks;
   if(Array.isArray(out.players)) out.players=out.players.map(v=>projectPlayerForViewer(v,c));
   if(Array.isArray(out.islands)) out.islands=out.islands.map(v=>projectIslandForViewer(v,c));
-  for(const [key,actorField] of pendingFamilies) {
-    if(own(out,key)) out[key]=projectPendingForViewer(out[key],c,{actorField,family:key});
-  }
+  projectPersonalPendingFamilies(out,legacyRoomView,c);
   for(const [key,schema] of [['pendingBattle',battle],['pendingAlliance',alliance]]) {
     if(own(out,key)) out[key]=p(out[key],schema);
   }
