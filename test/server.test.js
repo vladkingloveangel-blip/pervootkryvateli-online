@@ -722,3 +722,109 @@ test('4.4 corrective: general gameplay gate reports private pending generically'
   assert.equal(pendingDecisionError({pendingBattle:{}}),'Сначала завершите текущий совместный бой.');
   assert.equal(pendingDecisionError({pendingAlliance:{}}),'Сначала завершите предложение союза.');
 });
+
+
+test('finished persisted room restart resume projects identical public result without leaking private state', { timeout: 30000 }, async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pervo-finished-resume-'));
+  const file = path.join(dir, 'database.json');
+  const listener = net.createServer(); listener.listen(0, '127.0.0.1'); await once(listener, 'listening');
+  const port = listener.address().port; await new Promise(resolve => listener.close(resolve));
+  const base = 'http://127.0.0.1:' + port;
+  let child;
+  let output = '';
+  const sockets = [];
+  async function start() {
+    output = '';
+    child = spawn(process.execPath, ['--require', './test/fixtures/postgres.cjs', 'server.js'], {
+      cwd: path.join(__dirname, '..'), windowsHide: true,
+      env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', DATABASE_URL: 'postgres://test', AUTH_SECRET: 'finished-resume-secret', TEST_DB_FILE: file },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    child.stdout.on('data', data => { output += data; }); child.stderr.on('data', data => { output += data; });
+    for (let i = 0; i < 150; i++) {
+      if (child.exitCode !== null) throw Error(output);
+      try { if ((await fetch(base + '/health')).ok) return; } catch {}
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    throw Error('Server did not start: ' + output);
+  }
+  async function stop() { const exit = once(child, 'exit'); child.kill('SIGKILL'); await exit; }
+  async function connect() { const socket = io(base, { transports: ['websocket'], reconnection: false }); sockets.push(socket); await once(socket, 'connect'); return socket; }
+  const emit = (socket, name, data = {}) => new Promise((resolve, reject) => socket.timeout(5000).emit(name, data, (err, value) => err ? reject(err) : resolve(value)));
+  async function register(username) {
+    const response = await fetch(base + '/api/auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ username, password:'password1' }) });
+    return response.json();
+  }
+  const database = () => JSON.parse(fs.readFileSync(file, 'utf8'));
+  const writeDatabase = value => fs.writeFileSync(file, JSON.stringify(value));
+  t.after(async () => { sockets.forEach(socket => socket.disconnect()); if (child?.exitCode === null) await stop(); fs.rmSync(dir, { recursive:true, force:true }); });
+
+  await start();
+  const a = await register('finishedresume1');
+  const b = await register('finishedresume2');
+  const first = await connect(), second = await connect();
+  const created = await emit(first, 'createRoom', { accountToken:a.token, name:'One' });
+  const joined = await emit(second, 'joinRoom', { code:created.code, accountToken:b.token, name:'Two' });
+  assert.equal(created.ok && joined.ok, true);
+  await stop();
+
+  const db = database();
+  const room = db.game_rooms[0].state;
+  const p1 = room.players.find(player => player.id === created.playerId);
+  const p2 = room.players.find(player => player.id === joined.playerId);
+  room.started = true; room.finished = true; room.phase = 'finished'; room.round = 8; room.circle = 6;
+  room.digitalModelSchemaVersion = CURRENT_DIGITAL_MODEL_SCHEMA_VERSION;
+  room.endGameConsensus = { status:'accepted', proposedById:p1.id, confirmedPlayerIds:[p1.id,p2.id], finishAfterRound:8 };
+  const metricKeys = ['islands','wealth','army','fleet','prestige','legendaryPlaces'];
+  const finalResult = {
+    finishedRound:8,
+    playerMetrics:[
+      { playerId:p1.id, metrics:{ islands:3, wealth:40, army:9, fleet:8, prestige:7, legendaryPlaces:2 } },
+      { playerId:p2.id, metrics:{ islands:3, wealth:30, army:5, fleet:8, prestige:4, legendaryPlaces:1 } },
+    ],
+    titles:metricKeys.map((id,index)=>({ id, name:'Title '+id, metric:id, maxValue:index, winnerIds:index===0?[p1.id,p2.id]:[p1.id] })),
+  };
+  room.finalResult = structuredClone(finalResult);
+  p1.ducats = 777; p1.character = { id:'private-character', name:'Private Character' }; p1.storedBenefits = [{ id:'private-benefit', payload:'STORED_SECRET' }];
+  room.pendingResolution = { type:'event', actorPlayerId:p1.id, payload:{ secret:'PENDING_SECRET' } };
+  room.randomSourceState = { sailingEvent:{ available:[{ id:'RANDOM_SECRET' }] } };
+  room.persistenceOnlySentinel = 'PERSISTENCE_SECRET';
+  const persistedFinalResult = structuredClone(room.finalResult);
+  writeDatabase(db);
+
+  await start();
+  const restoredBeforeResume = database().game_rooms[0].state;
+  assert.deepEqual(restoredBeforeResume.finalResult, persistedFinalResult);
+
+  const resumedOne = await connect(), resumedTwo = await connect();
+  const oneStatePromise = once(resumedOne, 'roomState');
+  assert.equal((await emit(resumedOne, 'resumeRoom', { code:created.code, accountToken:a.token })).ok, true);
+  const [oneState] = await oneStatePromise;
+  const twoStatePromise = once(resumedTwo, 'roomState');
+  assert.equal((await emit(resumedTwo, 'resumeRoom', { code:created.code, accountToken:b.token })).ok, true);
+  const [twoState] = await twoStatePromise;
+
+  for (const state of [oneState,twoState]) {
+    assert.equal(state.finished,true); assert.equal(state.phase,'finished');
+    assert.deepEqual(state.finalResult,finalResult);
+    assert.equal(state.finalResult.playerMetrics.length,2);
+    for (const entry of state.finalResult.playerMetrics) assert.deepEqual(Object.keys(entry.metrics).sort(),[...metricKeys].sort());
+    assert.equal(state.finalResult.titles.length,6);
+    assert.deepEqual(state.finalResult.titles[0].winnerIds,[p1.id,p2.id]);
+    assert.deepEqual(state.endGameConsensus,{ status:'accepted', proposedById:p1.id, confirmedPlayerIds:[p1.id,p2.id], finishAfterRound:8 });
+    for (const key of ['randomSourceState','digitalModelSchemaVersion','persistenceOnlySentinel','pendingResolution']) assert.equal(Object.hasOwn(state,key),false,key);
+    assert.equal(JSON.stringify(state).includes('PENDING_SECRET'),false);
+    assert.equal(JSON.stringify(state).includes('RANDOM_SECRET'),false);
+    assert.equal(JSON.stringify(state).includes('PERSISTENCE_SECRET'),false);
+    assert.equal(JSON.stringify(state).includes('STORED_SECRET'),false);
+  }
+  assert.deepEqual(oneState.finalResult,twoState.finalResult);
+  const oneOwn = oneState.players.find(player => player.id===p1.id);
+  const oneOther = twoState.players.find(player => player.id===p1.id);
+  assert.equal(oneOwn.ducats,777); assert.equal(oneOwn.character.id,'private-character');
+  assert.equal(Object.hasOwn(oneOther,'ducats'),false); assert.equal(Object.hasOwn(oneOther,'character'),false);
+  assert.equal(Object.hasOwn(oneOther,'storedBenefits'),false);
+
+  const persistedAfterResume = database().game_rooms[0].state;
+  assert.deepEqual(persistedAfterResume.finalResult,persistedFinalResult);
+});
