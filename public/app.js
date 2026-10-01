@@ -2630,7 +2630,7 @@
           b.disabled = !canAct;
           b.addEventListener('click', () => socket.emit('useScout', { mode: 'garrison', islandId: island.id }, res => {
             handleGameAck(res);
-            if (res?.ok) enqueueToast(`Разведан гарнизон: ${island.name}`, 'success');
+            if (res?.ok) enqueueToast(`Разведан гарнизон: ${island.name}. Откройте остров на карте.`, 'success');
           }));
           actions.appendChild(b);
         }
@@ -3598,11 +3598,88 @@
     }
   }
 
+  function foreignIslandHasPrivateReveal(island) {
+    if (!island || island.ownerId === state.myId) return false;
+    return Object.hasOwn(island, 'garrisonName')
+      || Object.hasOwn(island, 'garrisonDefense')
+      || Object.hasOwn(island, 'defenseArmy')
+      || Object.hasOwn(island, 'defenseBreakdown');
+  }
+
+  function foreignIslandCompactHtml(island) {
+    const owner = island.ownerId
+      ? playerName(island.ownerId)
+      : (island.faction || (island.kind === 'free' ? 'Свободный остров' : island.kind === 'independent' ? 'Независимый остров' : 'Нет владельца'));
+    const resources = island.resources?.length ? island.resources.join(', ') : 'нет';
+    const buildings = island.buildings?.length
+      ? island.buildings.map(building => building.name).join(', ')
+      : 'нет';
+    const revealed = foreignIslandHasPrivateReveal(island);
+
+    let hiddenBlock = '<div class="foreign-island-hidden"><span>Гарнизон</span><strong>неизвестно</strong></div>';
+    if (revealed) {
+      const garrison = island.garrisonName
+        ? `${island.garrisonName} (+${island.garrisonDefense || 0})`
+        : 'нет отдельного гарнизона';
+      hiddenBlock = `
+        <div class="foreign-island-scout-badge">РАЗВЕДАНО · до конца вашего хода</div>
+        <div class="foreign-island-line"><span>Гарнизон</span><strong>${escapeHtml(garrison)}</strong></div>
+        ${Object.hasOwn(island, 'defenseArmy') ? `<div class="foreign-island-line"><span>Точная защита</span><strong>${island.defenseArmy}</strong></div>` : ''}
+      `;
+    }
+
+    return `
+      <div class="foreign-island-summary">
+        <div class="foreign-island-stat"><span>Владелец</span><strong>${escapeHtml(owner)}</strong></div>
+        <div class="foreign-island-stat"><span>Статус</span><strong>${escapeHtml(island.status || '—')}</strong></div>
+        <div class="foreign-island-stat"><span>Площадь</span><strong>${island.usedArea ?? 0}/${island.effectiveArea ?? island.area ?? 0}</strong></div>
+        <div class="foreign-island-stat"><span>Ресурсы</span><strong>${escapeHtml(resources)}</strong></div>
+      </div>
+      ${hiddenBlock}
+      <div class="foreign-island-line"><span>Постройки</span><strong>${escapeHtml(buildings)}</strong></div>
+    `;
+  }
+
+  function renderForeignIslandObjectSheet(island) {
+    const sheet = $('objectSheet');
+    $('objectSheetKind').textContent = island.ownerId ? 'ЧУЖОЙ ОСТРОВ' : (island.kind === 'state' ? 'ГОСУДАРСТВЕННЫЙ ОСТРОВ' : 'ОСТРОВ');
+    $('objectSheetTitle').textContent = island.name;
+    $('objectSheetBody').innerHTML = foreignIslandCompactHtml(island);
+
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    const here = currentIslands().some(item => item.id === island.id);
+    const mine = me();
+    const myTurn = state.room?.activePlayerId === state.myId;
+    const canContextAct = Boolean(here && mine && myTurn && mine.phase === 'actions' && !isDecisionPending());
+
+    if (canContextAct) {
+      state.selectedIslandId = island.id;
+      const action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'danger-soft';
+      action.textContent = 'Действия на острове';
+      action.addEventListener('click', () => {
+        closeMapInfo();
+        openMobileTab('actions');
+      });
+      actions.appendChild(action);
+    }
+
+    sheet.classList.remove('hidden');
+    sheet.classList.remove('expanded');
+    document.body.classList.add('object-sheet-open');
+  }
+
   function renderObjectSheetFromMapInfo(kind, data) {
     const sheet = $('objectSheet');
     if (!sheet) return;
     if (kind === 'island' && data.ownerId === state.myId) {
       renderOwnIslandObjectSheet(data);
+      return;
+    }
+    if (kind === 'island') {
+      renderForeignIslandObjectSheet(data);
       return;
     }
 
@@ -3695,10 +3772,13 @@
     action.onclick = null;
 
     if (kind === 'island') {
-      const owner = data.ownerId ? playerName(data.ownerId) : (data.faction || (data.kind === 'free' ? 'Свободный остров' : data.kind === 'independent' ? 'Независимый остров' : 'Нет владельца'));
-      const resources = data.resources?.length ? data.resources.join(', ') : 'нет';
-      const defense = data.defenseArmy ?? data.army ?? 0;
-      meta.innerHTML = `<span>Владелец: <strong>${escapeHtml(owner)}</strong></span><span>Площадь: <strong>${data.area}</strong></span><span>Исходный гарнизон: <strong>${data.army ?? 0}</strong></span><span>Текущая защита: <strong>${defense}</strong></span><span>Ресурс: <strong>${escapeHtml(resources)}</strong></span>`;
+      if (data.ownerId === state.myId) {
+        const resources = data.resources?.length ? data.resources.join(', ') : 'нет';
+        const defense = Object.hasOwn(data, 'defenseArmy') ? data.defenseArmy : data.army;
+        meta.innerHTML = `<span>Ваш остров</span><span>Статус: <strong>${escapeHtml(data.status || '—')}</strong></span><span>Площадь: <strong>${data.usedArea ?? 0}/${data.effectiveArea ?? data.area ?? 0}</strong></span><span>Защита: <strong>${defense ?? '—'}</strong></span><span>Ресурсы: <strong>${escapeHtml(resources)}</strong></span>`;
+      } else {
+        meta.innerHTML = foreignIslandCompactHtml(data);
+      }
       const here = currentIslands().some(i => i.id === data.id);
       if (here) {
         state.selectedIslandId = data.id;

@@ -1910,3 +1910,60 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     background: rgba(8,37,44,.98);
   }
 }
+
+
+/* UI-11 — foreign island privacy and Scout reveal */
+@media (max-width: 900px) {
+  body.game-active .foreign-island-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  body.game-active .foreign-island-stat {
+    display: grid;
+    gap: 2px;
+    padding: 8px 9px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(255,255,255,.035);
+  }
+
+  body.game-active .foreign-island-stat span,
+  body.game-active .foreign-island-line span,
+  body.game-active .foreign-island-hidden span {
+    color: var(--muted);
+    font-size: 10px;
+  }
+
+  body.game-active .foreign-island-stat strong {
+    font-size: 13px;
+  }
+
+  body.game-active .foreign-island-line,
+  body.game-active .foreign-island-hidden {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 2px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+  }
+
+  body.game-active .foreign-island-hidden strong {
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  body.game-active .foreign-island-scout-badge {
+    margin-top: 4px;
+    padding: 7px 9px;
+    border: 1px solid rgba(240,196,91,.42);
+    border-radius: 9px;
+    color: var(--accent);
+    background: rgba(240,196,91,.08);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .06em;
+    text-align: center;
+  }
+}

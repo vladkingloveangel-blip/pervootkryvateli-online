@@ -474,3 +474,42 @@ test('UI-10 does not remove legacy island renderer before parity cleanup', () =>
   assert.match(index, /id="islandContent"/);
   assert.match(index, /id="islandActions"/);
 });
+
+
+test('UI-11 foreign island card never derives hidden defense from public army', () => {
+  const start = app.indexOf('  function foreignIslandHasPrivateReveal(');
+  const end = app.indexOf('\n  function renderObjectSheetFromMapInfo(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /foreignIslandCompactHtml/);
+  assert.match(code, /Гарнизон/);
+  assert.match(code, /неизвестно/);
+  assert.match(code, /Object\.hasOwn\(island, 'defenseArmy'\)/);
+  assert.match(code, /РАЗВЕДАНО · до конца вашего хода/);
+  assert.doesNotMatch(code, /defenseArmy \?\? island\.army/);
+  assert.doesNotMatch(code, /Точная защита[^\n]*island\.army/);
+
+  const showStart = app.indexOf('  function showMapInfo(');
+  const showEnd = app.indexOf('\n  function ', showStart + 1);
+  const showCode = app.slice(showStart, showEnd);
+  assert.match(showCode, /foreignIslandCompactHtml\(data\)/);
+  assert.doesNotMatch(showCode, /data\.defenseArmy \?\? data\.army/);
+  assert.doesNotMatch(showCode, /Исходный гарнизон/);
+});
+
+test('UI-11 Scout reveal is inferred only from viewer-projected private island fields', () => {
+  const start = app.indexOf('  function foreignIslandHasPrivateReveal(');
+  const end = app.indexOf('\n  function foreignIslandCompactHtml(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /Object\.hasOwn\(island, 'garrisonName'\)/);
+  assert.match(code, /Object\.hasOwn\(island, 'garrisonDefense'\)/);
+  assert.match(code, /Object\.hasOwn\(island, 'defenseArmy'\)/);
+  assert.match(code, /Object\.hasOwn\(island, 'defenseBreakdown'\)/);
+  assert.doesNotMatch(code, /scoutRevealGrants|localStorage|state\.scout/);
+
+  assert.match(app, /Разведан гарнизон: .*Откройте остров на карте/);
+  assert.match(styles, /UI-11 — foreign island privacy and Scout reveal/);
+});
