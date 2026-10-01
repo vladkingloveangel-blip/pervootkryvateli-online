@@ -16,6 +16,8 @@ const {
   dequeueResolution,
   resolutionQueueLength,
   getPendingResolution,
+  setPendingResolution,
+  pendingResolutionFromLegacy,
   pendingResolutionToLegacy,
 } = require('../domain-state');
 const { ASSIGNMENT_CARDS, TREASURE_CARDS } = require('../game-data');
@@ -317,7 +319,7 @@ test('restart mid expedition pending keeps queued B blocked, then cargo response
   room.completedTurns = room.order.length * 6;
   room.phase = 'actions';
   room.actionsLeft = 2;
-  room.eventPhase = null;
+  room.preTurnResolutionFlow = null;
   active.cargo = null;
   active.escorts = [];
   active.activeAssignment = {
@@ -326,7 +328,7 @@ test('restart mid expedition pending keeps queued B blocked, then cargo response
     card: structuredClone(treasureAssignment),
     issuedRound: 2,
   };
-  room.pendingEvent = {
+  setPendingResolution(room, 'event', pendingResolutionFromLegacy('event', {
     id: 'expedition-A-pending',
     playerId: activeId,
     kind: 'cargo',
@@ -336,12 +338,12 @@ test('restart mid expedition pending keeps queued B blocked, then cargo response
     treasureCard: structuredClone(diamonds),
     treasureAssignmentInstanceId: null,
     origin: 'expedition',
-  };
-  room.pendingExpeditionRewards = [{
+  }));
+  room.resolutionQueue = { kind: 'resolution-queue', items: [{
     playerId: activeId,
     expeditionName: 'B queued reward',
     treasureAssignmentInstanceId: 'old-captured-assignment',
-  }];
+  }] };
   writeDb(db);
 
   await start({ fixedRandom: true });

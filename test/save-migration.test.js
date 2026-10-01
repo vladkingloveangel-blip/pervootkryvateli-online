@@ -839,7 +839,7 @@ test('completion releases a migrated active occurrence exactly once after restar
   assert.equal(storage.available.filter(item => item.id === active.id).length, 1);
 });
 
-test('already-current schema 7 save is a content-exact no-op and second migration is idempotent', () => {
+test('already-current schema 8 save is a content-exact no-op and second migration is idempotent', () => {
   const current = migrateRoomState(assignmentFixture().raw).state;
   const direct = migrateRoomState(current);
   assert.equal(direct.migrated, false);
@@ -1015,7 +1015,7 @@ test('4 -> 5 -> 6 -> 7 preserves task linkage and migrates discovery/effects/pen
   const migrated = migrateRoomState(raw).state;
   const player = migrated.players[0];
   assert.equal(getActiveAssignmentTask(player).id, listStoredBenefits(player)[0].payload.assignmentInstanceId);
-  assert.equal(migrated.digitalModelSchemaVersion, PENDING_ORCHESTRATION_DIGITAL_MODEL_SCHEMA_VERSION);
+  assert.equal(migrated.digitalModelSchemaVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
 
   for (const field of ['namedPlaceCards', 'legendaryEffects', 'activeTurnEffects', 'nextTurnEffects']) {
     assert.equal(Object.hasOwn(player, field), false, field);

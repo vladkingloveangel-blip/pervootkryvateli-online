@@ -8,6 +8,7 @@ const path = require('node:path');
 const net = require('node:net');
 const { io } = require('socket.io-client');
 const { projectOpponentFacingRoomView } = require('../state-projection');
+const { pendingResolutionFromLegacy, setPendingResolution } = require('../domain-state');
 
 const has = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 const PRIVATE_PLAYER_KEYS = [
@@ -507,11 +508,14 @@ test('4.7 personal pending families and event phase are actor-only over real roo
   const boot = await bootstrapStartedRoom(h);
   const families = ['pendingEvent', 'pendingFeud', 'pendingAssignmentChoice', 'pendingIslandCorrection', 'pendingFleetAdjustment', 'pendingLegendaryReaction'];
   boot.room.phase = 'actions';
-  boot.room.eventPhase = {
-    active: true, personalTurn: true, currentPlayerId: boot.a.playerId, playerIndex: 2, totalPlayers: 4,
-    stage: 'SECRET_EVENT_STAGE', observatoryReplacementsUsed: 1, feudIndex: 1, feudTotal: 3,
-    assignmentIndex: 1, assignmentTotal: 2, replacementIndex: 1, replacementTotal: 2,
-    feudQueue: ['SECRET_FEUD_QUEUE'], assignmentQueue: ['SECRET_ASSIGNMENT_QUEUE'], replacementQueue: ['SECRET_REPLACEMENT_QUEUE'],
+  boot.room.preTurnResolutionFlow = {
+    active: true,
+    personalTurn: true,
+    currentPlayerId: boot.a.playerId,
+    stage: 'SECRET_EVENT_STAGE',
+    indexes: { sailing: 2, political: 1, assignment: 1 },
+    queues: { political: ['SECRET_FEUD_QUEUE'], assignment: ['SECRET_ASSIGNMENT_QUEUE'] },
+    counters: { observatoryReplacementsUsed: 1 },
     lastCard: { playerId: boot.a.playerId, playerName: 'Player A', cardName: 'SECRET_EVENT_CARD', factionId: 'mori', factionName: 'SECRET_EVENT_FACTION', pending: true, source: 'SECRET_EVENT_SOURCE' },
   };
   const correctionIsland = boot.room.islands[0];
@@ -520,7 +524,18 @@ test('4.7 personal pending families and event phase are actor-only over real roo
     { type: 'fort', level: 1 },
     { type: 'fort', level: 1 },
   ]; // Deliberately illegal settlement branch count so emitRoom keeps/refreshes this real pending family.
-  for (const family of families) boot.room[family] = pendingFixture(family, boot.a.playerId, boot.b.playerId, correctionIsland.id);
+  const targetFamilies = {
+    pendingEvent: 'event',
+    pendingFeud: 'feud',
+    pendingAssignmentChoice: 'assignment-choice',
+    pendingLegendaryReaction: 'legendary-reaction',
+  };
+  for (const family of families) {
+    const fixture = pendingFixture(family, boot.a.playerId, boot.b.playerId, correctionIsland.id);
+    const targetFamily = targetFamilies[family];
+    if (targetFamily) setPendingResolution(boot.room, targetFamily, pendingResolutionFromLegacy(targetFamily, fixture));
+    else boot.room[family] = fixture;
+  }
   boot.room.pendingBattle = { id: 'public-battle', kind: 'sea', attackerId: boot.b.playerId, targetPlayerId: boot.c.playerId, islandId: null, invites: [] };
   boot.room.pendingAlliance = null;
   boot.room.log.push({ t: 1, text: 'SECRET_JOURNAL_ENTRY' });

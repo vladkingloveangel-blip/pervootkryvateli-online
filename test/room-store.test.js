@@ -9,7 +9,7 @@ const logger = { log() {}, error() {} };
 const room = () => ({ code: 'ABCDE', started: true, players: [{ id: 'p1', accountId: 'a1', socketId: 'stale', connected: true, token: 'private', ducats: 42 }], islands: [{ ownerId: 'p1' }], order: ['p1'], phase: 'action', pendingBattle: { invites: [{ response: null }] }, legendaryDeck: ['secret'], round: 3 });
 function pool() { const { Pool } = newDb({ noAstCoverageCheck: true }).adapters.createPg(); return new Pool(); }
 
-test('unversioned rooms retain retired content, old deck copies, islands and pending decisions', async () => {
+test('unversioned rooms clean retired persisted state while preserving playable target state', async () => {
   const original = room();
   Object.assign(original.players[0], { level: 7, shipClass: 'carrack', upgrades: ['foreStengha','foreMarsel'],
     escorts: [{ id: 'landin-old', type: 'landin', special: true, cargo: { goodId: 'ore', quantity: 5 } }],
@@ -41,9 +41,11 @@ test('unversioned rooms retain retired content, old deck copies, islands and pen
   assert.equal(drawSailingEventCard(playable).id,'old-tailwind');
   assert.equal(drawTreasureCard(playable,()=>0.75).id,'full-diamonds-hold');
   assert.equal(drawLegendaryCard(playable,()=>0).id,'sea-veil');
-  assert.equal(playable.legendaryDeck.drawPile.length,1); // цифровой выбор не потребляет старую физическую колоду; её удалит серверная нормализация
+  assert.equal(Object.hasOwn(playable,'treasureDeck'),false);
+  assert.equal(Object.hasOwn(playable,'legendaryDeck'),false);
+  assert.equal(Object.hasOwn(playable.players[0],'replacedAssignmentConditions'),false);
   assert.equal(drawFeudCard(playable,'lionia').percent,50);
-  assert.equal(pendingResolutionToLegacy(getPendingResolution(playable, 'assignment-choice')).id,'old-choice');
+  assert.equal(getPendingResolution(playable, 'assignment-choice'), null);
 });
 
 test('JSONB round trip preserves full state, clears connections and skips finished games', async () => {

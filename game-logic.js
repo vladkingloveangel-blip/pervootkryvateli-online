@@ -1,4 +1,5 @@
 const domainState = require('./domain-state');
+const { LEGACY_CLEANUP_DIGITAL_MODEL_SCHEMA_VERSION } = require('./save-migrations');
 const {
   Task,
   HistoryRecord,
@@ -529,6 +530,8 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
   let changed = false;
   let resumeEventPhase = false;
   const digitalPool = usesDigitalAssignmentPool(room);
+  const schemaVersion = Number(room.digitalModelSchemaVersion) || 0;
+  const legacyCompatibility = schemaVersion < LEGACY_CLEANUP_DIGITAL_MODEL_SCHEMA_VERSION;
   const canonicalStorage = digitalPool ? createAssignmentPoolState(rng) : createAssignmentDecks(rng);
 
   const occurrenceId = occurrence => occurrence?.id || occurrence?.conditionKey || null;
@@ -580,24 +583,26 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
     room.assignmentDecks ||= {};
   }
 
-  // Retire obsolete prize-building/capture-mode state from restored rooms.
-  if (Object.hasOwn(room, 'pendingStatePrize')) {
-    delete room.pendingStatePrize;
-    changed = true;
-  }
-  if (room.pendingBattle && Object.hasOwn(room.pendingBattle, 'captureMode')) {
-    delete room.pendingBattle.captureMode;
-    changed = true;
-  }
-  const pendingLegendaryReaction = getPendingLegendaryReactionResolution(room);
-  if (pendingLegendaryReaction?.payload && Object.hasOwn(pendingLegendaryReaction.payload, 'captureMode')) {
-    delete pendingLegendaryReaction.payload.captureMode;
-    setPendingResolution(room, 'legendary-reaction', pendingLegendaryReaction);
-    changed = true;
-  }
-  if (Object.hasOwn(room, 'legendaryDeck')) {
-    delete room.legendaryDeck;
-    changed = true;
+  // Pre-schema-8 compatibility only. Current saves are cleaned by the pure 7 -> 8 migration.
+  if (legacyCompatibility) {
+    if (Object.hasOwn(room, 'pendingStatePrize')) {
+      delete room.pendingStatePrize;
+      changed = true;
+    }
+    if (room.pendingBattle && Object.hasOwn(room.pendingBattle, 'captureMode')) {
+      delete room.pendingBattle.captureMode;
+      changed = true;
+    }
+    const pendingLegendaryReaction = getPendingLegendaryReactionResolution(room);
+    if (pendingLegendaryReaction?.payload && Object.hasOwn(pendingLegendaryReaction.payload, 'captureMode')) {
+      delete pendingLegendaryReaction.payload.captureMode;
+      setPendingResolution(room, 'legendary-reaction', pendingLegendaryReaction);
+      changed = true;
+    }
+    if (Object.hasOwn(room, 'legendaryDeck')) {
+      delete room.legendaryDeck;
+      changed = true;
+    }
   }
 
   for (const factionId of Object.keys(ASSIGNMENT_DEFINITIONS)) {
@@ -642,22 +647,38 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
   }
 
   for (const player of room.players) {
-    if (Object.hasOwn(player, 'replacedAssignmentConditions')) {
-      delete player.replacedAssignmentConditions;
-      changed = true;
+    if (legacyCompatibility) {
+      if (Object.hasOwn(player, 'replacedAssignmentConditions')) {
+        delete player.replacedAssignmentConditions;
+        changed = true;
+      }
+      const pendingLegendary = Math.max(0, Math.floor(Number(player.pendingLegendary) || 0));
+      if (pendingLegendary > 0) {
+        for (let i = 0; i < pendingLegendary; i++) {
+          const card = drawLegendaryCard(room, rng);
+          if (card) grantLegendaryAbility(player, card);
+        }
+        delete player.pendingLegendary;
+        changed = true;
+      } else if (Object.hasOwn(player, 'pendingLegendary')) {
+        delete player.pendingLegendary;
+        changed = true;
+      }
     }
-    const pendingLegendary = Math.max(0, Math.floor(Number(player.pendingLegendary) || 0));
-    if (pendingLegendary > 0) {
-      for (let i = 0; i < pendingLegendary; i++) {
+
+    const pendingAbilityGrants = Math.max(0, Math.floor(Number(player.pendingConsumableAbilityGrants) || 0));
+    if (pendingAbilityGrants > 0) {
+      for (let i = 0; i < pendingAbilityGrants; i++) {
         const card = drawLegendaryCard(room, rng);
         if (card) grantLegendaryAbility(player, card);
       }
-      delete player.pendingLegendary;
+      delete player.pendingConsumableAbilityGrants;
       changed = true;
-    } else if (Object.hasOwn(player, 'pendingLegendary')) {
-      delete player.pendingLegendary;
+    } else if (Object.hasOwn(player, 'pendingConsumableAbilityGrants')) {
+      delete player.pendingConsumableAbilityGrants;
       changed = true;
     }
+
     const task = getActiveAssignmentTask(player);
     const card = task?.payload;
     if (!task || !card) continue;
@@ -676,34 +697,47 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
     }
   }
 
-  const pendingAssignmentChoice = getPendingAssignmentChoiceResolution(room);
-  if (pendingAssignmentChoice && pendingAssignmentChoice.kind !== 'embassy') {
-    clearPendingResolution(room, 'assignment-choice');
-    changed = true;
-  }
+  if (legacyCompatibility) {
+    const pendingAssignmentChoice = getPendingAssignmentChoiceResolution(room);
+    if (pendingAssignmentChoice && pendingAssignmentChoice.kind !== 'embassy') {
+      clearPendingResolution(room, 'assignment-choice');
+      changed = true;
+    }
 
-  const preTurnFlow = getPreTurnResolutionFlow(room);
-  if (preTurnFlow?.active && preTurnFlow.stage === 'assignment-replace') {
-    preTurnFlow.stage = 'assignment';
-    preTurnFlow.queues ||= {};
-    preTurnFlow.queues.assignment ||= [];
-    preTurnFlow.indexes ||= {};
-    preTurnFlow.indexes.assignment = preTurnFlow.queues.assignment.length;
-    delete preTurnFlow.queues.replacement;
-    delete preTurnFlow.indexes.replacement;
-    setPreTurnResolutionFlow(room, preTurnFlow);
-    changed = true;
-    resumeEventPhase = true;
+    const preTurnFlow = getPreTurnResolutionFlow(room);
+    if (preTurnFlow?.active && preTurnFlow.stage === 'assignment-replace') {
+      preTurnFlow.stage = 'assignment';
+      preTurnFlow.queues ||= {};
+      preTurnFlow.queues.assignment ||= [];
+      preTurnFlow.indexes ||= {};
+      preTurnFlow.indexes.assignment = preTurnFlow.queues.assignment.length;
+      delete preTurnFlow.queues.replacement;
+      delete preTurnFlow.indexes.replacement;
+      setPreTurnResolutionFlow(room, preTurnFlow);
+      changed = true;
+      resumeEventPhase = true;
+    }
   }
 
   return { changed, resumeEventPhase };
 }
 
 function normalizeStage6Compatibility(room, rng = Math.random) {
-  const orchestrationChanged = adoptLegacyPendingOrchestration(room);
+  const schemaVersion = Number(room?.digitalModelSchemaVersion) || 0;
+  const legacyCompatibility = schemaVersion < LEGACY_CLEANUP_DIGITAL_MODEL_SCHEMA_VERSION;
+  const orchestrationChanged = legacyCompatibility ? adoptLegacyPendingOrchestration(room) : false;
   const base = normalizeAssignmentCompatibility(room, rng);
   if (!room || !Array.isArray(room.players)) return { ...base, changed: Boolean(base.changed || orchestrationChanged) };
   let changed = Boolean(base.changed || orchestrationChanged);
+  let resumeEventPhase = Boolean(base.resumeEventPhase);
+
+  const persistedFlow = room.preTurnResolutionFlow;
+  if (!legacyCompatibility && persistedFlow && typeof persistedFlow === 'object' && !Array.isArray(persistedFlow)
+      && Object.hasOwn(persistedFlow, 'migrationResumeEventPhase')) {
+    resumeEventPhase = resumeEventPhase || Boolean(persistedFlow.migrationResumeEventPhase);
+    delete persistedFlow.migrationResumeEventPhase;
+    changed = true;
+  }
 
   const persistedDiscoveries = room.discoveries && typeof room.discoveries === 'object' && !Array.isArray(room.discoveries);
   if (!persistedDiscoveries) {
@@ -841,7 +875,7 @@ if (usesDigitalExpeditionPool(room)) {
       changed = true;
     }
     if (Object.hasOwn(player, 'temporaryEffects')) {
-      if (adoptLegacyTemporaryEffects(player, 'player')) changed = true;
+      if (legacyCompatibility && adoptLegacyTemporaryEffects(player, 'player')) changed = true;
     } else if (!player.legendaryEffects || typeof player.legendaryEffects !== 'object' || Array.isArray(player.legendaryEffects)) {
       player.legendaryEffects = { seaCurses: [] };
       changed = true;
@@ -861,7 +895,7 @@ if (usesDigitalExpeditionPool(room)) {
   }
 
   for (const island of room.islands || []) {
-    if (Object.hasOwn(island, 'temporaryEffects') && adoptLegacyTemporaryEffects(island, 'island')) changed = true;
+    if (legacyCompatibility && Object.hasOwn(island, 'temporaryEffects') && adoptLegacyTemporaryEffects(island, 'island')) changed = true;
   }
 
   if (usesDigitalExpeditionPool(room)) {
@@ -899,7 +933,7 @@ if (usesDigitalExpeditionPool(room)) {
     changed = true;
   }
 
-  return { ...base, changed };
+  return { ...base, changed, resumeEventPhase };
 }
 
 function assignAssignmentCard(room, player, factionId, card, rng = Math.random) {

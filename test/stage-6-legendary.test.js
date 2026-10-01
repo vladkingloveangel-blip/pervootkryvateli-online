@@ -8,6 +8,7 @@ const path = require('node:path');
 const net = require('node:net');
 const { io } = require('socket.io-client');
 const rules = require('../rules');
+const { clearPendingResolution, addShipVeilEffect } = require('../domain-state');
 
 test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards without three-turn protection', { timeout: 45000 }, async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pervo-stage6-legendary-'));
@@ -120,13 +121,10 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   room.actionsLeft = rules.session.actionsPerTurn;
   room.roll = null;
   room.movePoints = null;
-  room.eventPhase = null;
-  room.pendingEvent = null;
-  room.pendingFeud = null;
-  room.pendingAssignmentChoice = null;
+  room.preTurnResolutionFlow = null;
+  for (const family of ['event', 'feud', 'assignment-choice', 'legendary-reaction']) clearPendingResolution(room, family);
   room.pendingIslandCorrection = null;
   room.pendingFleetAdjustment = null;
-  room.pendingLegendaryReaction = null;
   room.pendingBattle = null;
   room.pendingAlliance = null;
   room.alliances = [];
@@ -136,9 +134,9 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   source.attackLimitRound = 2;
   source.attackCountsThisRound = {};
   source.consumableAbilities = [{ instanceId:'source-curse-1', abilityId:'sea-curse', origin:{ kind:'legendary' }, data:{ copy:1 } }]; source.consumableAbilitySequence = 1; delete source.legendaryCards;
-  source.legendaryEffects = { seaCurses: [] };
+  source.temporaryEffects = { active: [], scheduled: [] };
   target.consumableAbilities = [{ instanceId:'target-veil-1', abilityId:'sea-veil', origin:{ kind:'legendary' }, data:{ copy:1 } }]; target.consumableAbilitySequence = 1; delete target.legendaryCards;
-  target.legendaryEffects = { seaCurses: [] };
+  target.temporaryEffects = { active: [], scheduled: [] };
   source.enemyFactionIds = [];
   target.enemyFactionIds = [];
   writeDb(db);
@@ -202,13 +200,10 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   protectedRoom.actionsLeft = rules.session.actionsPerTurn;
   protectedRoom.roll = null;
   protectedRoom.movePoints = null;
-  protectedRoom.eventPhase = null;
-  protectedRoom.pendingEvent = null;
-  protectedRoom.pendingFeud = null;
-  protectedRoom.pendingAssignmentChoice = null;
+  protectedRoom.preTurnResolutionFlow = null;
+  for (const family of ['event', 'feud', 'assignment-choice', 'legendary-reaction']) clearPendingResolution(protectedRoom, family);
   protectedRoom.pendingIslandCorrection = null;
   protectedRoom.pendingFleetAdjustment = null;
-  protectedRoom.pendingLegendaryReaction = null;
   protectedRoom.pendingBattle = null;
   protectedRoom.pendingAlliance = null;
   protectedRoom.alliances = [];
@@ -219,10 +214,8 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   protectedSource.brokenAlliesThisTurn = [];
   protectedSource.consumableAbilities = [{ instanceId:'protected-curse-1', abilityId:'sea-curse', origin:{ kind:'legendary' }, data:{ copy:1 } }]; protectedSource.consumableAbilitySequence = 1; delete protectedSource.legendaryCards;
   protectedTarget.consumableAbilities = []; protectedTarget.consumableAbilitySequence = 0; delete protectedTarget.legendaryCards;
-  protectedTarget.legendaryEffects = {
-    seaCurses: [],
-    shipVeil: { remaining: 3, sourcePlayerId: targetId, ignoreTurnNo: null },
-  };
+  protectedTarget.temporaryEffects = { active: [], scheduled: [] };
+  addShipVeilEffect(protectedTarget, { remaining: 3, sourcePlayerId: targetId, ignoreTurnNo: null });
   writeDb(protectedDb);
 
   await start();
@@ -266,22 +259,19 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   visitRoom.phase = 'navigation';
   visitRoom.roll = null;
   visitRoom.movePoints = null;
-  visitRoom.eventPhase = null;
-  visitRoom.pendingEvent = null;
-  visitRoom.pendingFeud = null;
-  visitRoom.pendingAssignmentChoice = null;
+  visitRoom.preTurnResolutionFlow = null;
+  for (const family of ['event', 'feud', 'assignment-choice', 'legendary-reaction']) clearPendingResolution(visitRoom, family);
   visitRoom.pendingIslandCorrection = null;
   visitRoom.pendingFleetAdjustment = null;
-  visitRoom.pendingLegendaryReaction = null;
   visitRoom.pendingBattle = null;
   visitRoom.pendingAlliance = null;
-  visitRoom.legendaryPlacesExplored ||= {};
-  delete visitRoom.legendaryPlacesExplored.atlantia;
+  visitRoom.discoveries ||= {};
+  delete visitRoom.discoveries.atlantia;
   visitSource.row = atlantia.cells[0][0];
   visitSource.col = atlantia.cells[0][1];
-  visitSource.namedPlaceCards = [];
+  delete visitSource.namedPlaceCards;
   visitSource.consumableAbilities = []; visitSource.consumableAbilitySequence = 0; delete visitSource.legendaryCards;
-  visitSource.activeExpedition = null;
+  visitSource.activeExpeditionTask = null; delete visitSource.activeExpedition;
   writeDb(visitDb);
 
   await start();

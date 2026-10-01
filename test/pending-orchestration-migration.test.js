@@ -6,6 +6,7 @@ const {
   CURRENT_DIGITAL_MODEL_SCHEMA_VERSION,
   DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION,
   PENDING_ORCHESTRATION_DIGITAL_MODEL_SCHEMA_VERSION,
+  LEGACY_CLEANUP_DIGITAL_MODEL_SCHEMA_VERSION,
   migrateRoomState,
 } = require('../save-migrations');
 const {
@@ -110,7 +111,7 @@ for (const fixture of pendingVariants) {
 
     assert.deepEqual(raw, before);
     assert.equal(result.fromVersion, DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION);
-    assert.equal(result.toVersion, PENDING_ORCHESTRATION_DIGITAL_MODEL_SCHEMA_VERSION);
+    assert.equal(result.state.digitalModelSchemaVersion, LEGACY_CLEANUP_DIGITAL_MODEL_SCHEMA_VERSION);
     assert.equal(result.toVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
     assert.equal(Object.hasOwn(result.state, fixture.field), false);
 
@@ -173,15 +174,18 @@ for (const legacyStage of ['sailing', 'feud', 'assignment']) {
 
     const flow = getPreTurnResolutionFlow(migrated);
     assert.equal(flow.stage, legacyStage === 'feud' ? 'political' : legacyStage);
-    assert.deepEqual(flow.indexes, { sailing: 2, political: 1, assignment: 3, replacement: 4 });
+    assert.deepEqual(flow.indexes, { sailing: 2, political: 1, assignment: 3 });
     assert.deepEqual(flow.queues.political, eventPhase.feudQueue);
     assert.deepEqual(flow.queues.assignment, eventPhase.assignmentQueue);
-    assert.deepEqual(flow.queues.replacement, eventPhase.replacementQueue);
+    assert.equal(Object.hasOwn(flow.queues, 'replacement'), false);
     assert.equal(flow.counters.observatoryReplacementsUsed, 2);
     assert.deepEqual(flow.lastCard, eventPhase.lastCard);
     assert.deepEqual(flow.taxResult, eventPhase.taxResult);
     assert.deepEqual(migrated.preTurnResolutionFlow.legacyData, { futureFlowField: { preserve: legacyStage } });
-    assert.deepEqual(preTurnResolutionFlowToLegacy(flow), eventPhase);
+    const expectedLegacy = structuredClone(eventPhase);
+    delete expectedLegacy.replacementIndex;
+    delete expectedLegacy.replacementQueue;
+    assert.deepEqual(preTurnResolutionFlowToLegacy(flow), expectedLegacy);
   });
 }
 

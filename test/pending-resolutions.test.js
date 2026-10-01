@@ -351,16 +351,13 @@ test('Treasure Hunter activation/restart/choice persists exact pending while cha
   room.completedTurns = room.order.length * 6;
   room.phase = 'actions';
   room.actionsLeft = 2;
-  room.eventPhase = null;
-  room.pendingEvent = null;
-  room.pendingFeud = null;
-  room.pendingAssignmentChoice = null;
-  room.pendingLegendaryReaction = null;
+  room.preTurnResolutionFlow = null;
+  for (const family of ['event', 'feud', 'assignment-choice', 'legendary-reaction']) clearPendingResolution(room, family);
   room.pendingIslandCorrection = null;
   room.pendingFleetAdjustment = null;
   room.pendingBattle = null;
   room.pendingAlliance = null;
-  room.pendingExpeditionRewards = [{ playerId: 'missing-player', expeditionName: 'must-not-drain' }];
+  room.resolutionQueue = { kind: 'resolution-queue', items: [{ playerId: 'missing-player', expeditionName: 'must-not-drain' }] };
   active.character = { id: 'treasureHunter' };
   active.cargo = { goodId: 'wood', quantity: 1 };
   active.escorts = [];
@@ -506,17 +503,17 @@ test('Treasure Hunter full-diamonds choice transitions to zero-cost persisted ca
   const activeId = room.order[0];
   const active = room.players.find(player => player.id === activeId);
   const account = accounts[ids.indexOf(activeId)];
-  room.round = 2; room.circle = 1; room.turnIndex = 0; room.completedTurns = room.order.length * 6; room.phase = 'actions'; room.actionsLeft = 1; room.eventPhase = null;
+  room.round = 2; room.circle = 1; room.turnIndex = 0; room.completedTurns = room.order.length * 6; room.phase = 'actions'; room.actionsLeft = 1; room.preTurnResolutionFlow = null;
   active.cargo = null;
   active.escorts = [{ id: 'test-escort', type: 'cargo', special: true, cargo: null }];
   const diamonds = structuredClone(TREASURE_CARDS.find(card => card.id === 'full-diamonds-hold'));
   const money = structuredClone(TREASURE_CARDS.find(card => card.id === 'income-x1'));
-  room.pendingEvent = {
+  setPendingResolution(room, 'event', pendingResolutionFromLegacy('event', {
     id: 'treasure-cargo-transition', playerId: activeId, kind: 'treasure-choice', cardName: 'Искатель сокровищ', origin: 'treasure-hunter',
     options: [{ id: '0', name: diamonds.name }, { id: '1', name: money.name }],
     treasureCandidates: [diamonds, money], treasureAssignmentInstanceId: null,
-  };
-  room.pendingExpeditionRewards = [{ playerId: 'missing-player', expeditionName: 'must-stay' }];
+  }));
+  room.resolutionQueue = { kind: 'resolution-queue', items: [{ playerId: 'missing-player', expeditionName: 'must-stay' }] };
   fs.writeFileSync(file, JSON.stringify(db));
 
   await start();

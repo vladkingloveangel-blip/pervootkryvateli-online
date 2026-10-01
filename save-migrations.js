@@ -8,10 +8,17 @@ const EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION = 4;
 const PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION = 5;
 const DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION = 6;
 const PENDING_ORCHESTRATION_DIGITAL_MODEL_SCHEMA_VERSION = 7;
-const CURRENT_DIGITAL_MODEL_SCHEMA_VERSION = PENDING_ORCHESTRATION_DIGITAL_MODEL_SCHEMA_VERSION;
+const LEGACY_CLEANUP_DIGITAL_MODEL_SCHEMA_VERSION = 8;
+const CURRENT_DIGITAL_MODEL_SCHEMA_VERSION = LEGACY_CLEANUP_DIGITAL_MODEL_SCHEMA_VERSION;
 const RANDOM_SOURCE_STATE_FIELD = 'randomSourceState';
 
-const { ASSIGNMENT_DEFINITIONS, CONSUMABLE_ABILITY_DEFINITIONS, PLACE_DISCOVERY_DEFINITIONS } = require('./game-data');
+const {
+  ASSIGNMENT_DEFINITIONS,
+  CONSUMABLE_ABILITY_DEFINITIONS,
+  PLACE_DISCOVERY_DEFINITIONS,
+  SAILING_EVENT_DEFINITIONS,
+  POLITICAL_EFFECT_DEFINITIONS,
+} = require('./game-data');
 
 function cloneState(value) {
   return structuredClone(value);
@@ -857,6 +864,222 @@ function migrateVersion6To7(state) {
   return next;
 }
 
+
+const RETIRED_EXPEDITION_IDS = new Set(['expedition-atlantia', 'expedition-adia', 'expedition-skull']);
+const RETIRED_EXPEDITION_PLACE_IDS = new Set(['atlantia', 'adia', 'skull']);
+
+function retiredExpeditionEntry(value) {
+  if (!isRecord(value)) return false;
+  const ids = [value.id, value.expeditionId, value.cardId].filter(id => id != null).map(String);
+  const places = [value.placeId].filter(id => id != null).map(String);
+  return ids.some(id => RETIRED_EXPEDITION_IDS.has(id))
+    || places.some(placeId => RETIRED_EXPEDITION_PLACE_IDS.has(placeId));
+}
+
+function stripKnownMasterCardId(occurrence, definitions) {
+  if (!isRecord(occurrence) || !Object.hasOwn(occurrence, 'masterCardId')) return occurrence;
+  const masterCardId = occurrence.masterCardId;
+  const canonical = (definitions || []).find(definition => definition?.id === masterCardId);
+  if (!canonical) return occurrence;
+  const cleaned = { ...occurrence, id: canonical.id };
+  delete cleaned.masterCardId;
+  return cleaned;
+}
+
+function cleanupPendingResolutions(rawPending) {
+  if (!isRecord(rawPending)) return rawPending;
+  const pending = cloneState(rawPending);
+
+  const event = pending.event;
+  if (isRecord(event?.payload) && isRecord(event.payload.eventCard)) {
+    event.payload.eventCard = stripKnownMasterCardId(event.payload.eventCard, SAILING_EVENT_DEFINITIONS);
+  }
+
+  const feud = pending.feud;
+  if (isRecord(feud?.payload) && isRecord(feud.payload.feudCard)) {
+    const factionId = feud.payload.factionId;
+    feud.payload.feudCard = stripKnownMasterCardId(
+      feud.payload.feudCard,
+      POLITICAL_EFFECT_DEFINITIONS?.[factionId] || []
+    );
+  }
+
+  const assignmentChoice = pending['assignment-choice'];
+  if (assignmentChoice && assignmentChoice.kind !== 'embassy') {
+    pending['assignment-choice'] = null;
+  }
+
+  const legendaryReaction = pending['legendary-reaction'];
+  if (isRecord(legendaryReaction?.payload) && Object.hasOwn(legendaryReaction.payload, 'captureMode')) {
+    delete legendaryReaction.payload.captureMode;
+  }
+
+  return pending;
+}
+
+function cleanupStoredBenefits(rawBenefits) {
+  if (!Array.isArray(rawBenefits)) return rawBenefits;
+  return rawBenefits.map(benefit => {
+    if (!isRecord(benefit)) return benefit;
+    const cleaned = cloneState(benefit);
+    if (cleaned.source?.deck === 'event' && isRecord(cleaned.source.occurrence)) {
+      cleaned.source.occurrence = stripKnownMasterCardId(
+        cleaned.source.occurrence,
+        SAILING_EVENT_DEFINITIONS
+      );
+    }
+    return cleaned;
+  });
+}
+
+function cleanupPreTurnResolutionFlow(rawFlow) {
+  if (!isRecord(rawFlow)) return rawFlow;
+  const flow = cloneState(rawFlow);
+  const retiredAssignmentReplace = flow.stage === 'assignment-replace';
+
+  if (retiredAssignmentReplace) {
+    flow.stage = 'assignment';
+    flow.queues = isRecord(flow.queues) ? flow.queues : {};
+    flow.indexes = isRecord(flow.indexes) ? flow.indexes : {};
+    if (!Array.isArray(flow.queues.assignment)) flow.queues.assignment = [];
+    flow.indexes.assignment = flow.queues.assignment.length;
+    if (flow.active) flow.migrationResumeEventPhase = true;
+  }
+
+  if (isRecord(flow.queues)) delete flow.queues.replacement;
+  if (isRecord(flow.indexes)) delete flow.indexes.replacement;
+  return flow;
+}
+
+function cleanupExpeditionPool(rawPool) {
+  if (!isRecord(rawPool)) return rawPool;
+  const pool = cloneState(rawPool);
+  for (const key of ['available', 'reserved']) {
+    if (Array.isArray(pool[key])) pool[key] = pool[key].filter(entry => !retiredExpeditionEntry(entry));
+  }
+  return pool;
+}
+
+function cleanupLegacyPlayerState(player) {
+  if (!isRecord(player)) return player;
+  const migrated = { ...player };
+
+  // Globally retired assignment-replacement bookkeeping has no target meaning.
+  delete migrated.replacedAssignmentConditions;
+
+  if (Object.hasOwn(player, 'activeAssignmentTask')) delete migrated.activeAssignment;
+
+  if (Object.hasOwn(player, 'consumableAbilities')) {
+    delete migrated.legendaryCards;
+    delete migrated.specialCards;
+    if (Object.hasOwn(player, 'pendingLegendary')) {
+      const pendingCount = Math.max(0, Math.floor(Number(player.pendingLegendary) || 0));
+      if (!Object.hasOwn(player, 'pendingConsumableAbilityGrants') && pendingCount > 0) {
+        migrated.pendingConsumableAbilityGrants = pendingCount;
+      }
+      delete migrated.pendingLegendary;
+    }
+  }
+
+  if (Object.hasOwn(player, 'storedBenefits')) {
+    migrated.storedBenefits = cleanupStoredBenefits(player.storedBenefits);
+    delete migrated.savedEventCards;
+  }
+
+  if (Object.hasOwn(player, 'activeExpeditionTask')) {
+    migrated.activeExpeditionTask = retiredExpeditionEntry(player.activeExpeditionTask)
+      ? null
+      : cloneState(player.activeExpeditionTask);
+    delete migrated.activeExpedition;
+  }
+
+  if (Object.hasOwn(player, 'expeditionCompletions')) {
+    migrated.expeditionCompletions = Array.isArray(player.expeditionCompletions)
+      ? player.expeditionCompletions.filter(entry => !retiredExpeditionEntry(entry)).map(cloneState)
+      : player.expeditionCompletions;
+    delete migrated.expeditionHistory;
+  }
+
+  if (Object.hasOwn(player, 'expeditionAccessUsage')) {
+    delete migrated.expeditionDrawRound;
+    delete migrated.expeditionsDrawnThisRound;
+  }
+
+  if (Object.hasOwn(player, 'temporaryEffects')) {
+    delete migrated.activeTurnEffects;
+    delete migrated.nextTurnEffects;
+    delete migrated.legendaryEffects;
+  }
+
+  return migrated;
+}
+
+function migrateVersion7To8(state) {
+  const next = {
+    ...state,
+    [DIGITAL_MODEL_SCHEMA_VERSION_FIELD]: LEGACY_CLEANUP_DIGITAL_MODEL_SCHEMA_VERSION,
+  };
+
+  // These physical decks are fully retired. Digital selectors never read them.
+  delete next.treasureDeck;
+  delete next.legendaryDeck;
+  delete next.pendingStatePrize;
+
+  if (isRecord(state.pendingBattle) && Object.hasOwn(state.pendingBattle, 'captureMode')) {
+    next.pendingBattle = cloneState(state.pendingBattle);
+    delete next.pendingBattle.captureMode;
+  }
+
+  if (isRecord(state[RANDOM_SOURCE_STATE_FIELD])) {
+    const sources = { ...state[RANDOM_SOURCE_STATE_FIELD] };
+    if (Object.hasOwn(sources, 'seaEncounter')) delete next.anchorDecks;
+    if (Object.hasOwn(sources, 'sailingEvent')) delete next.eventDeck;
+    if (Object.hasOwn(sources, 'politicalEffect')) delete next.feudDecks;
+    if (Object.hasOwn(sources, 'assignmentPool')) delete next.assignmentDecks;
+    if (Object.hasOwn(sources, 'expeditionPool')) {
+      sources.expeditionPool = cleanupExpeditionPool(sources.expeditionPool);
+      delete next.expeditionDeck;
+    }
+    next[RANDOM_SOURCE_STATE_FIELD] = sources;
+  }
+
+  if (Object.hasOwn(state, 'pendingResolutions')) {
+    next.pendingResolutions = cleanupPendingResolutions(state.pendingResolutions);
+    for (const config of Object.values(PENDING_RESOLUTION_MIGRATION_FAMILIES)) delete next[config.field];
+  }
+
+  if (Object.hasOwn(state, 'resolutionQueue')) delete next.pendingExpeditionRewards;
+
+  if (Object.hasOwn(state, 'preTurnResolutionFlow')) {
+    next.preTurnResolutionFlow = cleanupPreTurnResolutionFlow(state.preTurnResolutionFlow);
+    delete next.eventPhase;
+  }
+
+  if (Object.hasOwn(state, 'discoveries')) delete next.legendaryPlacesExplored;
+
+  if (Array.isArray(state.players)) {
+    next.players = state.players.map(player => {
+      const migrated = cleanupLegacyPlayerState(player);
+      if (Object.hasOwn(state, 'discoveries')) delete migrated.namedPlaceCards;
+      return migrated;
+    });
+  }
+
+  if (Array.isArray(state.islands)) {
+    next.islands = state.islands.map(island => {
+      if (!isRecord(island)) return island;
+      const migrated = { ...island };
+      if (Object.hasOwn(island, 'temporaryEffects')) {
+        delete migrated.legendaryVeil;
+        delete migrated.legendaryVeilReaction;
+      }
+      return migrated;
+    });
+  }
+
+  return next;
+}
+
 function migrateVersion0To1(state) {
   return {
     ...state,
@@ -983,6 +1206,7 @@ const MIGRATIONS = new Map([
   [4, { toVersion: PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion4To5 }],
   [5, { toVersion: DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion5To6 }],
   [6, { toVersion: PENDING_ORCHESTRATION_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion6To7 }],
+  [7, { toVersion: LEGACY_CLEANUP_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion7To8 }],
 ]);
 
 function readDigitalModelSchemaVersion(rawRoom) {
@@ -1031,6 +1255,7 @@ module.exports = {
   PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION,
   DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION,
   PENDING_ORCHESTRATION_DIGITAL_MODEL_SCHEMA_VERSION,
+  LEGACY_CLEANUP_DIGITAL_MODEL_SCHEMA_VERSION,
   RANDOM_SOURCE_STATE_FIELD,
   migrateRoomState,
 };
