@@ -5,7 +5,7 @@ const { islandStatus } = require('./game-logic');
 const { listPlayerDiscoveries } = require('./domain-state');
 
 const CANONICAL_NAMED_PLACE_IDS = new Set(
-  (PLACE_DISCOVERY_DEFINITIONS || []).map(definition => String(definition.id))
+  (PLACE_DISCOVERY_DEFINITIONS || []).map(definition => String(definition.placeId))
 );
 
 function sameId(left, right) {

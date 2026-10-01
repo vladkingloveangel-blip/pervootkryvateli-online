@@ -16,6 +16,9 @@ function title(scoring, id) {
 }
 
 test('calculatePlayerFinalMetrics covers all six canonical metrics without cached island counts', () => {
+  const namedOne = PLACE_DISCOVERY_DEFINITIONS[0];
+  const namedTwo = PLACE_DISCOVERY_DEFINITIONS[1];
+  const expedition = EXPEDITION_DEFINITIONS[0];
   const player = {
     id: 'p1',
     ducats: 90,
@@ -24,10 +27,14 @@ test('calculatePlayerFinalMetrics covers all six canonical metrics without cache
     fleetPoints: 6,
     islandCount: 999,
     ownedIslandCount: 999,
+    expeditionHistory: [{
+      id: 'completed-expedition-1',
+      cardId: expedition.id,
+      placeId: expedition.placeId,
+      name: expedition.name,
+      completedRound: 3,
+    }],
   };
-  const namedOne = PLACE_DISCOVERY_DEFINITIONS[0];
-  const namedTwo = PLACE_DISCOVERY_DEFINITIONS[1];
-  const expedition = EXPEDITION_DEFINITIONS[0];
   const room = {
     players: [player],
     islands: [
@@ -45,9 +52,8 @@ test('calculatePlayerFinalMetrics covers all six canonical metrics without cache
       island('other-player', 'p2', [building('farm')]),
     ],
     discoveries: {
-      [namedOne.id]: { ownerId: 'p1' },
-      [namedTwo.id]: { ownerId: 'p1' },
-      [expedition.id]: { ownerId: 'p1' },
+      [namedOne.placeId]: { ownerId: 'p1' },
+      [namedTwo.placeId]: { ownerId: 'p1' },
       'not-a-canonical-place': { ownerId: 'p1' },
     },
   };
@@ -60,6 +66,19 @@ test('calculatePlayerFinalMetrics covers all six canonical metrics without cache
     prestige: 12,
     legendaryPlaces: 2,
   });
+});
+
+test('canonical discovery key kraken increases legendaryPlaces by one', () => {
+  const player = { id: 'p1' };
+  const room = {
+    players: [player],
+    islands: [island('i1', 'p1', [building('farm')])],
+    discoveries: {
+      kraken: { ownerId: 'p1' },
+    },
+  };
+
+  assert.equal(calculatePlayerFinalMetrics(room, player).legendaryPlaces, 1);
 });
 
 test('calculateFinalScoring shares ties, excludes players without islands, and allows multiple titles', () => {
@@ -78,7 +97,7 @@ test('calculateFinalScoring shares ties, excludes players without islands, and a
       island('p2-a', 'p2', [building('farm')]),
     ],
     discoveries: {
-      [namedOne.id]: { ownerId: 'p1' },
+      [namedOne.placeId]: { ownerId: 'p1' },
     },
   };
 
@@ -112,7 +131,7 @@ test('final scoring is pure and does not mutate room, players, islands, building
   const room = {
     players: [{ id: 'p1', ducats: 10, debt: 2, armyPoints: 1, fleetPoints: 2 }],
     islands: [island('i1', 'p1', [building('farm'), building('admiralty', 2)])],
-    discoveries: { [namedOne.id]: { ownerId: 'p1' } },
+    discoveries: { [namedOne.placeId]: { ownerId: 'p1' } },
   };
   const before = JSON.parse(JSON.stringify(room));
 
