@@ -395,7 +395,7 @@ function discardAssignmentCard(room, factionId, card) {
 function ensureAssignmentPlayer(player) {
   if (!player) return player;
   if (!Object.hasOwn(player, 'activeAssignmentTask') && !Object.hasOwn(player, 'activeAssignment')) {
-    player.activeAssignment = null;
+    player.activeAssignmentTask = null;
   }
   return player;
 }
@@ -739,7 +739,12 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
     changed = true;
   }
 
-  const persistedDiscoveries = room.discoveries && typeof room.discoveries === 'object' && !Array.isArray(room.discoveries);
+  let persistedDiscoveries = room.discoveries && typeof room.discoveries === 'object' && !Array.isArray(room.discoveries);
+  if (!persistedDiscoveries && !legacyCompatibility) {
+    room.discoveries = {};
+    persistedDiscoveries = true;
+    changed = true;
+  }
   if (!persistedDiscoveries) {
     if (!room.legendaryPlacesExplored || typeof room.legendaryPlacesExplored !== 'object' || Array.isArray(room.legendaryPlacesExplored)) {
       room.legendaryPlacesExplored = {};
@@ -870,12 +875,19 @@ if (usesDigitalExpeditionPool(room)) {
         player.consumableAbilitySequence = player.consumableAbilities.length;
         changed = true;
       }
+    } else if (!legacyCompatibility) {
+      player.consumableAbilities = [];
+      player.consumableAbilitySequence = 0;
+      changed = true;
     } else if (!Array.isArray(player.legendaryCards)) {
       player.legendaryCards = [];
       changed = true;
     }
     if (Object.hasOwn(player, 'temporaryEffects')) {
       if (legacyCompatibility && adoptLegacyTemporaryEffects(player, 'player')) changed = true;
+    } else if (!legacyCompatibility) {
+      player.temporaryEffects = { active: [], scheduled: [] };
+      changed = true;
     } else if (!player.legendaryEffects || typeof player.legendaryEffects !== 'object' || Array.isArray(player.legendaryEffects)) {
       player.legendaryEffects = { seaCurses: [] };
       changed = true;
@@ -888,6 +900,9 @@ if (usesDigitalExpeditionPool(room)) {
         player.storedBenefits = [];
         changed = true;
       }
+    } else if (!legacyCompatibility) {
+      player.storedBenefits = [];
+      changed = true;
     } else if (!Array.isArray(player.savedEventCards)) {
       player.savedEventCards = [];
       changed = true;
@@ -895,6 +910,10 @@ if (usesDigitalExpeditionPool(room)) {
   }
 
   for (const island of room.islands || []) {
+    if (!legacyCompatibility && !Object.hasOwn(island, 'temporaryEffects')) {
+      island.temporaryEffects = { active: [], scheduled: [] };
+      changed = true;
+    }
     if (legacyCompatibility && Object.hasOwn(island, 'temporaryEffects') && adoptLegacyTemporaryEffects(island, 'island')) changed = true;
   }
 
@@ -917,6 +936,20 @@ if (usesDigitalExpeditionPool(room)) {
         room.expeditionDeck.drawPile = filteredDeck;
         changed = true;
       }
+    }
+  }
+  if (!legacyCompatibility) {
+    if (!room.pendingResolutions || typeof room.pendingResolutions !== 'object' || Array.isArray(room.pendingResolutions)) {
+      room.pendingResolutions = {};
+      changed = true;
+    }
+    for (const family of ['event', 'feud', 'assignment-choice', 'legendary-reaction']) {
+      if (!Object.hasOwn(room.pendingResolutions, family)) { room.pendingResolutions[family] = null; changed = true; }
+    }
+    if (!Object.hasOwn(room, 'preTurnResolutionFlow')) { room.preTurnResolutionFlow = null; changed = true; }
+    if (!room.resolutionQueue || typeof room.resolutionQueue !== 'object' || Array.isArray(room.resolutionQueue) || !Array.isArray(room.resolutionQueue.items)) {
+      room.resolutionQueue = { kind: 'resolution-queue', items: [] };
+      changed = true;
     }
   }
   const targetOrchestration = Object.hasOwn(room, 'pendingResolutions')

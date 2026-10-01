@@ -35,17 +35,26 @@ class RoomStore {
     const result = await this.db.query('SELECT code, state FROM game_rooms');
     // Validate everything before making the restored rooms available.
     const restored = [];
+    const migratedSnapshots = [];
     for (const row of result.rows) {
       let room;
+      let migration;
       try {
-        room = migrateRoomState(row.state).state;
+        migration = migrateRoomState(row.state);
+        room = migration.state;
       } catch (err) {
         throw new Error(`Invalid saved room: ${row.code}: ${err.message}`);
       }
       if (!room || room.code !== row.code || !Array.isArray(room.players) || !Array.isArray(room.islands) || !Array.isArray(room.order)) {
         throw new Error(`Invalid saved room: ${row.code}`);
       }
-      if (isUnfinished(room)) restored.push(roomSnapshot(room));
+      const snapshot = roomSnapshot(room);
+      if (migration.migrated) migratedSnapshots.push(snapshot);
+      if (isUnfinished(room)) restored.push(snapshot);
+    }
+    // Resave only after every row has migrated and validated successfully.
+    for (const snapshot of migratedSnapshots) {
+      await this.db.query('UPDATE game_rooms SET state = $2::jsonb, updated_at = NOW() WHERE code = $1', [snapshot.code, JSON.stringify(snapshot)]);
     }
     for (const room of restored) rooms.set(room.code, room);
     this.restored = restored.length;

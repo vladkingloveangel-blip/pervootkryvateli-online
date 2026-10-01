@@ -154,3 +154,54 @@ test('guest mode works without a database', async () => {
   const store = new RoomStore(null);
   await store.init(new Map()); await store.save(room()); await store.remove('ABCDE'); await store.flush();
 });
+
+
+test('6.10 cutover resaves migrated rooms once and second restart reads current schema without backslide', async () => {
+  const db = pool();
+  await new RoomStore(db, { logger }).init(new Map());
+
+  const legacy = room();
+  legacy.anchorDecks = { red: { drawPile: [{ id: 'sea-next', copy: 1 }], discard: [{ id: 'sea-used', copy: 2 }] } };
+  legacy.eventDeck = { drawPile: [{ id: 'event-next', copy: 1 }], discard: [] };
+  legacy.feudDecks = { lionia: { drawPile: [{ id: 'feud-next', copy: 1 }], discard: [] } };
+  legacy.assignmentDecks = { lionia: { drawPile: [{ id: 'assignment-next', copy: 1 }], discard: [], removed: [] } };
+  legacy.players[0].activeAssignment = null;
+  legacy.players[0].savedEventCards = [];
+  legacy.pendingEvent = null;
+  legacy.pendingFeud = null;
+  legacy.pendingAssignmentChoice = null;
+  legacy.pendingLegendaryReaction = null;
+  legacy.pendingExpeditionRewards = [];
+  legacy.eventPhase = null;
+  delete legacy.digitalModelSchemaVersion;
+
+  await db.query('INSERT INTO game_rooms (code, state) VALUES ($1,$2::jsonb)', [legacy.code, JSON.stringify(legacy)]);
+
+  const firstRooms = new Map();
+  await new RoomStore(db, { logger }).init(firstRooms);
+  const firstPersisted = (await db.query('SELECT state FROM game_rooms WHERE code = $1', [legacy.code])).rows[0].state;
+  assert.equal(firstPersisted.digitalModelSchemaVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
+  for (const field of ['anchorDecks','eventDeck','feudDecks','assignmentDecks','expeditionDeck','pendingEvent','pendingFeud','pendingAssignmentChoice','pendingLegendaryReaction','pendingExpeditionRewards','eventPhase','legendaryDeck']) {
+    assert.equal(Object.hasOwn(firstPersisted, field), false, field);
+  }
+
+  const expected = migrateRoomState(legacy).state;
+  expected.players[0].socketId = null;
+  expected.players[0].connected = false;
+  assert.deepEqual(firstPersisted, expected);
+  assert.equal(migrateRoomState(firstPersisted).migrated, false);
+
+  const { drawAnchorCard, drawSailingEventCard, drawFeudCard } = require('../game-logic');
+  const expectedContinuation = structuredClone(expected);
+  const persistedContinuation = structuredClone(firstPersisted);
+  assert.equal(drawAnchorCard(persistedContinuation, 'red').card.id, drawAnchorCard(expectedContinuation, 'red').card.id);
+  assert.equal(drawSailingEventCard(persistedContinuation).id, drawSailingEventCard(expectedContinuation).id);
+  assert.equal(drawFeudCard(persistedContinuation, 'lionia').id, drawFeudCard(expectedContinuation, 'lionia').id);
+
+  const beforeSecondRestart = structuredClone(firstPersisted);
+  const secondRooms = new Map();
+  await new RoomStore(db, { logger }).init(secondRooms);
+  const secondPersisted = (await db.query('SELECT state FROM game_rooms WHERE code = $1', [legacy.code])).rows[0].state;
+  assert.deepEqual(secondPersisted, beforeSecondRestart);
+  assert.deepEqual(secondRooms.get(legacy.code), firstRooms.get(legacy.code));
+});

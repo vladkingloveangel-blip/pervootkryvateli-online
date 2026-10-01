@@ -862,7 +862,7 @@ test('malformed and future digital model schema versions are rejected', () => {
   );
 });
 
-test('RoomStore.init migrates schema 2 AssignmentPool backing before validation without rewriting DB row immediately', async () => {
+test('6.10 RoomStore.init migrates schema 2 and resaves current schema after validation', async () => {
   const db = pool();
   const setup = new RoomStore(db, { logger });
   await setup.init(new Map());
@@ -883,9 +883,11 @@ test('RoomStore.init migrates schema 2 AssignmentPool backing before validation 
   assert.equal(restored.players[0].connected, false);
 
   const persisted = (await db.query('SELECT state FROM game_rooms WHERE code = $1', [raw.code])).rows[0].state;
-  assert.equal(persisted.digitalModelSchemaVersion, SOURCE_STATE_DIGITAL_MODEL_SCHEMA_VERSION);
-  assert.ok(persisted.assignmentDecks);
-  assert.equal(Object.hasOwn(persisted.randomSourceState, 'assignmentPool'), false);
+  assert.equal(persisted.digitalModelSchemaVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
+  assert.equal(Object.hasOwn(persisted, 'assignmentDecks'), false);
+  assert.ok(persisted.randomSourceState.assignmentPool);
+  assert.deepEqual(persisted, restored);
+  assert.equal(migrateRoomState(persisted).migrated, false);
 });
 
 test('invalid saved rooms keep Invalid saved room contract and guest/no-DB mode remains safe', async () => {

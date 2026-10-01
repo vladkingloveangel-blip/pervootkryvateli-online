@@ -42,6 +42,21 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
     return { response, data: await response.json() };
   }
   const rows = () => JSON.parse(fs.readFileSync(file, 'utf8')).game_rooms;
+  const assertCurrentPersistedShape = state => {
+    assert.equal(state.digitalModelSchemaVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
+    for (const field of ['anchorDecks','eventDeck','feudDecks','assignmentDecks','expeditionDeck','treasureDeck','legendaryDeck','pendingEvent','pendingFeud','pendingAssignmentChoice','pendingLegendaryReaction','pendingExpeditionRewards','eventPhase','legendaryPlacesExplored','pendingStatePrize']) {
+      assert.equal(Object.hasOwn(state, field), false, field);
+    }
+    for (const player of state.players || []) {
+      for (const field of ['activeAssignment','activeExpedition','expeditionHistory','expeditionDrawRound','expeditionsDrawnThisRound','legendaryCards','specialCards','savedEventCards','namedPlaceCards','activeTurnEffects','nextTurnEffects','legendaryEffects','pendingLegendary','replacedAssignmentConditions']) {
+        assert.equal(Object.hasOwn(player, field), false, field);
+      }
+    }
+    for (const island of state.islands || []) {
+      assert.equal(Object.hasOwn(island, 'legendaryVeil'), false, 'legendaryVeil');
+      assert.equal(Object.hasOwn(island, 'legendaryVeilReaction'), false, 'legendaryVeilReaction');
+    }
+  };
   t.after(async () => { sockets.forEach(s => s.disconnect()); if (child?.exitCode === null) await stop(); fs.rmSync(dir, { recursive: true, force: true }); });
   await start();
   const canonical = await (await fetch(base + '/api/rules')).json();
@@ -72,6 +87,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(created.ok, true); assert.equal(rows().length, 1); // ack means durable
   const code = created.code;
   assert.equal(rows()[0].state.digitalModelSchemaVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
+  assertCurrentPersistedShape(rows()[0].state);
   assert.ok(rows()[0].state.randomSourceState);
   assert.ok(rows()[0].state.randomSourceState.assignmentPool);
   assert.ok(rows()[0].state.randomSourceState.expeditionPool);
@@ -120,6 +136,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   }
   const started = rows()[0].state;
   assert.equal(started.started, true);
+  assertCurrentPersistedShape(started);
   assert.ok(started.randomSourceState.assignmentPool);
   assert.ok(started.randomSourceState.expeditionPool);
   assert.equal(Object.hasOwn(started, 'assignmentDecks'), false);
@@ -154,6 +171,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.deepEqual(afterScoutFailure.players.find(p=>p.id===joinedSecond.playerId).character, beforeScoutFailure.players.find(p=>p.id===joinedSecond.playerId).character);
   assert.deepEqual(afterScoutFailure.scoutRevealGrants, beforeScoutFailure.scoutRevealGrants);
   assert.equal((await emit(active, 'endTurn')).ok, true);
+  assertCurrentPersistedShape(rows()[0].state);
   let beforeRestart = rows()[0].state;
   const list = await api('/api/my-games?accountId=' + b.user.id, a.token);
   assert.equal(list.response.headers.get('cache-control'), 'no-store');
@@ -361,6 +379,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
     for(const secret of logSecrets) assert.equal(JSON.stringify(view).includes(secret),false);
   }
   const afterRestart = rows()[0].state;
+  assertCurrentPersistedShape(afterRestart);
   assert.equal(Object.hasOwn(afterRestart,'log'),true);
   for(const secret of logSecrets) assert.equal(afterRestart.log.some(entry=>entry.text===secret),true);
   const afterOldPlayer = afterRestart.players.find(p => p.id === created.playerId);
