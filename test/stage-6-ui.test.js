@@ -258,3 +258,29 @@ test('UI-4 mobile shell makes the map the permanent gameplay surface without del
     assert.match(index, new RegExp('id="' + id + '"'), id + ' remains available during migration');
   }
 });
+
+
+test('UI-5 HUD separates live combat stats from scoring metrics and exposes phase navigation', () => {
+  assert.doesNotMatch(index, /id="hudArmyPointsBtn"|id="hudFleetPointsBtn"|id="hudDebtBtn"/);
+  assert.match(index, /id="hudArmyBtn"[^>]*aria-label="Войско"/);
+  assert.match(index, /id="hudArtilleryBtn"[^>]*aria-label="Артиллерия"/);
+  assert.match(index, /id="hudCargoBtn"/);
+  assert.match(index, /id="hudPhase"/);
+  assert.match(index, /id="hudMenuBtn"/);
+
+  const start = app.indexOf('  function hudPhaseLabel(');
+  const end = app.indexOf('\n\n  function updateContextualActionPanels()', start);
+  assert.ok(start >= 0 && end > start);
+  const hudCode = app.slice(start, end);
+  assert.match(hudCode, /mine\.assaultArmy \?\? mine\.stats\?\.army/);
+  assert.match(hudCode, /mine\.fleetArtillery \?\? mine\.stats\?\.artillery/);
+  assert.doesNotMatch(hudCode, /mine\.armyPoints|mine\.fleetPoints|mine\.debt/);
+  assert.match(hudCode, /НАВИГАЦИЯ/);
+  assert.match(hudCode, /ДЕЙСТВИЯ/);
+  assert.match(hudCode, /СОБЫТИЯ/);
+
+  assert.match(app, /\$\('hudPlayerBtn'\)\.addEventListener\('click',[\s\S]*?openMobileTab\('ship'\)/);
+  assert.match(app, /\$\('hudCargoBtn'\)\.addEventListener\('click',[\s\S]*?openMobileTab\('ship'\)/);
+  assert.match(app, /\$\('hudMenuBtn'\)\.addEventListener\('click', \(\) => toggleGameAccountMenu\(\)\)/);
+  assert.match(styles, /UI-5 — canonical mobile gameplay HUD/);
+});

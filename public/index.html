@@ -138,7 +138,7 @@
       </section>
 
       <section id="gameHud" class="game-hud" aria-label="Параметры игрока">
-        <button id="hudPlayerBtn" class="hud-player" type="button" aria-label="Меню игрока">
+        <button id="hudPlayerBtn" class="hud-player" type="button" aria-label="Открыть корабль и флотилию">
           <span class="hud-ship-icon">⛵</span>
           <span><strong id="hudPlayerName">Игрок</strong><small id="hudShipLevel">ур. I</small></span>
           <span class="hud-menu-chevron">⌄</span>
@@ -146,15 +146,16 @@
         <div id="hudResources" class="hud-resources">
           <button class="hud-chip" id="hudDucatsBtn" type="button" aria-label="Дукаты"><span>🪙</span><strong id="hudDucats">0</strong></button>
           <button class="hud-chip" id="hudGloryBtn" type="button" aria-label="Слава"><span>★</span><strong id="hudGlory">0</strong></button>
-          <button class="hud-chip" id="hudArmyPointsBtn" type="button" aria-label="Очки армии"><span>⚔</span><strong id="hudArmyPoints">0</strong></button>
-          <button class="hud-chip" id="hudFleetPointsBtn" type="button" aria-label="Очки флота"><span>⚓</span><strong id="hudFleetPoints">0</strong></button>
+          <button class="hud-chip" id="hudArmyBtn" type="button" aria-label="Войско"><span>⚔</span><strong id="hudArmy">0</strong></button>
+          <button class="hud-chip" id="hudArtilleryBtn" type="button" aria-label="Артиллерия"><span>💥</span><strong id="hudArtillery">0</strong></button>
           <button class="hud-chip" id="hudCargoBtn" type="button" aria-label="Трюм"><span>▣</span><strong id="hudCargo">0/0</strong></button>
-          <button class="hud-chip hud-debt hidden" id="hudDebtBtn" type="button" aria-label="Долг"><span>!</span><strong id="hudDebt">0</strong></button>
         </div>
-        <button id="hudTurnBtn" class="hud-turn" type="button">
+        <button id="hudTurnBtn" class="hud-turn" type="button" aria-label="Текущее состояние хода">
           <small id="hudRound">Лобби</small>
           <strong id="hudTurn">Ожидание</strong>
+          <span id="hudPhase" class="hud-phase">—</span>
         </button>
+        <button id="hudMenuBtn" class="hud-menu-btn" type="button" aria-label="Меню">☰</button>
       </section>
 
       <section class="status panel legacy-status">

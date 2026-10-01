@@ -686,12 +686,14 @@
     btn.addEventListener('click', () => openMobileTab(btn.dataset.mobileNav));
   });
   $('mobileSheetClose').addEventListener('click', () => openMobileTab('map'));
-  $('hudPlayerBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : toggleGameAccountMenu());
+  $('hudPlayerBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : openMobileTab('ship'));
   $('hudDucatsBtn').addEventListener('click', () => openMobileTab('ship'));
   $('hudGloryBtn').addEventListener('click', () => openMobileTab('players'));
+  $('hudArmyBtn').addEventListener('click', () => openMobileTab('ship'));
+  $('hudArtilleryBtn').addEventListener('click', () => openMobileTab('ship'));
   $('hudCargoBtn').addEventListener('click', () => openMobileTab('ship'));
-  $('hudDebtBtn').addEventListener('click', () => openMobileTab('ship'));
   $('hudTurnBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : openMobileTab('actions'));
+  $('hudMenuBtn').addEventListener('click', () => toggleGameAccountMenu());
 
   $('startBtn').addEventListener('click', () => {
     $('startBtn').disabled = true;
@@ -809,6 +811,16 @@
     return { quantity, capacity };
   }
 
+  function hudPhaseLabel(room, activePlayer) {
+    if (!room?.started) return 'ЛОББИ';
+    if (room.finished || room.phase === 'finished') return 'ЗАВЕРШЕНО';
+    if (room.eventPhase?.active || room.phase === 'event') return 'СОБЫТИЯ';
+    const phase = activePlayer?.phase || room.phase;
+    if (phase === 'navigation') return 'НАВИГАЦИЯ';
+    if (phase === 'actions') return 'ДЕЙСТВИЯ';
+    return String(phase || 'ОЖИДАНИЕ').toUpperCase();
+  }
+
   function renderMobileHud() {
     const r = state.room;
     if (!r) return;
@@ -824,25 +836,25 @@
       $('hudShipLevel').textContent = `${shipName(mine.shipClass)} · ${ROMAN[mine.level] || mine.level}`;
       $('hudDucats').textContent = mine.ducats ?? 0;
       $('hudGlory').textContent = mine.glory ?? 0;
-      $('hudArmyPoints').textContent = mine.armyPoints ?? 0;
-      $('hudFleetPoints').textContent = mine.fleetPoints ?? 0;
+      $('hudArmy').textContent = mine.assaultArmy ?? mine.stats?.army ?? 0;
+      $('hudArtillery').textContent = mine.fleetArtillery ?? mine.stats?.artillery ?? 0;
       $('hudCargo').textContent = `${cargo.quantity}/${cargo.capacity}`;
-      $('hudDebtBtn').classList.toggle('hidden', !(mine.debt > 0));
-      $('hudDebt').textContent = mine.debt || 0;
     } else {
       $('hudPlayerName').textContent = state.spectating ? 'Наблюдение' : 'Игрок';
       $('hudShipLevel').textContent = state.spectating ? `Комната ${r.code}` : '—';
-      $('hudDebtBtn').classList.add('hidden');
     }
 
-    $('hudRound').textContent = !r.started ? `Лобби · ${r.players.length}/${r.balanceCatalog.session.players.max}` : `Раунд ${r.round} · круг ${r.circle}/${r.balanceCatalog.session.circlesPerRound}`;
+    $('hudRound').textContent = !r.started
+      ? `Лобби · ${r.players.length}/${r.balanceCatalog.session.players.max}`
+      : `Раунд ${r.round} · круг ${r.circle}/${r.balanceCatalog.session.circlesPerRound}`;
     $('hudTurn').textContent = !r.started
       ? 'Ожидание старта'
       : r.eventPhase?.active
-        ? `События · ${playerName(r.eventPhase.currentPlayerId)}`
+        ? (r.eventPhase.currentPlayerId ? `События · ${playerName(r.eventPhase.currentPlayerId)}` : 'Фаза событий')
         : activePlayer
           ? (activePlayer.id === state.myId ? 'Ваш ход' : `Ход: ${activePlayer.name}`)
           : 'Ожидание';
+    $('hudPhase').textContent = hudPhaseLabel(r, activePlayer);
     $('mobileNavActions').classList.toggle('attention', Boolean(isDecisionPending()));
   }
 

@@ -1266,3 +1266,51 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     display: none !important;
   }
 }
+
+
+/* UI-5 — canonical mobile gameplay HUD */
+.game-hud .hud-phase {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .055em;
+  white-space: nowrap;
+}
+.hud-menu-btn {
+  display: none;
+  width: 40px;
+  min-width: 40px;
+  padding: 0;
+  font-size: 19px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+}
+@media (max-width: 900px) {
+  body.game-active .game-hud {
+    grid-template-columns: minmax(92px, 112px) minmax(0, 1fr) minmax(92px, 108px) 40px;
+  }
+  body.game-active .hud-menu-btn {
+    display: grid;
+    place-items: center;
+    min-height: 40px;
+  }
+  body.game-active .hud-turn {
+    gap: 1px;
+  }
+  body.game-active .hud-resources {
+    overscroll-behavior-x: contain;
+  }
+}
+@media (max-width: 420px) {
+  body.game-active .game-hud {
+    grid-template-columns: 82px minmax(0, 1fr) 82px 38px;
+  }
+  body.game-active .hud-menu-btn {
+    width: 38px;
+    min-width: 38px;
+  }
+  body.game-active .hud-phase {
+    font-size: 8px;
+  }
+}
