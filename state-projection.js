@@ -102,6 +102,9 @@ const characterCatalog = m(o(f('id name admiraltyLevel acquireActionCost useActi
 const battle = o({ ...f('id kind attackerId targetPlayerId islandId viewerInvite'), invites:a(o(f('playerId side status'))) });
 const alliance = o(f('id fromId toId viewerRole'));
 const endGameConsensus = o({ ...f('status proposedById finishAfterRound'), confirmedPlayerIds:a(S) });
+const finalPlayerMetrics = o({ playerId:S, metrics:o(f('islands wealth army fleet prestige legendaryPlaces')) });
+const finalTitle = o({ ...f('id name metric maxValue'), winnerIds:a(S) });
+const finalResult = o({ finishedRound:S, playerMetrics:a(finalPlayerMetrics), titles:a(finalTitle) });
 
 const own = (x,k) => Boolean(x) && Object.prototype.hasOwnProperty.call(x,k);
 const scalar = v => v === null || ['string','number','boolean'].includes(typeof v);
@@ -141,6 +144,8 @@ function hasScoutGrant(c, mode, targetKey, targetId){
   if(!SCOUT_RUNTIME_ENABLED || c.viewerId===null || targetId==null) return false;
   return c.scoutRevealGrants.some(grant => grant.mode===mode && grant.viewerPlayerId===c.viewerId && String(grant[targetKey])===String(targetId));
 }
+
+function projectFinalResult(result){ return p(result,finalResult); }
 
 function projectPlayerForViewer(player, viewerContext=null){
   if(!player || typeof player!=='object' || Array.isArray(player)) return null;
@@ -203,9 +208,9 @@ function projectEventPhaseForViewer(phase, viewerContext=null){
 function projectRoomForViewer(roomView, viewerContext=null){
   if(!roomView || typeof roomView!=='object' || Array.isArray(roomView)) return {};
   const c=ctx(viewerContext), out={};
-  for(const key of 'version code started hostId leaderId round circle turnIndex activePlayerId'.split(' ')) put(out,roomView,key,S);
+  for(const key of 'version code started hostId leaderId round circle turnIndex activePlayerId finished phase'.split(' ')) put(out,roomView,key,S);
   for(const key of ['seatingOrder','order']) put(out,roomView,key,a(S));
-  for(const [key,schema] of [['eventPhase',eventPhase],['treasurePool',pool],['legendaryPool',pool],['legendaryPlaces',a(legendaryPlace)],['namedPlaceCards',a(namedPlace)],['alliances',a(a(S))],['pendingBattle',battle],['pendingAlliance',alliance],['endGameConsensus',endGameConsensus],['characterCatalog',characterCatalog],['buildingCatalog',simpleCatalog],['goodsCatalog',simpleCatalog],['shipUpgradeCatalog',simpleCatalog]]) put(out,roomView,key,schema);
+  for(const [key,schema] of [['eventPhase',eventPhase],['treasurePool',pool],['legendaryPool',pool],['legendaryPlaces',a(legendaryPlace)],['namedPlaceCards',a(namedPlace)],['alliances',a(a(S))],['pendingBattle',battle],['pendingAlliance',alliance],['endGameConsensus',endGameConsensus],['finalResult',finalResult],['characterCatalog',characterCatalog],['buildingCatalog',simpleCatalog],['goodsCatalog',simpleCatalog],['shipUpgradeCatalog',simpleCatalog]]) put(out,roomView,key,schema);
   projectPersonalPendingFamilies(out,roomView,c);
   if(own(roomView,'eventPhase')) out.eventPhase=projectEventPhaseForViewer(roomView.eventPhase,c);
   if(Array.isArray(roomView.players)) out.players=roomView.players.map(v=>projectPlayerForViewer(v,c));
@@ -225,14 +230,17 @@ function projectOpponentFacingRoomView(legacyRoomView, viewerContext=null){
   delete out.feudDecks;
   delete out.assignmentDecks;
   delete out.scoutRevealGrants;
+  delete out.randomSourceState;
+  delete out.digitalModelSchemaVersion;
+  delete out.persistenceInternal;
   if(Array.isArray(out.players)) out.players=out.players.map(v=>projectPlayerForViewer(v,c));
   if(Array.isArray(out.islands)) out.islands=out.islands.map(v=>projectIslandForViewer(v,c));
   projectPersonalPendingFamilies(out,legacyRoomView,c);
-  for(const [key,schema] of [['pendingBattle',battle],['pendingAlliance',alliance],['endGameConsensus',endGameConsensus]]) {
+  for(const [key,schema] of [['pendingBattle',battle],['pendingAlliance',alliance],['endGameConsensus',endGameConsensus],['finalResult',finalResult]]) {
     if(own(out,key)) out[key]=p(out[key],schema);
   }
   if(own(out,'eventPhase')) out.eventPhase=projectEventPhaseForViewer(legacyRoomView.eventPhase,c);
   return out;
 }
 
-module.exports={projectOpponentFacingRoomView,IMPLEMENTED_POLICY_KEYS,SCOUT_RUNTIME_ENABLED,projectRoomForViewer,projectPlayerForViewer,projectIslandForViewer,projectPendingForViewer};
+module.exports={projectOpponentFacingRoomView,IMPLEMENTED_POLICY_KEYS,SCOUT_RUNTIME_ENABLED,projectRoomForViewer,projectPlayerForViewer,projectIslandForViewer,projectPendingForViewer,projectFinalResult};

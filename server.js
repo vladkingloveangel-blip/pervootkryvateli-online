@@ -1,4 +1,4 @@
-const { projectOpponentFacingRoomView } = require('./state-projection');
+const { projectOpponentFacingRoomView, projectFinalResult } = require('./state-projection');
 const { applyScoutUse, scoutViewerContext, clearScoutRevealGrants, normalizeScoutRevealGrants } = require('./scout-runtime');
 const { BALANCE, RULESET, RUNTIME_PROFILE } = require('./game-data');
 const path = require('path');
@@ -549,6 +549,9 @@ function publicRoom(room, viewerId = null) {
     circle: room.circle,
     turnIndex: room.turnIndex,
     activePlayerId: active?.id || null,
+    finished: Boolean(room.finished),
+    phase: room.phase,
+    finalResult: projectFinalResult(room.finalResult),
     endGameConsensus: endGameConsensusView(room),
     eventPhase: legacyEventPhase ? {
       active: Boolean(legacyEventPhase.active),

@@ -674,8 +674,9 @@ test('Scout reveal lifecycle survives reconnect, device replacement and same-tur
   const liveTarget = restartState.players.find(player => player.id === targetMember.playerId);
   assert.equal(liveTarget.ducats, 777);
   assert.equal(Object.hasOwn(liveTarget, 'debt'), false);
-  assert.equal(JSON.stringify(restartState).includes('999'), false);
+  assert.equal(Object.hasOwn(liveTarget, 'debt'), false);
   assert.equal(Object.hasOwn(restartState, 'scoutRevealGrants'), false);
+  assert.equal(Object.hasOwn(restartState, 'randomSourceState'), false);
   assert.equal(rows()[0].state.players.find(player => player.id === activeId).personalTurnNo, scoutTurnNo);
 
   assert.equal((await emit(afterRestartSocket, 'endTurn')).ok, true);

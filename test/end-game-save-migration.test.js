@@ -10,6 +10,7 @@ const {
   migrateRoomState,
 } = require('../save-migrations');
 const { FINISHED_GAMEPLAY_ERROR, finishedGameEventError } = require('../finished-game-lock');
+const { projectFinalResult } = require('../state-projection');
 
 const logger = { log() {}, error() {} };
 
@@ -147,6 +148,7 @@ test('finished room survives save/restart with immutable finalResult and remains
   assert.equal(restored.finished, true);
   assert.equal(restored.phase, 'finished');
   assert.deepEqual(restored.finalResult, finalResult);
+  assert.deepEqual(projectFinalResult(restored.finalResult), projectFinalResult(finalResult));
   assert.equal(restored.round, expectedRound);
   assert.equal(restored.circle, expectedCircle);
   assert.deepEqual(
