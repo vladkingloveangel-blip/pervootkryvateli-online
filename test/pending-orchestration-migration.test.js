@@ -111,7 +111,7 @@ for (const fixture of pendingVariants) {
 
     assert.deepEqual(raw, before);
     assert.equal(result.fromVersion, DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION);
-    assert.equal(result.state.digitalModelSchemaVersion, LEGACY_CLEANUP_DIGITAL_MODEL_SCHEMA_VERSION);
+    assert.equal(result.state.digitalModelSchemaVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
     assert.equal(result.toVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
     assert.equal(Object.hasOwn(result.state, fixture.field), false);
 

@@ -48,23 +48,35 @@ test('unversioned rooms clean retired persisted state while preserving playable 
   assert.equal(getPendingResolution(playable, 'assignment-choice'), null);
 });
 
-test('JSONB round trip preserves full state, clears connections and skips finished games', async () => {
+test('JSONB round trip preserves full state, clears connections and restores finished games', async () => {
   const db = pool();
   const store = new RoomStore(db, { logger });
   await store.init(new Map());
   const original = room();
   await store.save(original);
   assert.equal(original.players[0].connected, true);
-  await db.query('INSERT INTO game_rooms (code, state) VALUES ($1,$2::jsonb)', ['DONE', JSON.stringify({ ...room(), code: 'DONE', finished: true })]);
+  const finished = {
+    ...room(),
+    code: 'DONE',
+    finished: true,
+    phase: 'finished',
+    finalResult: { finishedRound: 3, playerMetrics: [{ playerId: 'p1', score: 77 }], titles: [] },
+  };
+  await store.save(finished);
   const restored = new Map();
   await new RoomStore(db, { logger }).init(restored);
-  assert.equal(restored.size, 1);
+  assert.equal(restored.size, 2);
   const expected = migrateRoomState(original).state;
   expected.players[0].connected = false;
   expected.players[0].socketId = null;
   assert.deepEqual(restored.get('ABCDE'), expected);
+  const restoredFinished = restored.get('DONE');
+  assert.equal(restoredFinished.finished, true);
+  assert.equal(restoredFinished.phase, 'finished');
+  assert.deepEqual(restoredFinished.finalResult, finished.finalResult);
   await store.remove('ABCDE');
-  assert.equal((await db.query('SELECT * FROM game_rooms WHERE code = $1', ['ABCDE'])).rowCount, 0);
+  await store.remove('DONE');
+  assert.equal((await db.query('SELECT * FROM game_rooms')).rowCount, 0);
 });
 
 test('in-flight saves cannot resurrect closed rooms; later snapshots are captured immediately', async () => {

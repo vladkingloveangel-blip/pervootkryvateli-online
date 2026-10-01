@@ -14,6 +14,10 @@ function isUnfinished(room) {
   return !room.finished && !room.endedAt && room.phase !== 'finished';
 }
 
+function isRestorable(room) {
+  return isUnfinished(room) || Boolean(room && (room.finished === true || room.phase === 'finished'));
+}
+
 class RoomStore {
   constructor(db, { retryMs = 1000, logger = console } = {}) {
     this.db = db;
@@ -50,7 +54,7 @@ class RoomStore {
       }
       const snapshot = roomSnapshot(room);
       if (migration.migrated) migratedSnapshots.push(snapshot);
-      if (isUnfinished(room)) restored.push(snapshot);
+      if (isRestorable(room)) restored.push(snapshot);
     }
     // Resave only after every row has migrated and validated successfully.
     for (const snapshot of migratedSnapshots) {
@@ -58,11 +62,11 @@ class RoomStore {
     }
     for (const room of restored) rooms.set(room.code, room);
     this.restored = restored.length;
-    this.logger.log(`Game rooms database ready. Restored ${this.restored} unfinished rooms.`);
+    this.logger.log(`Game rooms database ready. Restored ${this.restored} restorable rooms.`);
   }
 
   save(room) {
-    return this.enqueue(room.code, isUnfinished(room) ? roomSnapshot(room) : null);
+    return this.enqueue(room.code, isRestorable(room) ? roomSnapshot(room) : null);
   }
 
   remove(code) {
@@ -106,4 +110,4 @@ class RoomStore {
   }
 }
 
-module.exports = { RoomStore, roomSnapshot, isUnfinished };
+module.exports = { RoomStore, roomSnapshot, isUnfinished, isRestorable };

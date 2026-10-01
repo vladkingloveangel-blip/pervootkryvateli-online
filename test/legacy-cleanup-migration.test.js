@@ -69,7 +69,7 @@ test('7 -> 8 removes retired decks/state and canonicalizes assignment-replace wi
   const migrated = migrateRoomState(raw);
 
   assert.deepEqual(raw, before);
-  assert.equal(migrated.toVersion, LEGACY_CLEANUP_DIGITAL_MODEL_SCHEMA_VERSION);
+  assert.equal(migrated.state.digitalModelSchemaVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
   assert.equal(migrated.toVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
   for (const field of ['treasureDeck', 'legendaryDeck', 'pendingStatePrize']) {
     assert.equal(Object.hasOwn(migrated.state, field), false, field);

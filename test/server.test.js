@@ -333,7 +333,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   fs.writeFileSync(file,JSON.stringify(savedDatabase));
   beforeRestart = structuredClone(legacyRoom);
   await start();
-  assert.match(output, /Restored 1 unfinished rooms/);
+  assert.match(output, /Restored 1 restorable rooms/);
   const health = (await api('/health')).data;
   assert.equal(health.databaseReady, true); assert.equal(health.roomPersistence.restored, 1);
   const newDevice = await connect(); const restoredWatcher = await connect();
