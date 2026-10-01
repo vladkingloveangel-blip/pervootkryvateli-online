@@ -1314,3 +1314,113 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     font-size: 8px;
   }
 }
+
+
+/* UI-6 — state-driven mobile action bar */
+.game-action-bar { display: none; }
+
+@media (max-width: 900px) {
+  body.game-active .game-action-bar {
+    position: absolute;
+    z-index: 68;
+    left: 8px;
+    right: 8px;
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 9px;
+    align-items: end;
+    padding: 9px 10px;
+    border: 1px solid rgba(240,196,91,.38);
+    border-radius: 14px;
+    background: rgba(7,31,37,.93);
+    box-shadow: 0 10px 28px rgba(0,0,0,.38);
+    backdrop-filter: blur(10px);
+  }
+
+  body.game-active .game-action-bar.hidden,
+  body.game-active.mobile-sheet-open .game-action-bar,
+  body.game-active .finished-state .game-action-bar {
+    display: none !important;
+  }
+
+  body.game-active .game-action-copy {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  body.game-active .game-action-kicker {
+    color: var(--accent);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .08em;
+  }
+
+  body.game-active .game-action-copy > strong {
+    font-size: 14px;
+    line-height: 1.2;
+  }
+
+  body.game-active .game-action-detail {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.3;
+  }
+
+  body.game-active .game-action-buttons {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  body.game-active .game-action-buttons button {
+    min-height: 40px;
+    padding: 7px 10px;
+    white-space: nowrap;
+    font-size: 11px;
+  }
+
+  body.game-active .game-action-progress {
+    display: flex;
+    gap: 5px;
+    margin-top: 4px;
+  }
+
+  body.game-active .game-action-progress.hidden {
+    display: none;
+  }
+
+  body.game-active .game-action-progress span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,.34);
+    background: rgba(255,255,255,.08);
+  }
+
+  body.game-active .game-action-progress span.active {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+
+  /* The new action bar is the mobile turn controller. Legacy controls remain
+     reachable in the Actions sheet until their mechanics migrate. */
+  body.game-active .mobile-action-dock,
+  body.game-active .map-nav-overlay {
+    display: none !important;
+  }
+}
+
+@media (max-width: 430px) {
+  body.game-active .game-action-bar {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+  body.game-active .game-action-buttons {
+    width: 100%;
+  }
+  body.game-active .game-action-buttons button {
+    flex: 1 1 0;
+  }
+}

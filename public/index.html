@@ -394,6 +394,16 @@
         </aside>
       </section>
 
+      <section id="gameActionBar" class="game-action-bar hidden" aria-live="polite" aria-label="Текущее действие">
+        <div class="game-action-copy">
+          <span id="gameActionKicker" class="game-action-kicker">Ожидание</span>
+          <strong id="gameActionTitle">—</strong>
+          <span id="gameActionDetail" class="game-action-detail">—</span>
+          <div id="gameActionProgress" class="game-action-progress hidden" aria-label="Оставшиеся действия"></div>
+        </div>
+        <div id="gameActionButtons" class="game-action-buttons"></div>
+      </section>
+
       <section id="mobileActionDock" class="mobile-action-dock hidden" aria-label="Быстрые действия">
         <button id="dockRollBtn" class="primary" type="button">🎲 Бросить</button>
         <button id="dockSkipBtn" type="button">Остаться</button>

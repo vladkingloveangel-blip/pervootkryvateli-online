@@ -284,3 +284,35 @@ test('UI-5 HUD separates live combat stats from scoring metrics and exposes phas
   assert.match(app, /\$\('hudMenuBtn'\)\.addEventListener\('click', \(\) => toggleGameAccountMenu\(\)\)/);
   assert.match(styles, /UI-5 — canonical mobile gameplay HUD/);
 });
+
+
+test('UI-6 provides one state-driven mobile action bar over the map', () => {
+  assert.match(index, /id="gameActionBar" class="game-action-bar hidden"/);
+  assert.match(index, /id="gameActionKicker"/);
+  assert.match(index, /id="gameActionTitle"/);
+  assert.match(index, /id="gameActionDetail"/);
+  assert.match(index, /id="gameActionProgress"/);
+  assert.match(index, /id="gameActionButtons"/);
+
+  const start = app.indexOf('  function actionBarDecisionLabel(');
+  const end = app.indexOf('\n  function renderControls()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /socket\.emit\('rollMove'/);
+  assert.match(code, /socket\.emit\('skipNavigation'/);
+  assert.match(code, /socket\.emit\('endTurn'/);
+  assert.match(code, /r\.reachableCells/);
+  assert.match(code, /mine\.actionsLeft/);
+  assert.match(code, /eventStageLabel/);
+  assert.match(code, /pendingDecision\?\.waiting/);
+  assert.match(code, /Открыть решение/);
+  assert.match(code, /Событие → Вражда → Поручение/);
+
+  assert.match(app, /renderControls\(\);\s*renderGameActionBar\(\);\s*renderMapNavigation\(\);/);
+  assert.match(styles, /UI-6 — state-driven mobile action bar/);
+  assert.match(styles, /body\.game-active \.mobile-action-dock,[\s\S]*?body\.game-active \.map-nav-overlay \{\s*display: none !important;/);
+
+  // Legacy mechanic panels are intentionally retained as fallback until their dedicated migrations.
+  assert.match(index, /class="panel controls" data-ui-tab="actions"/);
+  assert.match(index, /id="mobileActionDock"/);
+});

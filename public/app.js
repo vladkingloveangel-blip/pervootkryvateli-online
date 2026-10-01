@@ -1051,6 +1051,7 @@
 
     renderPlayers();
     renderControls();
+    renderGameActionBar();
     renderMapNavigation();
     renderMapContext();
     renderEvents();
@@ -1358,6 +1359,119 @@
     }
 
     overlay.classList.add('hidden');
+  }
+
+  function actionBarDecisionLabel(room) {
+    if (room?.pendingEvent?.viewerCanRespond) return 'Решение по событию';
+    if (room?.pendingFeud?.viewerCanRespond) return 'Решение по вражде';
+    if (room?.pendingAssignmentChoice?.viewerCanRespond) return 'Выберите поручение';
+    if (room?.pendingIslandCorrection?.viewerCanRespond) return 'Исправьте остров';
+    if (room?.pendingFleetAdjustment?.viewerCanRespond) return 'Настройте флотилию';
+    if (room?.pendingLegendaryReaction) return 'Ответьте на легендарный эффект';
+    if (room?.pendingBattle?.viewerInvite) return 'Ответьте на приглашение в бой';
+    if (room?.pendingAlliance?.viewerRole === 'recipient') return 'Ответьте на предложение союза';
+    return null;
+  }
+
+  function eventStageLabel(phase) {
+    if (!phase?.active) return 'СОБЫТИЯ';
+    if (phase.stage === 'political' || phase.stage === 'feud') return 'ВРАЖДА';
+    if (phase.stage === 'assignment') return 'ПОРУЧЕНИЕ';
+    return 'СОБЫТИЕ';
+  }
+
+  function renderGameActionBar() {
+    const r = state.room;
+    const bar = $('gameActionBar');
+    const buttons = $('gameActionButtons');
+    const progress = $('gameActionProgress');
+    if (!r || !r.started || r.finished || r.phase === 'finished') {
+      bar.classList.add('hidden');
+      return;
+    }
+
+    bar.classList.remove('hidden');
+    buttons.innerHTML = '';
+    progress.innerHTML = '';
+    progress.classList.add('hidden');
+
+    const mine = me();
+    const activePlayer = active();
+    const myTurn = Boolean(mine && r.activePlayerId === state.myId && !state.spectating);
+    const decisionLabel = actionBarDecisionLabel(r);
+    const waitingActor = r.pendingDecision?.waiting ? playerName(r.pendingDecision.actorPlayerId) : null;
+
+    const setCopy = (kicker, title, detail = '') => {
+      $('gameActionKicker').textContent = kicker;
+      $('gameActionTitle').textContent = title;
+      $('gameActionDetail').textContent = detail;
+    };
+    const addButton = (label, onClick, className = '') => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      if (className) button.className = className;
+      button.textContent = label;
+      button.addEventListener('click', onClick);
+      buttons.appendChild(button);
+      return button;
+    };
+
+    if (decisionLabel) {
+      setCopy('ТРЕБУЕТСЯ РЕШЕНИЕ', decisionLabel, 'Продолжение партии ждёт вашего выбора.');
+      addButton('Открыть решение', () => openMobileTab('actions'), 'primary');
+      return;
+    }
+
+    if (waitingActor) {
+      setCopy('ОЖИДАНИЕ', `Ждём решения: ${waitingActor}`, 'Карта остаётся доступна для просмотра.');
+      return;
+    }
+
+    if (r.eventPhase?.active || r.phase === 'event') {
+      const actor = r.eventPhase?.currentPlayerId ? playerName(r.eventPhase.currentPlayerId) : null;
+      setCopy(eventStageLabel(r.eventPhase), actor ? `Сейчас: ${actor}` : 'Фаза событий', 'Событие → Вражда → Поручение');
+      return;
+    }
+
+    if (!myTurn) {
+      const name = activePlayer?.name || 'другого игрока';
+      const phase = activePlayer?.phase === 'navigation' ? 'навигация' : activePlayer?.phase === 'actions' ? 'действия' : 'ход';
+      setCopy('ОЖИДАНИЕ', `Ход: ${name}`, `Сейчас выполняется: ${phase}.`);
+      return;
+    }
+
+    if (mine.phase === 'navigation' && mine.roll === null) {
+      setCopy('НАВИГАЦИЯ', 'Куда отправится корабль?', 'Бросьте навигацию или останьтесь на месте.');
+      addButton('🎲 Бросить', () => socket.emit('rollMove', {}, handleGameAck), 'primary');
+      addButton('Остаться', () => socket.emit('skipNavigation', {}, handleGameAck));
+      return;
+    }
+
+    if (mine.phase === 'navigation') {
+      const destinations = (r.reachableCells || []).filter(cell => cell.row !== mine.row || cell.col !== mine.col);
+      setCopy('НАВИГАЦИЯ', `Выпало ${mine.roll} · дальность ${mine.movePoints}`,
+        destinations.length ? `Выберите подсвеченную клетку · доступно: ${destinations.length}` : 'Доступных клеток нет.');
+      addButton('Остаться здесь', () => socket.emit('skipNavigation', {}, handleGameAck));
+      return;
+    }
+
+    if (mine.phase === 'actions') {
+      const left = Math.max(0, Number(mine.actionsLeft) || 0);
+      setCopy('ДЕЙСТВИЯ', left > 0 ? `Осталось действий: ${left}` : 'Действия закончились',
+        left > 0 ? 'Выберите объект на карте или откройте доступные действия.' : 'Завершите ход.');
+      progress.classList.remove('hidden');
+      const total = Number(r.balanceCatalog?.session?.actionsPerTurn) || 3;
+      for (let i = 0; i < total; i += 1) {
+        const dot = document.createElement('span');
+        dot.className = i < left ? 'active' : '';
+        progress.appendChild(dot);
+      }
+      if (left > 0) addButton('Действия', () => openMobileTab('actions'), 'primary');
+      addButton('Завершить ход', () => socket.emit('endTurn', {}, handleGameAck), left > 0 ? 'danger-soft' : 'primary');
+      return;
+    }
+
+    setCopy('ОЖИДАНИЕ', 'Состояние обновляется', 'Ожидаем следующего шага партии.');
   }
 
   function renderControls() {
