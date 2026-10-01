@@ -84,7 +84,7 @@ const { createSeaEncounterStorage, seaEncounterSource } = require('./sea-encount
 const { createSailingEventStorage, canonicalizeSailingEventOccurrence, sailingEventSource, releaseStoredBenefitReservation } = require('./sailing-event-source');
 const { createPoliticalEffectStorage, politicalEffectSource } = require('./political-effect-source');
 const { createAssignmentStorage, createAssignmentPoolState, usesDigitalAssignmentPool, assignmentPool } = require('./assignment-pool');
-const { createExpeditionStorage, expeditionPool } = require('./expedition-pool');
+const { createExpeditionStorage, usesDigitalExpeditionPool, expeditionPool } = require('./expedition-pool');
 const {
   SHIPS,
   SHIP_LEVELS,
@@ -740,41 +740,65 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
       changed = true;
     }
 
-    if (!Array.isArray(player.expeditionHistory)) {
-      player.expeditionHistory = [];
-      changed = true;
-    } else {
-      const validExpeditionPlaces = new Set(EXPEDITION_DEFINITIONS.map(card => card.placeId));
-      const filteredHistory = player.expeditionHistory.filter(item => validExpeditionPlaces.has(item?.placeId));
-      if (filteredHistory.length !== player.expeditionHistory.length) {
-        player.expeditionHistory = filteredHistory;
+    if (usesDigitalExpeditionPool(room)) {
+      if (!Array.isArray(player.expeditionCompletions)) {
+        player.expeditionCompletions = [];
         changed = true;
       }
-    }
-    if (!Object.hasOwn(player, 'activeExpedition')) {
-      player.activeExpedition = null;
-      changed = true;
-    }
-    if (player.activeExpedition) {
-      const active = player.activeExpedition;
-      const canonical = EXPEDITION_DEFINITIONS.find(card => card.id === active.cardId || card.placeId === active.placeId);
-      if (!canonical) {
-        player.activeExpedition = null;
+      if (!Object.hasOwn(player, 'activeExpeditionTask')) {
+        player.activeExpeditionTask = null;
+        changed = true;
+      }
+      if (!player.expeditionAccessUsage || typeof player.expeditionAccessUsage !== 'object' || Array.isArray(player.expeditionAccessUsage)) {
+        player.expeditionAccessUsage = { round: null, draws: 0 };
         changed = true;
       } else {
-        if (!active.cardId) { active.cardId = canonical.id; changed = true; }
-        if (!active.name) { active.name = canonical.name; changed = true; }
-        if (!active.placeId) { active.placeId = canonical.placeId; changed = true; }
-        if (!active.card) { active.card = { ...canonical }; changed = true; }
+        if (!Object.hasOwn(player.expeditionAccessUsage, 'round')) {
+          player.expeditionAccessUsage.round = null;
+          changed = true;
+        }
+        if (!Number.isFinite(Number(player.expeditionAccessUsage.draws))) {
+          player.expeditionAccessUsage.draws = 0;
+          changed = true;
+        }
       }
-    }
-    if (!Object.hasOwn(player, 'expeditionDrawRound')) {
-      player.expeditionDrawRound = null;
-      changed = true;
-    }
-    if (!Number.isFinite(Number(player.expeditionsDrawnThisRound))) {
-      player.expeditionsDrawnThisRound = 0;
-      changed = true;
+    } else {
+      if (!Array.isArray(player.expeditionHistory)) {
+        player.expeditionHistory = [];
+        changed = true;
+      } else {
+        const validExpeditionPlaces = new Set(EXPEDITION_DEFINITIONS.map(card => card.placeId));
+        const filteredHistory = player.expeditionHistory.filter(item => validExpeditionPlaces.has(item?.placeId));
+        if (filteredHistory.length !== player.expeditionHistory.length) {
+          player.expeditionHistory = filteredHistory;
+          changed = true;
+        }
+      }
+      if (!Object.hasOwn(player, 'activeExpedition')) {
+        player.activeExpedition = null;
+        changed = true;
+      }
+      if (player.activeExpedition) {
+        const active = player.activeExpedition;
+        const canonical = EXPEDITION_DEFINITIONS.find(card => card.id === active.cardId || card.placeId === active.placeId);
+        if (!canonical) {
+          player.activeExpedition = null;
+          changed = true;
+        } else {
+          if (!active.cardId) { active.cardId = canonical.id; changed = true; }
+          if (!active.name) { active.name = canonical.name; changed = true; }
+          if (!active.placeId) { active.placeId = canonical.placeId; changed = true; }
+          if (!active.card) { active.card = { ...canonical }; changed = true; }
+        }
+      }
+      if (!Object.hasOwn(player, 'expeditionDrawRound')) {
+        player.expeditionDrawRound = null;
+        changed = true;
+      }
+      if (!Number.isFinite(Number(player.expeditionsDrawnThisRound))) {
+        player.expeditionsDrawnThisRound = 0;
+        changed = true;
+      }
     }
     if (!Array.isArray(player.legendaryCards)) {
       player.legendaryCards = [];
@@ -793,17 +817,25 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
     }
   }
 
-  const reservedExpeditionIds = new Set(room.players.map(player => getActiveExpeditionTask(player)?.id).filter(Boolean));
-  if (!room.expeditionDeck || !Array.isArray(room.expeditionDeck.drawPile)) {
-    room.expeditionDeck = createExpeditionDeck(rng);
-    room.expeditionDeck.drawPile = room.expeditionDeck.drawPile.filter(card => !reservedExpeditionIds.has(card.id));
-    changed = true;
-  } else {
-    const canonicalIds = new Set(EXPEDITION_DEFINITIONS.map(card => card.id));
-    const filteredDeck = room.expeditionDeck.drawPile.filter(card => canonicalIds.has(card?.id) && !reservedExpeditionIds.has(card.id));
-    if (filteredDeck.length !== room.expeditionDeck.drawPile.length) {
-      room.expeditionDeck.drawPile = filteredDeck;
+  if (usesDigitalExpeditionPool(room)) {
+    const storage = room.randomSourceState?.expeditionPool;
+    if (!storage || !Array.isArray(storage.available) || !Array.isArray(storage.reserved)) {
+      expeditionPoolFor(room, rng)?.ensureStorage();
       changed = true;
+    }
+  } else {
+    const reservedExpeditionIds = new Set(room.players.map(player => getActiveExpeditionTask(player)?.id).filter(Boolean));
+    if (!room.expeditionDeck || !Array.isArray(room.expeditionDeck.drawPile)) {
+      room.expeditionDeck = createExpeditionDeck(rng);
+      room.expeditionDeck.drawPile = room.expeditionDeck.drawPile.filter(card => !reservedExpeditionIds.has(card.id));
+      changed = true;
+    } else {
+      const canonicalIds = new Set(EXPEDITION_DEFINITIONS.map(card => card.id));
+      const filteredDeck = room.expeditionDeck.drawPile.filter(card => canonicalIds.has(card?.id) && !reservedExpeditionIds.has(card.id));
+      if (filteredDeck.length !== room.expeditionDeck.drawPile.length) {
+        room.expeditionDeck.drawPile = filteredDeck;
+        changed = true;
+      }
     }
   }
   if (!Array.isArray(room.pendingExpeditionRewards)) {

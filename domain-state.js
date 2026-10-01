@@ -1,5 +1,7 @@
 'use strict';
 
+const { EXPEDITION_DEFINITIONS } = require('./game-data');
+
 const DOMAIN_KIND = Symbol('domain-state.kind');
 const LEGACY_SNAPSHOT = Symbol('domain-state.legacy-snapshot');
 const ABSENT = Symbol('domain-state.absent');
@@ -161,7 +163,16 @@ function completeAssignmentTask(player) {
 
 
 const ACTIVE_EXPEDITION_LEGACY_SNAPSHOT = Symbol('domain-state.active-expedition-legacy-snapshot');
+const ACTIVE_EXPEDITION_PERSISTED_SNAPSHOT = Symbol('domain-state.active-expedition-persisted-snapshot');
 const EXPEDITION_HISTORY_LEGACY_SNAPSHOT = Symbol('domain-state.expedition-history-legacy-snapshot');
+const EXPEDITION_COMPLETION_PERSISTED_SNAPSHOT = Symbol('domain-state.expedition-completion-persisted-snapshot');
+
+function expeditionDefinition(expeditionId, placeId) {
+  return EXPEDITION_DEFINITIONS.find(definition =>
+    (expeditionId && definition.id === expeditionId)
+    || (placeId && definition.placeId === placeId)
+  ) || null;
+}
 
 function activeExpeditionTaskFromLegacy(player, legacyExpedition) {
   if (legacyExpedition === undefined || legacyExpedition === null) return legacyExpedition;
@@ -194,8 +205,42 @@ function activeExpeditionTaskFromLegacy(player, legacyExpedition) {
   return task;
 }
 
+function activeExpeditionTaskFromPersisted(player, persistedExpedition) {
+  if (persistedExpedition === undefined || persistedExpedition === null) return persistedExpedition;
+  if (!persistedExpedition || typeof persistedExpedition !== 'object' || Array.isArray(persistedExpedition)) {
+    throw new TypeError('ActiveExpeditionTask expects a persisted expedition record, null, or undefined.');
+  }
+  const definition = expeditionDefinition(persistedExpedition.expeditionId, persistedExpedition.placeId);
+  const semantic = {
+    kind: 'expedition',
+    ownerId: player?.id,
+    state: 'active',
+    source: {},
+    progress: {},
+  };
+  if (hasOwn(persistedExpedition, 'expeditionId')) semantic.id = cloneDetached(persistedExpedition.expeditionId);
+  else if (definition?.id) semantic.id = cloneDetached(definition.id);
+  if (hasOwn(persistedExpedition, 'placeId')) semantic.source.placeId = cloneDetached(persistedExpedition.placeId);
+  else if (definition?.placeId) semantic.source.placeId = cloneDetached(definition.placeId);
+  if (hasOwn(persistedExpedition, 'acceptedRound')) semantic.source.acceptedRound = cloneDetached(persistedExpedition.acceptedRound);
+  if (definition?.name) semantic.source.name = cloneDetached(definition.name);
+  if (definition) semantic.payload = cloneDetached(definition);
+  if (hasOwn(persistedExpedition, 'startedAtTarget')) semantic.progress.startedAtTarget = cloneDetached(persistedExpedition.startedAtTarget);
+  if (hasOwn(persistedExpedition, 'departedAfterIssue')) semantic.progress.departedAfterIssue = cloneDetached(persistedExpedition.departedAfterIssue);
+  const task = Task.view(semantic);
+  Object.defineProperty(task, ACTIVE_EXPEDITION_PERSISTED_SNAPSHOT, {
+    value: cloneDetached(persistedExpedition),
+    enumerable: false,
+  });
+  return task;
+}
+
 function getActiveExpeditionTask(player) {
-  if (!player || typeof player !== 'object' || !hasOwn(player, 'activeExpedition')) return undefined;
+  if (!player || typeof player !== 'object') return undefined;
+  if (hasOwn(player, 'activeExpeditionTask')) {
+    return activeExpeditionTaskFromPersisted(player, player.activeExpeditionTask);
+  }
+  if (!hasOwn(player, 'activeExpedition')) return undefined;
   return activeExpeditionTaskFromLegacy(player, player.activeExpedition);
 }
 
@@ -231,6 +276,35 @@ function activeExpeditionTaskToLegacy(task) {
   return legacy;
 }
 
+function activeExpeditionTaskToPersisted(task) {
+  if (task === undefined || task === null) return task;
+  if (!Task.is(task) || task.kind !== 'expedition' || task.state !== 'active') {
+    throw new TypeError('assignExpeditionTask expects an active expedition Task.');
+  }
+  const snapshot = task[ACTIVE_EXPEDITION_PERSISTED_SNAPSHOT];
+  const persisted = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)
+    ? cloneDetached(snapshot)
+    : {};
+  const source = task.source && typeof task.source === 'object' ? task.source : {};
+  const progress = task.progress && typeof task.progress === 'object' ? task.progress : {};
+
+  if (hasOwn(task, 'id')) persisted.expeditionId = cloneDetached(task.id);
+  else delete persisted.expeditionId;
+  if (hasOwn(source, 'placeId')) persisted.placeId = cloneDetached(source.placeId);
+  else delete persisted.placeId;
+  if (hasOwn(source, 'acceptedRound')) persisted.acceptedRound = cloneDetached(source.acceptedRound);
+  else delete persisted.acceptedRound;
+  if (hasOwn(progress, 'startedAtTarget')) persisted.startedAtTarget = cloneDetached(progress.startedAtTarget);
+  else delete persisted.startedAtTarget;
+  if (hasOwn(progress, 'departedAfterIssue')) persisted.departedAfterIssue = cloneDetached(progress.departedAfterIssue);
+  else delete persisted.departedAfterIssue;
+
+  delete persisted.card;
+  delete persisted.cardId;
+  delete persisted.name;
+  return persisted;
+}
+
 function assignExpeditionTask(player, task) {
   if (!player || typeof player !== 'object') throw new TypeError('assignExpeditionTask requires a player object.');
   if (!Task.is(task) || task.kind !== 'expedition' || task.state !== 'active') {
@@ -238,6 +312,10 @@ function assignExpeditionTask(player, task) {
   }
   if (task.ownerId != null && player.id != null && String(task.ownerId) !== String(player.id)) {
     throw new TypeError('Expedition Task ownerId does not match the target player.');
+  }
+  if (hasOwn(player, 'activeExpeditionTask')) {
+    player.activeExpeditionTask = activeExpeditionTaskToPersisted(task);
+    return activeExpeditionTaskToLegacy(task);
   }
   player.activeExpedition = activeExpeditionTaskToLegacy(task);
   return player.activeExpedition;
@@ -247,7 +325,8 @@ function completeExpeditionTask(player) {
   if (!player || typeof player !== 'object') throw new TypeError('completeExpeditionTask requires a player object.');
   const task = getActiveExpeditionTask(player);
   const legacy = task === undefined || task === null ? task : activeExpeditionTaskToLegacy(task);
-  player.activeExpedition = null;
+  if (hasOwn(player, 'activeExpeditionTask')) player.activeExpeditionTask = null;
+  else player.activeExpedition = null;
   return legacy;
 }
 
@@ -271,6 +350,35 @@ function expeditionHistoryRecordFromLegacy(player, legacyRecord) {
   const record = HistoryRecord.view(semantic);
   Object.defineProperty(record, EXPEDITION_HISTORY_LEGACY_SNAPSHOT, {
     value: cloneDetached(legacyRecord),
+    enumerable: false,
+  });
+  return record;
+}
+
+function expeditionCompletionRecordFromPersisted(player, persistedRecord) {
+  if (persistedRecord === undefined || persistedRecord === null) return persistedRecord;
+  if (!persistedRecord || typeof persistedRecord !== 'object' || Array.isArray(persistedRecord)) {
+    throw new TypeError('Expedition HistoryRecord expects a persisted record, null, or undefined.');
+  }
+  const definition = expeditionDefinition(persistedRecord.expeditionId, persistedRecord.placeId);
+  const semantic = {
+    kind: 'expedition-completion',
+    ownerId: player?.id,
+    state: 'completed',
+    source: {},
+    payload: {},
+  };
+  if (hasOwn(persistedRecord, 'id')) semantic.id = cloneDetached(persistedRecord.id);
+  if (hasOwn(persistedRecord, 'placeId')) semantic.source.placeId = cloneDetached(persistedRecord.placeId);
+  else if (definition?.placeId) semantic.source.placeId = cloneDetached(definition.placeId);
+  if (hasOwn(persistedRecord, 'expeditionId')) semantic.source.cardId = cloneDetached(persistedRecord.expeditionId);
+  else if (definition?.id) semantic.source.cardId = cloneDetached(definition.id);
+  if (hasOwn(persistedRecord, 'name')) semantic.payload.name = cloneDetached(persistedRecord.name);
+  else if (definition?.name) semantic.payload.name = cloneDetached(definition.name);
+  if (hasOwn(persistedRecord, 'completedRound')) semantic.completedAt = { round: cloneDetached(persistedRecord.completedRound) };
+  const record = HistoryRecord.view(semantic);
+  Object.defineProperty(record, EXPEDITION_COMPLETION_PERSISTED_SNAPSHOT, {
+    value: cloneDetached(persistedRecord),
     enumerable: false,
   });
   return record;
@@ -308,8 +416,42 @@ function expeditionHistoryRecordToLegacy(record) {
   return legacy;
 }
 
+function expeditionHistoryRecordToPersisted(record) {
+  if (record === undefined || record === null) return record;
+  if (!HistoryRecord.is(record) || record.kind !== 'expedition-completion' || record.state !== 'completed') {
+    throw new TypeError('Expedition history writes expect a completed expedition HistoryRecord.');
+  }
+  const snapshot = record[EXPEDITION_COMPLETION_PERSISTED_SNAPSHOT];
+  const persisted = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)
+    ? cloneDetached(snapshot)
+    : {};
+  const source = record.source && typeof record.source === 'object' ? record.source : {};
+  const payload = record.payload && typeof record.payload === 'object' ? record.payload : {};
+  const completedAt = record.completedAt && typeof record.completedAt === 'object' ? record.completedAt : {};
+
+  if (hasOwn(record, 'id')) persisted.id = cloneDetached(record.id);
+  else delete persisted.id;
+  if (hasOwn(source, 'placeId')) persisted.placeId = cloneDetached(source.placeId);
+  else delete persisted.placeId;
+  if (hasOwn(source, 'cardId')) persisted.expeditionId = cloneDetached(source.cardId);
+  else delete persisted.expeditionId;
+  if (hasOwn(payload, 'name')) persisted.name = cloneDetached(payload.name);
+  else delete persisted.name;
+  if (hasOwn(completedAt, 'round')) persisted.completedRound = cloneDetached(completedAt.round);
+  else delete persisted.completedRound;
+  delete persisted.cardId;
+  return persisted;
+}
+
 function getExpeditionHistoryRecords(player) {
-  if (!player || typeof player !== 'object' || !hasOwn(player, 'expeditionHistory')) return undefined;
+  if (!player || typeof player !== 'object') return undefined;
+  if (hasOwn(player, 'expeditionCompletions')) {
+    const history = player.expeditionCompletions;
+    if (history === null) return null;
+    if (!Array.isArray(history)) throw new TypeError('Expedition completion backing field must be an array, null, or absent.');
+    return history.map(entry => expeditionCompletionRecordFromPersisted(player, entry));
+  }
+  if (!hasOwn(player, 'expeditionHistory')) return undefined;
   const history = player.expeditionHistory;
   if (history === null) return null;
   if (!Array.isArray(history)) throw new TypeError('Expedition history backing field must be an array, null, or absent.');
@@ -318,21 +460,34 @@ function getExpeditionHistoryRecords(player) {
 
 function setExpeditionHistoryRecords(player, records) {
   if (!player || typeof player !== 'object') throw new TypeError('setExpeditionHistoryRecords requires a player object.');
+  const persisted = hasOwn(player, 'expeditionCompletions');
   if (records === undefined) {
-    delete player.expeditionHistory;
+    if (persisted) delete player.expeditionCompletions;
+    else delete player.expeditionHistory;
     return undefined;
   }
   if (records === null) {
-    player.expeditionHistory = null;
+    if (persisted) player.expeditionCompletions = null;
+    else player.expeditionHistory = null;
     return null;
   }
   if (!Array.isArray(records)) throw new TypeError('setExpeditionHistoryRecords expects an array, null, or undefined.');
+  if (persisted) {
+    player.expeditionCompletions = records.map(expeditionHistoryRecordToPersisted);
+    return player.expeditionCompletions;
+  }
   player.expeditionHistory = records.map(expeditionHistoryRecordToLegacy);
   return player.expeditionHistory;
 }
 
 function addCompletedExpeditionRecord(player, record) {
   if (!player || typeof player !== 'object') throw new TypeError('addCompletedExpeditionRecord requires a player object.');
+  if (hasOwn(player, 'expeditionCompletions')) {
+    const persistedRecord = expeditionHistoryRecordToPersisted(record);
+    if (!Array.isArray(player.expeditionCompletions)) player.expeditionCompletions = [];
+    player.expeditionCompletions.push(persistedRecord);
+    return expeditionHistoryRecordToLegacy(record);
+  }
   const legacyRecord = expeditionHistoryRecordToLegacy(record);
   if (!Array.isArray(player.expeditionHistory)) player.expeditionHistory = [];
   player.expeditionHistory.push(legacyRecord);
@@ -348,6 +503,16 @@ function countExpeditionCompletions(player, placeId) {
 
 function getExpeditionUsage(player) {
   if (!player || typeof player !== 'object') return { drawRound: undefined, drawsThisRound: undefined };
+  if (hasOwn(player, 'expeditionAccessUsage')) {
+    const usage = player.expeditionAccessUsage;
+    if (!usage || typeof usage !== 'object' || Array.isArray(usage)) {
+      return { drawRound: undefined, drawsThisRound: undefined };
+    }
+    return {
+      drawRound: hasOwn(usage, 'round') ? cloneDetached(usage.round) : undefined,
+      drawsThisRound: hasOwn(usage, 'draws') ? cloneDetached(usage.draws) : undefined,
+    };
+  }
   return {
     drawRound: hasOwn(player, 'expeditionDrawRound') ? cloneDetached(player.expeditionDrawRound) : undefined,
     drawsThisRound: hasOwn(player, 'expeditionsDrawnThisRound') ? cloneDetached(player.expeditionsDrawnThisRound) : undefined,
@@ -363,6 +528,17 @@ function expeditionTakenThisRound(player, round) {
 
 function recordExpeditionTaken(player, round) {
   if (!player || typeof player !== 'object') throw new TypeError('recordExpeditionTaken requires a player object.');
+  if (hasOwn(player, 'expeditionAccessUsage')) {
+    const current = player.expeditionAccessUsage && typeof player.expeditionAccessUsage === 'object' && !Array.isArray(player.expeditionAccessUsage)
+      ? player.expeditionAccessUsage
+      : {};
+    player.expeditionAccessUsage = {
+      ...current,
+      round: Number(round) || 1,
+      draws: 1,
+    };
+    return getExpeditionUsage(player);
+  }
   player.expeditionDrawRound = Number(round) || 1;
   player.expeditionsDrawnThisRound = 1;
   return getExpeditionUsage(player);
@@ -370,6 +546,13 @@ function recordExpeditionTaken(player, round) {
 
 function resetExpeditionRoundUsage(player) {
   if (!player || typeof player !== 'object') throw new TypeError('resetExpeditionRoundUsage requires a player object.');
+  if (hasOwn(player, 'expeditionAccessUsage')) {
+    const current = player.expeditionAccessUsage && typeof player.expeditionAccessUsage === 'object' && !Array.isArray(player.expeditionAccessUsage)
+      ? player.expeditionAccessUsage
+      : {};
+    player.expeditionAccessUsage = { ...current, draws: 0 };
+    return getExpeditionUsage(player);
+  }
   player.expeditionsDrawnThisRound = 0;
   return getExpeditionUsage(player);
 }

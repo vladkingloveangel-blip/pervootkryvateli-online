@@ -73,6 +73,15 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(rows()[0].state.digitalModelSchemaVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
   assert.ok(rows()[0].state.randomSourceState);
   assert.ok(rows()[0].state.randomSourceState.assignmentPool);
+  assert.ok(rows()[0].state.randomSourceState.expeditionPool);
+  assert.equal(Object.hasOwn(rows()[0].state, 'expeditionDeck'), false);
+  const createdPlayerState = rows()[0].state.players.find(player => player.id === created.playerId);
+  assert.deepEqual(createdPlayerState.activeExpeditionTask, null);
+  assert.deepEqual(createdPlayerState.expeditionCompletions, []);
+  assert.deepEqual(createdPlayerState.expeditionAccessUsage, { round: null, draws: 0 });
+  for (const legacyField of ['activeExpedition', 'expeditionHistory', 'expeditionDrawRound', 'expeditionsDrawnThisRound']) {
+    assert.equal(Object.hasOwn(createdPlayerState, legacyField), false, legacyField);
+  }
   for (const legacySourceField of ['anchorDecks', 'eventDeck', 'feudDecks', 'assignmentDecks']) {
     assert.equal(Object.hasOwn(rows()[0].state, legacySourceField), false, legacySourceField);
   }
@@ -107,7 +116,12 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   const started = rows()[0].state;
   assert.equal(started.started, true);
   assert.ok(started.randomSourceState.assignmentPool);
+  assert.ok(started.randomSourceState.expeditionPool);
   assert.equal(Object.hasOwn(started, 'assignmentDecks'), false);
+  assert.equal(Object.hasOwn(started, 'expeditionDeck'), false);
+  assert.equal(started.players.every(p => p.activeExpeditionTask === null), true);
+  assert.equal(started.players.every(p => Array.isArray(p.expeditionCompletions) && p.expeditionCompletions.length === 0), true);
+  assert.equal(started.players.every(p => p.expeditionAccessUsage?.round === null && p.expeditionAccessUsage?.draws === 0), true);
   assert.equal(started.players.find(p=>p.id===joinedSecond.playerId).shipClass,'carrack');
   assert.deepEqual(started.order,[joinedSecond.playerId,joinedFourth.playerId,created.playerId,joinedThird.playerId]);
   assert.equal(started.players.every(p=>p.ducats===canonical.session.startingDucats),true);
@@ -233,6 +247,9 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
     discard: structuredClone(source.recyclable),
     removed: structuredClone(source.permanentlyExcluded),
   }]));
+  legacyRoom.expeditionDeck = {
+    drawPile: structuredClone(migratedSources.expeditionPool.available),
+  };
   delete legacyRoom.randomSourceState;
   delete legacyRoom.digitalModelSchemaVersion;
   delete legacyRoom.rulesDataVersion; delete legacyRoom.rulesSchemaVersion; delete legacyRoom.runtimeProfile;

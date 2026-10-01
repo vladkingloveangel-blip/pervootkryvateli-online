@@ -10,6 +10,7 @@ const { Pool } = require('pg');
 const { RoomStore, isUnfinished } = require('./room-store');
 const { CURRENT_DIGITAL_MODEL_SCHEMA_VERSION } = require('./save-migrations');
 const { createAssignmentPoolState, assignmentPool } = require('./assignment-pool');
+const { createExpeditionPoolState } = require('./expedition-pool');
 const { MAP_META, CITADEL, HAZARDS, SHIPS, SHIP_LEVELS, SHIP_UPGRADES, ESCORTS, COLORS, BUILDINGS, CHARACTERS, GOODS, CITADEL_CELLS, ANCHORS, FACTIONS, POLITICAL_FACTION_ORDER, ASSIGNMENT_DEFINITIONS, LEGENDARY_PLACES, LEGENDARY_PLACE_RULES, PLACE_DISCOVERY_DEFINITIONS } = require('./game-data');
 const {
   cloneIslands,
@@ -119,7 +120,6 @@ const {
   drawTreasureCard,
   treasureHunterCandidates,
   prepareTreasureHunterChoice,
-  createExpeditionDeck,
   drawFeudCard,
   normalizeStage6Compatibility,
   getActiveAssignmentTask,
@@ -627,7 +627,7 @@ function publicRoom(room, viewerId = null) {
     } : null,
     eventDecks: {
       sailing: (() => { const counts = sailingEventSource(room)?.availabilityCounts() || {}; return { remaining: counts.available || 0, discard: counts.recyclable || 0 }; })(),
-      expeditions: { remaining: room.expeditionDeck?.drawPile?.length || 0 },
+      expeditions: { remaining: room.randomSourceState?.expeditionPool?.available?.length || 0 },
     },
     treasurePool: {
       mode: BALANCE.treasurePool?.mode || 'random-with-replacement',
@@ -2890,10 +2890,9 @@ function newPlayer(socket, data, color) {
     col: MAP_META.startCell[1],
     specialCards: [],
     namedPlaceCards: [],
-    activeExpedition: null,
-    expeditionHistory: [],
-    expeditionDrawRound: null,
-    expeditionsDrawnThisRound: 0,
+    activeExpeditionTask: null,
+    expeditionCompletions: [],
+    expeditionAccessUsage: { round: null, draws: 0 },
     cargo: null,
     upgrades: [],
     disabledUpgradeIds: [],
@@ -3003,7 +3002,7 @@ io.on('connection', socket => {
     // Preserve the pre-6.2 initialization RNG call order exactly.
     const seaEncounterState = createSeaEncounterSourceState();
     const sailingEventState = createSailingEventSourceState();
-    const expeditionDeck = createExpeditionDeck();
+    const expeditionPoolState = createExpeditionPoolState();
     const politicalEffectState = createPoliticalEffectSourceState();
     const assignmentPoolState = createAssignmentPoolState();
     const room = {
@@ -3044,8 +3043,8 @@ io.on('connection', socket => {
         sailingEvent: sailingEventState,
         politicalEffect: politicalEffectState,
         assignmentPool: assignmentPoolState,
+        expeditionPool: expeditionPoolState,
       },
-      expeditionDeck,
       pendingExpeditionRewards: [],
       legendaryPlacesExplored: {},
       factionState: {},
@@ -3244,7 +3243,7 @@ io.on('connection', socket => {
     // Preserve the pre-6.2 source reset RNG call order exactly.
     const seaEncounterState = createSeaEncounterSourceState();
     const sailingEventState = createSailingEventSourceState();
-    const expeditionDeck = createExpeditionDeck();
+    const expeditionPoolState = createExpeditionPoolState();
     const politicalEffectState = createPoliticalEffectSourceState();
     const assignmentPoolState = createAssignmentPoolState();
     room.randomSourceState = {
@@ -3252,14 +3251,15 @@ io.on('connection', socket => {
       sailingEvent: sailingEventState,
       politicalEffect: politicalEffectState,
       assignmentPool: assignmentPoolState,
+      expeditionPool: expeditionPoolState,
     };
-    room.expeditionDeck = expeditionDeck;
+    delete room.expeditionDeck;
     room.pendingExpeditionRewards = [];
     room.legendaryPlacesExplored = {};
     room.factionState = {};
     room.players.forEach(p => {
       p.row = 0; p.col = 0; p.ducats = BALANCE.session.startingDucats; p.debt = 0; p.level = 1; p.specialCards = []; p.cargo = null; p.upgrades = []; p.disabledUpgradeIds = []; p.escorts = []; p.levelInactiveEscortIds = []; p.nextEscortId = 0;
-      p.glory = 0; p.fleetPoints = 0; p.fleetPointRound = room.round; p.fleetPointOpponentIds = []; p.armyPoints = 0; p.armyPointRound = room.round; p.armyPointOpponentIds = []; p.skipTurns = 0; p.personalTurnNo = 0; p.attackLimitRound = room.round; p.attackCountsThisRound = {}; p.brokenAlliesThisTurn = []; p.pendingLandinEscort = false; p.activeExpedition = null; p.expeditionHistory = []; p.expeditionDrawRound = null; p.expeditionsDrawnThisRound = 0; p.legendaryCards = []; p.legendaryEffects = { seaCurses: [] }; p.savedEventCards = []; p.nextTurnEffects = {}; p.activeTurnEffects = {}; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignment = null; p.landCompany = null; p.bastionPriority = []; p.inactiveBastionIslandIds = []; p.character = null; p.characterReplacedRound = null; p.palaceUsed = false;
+      p.glory = 0; p.fleetPoints = 0; p.fleetPointRound = room.round; p.fleetPointOpponentIds = []; p.armyPoints = 0; p.armyPointRound = room.round; p.armyPointOpponentIds = []; p.skipTurns = 0; p.personalTurnNo = 0; p.attackLimitRound = room.round; p.attackCountsThisRound = {}; p.brokenAlliesThisTurn = []; p.pendingLandinEscort = false; p.activeExpeditionTask = null; p.expeditionCompletions = []; p.expeditionAccessUsage = { round: null, draws: 0 }; delete p.activeExpedition; delete p.expeditionHistory; delete p.expeditionDrawRound; delete p.expeditionsDrawnThisRound; p.legendaryCards = []; p.legendaryEffects = { seaCurses: [] }; p.savedEventCards = []; p.nextTurnEffects = {}; p.activeTurnEffects = {}; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignment = null; p.landCompany = null; p.bastionPriority = []; p.inactiveBastionIslandIds = []; p.character = null; p.characterReplacedRound = null; p.palaceUsed = false;
     });
     refreshFactionExistence(room);
     log(room, `Партия началась. Порядок: ${room.order.map(id => room.players.find(p => p.id === id)?.name).join(' → ')}.`);

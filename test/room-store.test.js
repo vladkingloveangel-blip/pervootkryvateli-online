@@ -56,7 +56,10 @@ test('JSONB round trip preserves full state, clears connections and skips finish
   const restored = new Map();
   await new RoomStore(db, { logger }).init(restored);
   assert.equal(restored.size, 1);
-  assert.deepEqual(restored.get('ABCDE'), { ...original, digitalModelSchemaVersion: CURRENT_DIGITAL_MODEL_SCHEMA_VERSION, players: [{ ...original.players[0], connected: false, socketId: null }] });
+  const expected = migrateRoomState(original).state;
+  expected.players[0].connected = false;
+  expected.players[0].socketId = null;
+  assert.deepEqual(restored.get('ABCDE'), expected);
   await store.remove('ABCDE');
   assert.equal((await db.query('SELECT * FROM game_rooms WHERE code = $1', ['ABCDE'])).rowCount, 0);
 });
