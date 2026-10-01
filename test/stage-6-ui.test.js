@@ -163,6 +163,11 @@ test('4.5 Scout UI offers only public-coordinate targets and emits one scoped mo
 
 test('7.7 end-game UI covers proposal, consensus, finished results and reconnect rendering', () => {
   assert.match(index, /id="endGamePanel"/);
+  assert.match(index, /id="endGamePanel"[^>]*data-ui-tab="players"/);
+  const sideStart = index.indexOf('id="gameSidePanel"');
+  const endGameIndex = index.indexOf('id="endGamePanel"');
+  const sideEnd = index.indexOf('</aside>', sideStart);
+  assert.ok(sideStart >= 0 && endGameIndex > sideStart && endGameIndex < sideEnd, 'end-game consensus panel lives inside the Players side tab');
   assert.match(index, /id="finalResultsPanel"/);
   assert.match(app, /function renderEndGame\(\)/);
   assert.match(app, /proposeEndGame/);

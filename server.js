@@ -498,7 +498,7 @@ function cleanName(name) {
   return s.slice(0, 24) || 'Мореплаватель';
 }
 function getRoom(code) { return rooms.get(String(code || '').trim().toUpperCase()); }
-function rollD6() { return 1 + Math.floor(Math.random() * BALANCE.session.dieSides); }
+function rollD6() { return 2 + Math.floor(Math.random() * (BALANCE.session.dieSides - 1)); }
 function ackSafe(ack, payload) { if (typeof ack === 'function') ack(payload); }
 const ROMAN_SERVER = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 

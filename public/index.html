@@ -168,18 +168,6 @@
         </div>
       </section>
 
-      <section id="endGamePanel" class="panel end-game-panel hidden" aria-live="polite">
-        <div class="section-head">
-          <div>
-            <h2 id="endGameTitle">Завершение партии</h2>
-            <div id="endGameSummary" class="muted">Игроки могут единогласно договориться завершить партию после текущего раунда.</div>
-          </div>
-          <span id="endGameBadge" class="mini-badge">служебное</span>
-        </div>
-        <div id="endGameConfirmations" class="end-game-confirmations"></div>
-        <div id="endGameActions" class="end-game-actions"></div>
-      </section>
-
       <section id="finalResultsPanel" class="panel final-results-panel hidden" aria-live="polite">
         <div class="final-results-head">
           <div>
@@ -388,6 +376,18 @@
               <button id="startBtn" class="primary small hidden">Начать игру</button>
             </div>
             <div id="players"></div>
+          </section>
+
+          <section id="endGamePanel" class="panel end-game-panel hidden" data-ui-tab="players" aria-live="polite">
+            <div class="section-head">
+              <div>
+                <h2 id="endGameTitle">Завершение партии</h2>
+                <div id="endGameSummary" class="muted">Игроки могут единогласно договориться завершить партию после текущего раунда.</div>
+              </div>
+              <span id="endGameBadge" class="mini-badge">служебное</span>
+            </div>
+            <div id="endGameConfirmations" class="end-game-confirmations"></div>
+            <div id="endGameActions" class="end-game-actions"></div>
           </section>
 
         </aside>
