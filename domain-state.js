@@ -83,7 +83,7 @@ const Task = defineContract('Task', ['kind', 'id', 'ownerId', 'state', 'source',
 const ConsumableAbility = defineContract('ConsumableAbility', ['kind', 'id', 'ownerId', 'source', 'payload']);
 const StoredBenefit = defineContract('StoredBenefit', ['kind', 'id', 'ownerId', 'state', 'source', 'payload']);
 const Discovery = defineContract('Discovery', ['kind', 'id', 'ownerId', 'state', 'source', 'payload', 'claimedById']);
-const TemporaryEffect = defineContract('TemporaryEffect', ['kind', 'id', 'ownerId', 'state', 'source', 'payload', 'duration']);
+const TemporaryEffect = defineContract('TemporaryEffect', ['kind', 'id', 'ownerId', 'targetType', 'targetId', 'state', 'source', 'payload', 'duration']);
 const PendingResolution = defineContract('PendingResolution', ['kind', 'id', 'actorId', 'state', 'source', 'payload', 'options']);
 const HistoryRecord = defineContract('HistoryRecord', ['kind', 'id', 'ownerId', 'state', 'source', 'payload', 'completedAt']);
 
@@ -712,6 +712,361 @@ function claimDiscovery(room, placeId, playerId, placeDefinitions = null) {
   };
 }
 
+
+const ACTIVE_TURN_NUMERIC_EFFECTS = new Set(['moveBonus', 'movePenalty']);
+
+function activeTurnEffectFromLegacy(player, effectKind, value) {
+  const key = String(effectKind || '');
+  if (!key || value === undefined) return null;
+  return TemporaryEffect.view({
+    kind: `active-turn:${key}`,
+    id: `active-turn:${key}`,
+    ownerId: player?.id,
+    targetType: 'player',
+    targetId: player?.id,
+    state: 'active',
+    source: { backing: 'activeTurnEffects', key },
+    duration: { scope: 'personal-turn' },
+    payload: { value: cloneDetached(value) },
+  });
+}
+
+function listActiveTurnEffects(player) {
+  const backing = player?.activeTurnEffects;
+  if (!backing || typeof backing !== 'object' || Array.isArray(backing)) return [];
+  return Object.entries(backing)
+    .map(([key, value]) => activeTurnEffectFromLegacy(player, key, value))
+    .filter(Boolean);
+}
+
+function getActiveTurnEffect(player, effectKind) {
+  const key = String(effectKind || '');
+  if (!key || !player?.activeTurnEffects || typeof player.activeTurnEffects !== 'object' || Array.isArray(player.activeTurnEffects) || !hasOwn(player.activeTurnEffects, key)) return null;
+  return activeTurnEffectFromLegacy(player, key, player.activeTurnEffects[key]);
+}
+
+function getActiveTurnEffectValue(player, effectKind) {
+  return getActiveTurnEffect(player, effectKind)?.payload?.value;
+}
+
+function activeTurnEffectsSnapshot(player) {
+  return Object.fromEntries(listActiveTurnEffects(player).map(effect => [effect.source.key, cloneDetached(effect.payload.value)]));
+}
+
+function addActiveTurnEffect(player, effectKind, value) {
+  if (!player || typeof player !== 'object') throw new TypeError('addActiveTurnEffect requires a player object.');
+  const key = String(effectKind || '');
+  if (!key) throw new TypeError('addActiveTurnEffect requires an effect kind.');
+  if (!player.activeTurnEffects || typeof player.activeTurnEffects !== 'object' || Array.isArray(player.activeTurnEffects)) player.activeTurnEffects = {};
+  if (ACTIVE_TURN_NUMERIC_EFFECTS.has(key)) {
+    player.activeTurnEffects[key] = (Number(player.activeTurnEffects[key]) || 0) + (Number(value) || 0);
+  } else {
+    player.activeTurnEffects[key] = Boolean(value);
+  }
+  return getActiveTurnEffect(player, key);
+}
+
+function clearActiveTurnEffects(player) {
+  if (!player || typeof player !== 'object') return [];
+  player.activeTurnEffects = {};
+  return [];
+}
+
+function ensurePlayerLegendaryEffectBacking(player) {
+  if (!player.legendaryEffects || typeof player.legendaryEffects !== 'object' || Array.isArray(player.legendaryEffects)) player.legendaryEffects = {};
+  return player.legendaryEffects;
+}
+
+function shipVeilEffectFromLegacy(player, legacy = player?.legendaryEffects?.shipVeil) {
+  if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) return null;
+  return TemporaryEffect.view({
+    kind: 'ship-veil',
+    id: 'ship-veil',
+    ownerId: player?.id,
+    targetType: 'player',
+    targetId: player?.id,
+    state: 'active',
+    source: {
+      backing: 'legendaryEffects.shipVeil',
+      sourcePlayerId: cloneDetached(legacy.sourcePlayerId),
+    },
+    duration: {
+      remaining: cloneDetached(legacy.remaining),
+      ignoreTurnNo: hasOwn(legacy, 'ignoreTurnNo') ? cloneDetached(legacy.ignoreTurnNo) : null,
+    },
+    payload: {},
+  });
+}
+
+function getShipVeilEffect(player) {
+  return shipVeilEffectFromLegacy(player);
+}
+
+function addShipVeilEffect(player, effect) {
+  if (!player || typeof player !== 'object') throw new TypeError('addShipVeilEffect requires a player object.');
+  const input = effect || {};
+  const duration = input.duration && typeof input.duration === 'object' ? input.duration : input;
+  const source = input.source && typeof input.source === 'object' ? input.source : input;
+  const backing = ensurePlayerLegendaryEffectBacking(player);
+  backing.shipVeil = {
+    remaining: cloneDetached(duration.remaining),
+    sourcePlayerId: cloneDetached(source.sourcePlayerId),
+    ignoreTurnNo: hasOwn(duration, 'ignoreTurnNo') ? cloneDetached(duration.ignoreTurnNo) : null,
+  };
+  return getShipVeilEffect(player);
+}
+
+function removeShipVeilEffect(player) {
+  const effect = getShipVeilEffect(player);
+  if (player?.legendaryEffects && typeof player.legendaryEffects === 'object') delete player.legendaryEffects.shipVeil;
+  return effect;
+}
+
+function tickShipVeilEffect(player, personalTurnNo) {
+  const effect = getShipVeilEffect(player);
+  if (!effect) return { effect: null, expired: false, skipped: false };
+  const turnNo = Number(personalTurnNo) || 0;
+  if (effect.duration.ignoreTurnNo === turnNo) {
+    effect.duration.ignoreTurnNo = null;
+    return { effect: addShipVeilEffect(player, effect), expired: false, skipped: true };
+  }
+  effect.duration.remaining = Math.max(0, (Number(effect.duration.remaining) || 0) - 1);
+  if (!effect.duration.remaining) {
+    removeShipVeilEffect(player);
+    return { effect: null, expired: true, skipped: false };
+  }
+  return { effect: addShipVeilEffect(player, effect), expired: false, skipped: false };
+}
+
+function seaCurseEffectFromLegacy(player, legacy, index = 0) {
+  if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) return null;
+  return TemporaryEffect.view({
+    kind: 'sea-curse',
+    id: `sea-curse:${index}`,
+    ownerId: player?.id,
+    targetType: 'player',
+    targetId: player?.id,
+    state: 'active',
+    source: {
+      backing: 'legendaryEffects.seaCurses',
+      index,
+      sourcePlayerId: cloneDetached(legacy.sourcePlayerId),
+    },
+    duration: { remaining: cloneDetached(legacy.remaining) },
+    payload: { penalty: cloneDetached(legacy.penalty) },
+  });
+}
+
+function listSeaCurseEffects(player) {
+  const curses = player?.legendaryEffects?.seaCurses;
+  if (!Array.isArray(curses)) return [];
+  return curses.map((legacy, index) => seaCurseEffectFromLegacy(player, legacy, index)).filter(Boolean);
+}
+
+function addSeaCurseEffect(player, effect) {
+  if (!player || typeof player !== 'object') throw new TypeError('addSeaCurseEffect requires a player object.');
+  const input = effect || {};
+  const duration = input.duration && typeof input.duration === 'object' ? input.duration : input;
+  const source = input.source && typeof input.source === 'object' ? input.source : input;
+  const payload = input.payload && typeof input.payload === 'object' ? input.payload : input;
+  const backing = ensurePlayerLegendaryEffectBacking(player);
+  if (!Array.isArray(backing.seaCurses)) backing.seaCurses = [];
+  backing.seaCurses.push({
+    remaining: cloneDetached(duration.remaining),
+    penalty: cloneDetached(payload.penalty),
+    sourcePlayerId: hasOwn(source, 'sourcePlayerId') ? cloneDetached(source.sourcePlayerId) : null,
+  });
+  return seaCurseEffectFromLegacy(player, backing.seaCurses[backing.seaCurses.length - 1], backing.seaCurses.length - 1);
+}
+
+function removeSeaCurseEffect(player, index) {
+  const curses = player?.legendaryEffects?.seaCurses;
+  if (!Array.isArray(curses) || !Number.isInteger(index) || index < 0 || index >= curses.length) return null;
+  const removed = seaCurseEffectFromLegacy(player, curses[index], index);
+  curses.splice(index, 1);
+  return removed;
+}
+
+function tickSeaCurseEffects(player) {
+  const curses = listSeaCurseEffects(player);
+  if (!curses.length) {
+    if (player?.legendaryEffects && !Array.isArray(player.legendaryEffects.seaCurses)) player.legendaryEffects.seaCurses = [];
+    return { active: [], expired: [] };
+  }
+  const activeLegacy = [];
+  const expired = [];
+  for (const effect of curses) {
+    effect.duration.remaining = Math.max(0, (Number(effect.duration.remaining) || 0) - 1);
+    if (!effect.duration.remaining) {
+      expired.push(effect);
+      continue;
+    }
+    activeLegacy.push({
+      remaining: cloneDetached(effect.duration.remaining),
+      penalty: cloneDetached(effect.payload.penalty),
+      sourcePlayerId: hasOwn(effect.source, 'sourcePlayerId') ? cloneDetached(effect.source.sourcePlayerId) : null,
+    });
+  }
+  const backing = ensurePlayerLegendaryEffectBacking(player);
+  backing.seaCurses = activeLegacy;
+  return { active: listSeaCurseEffects(player), expired };
+}
+
+function shipVeilReactionEffectFromLegacy(player, legacy = player?.legendaryEffects?.shipVeilReaction) {
+  if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) return null;
+  return TemporaryEffect.view({
+    kind: 'ship-veil-reaction',
+    id: 'ship-veil-reaction',
+    ownerId: player?.id,
+    targetType: 'player',
+    targetId: player?.id,
+    state: 'active',
+    source: { backing: 'legendaryEffects.shipVeilReaction' },
+    duration: {
+      expiry: cloneDetached(legacy.expiry),
+      expiresOnPlayerId: cloneDetached(legacy.expiresOnPlayerId),
+    },
+    payload: {},
+  });
+}
+
+function getShipVeilReaction(player) {
+  return shipVeilReactionEffectFromLegacy(player);
+}
+
+function addShipVeilReaction(player, effect) {
+  if (!player || typeof player !== 'object') throw new TypeError('addShipVeilReaction requires a player object.');
+  const duration = effect?.duration && typeof effect.duration === 'object' ? effect.duration : (effect || {});
+  const backing = ensurePlayerLegendaryEffectBacking(player);
+  backing.shipVeilReaction = {
+    expiry: cloneDetached(duration.expiry),
+    expiresOnPlayerId: cloneDetached(duration.expiresOnPlayerId),
+  };
+  return getShipVeilReaction(player);
+}
+
+function removeShipVeilReaction(player) {
+  const effect = getShipVeilReaction(player);
+  if (player?.legendaryEffects && typeof player.legendaryEffects === 'object') delete player.legendaryEffects.shipVeilReaction;
+  return effect;
+}
+
+function listPlayerLegendaryEffects(player) {
+  return [
+    getShipVeilEffect(player),
+    ...listSeaCurseEffects(player),
+    getShipVeilReaction(player),
+  ].filter(Boolean);
+}
+
+function islandVeilEffectFromLegacy(island, legacy = island?.legendaryVeil) {
+  if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) return null;
+  return TemporaryEffect.view({
+    kind: 'island-veil',
+    id: 'island-veil',
+    ownerId: island?.ownerId || null,
+    targetType: 'island',
+    targetId: island?.id,
+    state: 'active',
+    source: {
+      backing: 'legendaryVeil',
+      sourcePlayerId: cloneDetached(legacy.sourcePlayerId),
+    },
+    duration: {
+      remaining: cloneDetached(legacy.remaining),
+      ignoreTurnNo: hasOwn(legacy, 'ignoreTurnNo') ? cloneDetached(legacy.ignoreTurnNo) : null,
+    },
+    payload: {},
+  });
+}
+
+function getIslandVeilEffect(island) {
+  return islandVeilEffectFromLegacy(island);
+}
+
+function addIslandVeilEffect(island, effect) {
+  if (!island || typeof island !== 'object') throw new TypeError('addIslandVeilEffect requires an island object.');
+  const input = effect || {};
+  const duration = input.duration && typeof input.duration === 'object' ? input.duration : input;
+  const source = input.source && typeof input.source === 'object' ? input.source : input;
+  island.legendaryVeil = {
+    remaining: cloneDetached(duration.remaining),
+    sourcePlayerId: cloneDetached(source.sourcePlayerId),
+    ignoreTurnNo: hasOwn(duration, 'ignoreTurnNo') ? cloneDetached(duration.ignoreTurnNo) : null,
+  };
+  return getIslandVeilEffect(island);
+}
+
+function removeIslandVeilEffect(island) {
+  const effect = getIslandVeilEffect(island);
+  if (island && typeof island === 'object') island.legendaryVeil = null;
+  return effect;
+}
+
+function tickIslandVeilEffect(island, sourcePlayerId, personalTurnNo) {
+  const effect = getIslandVeilEffect(island);
+  if (!effect || effect.source.sourcePlayerId !== sourcePlayerId) return { effect, expired: false, skipped: false, matchedSource: false };
+  const turnNo = Number(personalTurnNo) || 0;
+  if (effect.duration.ignoreTurnNo === turnNo) {
+    effect.duration.ignoreTurnNo = null;
+    return { effect: addIslandVeilEffect(island, effect), expired: false, skipped: true, matchedSource: true };
+  }
+  effect.duration.remaining = Math.max(0, (Number(effect.duration.remaining) || 0) - 1);
+  if (!effect.duration.remaining) {
+    removeIslandVeilEffect(island);
+    return { effect: null, expired: true, skipped: false, matchedSource: true };
+  }
+  return { effect: addIslandVeilEffect(island, effect), expired: false, skipped: false, matchedSource: true };
+}
+
+function islandVeilReactionEffectFromLegacy(island, legacy = island?.legendaryVeilReaction) {
+  if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) return null;
+  return TemporaryEffect.view({
+    kind: 'island-veil-reaction',
+    id: 'island-veil-reaction',
+    ownerId: island?.ownerId || null,
+    targetType: 'island',
+    targetId: island?.id,
+    state: 'active',
+    source: {
+      backing: 'legendaryVeilReaction',
+      sourcePlayerId: cloneDetached(legacy.sourcePlayerId),
+    },
+    duration: {
+      expiry: cloneDetached(legacy.expiry),
+      expiresOnPlayerId: cloneDetached(legacy.expiresOnPlayerId),
+    },
+    payload: {},
+  });
+}
+
+function getIslandVeilReaction(island) {
+  return islandVeilReactionEffectFromLegacy(island);
+}
+
+function addIslandVeilReaction(island, effect) {
+  if (!island || typeof island !== 'object') throw new TypeError('addIslandVeilReaction requires an island object.');
+  const input = effect || {};
+  const duration = input.duration && typeof input.duration === 'object' ? input.duration : input;
+  const source = input.source && typeof input.source === 'object' ? input.source : input;
+  island.legendaryVeilReaction = {
+    expiry: cloneDetached(duration.expiry),
+    sourcePlayerId: cloneDetached(source.sourcePlayerId),
+    expiresOnPlayerId: cloneDetached(duration.expiresOnPlayerId),
+  };
+  return getIslandVeilReaction(island);
+}
+
+function removeIslandVeilReaction(island) {
+  const effect = getIslandVeilReaction(island);
+  if (island && typeof island === 'object') island.legendaryVeilReaction = null;
+  return effect;
+}
+
+function listIslandLegendaryEffects(island) {
+  return [getIslandVeilEffect(island), getIslandVeilReaction(island)].filter(Boolean);
+}
+
 function createLegacyFieldAdapter(target, key, contract, options = {}) {
   if (!target || typeof target !== 'object') throw new TypeError('Legacy field adapter requires a target object.');
   if (!contract || typeof contract.view !== 'function' || typeof contract.toLegacy !== 'function') {
@@ -794,6 +1149,38 @@ module.exports = {
   listPlayerDiscoveries,
   hasDiscovery,
   claimDiscovery,
+  activeTurnEffectFromLegacy,
+  listActiveTurnEffects,
+  getActiveTurnEffect,
+  getActiveTurnEffectValue,
+  activeTurnEffectsSnapshot,
+  addActiveTurnEffect,
+  clearActiveTurnEffects,
+  shipVeilEffectFromLegacy,
+  getShipVeilEffect,
+  addShipVeilEffect,
+  removeShipVeilEffect,
+  tickShipVeilEffect,
+  seaCurseEffectFromLegacy,
+  listSeaCurseEffects,
+  addSeaCurseEffect,
+  removeSeaCurseEffect,
+  tickSeaCurseEffects,
+  shipVeilReactionEffectFromLegacy,
+  getShipVeilReaction,
+  addShipVeilReaction,
+  removeShipVeilReaction,
+  listPlayerLegendaryEffects,
+  islandVeilEffectFromLegacy,
+  getIslandVeilEffect,
+  addIslandVeilEffect,
+  removeIslandVeilEffect,
+  tickIslandVeilEffect,
+  islandVeilReactionEffectFromLegacy,
+  getIslandVeilReaction,
+  addIslandVeilReaction,
+  removeIslandVeilReaction,
+  listIslandLegendaryEffects,
   presenceOf,
   createLegacyFieldAdapter,
 };

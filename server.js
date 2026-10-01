@@ -23,6 +23,17 @@ const {
   applySeaCurse,
   legendaryMovementPenalty,
   tickLegendaryEffectsForPlayer,
+  listActiveTurnEffects,
+  getActiveTurnEffect,
+  getActiveTurnEffectValue,
+  activeTurnEffectsSnapshot,
+  addActiveTurnEffect,
+  clearActiveTurnEffects,
+  getShipVeilEffect,
+  removeShipVeilEffect,
+  listSeaCurseEffects,
+  getIslandVeilEffect,
+  removeIslandVeilEffect,
   applyHellfire,
   build,
   upgradeBuilding,
@@ -741,6 +752,8 @@ function publicRoom(room, viewerId = null) {
       const specialAbilities = listSpecialAbilities(p) || [];
       const storedBenefits = listStoredBenefits(p) || [];
       const playerDiscoveries = listPlayerDiscoveries(room, p.id, LEGENDARY_PLACE_RULES);
+      const shipVeilEffect = getShipVeilEffect(p);
+      const seaCurseEffects = listSeaCurseEffects(p);
       return {
         id: p.id,
         name: p.name,
@@ -790,8 +803,8 @@ function publicRoom(room, viewerId = null) {
         legendaryCardCount: legendaryAbilities.length,
         playableLegendaryCards: p.id === viewerId ? allLegendaryCardRefs(p) : [],
         legendaryStatus: {
-          shipVeilTurns: Number(p.legendaryEffects?.shipVeil?.remaining) || 0,
-          seaCurseTurns: (p.legendaryEffects?.seaCurses || []).map(e => Number(e.remaining) || 0),
+          shipVeilTurns: Number(shipVeilEffect?.duration?.remaining) || 0,
+          seaCurseTurns: seaCurseEffects.map(effect => Number(effect.duration?.remaining) || 0),
           seaCursePenalty: legendaryMovementPenalty(p),
         },
         savedEventCards: p.id === viewerId ? storedBenefits.map(benefit => ({
@@ -802,7 +815,7 @@ function publicRoom(room, viewerId = null) {
         })) : [],
         savedEventCardCount: storedBenefits.length,
         nextTurnEffects: p.id === viewerId ? { ...(p.nextTurnEffects || {}) } : {},
-        activeTurnEffects: { ...(p.activeTurnEffects || {}) },
+        activeTurnEffects: activeTurnEffectsSnapshot(p),
         landCompany: p.landCompany ? { ...p.landCompany } : null,
         canDismissLandCompanyHere: p.id === viewerId ? canDismissLandCompany(room, p).ok : false,
         character: p.id === viewerId && p.character ? { ...(CHARACTERS[typeof p.character === 'string' ? p.character : p.character.id] || {}), id: typeof p.character === 'string' ? p.character : p.character.id } : null,
@@ -1776,7 +1789,11 @@ function saveHeldEventCard(player, card, kind, extra = {}) {
 function applyCurrentTurnEffect(room, player, effect, value) {
   // Events and feud cards drawn in the sixth circle affect that same personal turn (§3.4).
   // The fallback remains only for compatibility with legacy non-personal event-phase saves.
-  const target = room.eventPhase?.personalTurn ? (player.activeTurnEffects ||= {}) : (player.nextTurnEffects ||= {});
+  if (room.eventPhase?.personalTurn) {
+    addActiveTurnEffect(player, effect, value);
+    return;
+  }
+  const target = player.nextTurnEffects ||= {};
   if (effect === 'moveBonus' || effect === 'movePenalty') {
     target[effect] = (Number(target[effect]) || 0) + (Number(value) || 0);
   } else {
@@ -2556,7 +2573,7 @@ function continueTurnAfterCards(room) {
     return;
   }
 
-  const noIncome = Boolean(p.activeTurnEffects?.noIncome);
+  const noIncome = Boolean(getActiveTurnEffectValue(p, 'noIncome'));
   const income = marketIncomeForPlayer(room, p.id);
   if (noIncome) {
     log(room, `${p.name}: эффект текущего хода отменяет доход рынков и банков.`);
@@ -2566,7 +2583,7 @@ function continueTurnAfterCards(room) {
     log(room, `${p.name} получает ${income} дукатов дохода от рынков и банков${debtText}.`);
   }
 
-  if (p.activeTurnEffects?.noNavigation) {
+  if (getActiveTurnEffectValue(p, 'noNavigation')) {
     room.phase = 'actions';
     room.movePoints = 0;
     log(room, `Ход: ${p.name}. Из-за «Поломки» обычная навигация недоступна; сразу начинается фаза действий.`);
@@ -2574,9 +2591,11 @@ function continueTurnAfterCards(room) {
   }
 
   const effects = [];
-  if (p.activeTurnEffects?.moveBonus) effects.push(`попутный ветер +${p.activeTurnEffects.moveBonus}`);
-  if (p.activeTurnEffects?.movePenalty) effects.push(`штраф движения −${p.activeTurnEffects.movePenalty}`);
-  if (p.activeTurnEffects?.bestOfTwo) effects.push('Удача Фортуны: два d6');
+  const moveBonus = Number(getActiveTurnEffectValue(p, 'moveBonus')) || 0;
+  const movePenalty = Number(getActiveTurnEffectValue(p, 'movePenalty')) || 0;
+  if (moveBonus) effects.push(`попутный ветер +${moveBonus}`);
+  if (movePenalty) effects.push(`штраф движения −${movePenalty}`);
+  if (getActiveTurnEffectValue(p, 'bestOfTwo')) effects.push('Удача Фортуны: два d6');
   log(room, `Ход: ${p.name}. Навигация.${effects.length ? ` Эффекты: ${effects.join(', ')}.` : ''}`);
 }
 
@@ -2586,7 +2605,7 @@ function endTurnInternal(room) {
   const ending = currentPlayer(room);
   if (ending) {
     clearScoutRevealGrants(room, ending.id);
-    ending.activeTurnEffects = {};
+    clearActiveTurnEffects(ending);
     clearSeaVeilHostileReactionsAtTurnEnd(room, ending.id);
     const tick = tickLegendaryEffectsForPlayer(room, ending);
     for (const expired of tick.expired || []) log(room, `${ending.name}: заканчивается эффект «${expired}».`);
@@ -3161,13 +3180,13 @@ io.on('connection', socket => {
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
     if (room.phase !== 'navigation' || room.roll !== null) return ackSafe(ack, { ok: false, error: 'Кубик движения уже использован.' });
     const firstRoll = rollD6();
-    const secondRoll = p.activeTurnEffects?.bestOfTwo ? rollD6() : null;
+    const secondRoll = getActiveTurnEffectValue(p, 'bestOfTwo') ? rollD6() : null;
     room.roll = secondRoll == null ? firstRoll : Math.max(firstRoll, secondRoll);
     const ship = SHIPS[p.shipClass];
     const stats = shipStats(p);
-    const bonus = Number(p.activeTurnEffects?.moveBonus) || 0;
+    const bonus = Number(getActiveTurnEffectValue(p, 'moveBonus')) || 0;
     const lighthouseBonus = lighthouseDepartureBonus(room, p);
-    const eventPenalty = Number(p.activeTurnEffects?.movePenalty) || 0;
+    const eventPenalty = Number(getActiveTurnEffectValue(p, 'movePenalty')) || 0;
     const cursePenalty = legendaryMovementPenalty(p);
     const penalty = eventPenalty + cursePenalty;
     room.movePoints = Math.max(0, room.roll + stats.moveMod + bonus + lighthouseBonus - penalty);
@@ -3284,9 +3303,9 @@ io.on('connection', socket => {
     const second = rollD6();
     room.roll = second;
     const stats = shipStats(p);
-    const bonus = Number(p.activeTurnEffects?.moveBonus) || 0;
+    const bonus = Number(getActiveTurnEffectValue(p, 'moveBonus')) || 0;
     const lighthouseBonus = lighthouseDepartureBonus(room, p);
-    const penalty = (Number(p.activeTurnEffects?.movePenalty) || 0) + legendaryMovementPenalty(p);
+    const penalty = (Number(getActiveTurnEffectValue(p, 'movePenalty')) || 0) + legendaryMovementPenalty(p);
     room.movePoints = Math.max(0, second + stats.moveMod + bonus + lighthouseBonus - penalty);
     room.actionsLeft -= character.useActionCost;
     consumeCharacter(p, 'navigator');
@@ -3755,9 +3774,9 @@ io.on('connection', socket => {
       consumeLegendaryCard(room, p, ref);
       room.actionsLeft -= 1;
       if (isShipProtected(target)) {
-        const effects = target.legendaryEffects || {};
-        if (effects.shipVeil) {
-          delete effects.shipVeil;
+        const veil = getShipVeilEffect(target);
+        if (veil) {
+          removeShipVeilEffect(target);
           applySeaVeilHostileReactionToShip(target, p.id);
         }
         log(room, `${p.name} разыгрывает «Морское проклятие» против ${target.name}, но действующий «Покров моря» отменяет эффект. Враждебная карта и «Покров моря» расходованы; защита сохраняется только до конца текущего хода ${p.name}. Осталось действий: ${room.actionsLeft}.`);
@@ -3799,9 +3818,10 @@ io.on('connection', socket => {
       consumeLegendaryCard(room, p, ref);
       room.actionsLeft -= 1;
       if (isIslandProtected(island)) {
-        if (island.legendaryVeil) {
-          const veilSourceId = island.legendaryVeil.sourcePlayerId || owner?.id || '';
-          island.legendaryVeil = null;
+        const veil = getIslandVeilEffect(island);
+        if (veil) {
+          const veilSourceId = veil.source?.sourcePlayerId || owner?.id || '';
+          removeIslandVeilEffect(island);
           applySeaVeilHostileReactionToIsland(island, { id: veilSourceId }, p.id);
         }
         log(room, `${p.name} разыгрывает «Пламя Ада» против ${island.name}, но действующий «Покров моря» отменяет эффект. Враждебная карта и «Покров моря» расходованы; защита острова сохраняется только до конца текущего хода ${p.name}. Осталось действий: ${room.actionsLeft}.`);
