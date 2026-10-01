@@ -111,6 +111,15 @@ const {
   expeditionHistoryRecordToLegacy,
   expeditionTakenThisRound,
   resetExpeditionRoundUsage,
+  listLegendaryAbilities,
+  listSpecialAbilities,
+  grantLegendaryAbility,
+  grantSpecialAbility,
+  allLegendaryCardRefs,
+  legendaryCardRefs,
+  playerHasLegendaryKind,
+  peekLegendaryCard,
+  consumeLegendaryCard,
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,
@@ -720,6 +729,8 @@ function publicRoom(room, viewerId = null) {
       const activeAssignmentTask = getActiveAssignmentTask(p);
       const activeExpeditionTask = getActiveExpeditionTask(p);
       const expeditionHistoryRecords = getExpeditionHistoryRecords(p) || [];
+      const legendaryAbilities = listLegendaryAbilities(p) || [];
+      const specialAbilities = listSpecialAbilities(p) || [];
       return {
         id: p.id,
         name: p.name,
@@ -746,8 +757,8 @@ function publicRoom(room, viewerId = null) {
           ? (() => { const required = assignmentRequiredAction(room, p, room.actionsLeft); return required ? { kind: required.kind, text: required.text } : null; })()
           : null,
         nextActionLimit: p.id === viewerId ? (p.nextActionLimit || null) : null,
-        specialCards: p.id === viewerId ? [...(p.specialCards || [])] : [],
-        specialCardCount: (p.specialCards || []).length,
+        specialCards: p.id === viewerId ? specialAbilities.map(ability => ability.payload.name) : [],
+        specialCardCount: specialAbilities.length,
         namedPlaceCards: (p.namedPlaceCards || []).map(card => ({ id: card.id, name: card.name, placeId: card.placeId })),
         namedPlaceCardCount: (p.namedPlaceCards || []).length,
         activeExpedition: activeExpeditionTask ? {
@@ -765,8 +776,8 @@ function publicRoom(room, viewerId = null) {
         expeditionTakenThisRound: p.id === viewerId ? expeditionTakenThisRound(p, room.round) > 0 : false,
         canTakeExpedition: p.id === viewerId && active?.id === p.id && room.phase === 'actions' && (Number(room.actionsLeft) || 0) > 0 && !room.eventPhase?.active && !hasPendingDecision(room)
           ? canTakeExpedition(room, p).ok : false,
-        legendaryCards: p.id === viewerId ? (p.legendaryCards || []).map((c, handIndex) => ({ id: c.id, name: c.name, handIndex })) : [],
-        legendaryCardCount: (p.legendaryCards || []).length,
+        legendaryCards: p.id === viewerId ? legendaryAbilities.map(ability => ({ id: ability.payload.id, name: ability.payload.name, handIndex: ability.source.index })) : [],
+        legendaryCardCount: legendaryAbilities.length,
         playableLegendaryCards: p.id === viewerId ? allLegendaryCardRefs(p) : [],
         legendaryStatus: {
           shipVeilTurns: Number(p.legendaryEffects?.shipVeil?.remaining) || 0,
@@ -1306,64 +1317,6 @@ function advanceFleetAdjustment(room) {
   return false;
 }
 
-function legendaryKindFromName(name) {
-  const value = String(name || '');
-  if (value === 'Покров моря') return 'sea-veil';
-  if (value === 'Пламя Ада') return 'hellfire';
-  if (value === 'Путь сквозь туман') return 'mist-path';
-  if (value === 'Морское проклятие') return 'sea-curse';
-  return null;
-}
-
-function allLegendaryCardRefs(player) {
-  if (!player) return [];
-  const out = [];
-  (player.legendaryCards || []).forEach((card, index) => out.push({
-    source: 'legendary', index, id: card.id, kind: card.id, name: card.name,
-  }));
-  (player.specialCards || []).forEach((name, index) => {
-    const kind = legendaryKindFromName(name);
-    if (kind) out.push({ source: 'special', index, id: kind, kind, name });
-  });
-  return out;
-}
-
-function legendaryCardRefs(player, kind) {
-  return allLegendaryCardRefs(player).filter(ref => ref.kind === kind);
-}
-
-function playerHasLegendaryKind(player, kind) {
-  return legendaryCardRefs(player, kind).length > 0;
-}
-
-function peekLegendaryCard(player, ref) {
-  if (!player || !ref) return null;
-  const source = String(ref.source || '');
-  const index = Number(ref.index);
-  if (!Number.isInteger(index) || index < 0) return null;
-  if (source === 'legendary') {
-    const card = player.legendaryCards?.[index];
-    return card ? { source, index, kind: card.id, name: card.name, card } : null;
-  }
-  if (source === 'special') {
-    const name = player.specialCards?.[index];
-    const kind = legendaryKindFromName(name);
-    return kind ? { source, index, kind, name, card: { id: kind, name } } : null;
-  }
-  return null;
-}
-
-function consumeLegendaryCard(_room, player, ref) {
-  const found = peekLegendaryCard(player, ref);
-  if (!found) return null;
-  if (found.source === 'legendary') {
-    const [card] = player.legendaryCards.splice(found.index, 1);
-    return { ...found, card };
-  }
-  player.specialCards.splice(found.index, 1);
-  return found;
-}
-
 function allianceNames(room, ids) {
   return (ids || []).map(id => playerById(room, id)?.name || 'Игрок').join(', ');
 }
@@ -1870,8 +1823,7 @@ function resolveSailingEventCard(room, player, card) {
   if (card.type === 'legendary') {
     const legendary = drawLegendaryCard(room);
     if (legendary) {
-      player.legendaryCards ||= [];
-      player.legendaryCards.push(legendary);
+      grantLegendaryAbility(player, legendary);
       log(room, `${player.name}: «${card.name}». Случайно получена легендарная карта «${legendary.name}».`);
     }
     return resultBase;
@@ -1902,8 +1854,7 @@ function resolveSailingEventCard(room, player, card) {
   }
 
   if (card.type === 'special-card') {
-    player.specialCards ||= [];
-    player.specialCards.push(card.cardName);
+    grantSpecialAbility(player, card.cardName);
     log(room, `${player.name}: «${card.name}». Получена одноразовая карта «${card.cardName}».`);
     return resultBase;
   }
@@ -2655,8 +2606,7 @@ function applyFreeClaimReward(room, player, island) {
   if (!reward || reward.trigger !== 'first-acquisition') return;
   if (reward.legendaryCardId) {
     const card = rules.legends.legendary.find(def => def.id === reward.legendaryCardId);
-    player.specialCards ||= [];
-    player.specialCards.push(card.name);
+    grantSpecialAbility(player, card.name);
     island.rewardClaimed = true;
     log(room, `${player.name} получает одноразовую карту «${card.name}» за ${island.name}.`);
   }

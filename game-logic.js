@@ -16,6 +16,14 @@ const {
   expeditionTakenThisRound,
   recordExpeditionTaken,
   resetExpeditionRoundUsage,
+  listLegendaryAbilities,
+  listSpecialAbilities,
+  listConsumableAbilities,
+  grantConsumableAbility,
+  grantLegendaryAbility,
+  grantSpecialAbility,
+  peekConsumableAbility,
+  consumeConsumableAbility,
 } = domainState;
 const { BALANCE, MAP_META } = require('./game-data');
 const { selectTreasureOutcome, selectLegendaryAbility, selectTreasureCandidates } = require('./digital-random-sources');
@@ -1011,11 +1019,10 @@ function claimLegendaryPlaceDiscovery(room, player, placeId, rng = Math.random) 
 
   const legendaryCards = [];
   const count = place.reward?.type === 'legendary' ? Math.max(0, Number(place.reward.count) || 0) : 0;
-  player.legendaryCards ||= [];
   for (let i = 0; i < count; i++) {
     const legendary = drawLegendaryCard(room, rng);
     if (legendary) {
-      player.legendaryCards.push(legendary);
+      grantLegendaryAbility(player, legendary);
       legendaryCards.push(legendary);
     }
   }
@@ -1337,18 +1344,86 @@ function politicalCargoOptions(room, player) {
   return out;
 }
 
+function legendaryKindFromName(name) {
+  const value = String(name || '');
+  if (value === 'Покров моря') return 'sea-veil';
+  if (value === 'Пламя Ада') return 'hellfire';
+  if (value === 'Путь сквозь туман') return 'mist-path';
+  if (value === 'Морское проклятие') return 'sea-curse';
+  return null;
+}
+
+function allLegendaryCardRefs(player) {
+  if (!player) return [];
+  const out = [];
+  for (const ability of listLegendaryAbilities(player) || []) {
+    const card = ability.payload;
+    out.push({
+      source: 'legendary',
+      index: ability.source.index,
+      id: card.id,
+      kind: card.id,
+      name: card.name,
+    });
+  }
+  for (const ability of listSpecialAbilities(player) || []) {
+    const name = ability.payload?.name;
+    const kind = legendaryKindFromName(name);
+    if (kind) out.push({ source: 'special', index: ability.source.index, id: kind, kind, name });
+  }
+  return out;
+}
+
+function legendaryCardRefs(player, kind) {
+  return allLegendaryCardRefs(player).filter(ref => ref.kind === kind);
+}
+
+function playerHasLegendaryKind(player, kind) {
+  return legendaryCardRefs(player, kind).length > 0;
+}
+
+function peekLegendaryCard(player, ref) {
+  const ability = peekConsumableAbility(player, ref);
+  if (!ability) return null;
+  const source = ability.source?.inventory;
+  const index = ability.source?.index;
+  if (source === 'legendary') {
+    const card = ability.payload;
+    return card ? { source, index, kind: card.id, name: card.name, card } : null;
+  }
+  if (source === 'special') {
+    const name = ability.payload?.name;
+    const kind = legendaryKindFromName(name);
+    return kind ? { source, index, kind, name, card: { id: kind, name } } : null;
+  }
+  return null;
+}
+
+function consumeLegendaryCard(_room, player, ref) {
+  const found = peekLegendaryCard(player, ref);
+  if (!found) return null;
+  const consumed = consumeConsumableAbility(player, ref);
+  if (!consumed) return null;
+  if (found.source === 'legendary') return { ...found, card: consumed.payload };
+  return found;
+}
+
 function discardRandomHeldCard(room, player, rng = Math.random) {
-  // Активное поручение — отдельная Task, а не held inventory; случайный сброс
-  // карты вражды выбирает только реальные held entries и не затрагивает поручение.
+  // Active tasks are not held inventory. Preserve the legacy deterministic
+  // candidate order: special abilities, legendary abilities, then saved events.
   const refs = [];
-  (player?.specialCards || []).forEach((name, index) => refs.push({ source: 'special', index, name }));
-  (player?.legendaryCards || []).forEach((card, index) => refs.push({ source: 'legendary', index, name: card.name, card }));
+  for (const ability of listSpecialAbilities(player) || []) {
+    refs.push({ source: 'special', index: ability.source.index, name: ability.payload.name });
+  }
+  for (const ability of listLegendaryAbilities(player) || []) {
+    const card = ability.payload;
+    refs.push({ source: 'legendary', index: ability.source.index, name: card.name, card });
+  }
   (player?.savedEventCards || []).forEach((card, index) => refs.push({ source: 'saved-event', index, name: card.name, card }));
   if (!refs.length) return { ok: true, discarded: null };
   const ref = refs[Math.floor(rng() * refs.length)];
-  if (ref.source === 'special') player.specialCards.splice(ref.index, 1);
-  else if (ref.source === 'legendary') {
-    player.legendaryCards.splice(ref.index, 1);
+  if (ref.source === 'special' || ref.source === 'legendary') {
+    consumeConsumableAbility(player, ref);
   } else {
     const [card] = player.savedEventCards.splice(ref.index, 1);
     if (card?.sourceCard && card.sourceDeck === 'event') {
@@ -3379,11 +3454,10 @@ function grantMilitaryReward(room, player, island, options = {}) {
     notes.push(credit.debtPaid ? `${reward.ducats} дукатов: ${credit.debtPaid} в погашение долга, ${credit.net} в казну` : `+${reward.ducats} дукатов`);
   }
   if (reward.legendary) {
-    player.legendaryCards ||= [];
     let drawn = 0;
     for (let i = 0; i < reward.legendary; i++) {
       const card = drawLegendaryCard(room, options.rng || Math.random);
-      if (card) { player.legendaryCards.push(card); drawn += 1; }
+      if (card) { grantLegendaryAbility(player, card); drawn += 1; }
     }
     if (drawn) notes.push(`легендарная карта ×${drawn}`);
   }
@@ -3688,6 +3762,20 @@ module.exports = {
   expeditionTakenThisRound,
   recordExpeditionTaken,
   resetExpeditionRoundUsage,
+  listLegendaryAbilities,
+  listSpecialAbilities,
+  listConsumableAbilities,
+  grantConsumableAbility,
+  grantLegendaryAbility,
+  grantSpecialAbility,
+  peekConsumableAbility,
+  consumeConsumableAbility,
+  legendaryKindFromName,
+  allLegendaryCardRefs,
+  legendaryCardRefs,
+  playerHasLegendaryKind,
+  peekLegendaryCard,
+  consumeLegendaryCard,
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,

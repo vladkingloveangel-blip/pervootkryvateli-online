@@ -374,6 +374,141 @@ function resetExpeditionRoundUsage(player) {
   return getExpeditionUsage(player);
 }
 
+
+function legendaryConsumableAbilityFromLegacy(player, legacyCard, index = 0) {
+  if (!legacyCard || typeof legacyCard !== 'object' || Array.isArray(legacyCard)) {
+    throw new TypeError('Legendary ConsumableAbility expects a legacy card object.');
+  }
+  const semantic = {
+    kind: 'legendary',
+    ownerId: player?.id,
+    source: { inventory: 'legendary', index: Math.max(0, Number(index) || 0) },
+    payload: cloneDetached(legacyCard),
+  };
+  if (hasOwn(legacyCard, 'id')) semantic.id = cloneDetached(legacyCard.id);
+  return ConsumableAbility.view(semantic);
+}
+
+function specialConsumableAbilityFromLegacy(player, legacyName, index = 0) {
+  if (typeof legacyName !== 'string') {
+    throw new TypeError('Special ConsumableAbility expects a legacy string entry.');
+  }
+  return ConsumableAbility.view({
+    kind: 'special',
+    ownerId: player?.id,
+    source: { inventory: 'special', index: Math.max(0, Number(index) || 0) },
+    payload: { name: legacyName },
+  });
+}
+
+function consumableAbilityToLegacy(ability) {
+  if (!ConsumableAbility.is(ability)) {
+    throw new TypeError('Consumable ability write expects a ConsumableAbility.');
+  }
+  const inventory = ability.source?.inventory;
+  if (inventory === 'legendary') {
+    if (ability.kind !== 'legendary' || !ability.payload || typeof ability.payload !== 'object' || Array.isArray(ability.payload)) {
+      throw new TypeError('Legendary ConsumableAbility must contain a card object payload.');
+    }
+    return cloneDetached(ability.payload);
+  }
+  if (inventory === 'special') {
+    if (ability.kind !== 'special' || typeof ability.payload?.name !== 'string') {
+      throw new TypeError('Special ConsumableAbility must contain a string name payload.');
+    }
+    return ability.payload.name;
+  }
+  throw new TypeError('ConsumableAbility source.inventory must be legendary or special.');
+}
+
+function listLegendaryAbilities(player) {
+  if (!player || typeof player !== 'object' || !hasOwn(player, 'legendaryCards')) return undefined;
+  if (player.legendaryCards === null) return null;
+  if (!Array.isArray(player.legendaryCards)) throw new TypeError('legendaryCards backing field must be an array, null, or absent.');
+  return player.legendaryCards.map((card, index) => legendaryConsumableAbilityFromLegacy(player, card, index));
+}
+
+function listSpecialAbilities(player) {
+  if (!player || typeof player !== 'object' || !hasOwn(player, 'specialCards')) return undefined;
+  if (player.specialCards === null) return null;
+  if (!Array.isArray(player.specialCards)) throw new TypeError('specialCards backing field must be an array, null, or absent.');
+  return player.specialCards.map((name, index) => specialConsumableAbilityFromLegacy(player, name, index));
+}
+
+function listConsumableAbilities(player) {
+  return [
+    ...(listLegendaryAbilities(player) || []),
+    ...(listSpecialAbilities(player) || []),
+  ];
+}
+
+function grantConsumableAbility(player, ability) {
+  if (!player || typeof player !== 'object') throw new TypeError('grantConsumableAbility requires a player object.');
+  if (!ConsumableAbility.is(ability)) throw new TypeError('grantConsumableAbility expects a ConsumableAbility.');
+  if (ability.ownerId != null && player.id != null && String(ability.ownerId) !== String(player.id)) {
+    throw new TypeError('ConsumableAbility ownerId does not match the target player.');
+  }
+  const inventory = ability.source?.inventory;
+  const legacy = consumableAbilityToLegacy(ability);
+  if (inventory === 'legendary') {
+    if (player.legendaryCards == null) player.legendaryCards = [];
+    if (!Array.isArray(player.legendaryCards)) throw new TypeError('legendaryCards backing field must be an array.');
+    const index = player.legendaryCards.push(legacy) - 1;
+    return legendaryConsumableAbilityFromLegacy(player, player.legendaryCards[index], index);
+  }
+  if (inventory === 'special') {
+    if (player.specialCards == null) player.specialCards = [];
+    if (!Array.isArray(player.specialCards)) throw new TypeError('specialCards backing field must be an array.');
+    const index = player.specialCards.push(legacy) - 1;
+    return specialConsumableAbilityFromLegacy(player, player.specialCards[index], index);
+  }
+  throw new TypeError('ConsumableAbility source.inventory must be legendary or special.');
+}
+
+function grantLegendaryAbility(player, card) {
+  const index = Array.isArray(player?.legendaryCards) ? player.legendaryCards.length : 0;
+  return grantConsumableAbility(player, legendaryConsumableAbilityFromLegacy(player, card, index));
+}
+
+function grantSpecialAbility(player, name) {
+  const index = Array.isArray(player?.specialCards) ? player.specialCards.length : 0;
+  return grantConsumableAbility(player, specialConsumableAbilityFromLegacy(player, name, index));
+}
+
+function peekConsumableAbility(player, ref) {
+  if (!player || !ref) return null;
+  const source = String(ref.source || ref.inventory || '');
+  const index = Number(ref.index);
+  if (!Number.isInteger(index) || index < 0) return null;
+  if (source === 'legendary') {
+    const cards = listLegendaryAbilities(player);
+    return Array.isArray(cards) ? cards[index] || null : null;
+  }
+  if (source === 'special') {
+    const cards = listSpecialAbilities(player);
+    return Array.isArray(cards) ? cards[index] || null : null;
+  }
+  return null;
+}
+
+function consumeConsumableAbility(player, ref) {
+  const ability = peekConsumableAbility(player, ref);
+  if (!ability) return null;
+  const source = ability.source?.inventory;
+  const index = ability.source?.index;
+  if (source === 'legendary') {
+    if (!Array.isArray(player.legendaryCards) || index < 0 || index >= player.legendaryCards.length) return null;
+    player.legendaryCards.splice(index, 1);
+    return ability;
+  }
+  if (source === 'special') {
+    if (!Array.isArray(player.specialCards) || index < 0 || index >= player.specialCards.length) return null;
+    player.specialCards.splice(index, 1);
+    return ability;
+  }
+  return null;
+}
+
 function createLegacyFieldAdapter(target, key, contract, options = {}) {
   if (!target || typeof target !== 'object') throw new TypeError('Legacy field adapter requires a target object.');
   if (!contract || typeof contract.view !== 'function' || typeof contract.toLegacy !== 'function') {
@@ -432,6 +567,17 @@ module.exports = {
   expeditionTakenThisRound,
   recordExpeditionTaken,
   resetExpeditionRoundUsage,
+  legendaryConsumableAbilityFromLegacy,
+  specialConsumableAbilityFromLegacy,
+  consumableAbilityToLegacy,
+  listLegendaryAbilities,
+  listSpecialAbilities,
+  listConsumableAbilities,
+  grantConsumableAbility,
+  grantLegendaryAbility,
+  grantSpecialAbility,
+  peekConsumableAbility,
+  consumeConsumableAbility,
   presenceOf,
   createLegacyFieldAdapter,
 };
