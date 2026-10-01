@@ -112,16 +112,13 @@ const {
   seaBattle,
   jointAssaultIsland,
   assaultIsland,
-  createAnchorDecks,
   resolveAnchorEncounter,
   creditDucats,
-  createSailingEventDeck,
   drawSailingEventCard,
   drawTreasureCard,
   treasureHunterCandidates,
   prepareTreasureHunterChoice,
   createExpeditionDeck,
-  createFeudDecks,
   drawFeudCard,
   createAssignmentDecks,
   normalizeStage6Compatibility,
@@ -192,9 +189,9 @@ const {
   applyBoardingLoss,
   stormCellOptions,
 } = require('./game-logic');
-const { seaEncounterSource } = require('./sea-encounter-source');
-const { sailingEventSource, releaseStoredBenefitReservation } = require('./sailing-event-source');
-const { canonicalizePoliticalEffectOccurrence, politicalEffectSource } = require('./political-effect-source');
+const { createSeaEncounterSourceState, seaEncounterSource } = require('./sea-encounter-source');
+const { createSailingEventSourceState, sailingEventSource, releaseStoredBenefitReservation } = require('./sailing-event-source');
+const { createPoliticalEffectSourceState, canonicalizePoliticalEffectOccurrence, politicalEffectSource } = require('./political-effect-source');
 const {
   preTurnResolutionFlowToLegacy,
   getPreTurnResolutionFlow,
@@ -629,7 +626,7 @@ function publicRoom(room, viewerId = null) {
       veilOptions: pendingLegendaryReaction.targetPlayerId === viewerId ? legendaryCardRefs(playerById(room, viewerId), 'sea-veil') : [],
     } : null,
     eventDecks: {
-      sailing: { remaining: room.eventDeck?.drawPile?.length || 0, discard: room.eventDeck?.discard?.length || 0 },
+      sailing: (() => { const counts = sailingEventSource(room)?.availabilityCounts() || {}; return { remaining: counts.available || 0, discard: counts.recyclable || 0 }; })(),
       expeditions: { remaining: room.expeditionDeck?.drawPile?.length || 0 },
     },
     treasurePool: {
@@ -664,7 +661,7 @@ function publicRoom(room, viewerId = null) {
         ceasedRound: room.factionState?.[factionId]?.ceasedRound || null,
       };
     }),
-    feudDecks: Object.fromEntries(POLITICAL_FACTION_ORDER.map(id => [id, { remaining: room.feudDecks?.[id]?.drawPile?.length || 0, discard: room.feudDecks?.[id]?.discard?.length || 0 }])),
+    feudDecks: Object.fromEntries(POLITICAL_FACTION_ORDER.map(id => { const counts = politicalEffectSource(room, id)?.availabilityCounts() || {}; return [id, { remaining: counts.available || 0, discard: counts.recyclable || 0 }]; })),
     assignmentDecks: Object.fromEntries(Object.keys(ASSIGNMENT_DEFINITIONS).map(id => [id, { remaining: room.assignmentDecks?.[id]?.drawPile?.length || 0, discard: room.assignmentDecks?.[id]?.discard?.length || 0, removed: room.assignmentDecks?.[id]?.removed?.length || 0 }])),
     legendaryPlaces: LEGENDARY_PLACE_RULES.map(place => ({
       id: place.id,
@@ -736,7 +733,7 @@ function publicRoom(room, viewerId = null) {
     },
     citadelCells: CITADEL_CELLS,
     anchorCells: Object.entries(ANCHORS).flatMap(([color, def]) => def.cells.map(([row, col]) => ({ color, row, col, name: def.name, fleetPoints: def.fleetPoints }))),
-    anchorDecks: Object.fromEntries(Object.entries(room.anchorDecks || {}).map(([color, deck]) => [color, { remaining: deck.drawPile?.length || 0, discard: deck.discard?.length || 0 }])),
+    anchorDecks: Object.fromEntries(Object.keys(ANCHORS).map(color => { const counts = seaEncounterSource(room, color)?.availabilityCounts() || {}; return [color, { remaining: counts.available || 0, discard: counts.recyclable || 0 }]; })),
     buildingCatalog: Object.fromEntries(Object.entries(BUILDINGS).filter(([, b]) => b.buildable !== false).map(([id, b]) => [id, {
       id: b.id,
       name: buildingDisplayName({ type: id, level: 1 }),
@@ -3003,6 +3000,12 @@ io.on('connection', socket => {
     if (db && !accountUser) return;
     const code = makeCode();
     const player = newPlayer(socket, { ...data, accountUser }, COLORS[0]);
+    // Preserve the pre-6.2 initialization RNG call order exactly.
+    const seaEncounterState = createSeaEncounterSourceState();
+    const sailingEventState = createSailingEventSourceState();
+    const expeditionDeck = createExpeditionDeck();
+    const politicalEffectState = createPoliticalEffectSourceState();
+    const assignmentDecks = createAssignmentDecks();
     const room = {
       code,
       digitalModelSchemaVersion: CURRENT_DIGITAL_MODEL_SCHEMA_VERSION,
@@ -3036,12 +3039,14 @@ io.on('connection', socket => {
       pendingLegendaryReaction: null,
       scoutRevealGrants: [],
       eventPhase: null,
-      anchorDecks: createAnchorDecks(),
-      eventDeck: createSailingEventDeck(),
-      expeditionDeck: createExpeditionDeck(),
+      randomSourceState: {
+        seaEncounter: seaEncounterState,
+        sailingEvent: sailingEventState,
+        politicalEffect: politicalEffectState,
+      },
+      expeditionDeck,
       pendingExpeditionRewards: [],
-      feudDecks: createFeudDecks(),
-      assignmentDecks: createAssignmentDecks(),
+      assignmentDecks,
       legendaryPlacesExplored: {},
       factionState: {},
       log: [],
@@ -3236,12 +3241,20 @@ io.on('connection', socket => {
     room.fleetAdjustmentQueue = [];
     clearPendingResolution(room, 'legendary-reaction');
     room.eventPhase = null;
-    room.anchorDecks = createAnchorDecks();
-    room.eventDeck = createSailingEventDeck();
-    room.expeditionDeck = createExpeditionDeck();
+    // Preserve the pre-6.2 source reset RNG call order exactly.
+    const seaEncounterState = createSeaEncounterSourceState();
+    const sailingEventState = createSailingEventSourceState();
+    const expeditionDeck = createExpeditionDeck();
+    const politicalEffectState = createPoliticalEffectSourceState();
+    const assignmentDecks = createAssignmentDecks();
+    room.randomSourceState = {
+      seaEncounter: seaEncounterState,
+      sailingEvent: sailingEventState,
+      politicalEffect: politicalEffectState,
+    };
+    room.expeditionDeck = expeditionDeck;
     room.pendingExpeditionRewards = [];
-    room.feudDecks = createFeudDecks();
-    room.assignmentDecks = createAssignmentDecks();
+    room.assignmentDecks = assignmentDecks;
     room.legendaryPlacesExplored = {};
     room.factionState = {};
     room.players.forEach(p => {

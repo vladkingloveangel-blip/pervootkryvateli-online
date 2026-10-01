@@ -148,16 +148,18 @@ test('stage 6.1: Observatory resolves one sailing card before feud, Embassy assi
   renaika.ownerId = targetId;
   renaika.buildings = [{ type: 'farm', level: 1 }, { type: 'observatory', level: 1 }];
 
-  room.eventDeck = {
-    drawPile: [
+  room.randomSourceState.sailingEvent = {
+    available: [
       { id: 'stage6-first', name: 'Первое событие', type: 'turn-effect', effect: 'moveBonus', value: 1, timing: 'current-personal-turn', copy: 1 },
       { id: 'stage6-second', name: 'Второе событие', type: 'turn-effect', effect: 'moveBonus', value: 2, timing: 'current-personal-turn', copy: 1 },
     ],
-    discard: [],
+    recyclable: [],
+    reserved: [],
   };
-  room.feudDecks.kadingir = {
-    drawPile: [{ id: 'stage6-feud-none', name: 'Нет события', type: 'none', copy: 1 }],
-    discard: [],
+  room.randomSourceState.politicalEffect.kadingir = {
+    available: [{ id: 'stage6-feud-none', name: 'Нет события', type: 'none', copy: 1 }],
+    recyclable: [],
+    reserved: [],
   };
   const assignmentIds = ['lionia-ship-level', 'lionia-yellow-a'];
   room.assignmentDecks.lionia = {
@@ -190,9 +192,11 @@ test('stage 6.1: Observatory resolves one sailing card before feud, Embassy assi
   assert.equal(targetView.activeTurnEffects.moveBonus, 2); // first (+1) was not applied; mandatory second (+2) was.
   for(const key of ['eventDecks','feudDecks','assignmentDecks']) assert.equal(Object.hasOwn(state,key),false,key);
   const persistedAfterEvent = JSON.parse(fs.readFileSync(file,'utf8')).game_rooms[0].state;
-  assert.equal(persistedAfterEvent.eventDeck.drawPile.length, 0);
-  assert.equal(persistedAfterEvent.eventDeck.discard.length, 2); // first rejected + second resolved, each returned exactly once.
-  assert.equal(persistedAfterEvent.feudDecks.kadingir.discard.length, 1);
+  assert.equal(persistedAfterEvent.randomSourceState.sailingEvent.available.length, 0);
+  assert.equal(persistedAfterEvent.randomSourceState.sailingEvent.recyclable.length, 2); // first rejected + second resolved, each returned exactly once.
+  assert.equal(persistedAfterEvent.randomSourceState.sailingEvent.reserved.length, 0);
+  assert.equal(persistedAfterEvent.randomSourceState.politicalEffect.kadingir.recyclable.length, 1);
+  assert.equal(persistedAfterEvent.randomSourceState.politicalEffect.kadingir.reserved.length, 0);
   assert.equal(state.pendingAssignmentChoice.kind, 'embassy');
   assert.equal(state.pendingAssignmentChoice.options.length, 2);
 
@@ -245,12 +249,13 @@ test('stage 6.1: Observatory resolves one sailing card before feud, Embassy assi
   keepTarget.activeTurnEffects = {};
   keepTarget.nextTurnEffects = {};
   keepTarget.skipTurns = 0;
-  keepRoom.eventDeck = {
-    drawPile: [
+  keepRoom.randomSourceState.sailingEvent = {
+    available: [
       { id: 'stage6-keep-first', name: 'Оставленное событие', type: 'turn-effect', effect: 'moveBonus', value: 1, timing: 'current-personal-turn', copy: 1 },
       { id: 'stage6-keep-second', name: 'Не взятое событие', type: 'turn-effect', effect: 'moveBonus', value: 2, timing: 'current-personal-turn', copy: 1 },
     ],
-    discard: [],
+    recyclable: [],
+    reserved: [],
   };
   saveRows(keepDb);
 
@@ -270,8 +275,9 @@ test('stage 6.1: Observatory resolves one sailing card before feud, Embassy assi
   assert.equal(keptTarget.activeTurnEffects.moveBonus, 1);
   assert.equal(Object.hasOwn(state,'eventDecks'), false);
   const persistedAfterKeep = JSON.parse(fs.readFileSync(file,'utf8')).game_rooms[0].state;
-  assert.equal(persistedAfterKeep.eventDeck.discard.length, 1);
-  assert.equal(persistedAfterKeep.eventDeck.drawPile.length, 1); // keep must not consume the second outcome.
+  assert.equal(persistedAfterKeep.randomSourceState.sailingEvent.recyclable.length, 1);
+  assert.equal(persistedAfterKeep.randomSourceState.sailingEvent.available.length, 1); // keep must not consume the second outcome.
+  assert.equal(persistedAfterKeep.randomSourceState.sailingEvent.reserved.length, 0);
 
 
 });

@@ -182,14 +182,14 @@ test('Embassy compatibility facades delegate offer and choice to AssignmentPool 
 
 test('gameplay consumers no longer read random-source storage buckets directly', () => {
   const server = sourceFile('server.js');
-  const directAnchor = server.split('\n').filter(line => /anchorDecks.*drawPile/.test(line));
-  const directEvent = server.split('\n').filter(line => /eventDeck.*(?:drawPile|discard)/.test(line));
+  const directAnchor = server.split('\n').filter(line => /room\.anchorDecks.*drawPile/.test(line));
+  const directEvent = server.split('\n').filter(line => /room\.eventDeck.*(?:drawPile|discard)/.test(line));
+  const directFeud = server.split('\n').filter(line => /room\.feudDecks.*(?:drawPile|discard)/.test(line));
   const directAssignment = server.split('\n').filter(line => /assignmentDecks.*(?:drawPile|discard|removed)/.test(line));
 
-  assert.equal(directAnchor.length, 1);
-  assert.match(directAnchor[0], /anchorDecks: Object\.fromEntries/);
-  assert.equal(directEvent.length, 1);
-  assert.match(directEvent[0], /sailing: \{ remaining:/);
+  assert.equal(directAnchor.length, 0);
+  assert.equal(directEvent.length, 0);
+  assert.equal(directFeud.length, 0);
   assert.equal(directAssignment.length, 1);
   assert.match(directAssignment[0], /assignmentDecks: Object\.fromEntries/);
 });

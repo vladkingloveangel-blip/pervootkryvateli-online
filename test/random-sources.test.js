@@ -20,17 +20,20 @@ const {
 } = require('../digital-random-sources');
 const { BALANCE, CHARACTERS, TREASURE_CARDS, LEGENDARY_CARDS, SAILING_EVENT_CARDS, FEUD_CARDS, POLITICAL_FACTION_ORDER } = require('../game-data');
 const { drawTreasureCard, treasureHunterCandidates, drawLegendaryCard, drawSailingEventCard, discardRandomHeldCard, createFeudDecks, drawFeudCard } = require('../game-logic');
-const { createSeaEncounterStorage, seaEncounterSource } = require('../sea-encounter-source');
+const { createSeaEncounterStorage, createSeaEncounterSourceState, seaEncounterSource } = require('../sea-encounter-source');
 const {
   createSailingEventStorage,
+  createSailingEventSourceState,
   canonicalizeSailingEventOccurrence,
   sailingEventSource,
 } = require('../sailing-event-source');
 const {
   createPoliticalEffectStorage,
+  createPoliticalEffectSourceState,
   canonicalizePoliticalEffectOccurrence,
   politicalEffectSource,
 } = require('../political-effect-source');
+const { CURRENT_DIGITAL_MODEL_SCHEMA_VERSION } = require('../save-migrations');
 
 function sequenceRng(values) {
   let index = 0;
@@ -768,4 +771,52 @@ test('PoliticalEffectSource adds no new room fields and keeps legacy feudDeck sa
     assert.deepEqual(Object.keys(room.feudDecks[factionId]).sort(), factionShapes[factionId]);
     assert.deepEqual(Object.keys(room.feudDecks[factionId]).sort(), ['discard', 'drawPile']);
   }
+});
+
+
+test('6.2 digital SeaEncounter source uses only available/recyclable persisted backing', () => {
+  const state = createSeaEncounterSourceState(() => 0.5);
+  const color = Object.keys(state)[0];
+  const room = { digitalModelSchemaVersion: CURRENT_DIGITAL_MODEL_SCHEMA_VERSION, randomSourceState: { seaEncounter: state } };
+  const source = seaEncounterSource(room, color, () => 0);
+  const before = source.remainingCount();
+  const occurrence = source.consumeNext();
+  assert.ok(occurrence);
+  assert.equal(source.remainingCount(), before - 1);
+  source.markUsed(occurrence);
+  assert.equal(room.randomSourceState.seaEncounter[color].recyclable.length, 1);
+  assert.equal(Object.hasOwn(room, 'anchorDecks'), false);
+  assert.deepEqual(Object.keys(room.randomSourceState.seaEncounter[color]).sort(), ['available', 'recyclable']);
+});
+
+test('6.2 digital SailingEvent source reserves on consume and recycles only on resolution', () => {
+  const state = createSailingEventSourceState(() => 0.5);
+  const room = { digitalModelSchemaVersion: CURRENT_DIGITAL_MODEL_SCHEMA_VERSION, randomSourceState: { sailingEvent: state } };
+  const source = sailingEventSource(room, () => 0);
+  const occurrence = source.consumeNext();
+  assert.ok(occurrence);
+  assert.equal(state.reserved.length, 1);
+  assert.equal(state.recyclable.length, 0);
+  assert.equal(source.markUsed(occurrence), true);
+  assert.equal(state.reserved.length, 0);
+  assert.equal(state.recyclable.length, 1);
+  assert.equal(Object.hasOwn(room, 'eventDeck'), false);
+  assert.deepEqual(Object.keys(state).sort(), ['available', 'recyclable', 'reserved']);
+});
+
+test('6.2 digital PoliticalEffect sources reserve independently by faction', () => {
+  const state = createPoliticalEffectSourceState(() => 0.5);
+  const firstFaction = POLITICAL_FACTION_ORDER[0];
+  const secondFaction = POLITICAL_FACTION_ORDER[1];
+  const secondBefore = JSON.stringify(state[secondFaction]);
+  const room = { digitalModelSchemaVersion: CURRENT_DIGITAL_MODEL_SCHEMA_VERSION, randomSourceState: { politicalEffect: state } };
+  const source = politicalEffectSource(room, firstFaction, () => 0);
+  const occurrence = source.consumeNext();
+  assert.ok(occurrence);
+  assert.equal(state[firstFaction].reserved.length, 1);
+  assert.equal(JSON.stringify(state[secondFaction]), secondBefore);
+  assert.equal(source.markUsed(occurrence), true);
+  assert.equal(state[firstFaction].reserved.length, 0);
+  assert.equal(state[firstFaction].recyclable.length, 1);
+  assert.equal(Object.hasOwn(room, 'feudDecks'), false);
 });

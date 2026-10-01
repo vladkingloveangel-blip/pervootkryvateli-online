@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const net = require('node:net');
 const { io } = require('socket.io-client');
-const { CURRENT_DIGITAL_MODEL_SCHEMA_VERSION } = require('../save-migrations');
+const { CURRENT_DIGITAL_MODEL_SCHEMA_VERSION, migrateRoomState } = require('../save-migrations');
 
 test('accounts, moves, restart recovery, private My Games, reattachment and admin observation', { timeout: 40000 }, async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pervo-rooms-'));
@@ -71,6 +71,10 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(created.ok, true); assert.equal(rows().length, 1); // ack means durable
   const code = created.code;
   assert.equal(rows()[0].state.digitalModelSchemaVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
+  assert.ok(rows()[0].state.randomSourceState);
+  for (const legacySourceField of ['anchorDecks', 'eventDeck', 'feudDecks']) {
+    assert.equal(Object.hasOwn(rows()[0].state, legacySourceField), false, legacySourceField);
+  }
   const joinedSecond = await emit(second, 'joinRoom', { code, accountToken: b.token, name: 'Two' });
   const joinedThird = await emit(third, 'joinRoom', { code, accountToken: c.token, name: 'Three' });
   const joinedFourth = await emit(fourth, 'joinRoom', { code, accountToken: d.token, name: 'Four' });
@@ -89,6 +93,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
     assert.ok(view);
     assert.equal(Object.hasOwn(view,'log'),false);
     assert.equal(Object.hasOwn(view,'digitalModelSchemaVersion'),false);
+    assert.equal(Object.hasOwn(view,'randomSourceState'),false);
     for(const key of ['eventDecks','feudDecks','assignmentDecks']) assert.equal(Object.hasOwn(view,key),false,key);
     for(const p of view.players) {
       if(p.id===ownerId) {
@@ -207,6 +212,21 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   // pre-stage-1 decks and an unfinished fleet decision instead of rebuilding them.
   const savedDatabase = JSON.parse(fs.readFileSync(file,'utf8'));
   const legacyRoom = savedDatabase.game_rooms[0].state;
+  const migratedSources = legacyRoom.randomSourceState;
+  legacyRoom.anchorDecks = Object.fromEntries(Object.entries(migratedSources.seaEncounter).map(([color, source]) => [color, {
+    drawPile: structuredClone(source.available),
+    discard: structuredClone(source.recyclable),
+  }]));
+  legacyRoom.eventDeck = {
+    drawPile: structuredClone(migratedSources.sailingEvent.available),
+    discard: structuredClone(migratedSources.sailingEvent.recyclable),
+  };
+  legacyRoom.feudDecks = Object.fromEntries(Object.entries(migratedSources.politicalEffect).map(([id, source]) => [id, {
+    drawPile: structuredClone(source.available),
+    discard: structuredClone(source.recyclable),
+  }]));
+  delete legacyRoom.randomSourceState;
+  delete legacyRoom.digitalModelSchemaVersion;
   delete legacyRoom.rulesDataVersion; delete legacyRoom.rulesSchemaVersion; delete legacyRoom.runtimeProfile;
   const oldPlayer = legacyRoom.players.find(p => p.id === created.playerId);
   Object.assign(oldPlayer,{ shipClass:'brigantine',level:7,upgrades:['foreStengha','foreMarsel'],
@@ -302,17 +322,22 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   const restartPendingFeudKey = `${restartPendingFeudCard.masterCardId || restartPendingFeudCard.id}:${restartPendingFeudCard.copy ?? 'legacy'}`;
   assert.equal(afterRestart.pendingFeud.id, 'restart-pending-feud');
   assert.equal(afterRestart.pendingFeud.feudCard.id, restartPendingFeudCard.id);
-  assert.equal(afterRestart.feudDecks.kadingir.drawPile.length, 9);
-  assert.equal(afterRestart.feudDecks.kadingir.discard.length, 0);
+  const restoredPoliticalSource = afterRestart.randomSourceState.politicalEffect.kadingir;
+  assert.equal(restoredPoliticalSource.available.length, 9);
+  assert.equal(restoredPoliticalSource.recyclable.length, 0);
+  assert.equal(restoredPoliticalSource.reserved.length, 1);
   assert.equal(
-    afterRestart.feudDecks.kadingir.drawPile[0]
-      ? `${afterRestart.feudDecks.kadingir.drawPile[0].masterCardId || afterRestart.feudDecks.kadingir.drawPile[0].id}:${afterRestart.feudDecks.kadingir.drawPile[0].copy ?? 'legacy'}`
+    restoredPoliticalSource.available[0]
+      ? `${restoredPoliticalSource.available[0].masterCardId || restoredPoliticalSource.available[0].id}:${restoredPoliticalSource.available[0].copy ?? 'legacy'}`
       : null,
     restartNextFeudKey
   );
-  assert.equal(afterRestart.feudDecks.kadingir.drawPile.some(card =>
+  assert.equal(restoredPoliticalSource.available.some(card =>
     `${card.masterCardId || card.id}:${card.copy ?? 'legacy'}` === restartPendingFeudKey
   ), false);
+  assert.equal(restoredPoliticalSource.reserved.some(card =>
+    `${card.masterCardId || card.id}:${card.copy ?? 'legacy'}` === restartPendingFeudKey
+  ), true);
   assert.deepEqual(Object.keys(afterRestart.assignmentDecks), ['lionia','kadingir','suniksiya','pirates','mori']);
   assert.equal(afterRestart.assignmentDecks.mori.drawPile.length, 9); // активная карта не возвращается в восстановленную колоду
   assert.deepEqual(afterRestart.assignmentDecks.lionia.removed, []);
@@ -328,7 +353,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
     for (const player of copy.players) { delete player.activeAssignment; delete player.replacedAssignmentConditions; }
     return copy;
   };
-  assert.deepEqual(stripAssignmentMigration(afterRestart), stripAssignmentMigration(beforeRestart));
+  assert.deepEqual(stripAssignmentMigration(afterRestart), stripAssignmentMigration(migrateRoomState(beforeRestart).state));
   const anotherDevice = await connect();
   assert.equal((await emit(anotherDevice, 'resumeRoom', { code, accountToken: a.token })).ok, true);
   assert.equal((await emit(newDevice, 'closeRoom')).ok, true); // detached socket cannot close another device's room

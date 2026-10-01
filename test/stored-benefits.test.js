@@ -438,7 +438,11 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
       sourceCard: sourceBlueprint,
     },
   ];
-  room.eventDeck = { drawPile: [{ id: 'unrelated', copy: 1 }], discard: [] };
+  room.randomSourceState.sailingEvent = {
+    available: [{ id: 'unrelated', copy: 1 }],
+    recyclable: [],
+    reserved: [structuredClone(sourceCargo), structuredClone(sourceShip), structuredClone(sourceBlueprint)],
+  };
   const upgradeId = Object.keys(SHIP_UPGRADES).find(id => canInstallShipUpgradeFree(active, id).ok);
   assert.ok(upgradeId, 'Expected at least one free install candidate');
   writeDb(db);
@@ -460,7 +464,7 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
   assert.equal(persisted.actionsLeft, cargoBeforeActions);
   assert.equal(persisted.log.length, cargoBeforeLog);
   assert.equal(persistedActive.savedEventCards.some(card => card.id === 'cargo-benefit'), true);
-  assert.equal(persisted.eventDeck.discard.length, 0);
+  assert.equal(persisted.randomSourceState.sailingEvent.recyclable.length, 0);
 
   let changed = await change(activeSocket, 'useSavedCargo', { savedCardId: 'cargo-benefit', holdId: 'main' });
   assert.equal(changed.result.result.ok, true);
@@ -468,8 +472,8 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
   persistedActive = persisted.players.find(player => player.id === activeId);
   assert.equal(persisted.actionsLeft, cargoBeforeActions - 1);
   assert.equal(persistedActive.savedEventCards.some(card => card.id === 'cargo-benefit'), false);
-  assert.equal(persisted.eventDeck.discard.filter(card => card.marker === 'cargo').length, 1);
-  assert.deepEqual(persisted.eventDeck.discard.find(card => card.marker === 'cargo'), sourceCargo);
+  assert.equal(persisted.randomSourceState.sailingEvent.recyclable.filter(card => card.marker === 'cargo').length, 1);
+  assert.deepEqual(persisted.randomSourceState.sailingEvent.recyclable.find(card => card.marker === 'cargo'), sourceCargo);
 
   before = persisted;
   const shipBeforeActions = before.actionsLeft;
@@ -482,7 +486,7 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
   assert.equal(persisted.actionsLeft, shipBeforeActions);
   assert.equal(persisted.log.length, shipBeforeLog);
   assert.equal(persistedActive.savedEventCards.some(card => card.id === 'ship-benefit'), true);
-  assert.equal(persisted.eventDeck.discard.filter(card => card.marker === 'ship').length, 0);
+  assert.equal(persisted.randomSourceState.sailingEvent.recyclable.filter(card => card.marker === 'ship').length, 0);
 
   changed = await change(activeSocket, 'useShipMaster', { savedCardId: 'ship-benefit', upgradeId });
   assert.equal(changed.result.result.ok, true);
@@ -490,8 +494,8 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
   persistedActive = persisted.players.find(player => player.id === activeId);
   assert.equal(persisted.actionsLeft, shipBeforeActions - 1);
   assert.equal(persistedActive.savedEventCards.some(card => card.id === 'ship-benefit'), false);
-  assert.equal(persisted.eventDeck.discard.filter(card => card.marker === 'ship').length, 1);
-  assert.deepEqual(persisted.eventDeck.discard.find(card => card.marker === 'ship'), sourceShip);
+  assert.equal(persisted.randomSourceState.sailingEvent.recyclable.filter(card => card.marker === 'ship').length, 1);
+  assert.deepEqual(persisted.randomSourceState.sailingEvent.recyclable.find(card => card.marker === 'ship'), sourceShip);
 
   await stop();
   activeSocket.disconnect();
@@ -516,7 +520,7 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
   room.pendingBattle = null;
   room.pendingAlliance = null;
   assert.equal(resumedActive.savedEventCards.some(card => card.id === 'blueprint-benefit'), true);
-  assert.equal(room.eventDeck.discard.filter(card => card.marker === 'blueprint').length, 0);
+  assert.equal(room.randomSourceState.sailingEvent.recyclable.filter(card => card.marker === 'blueprint').length, 0);
   writeDb(db);
 
   await start();
@@ -538,7 +542,7 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
   assert.equal(Object.hasOwn(opponentView, 'savedEventCards'), false);
   assert.equal(Object.hasOwn(opponentView, 'savedEventCardCount'), false);
   persisted = readDb().game_rooms[0].state;
-  assert.equal(persisted.eventDeck.discard.filter(card => card.marker === 'blueprint').length, 0);
+  assert.equal(persisted.randomSourceState.sailingEvent.recyclable.filter(card => card.marker === 'blueprint').length, 0);
 
   before = persisted;
   const blueprintBeforeActions = before.actionsLeft;
@@ -551,7 +555,7 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
   assert.equal(persisted.actionsLeft, blueprintBeforeActions);
   assert.equal(persisted.log.length, blueprintBeforeLog);
   assert.equal(persistedActive.savedEventCards.some(card => card.id === 'blueprint-benefit'), true);
-  assert.equal(persisted.eventDeck.discard.filter(card => card.marker === 'blueprint').length, 0);
+  assert.equal(persisted.randomSourceState.sailingEvent.recyclable.filter(card => card.marker === 'blueprint').length, 0);
 
   changed = await change(activeSocket, 'useBlueprint', { savedCardId: 'blueprint-benefit', islandId: bogamia.id });
   assert.equal(changed.result.result.ok, true);
@@ -559,7 +563,7 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
   persistedActive = persisted.players.find(player => player.id === activeId);
   assert.equal(persisted.actionsLeft, blueprintBeforeActions - 1);
   assert.equal(persistedActive.savedEventCards.some(card => card.id === 'blueprint-benefit'), false);
-  assert.equal(persisted.eventDeck.discard.filter(card => card.marker === 'blueprint').length, 1);
-  assert.deepEqual(persisted.eventDeck.discard.find(card => card.marker === 'blueprint'), sourceBlueprint);
-  assert.equal(persisted.eventDeck.discard.filter(card => ['cargo', 'ship', 'blueprint'].includes(card.marker)).length, 3);
+  assert.equal(persisted.randomSourceState.sailingEvent.recyclable.filter(card => card.marker === 'blueprint').length, 1);
+  assert.deepEqual(persisted.randomSourceState.sailingEvent.recyclable.find(card => card.marker === 'blueprint'), sourceBlueprint);
+  assert.equal(persisted.randomSourceState.sailingEvent.recyclable.filter(card => ['cargo', 'ship', 'blueprint'].includes(card.marker)).length, 3);
 });
