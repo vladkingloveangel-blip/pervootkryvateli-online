@@ -724,6 +724,11 @@
   $('mapNavStayBtn').addEventListener('click', () => socket.emit('skipNavigation', {}, handleGameAck));
   $('sellCargoBtn').addEventListener('click', () => socket.emit('sellCargo', {}, handleGameAck));
 
+  function emitEndGameCommand(event) {
+    setError('gameError');
+    socket.emit(event, {}, handleGameAck);
+  }
+
   function handleGameAck(res) { setError('gameError', res?.ok ? '' : (res?.error || 'Действие отклонено.')); }
   function me() { return state.room?.players.find(p => p.id === state.myId) || null; }
   function active() { return state.room?.players.find(p => p.id === state.room?.activePlayerId) || null; }
@@ -884,6 +889,127 @@
     actionNav.setAttribute('aria-label', visible.length > 1 ? `Действия, доступно разделов: ${visible.length}` : 'Действия');
   }
 
+  function renderEndGame() {
+    const r = state.room;
+    const panel = $('endGamePanel');
+    const finalPanel = $('finalResultsPanel');
+    const finished = Boolean(r?.finished || r?.phase === 'finished');
+    $('game').classList.toggle('finished-state', finished);
+    finalPanel.classList.toggle('hidden', !finished);
+
+    if (finished) {
+      panel.classList.add('hidden');
+      const result = r.finalResult || { titles: [], playerMetrics: [] };
+      $('finalResultsRound').textContent = result.finishedRound == null ? '' : `Финальная граница: раунд ${result.finishedRound}`;
+
+      const titles = $('finalTitles');
+      titles.innerHTML = '';
+      for (const title of result.titles || []) {
+        const card = document.createElement('article');
+        card.className = 'final-title-card';
+        const winners = (title.winnerIds || []).map(playerName).join(', ') || 'Нет обладателя';
+        card.innerHTML = `<span class="final-title-name">${escapeHtml(title.name)}</span><strong>${title.maxValue ?? 0}</strong><span class="final-title-metric">${escapeHtml(title.metric || '')}</span><div class="final-title-winners">${escapeHtml(winners)}</div>`;
+        titles.appendChild(card);
+      }
+
+      const metrics = $('finalPlayerMetrics');
+      metrics.innerHTML = '';
+      const labels = [
+        ['islands', 'Владения'],
+        ['wealth', 'Казна'],
+        ['army', 'Армия'],
+        ['fleet', 'Флот'],
+        ['prestige', 'Престиж'],
+        ['legendaryPlaces', 'Легендарные места'],
+      ];
+      for (const row of result.playerMetrics || []) {
+        const card = document.createElement('article');
+        card.className = 'final-player-card';
+        const name = document.createElement('h3');
+        name.textContent = playerName(row.playerId);
+        const grid = document.createElement('div');
+        grid.className = 'final-player-metrics';
+        for (const [key, label] of labels) {
+          const metricLabel = document.createElement('span');
+          metricLabel.textContent = label;
+          const value = document.createElement('strong');
+          value.textContent = String(row.metrics?.[key] ?? 0);
+          grid.append(metricLabel, value);
+        }
+        card.append(name, grid);
+        metrics.appendChild(card);
+      }
+      return;
+    }
+
+    if (!r?.started) {
+      panel.classList.add('hidden');
+      return;
+    }
+
+    panel.classList.remove('hidden');
+    const consensus = r.endGameConsensus;
+    const actions = $('endGameActions');
+    const confirmations = $('endGameConfirmations');
+    actions.innerHTML = '';
+    confirmations.innerHTML = '';
+
+    if (consensus?.status === 'accepted') {
+      $('endGameBadge').textContent = 'принято';
+      $('endGameTitle').textContent = 'Завершение согласовано';
+      $('endGameSummary').textContent = `Партия завершится после окончания раунда ${consensus.finishAfterRound}`;
+      return;
+    }
+
+    if (consensus?.status === 'proposed') {
+      const confirmed = new Set((consensus.confirmedPlayerIds || []).map(String));
+      $('endGameBadge').textContent = `${confirmed.size}/${r.players.length}`;
+      $('endGameTitle').textContent = 'Предложено завершить партию';
+      $('endGameSummary').textContent = `Предложил: ${playerName(consensus.proposedById)}. Согласились ${confirmed.size} из ${r.players.length}.`;
+
+      for (const player of r.players) {
+        const item = document.createElement('div');
+        item.className = 'end-game-confirmation';
+        const accepted = confirmed.has(String(player.id));
+        item.innerHTML = `<span>${escapeHtml(player.name)}</span><strong>${accepted ? 'Согласился' : 'Ожидается ответ'}</strong>`;
+        confirmations.appendChild(item);
+      }
+
+      const mineConfirmed = confirmed.has(String(state.myId));
+      if (!state.spectating && !mineConfirmed) {
+        const confirmButton = document.createElement('button');
+        confirmButton.type = 'button';
+        confirmButton.className = 'primary';
+        confirmButton.textContent = 'Согласиться';
+        confirmButton.addEventListener('click', () => emitEndGameCommand('confirmEndGame'));
+        const rejectButton = document.createElement('button');
+        rejectButton.type = 'button';
+        rejectButton.className = 'danger-soft';
+        rejectButton.textContent = 'Отклонить';
+        rejectButton.addEventListener('click', () => emitEndGameCommand('rejectEndGame'));
+        actions.append(confirmButton, rejectButton);
+      } else if (!state.spectating) {
+        const waiting = document.createElement('div');
+        waiting.className = 'muted end-game-waiting';
+        waiting.textContent = 'Ваше согласие учтено. Ожидаем остальных игроков.';
+        actions.appendChild(waiting);
+      }
+      return;
+    }
+
+    $('endGameBadge').textContent = 'служебное';
+    $('endGameTitle').textContent = 'Завершение партии';
+    $('endGameSummary').textContent = 'Если все игроки согласятся, партия завершится после полного текущего раунда.';
+    if (!state.spectating) {
+      const propose = document.createElement('button');
+      propose.type = 'button';
+      propose.className = 'end-game-propose';
+      propose.textContent = 'Предложить завершение партии';
+      propose.addEventListener('click', () => emitEndGameCommand('proposeEndGame'));
+      actions.appendChild(propose);
+    }
+  }
+
   function render() {
     const r = state.room;
     if (!r) return;
@@ -898,6 +1024,8 @@
 
     const mine = me();
     renderMobileHud();
+    renderEndGame();
+    if (r.finished || r.phase === 'finished') return;
     if (mine) {
       const cards = mine.specialCards?.length ? ` · особые карты: ${mine.specialCards.join(', ')}` : '';
       const cargo = mine.landCompany ? ` · трюм: рота +${mine.landCompany.army}` : (mine.cargo ? ` · трюм: ${state.room.goodsCatalog?.[mine.cargo.goodId]?.name || mine.cargo.goodId} ×${mine.cargo.quantity}` : ' · трюм пуст');

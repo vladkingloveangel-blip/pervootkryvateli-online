@@ -159,3 +159,77 @@ test('4.5 Scout UI offers only public-coordinate targets and emits one scoped mo
   assert.match(app,/Object\.hasOwn\(island, 'defenseArmy'\)/);
   assert.doesNotMatch(app,/Разведчик сохранён на корабле, но просмотр закрытых карт не включён/);
 });
+
+
+test('7.7 end-game UI covers proposal, consensus, finished results and reconnect rendering', () => {
+  assert.match(index, /id="endGamePanel"/);
+  assert.match(index, /id="finalResultsPanel"/);
+  assert.match(app, /function renderEndGame\(\)/);
+  assert.match(app, /proposeEndGame/);
+  assert.match(app, /confirmEndGame/);
+  assert.match(app, /rejectEndGame/);
+  assert.match(app, /Предложить завершение партии/);
+  assert.match(app, /Предложено завершить партию/);
+  assert.match(app, /Партия завершится после окончания раунда \$\{consensus\.finishAfterRound\}/);
+  assert.match(app, /confirmed\.has\(String\(player\.id\)\)/);
+  assert.match(app, /if \(!state\.spectating && !mineConfirmed\)/);
+  assert.match(app, /if \(r\.finished \|\| r\.phase === 'finished'\) return/);
+  assert.match(app, /const finished = Boolean\(r\?\.finished \|\| r\?\.phase === 'finished'\)/);
+  assert.match(app, /\(title\.winnerIds \|\| \[\]\)\.map\(playerName\)\.join\(', '\)/);
+  assert.match(app, /\['islands', 'Владения'\]/);
+  assert.match(app, /\['wealth', 'Казна'\]/);
+  assert.match(app, /\['army', 'Армия'\]/);
+  assert.match(app, /\['fleet', 'Флот'\]/);
+  assert.match(app, /\['prestige', 'Престиж'\]/);
+  assert.match(app, /\['legendaryPlaces', 'Легендарные места'\]/);
+  assert.doesNotMatch(index, /Общий победитель|1 место|2 место|3 место|victory points/i);
+  assert.match(styles, /\.game\.finished-state > \.layout/);
+  assert.match(styles, /\.final-title-grid, \.final-player-grid \{ grid-template-columns: 1fr; \}/);
+});
+
+test('7.7 finished finalResult renderer keeps six canonical titles and shared holders', () => {
+  const start = app.indexOf('  function renderEndGame()');
+  const end = app.indexOf('\n  function render()', start);
+  assert.ok(start >= 0 && end > start);
+  const nodes = new Map();
+  function node(tag = 'div') {
+    return {
+      tag, children: [], className: '', textContent: '', events: {}, classList: { toggle(){}, add(){}, remove(){} },
+      set innerHTML(value) { this.html = value; this.children = []; }, get innerHTML() { return this.html || ''; },
+      appendChild(child) { this.children.push(child); }, append(...children) { this.children.push(...children); },
+      addEventListener(event, callback) { this.events[event] = callback; },
+    };
+  }
+  const room = {
+    started: true, finished: true, phase: 'finished', finalResult: {
+      finishedRound: 4,
+      titles: [
+        { id:'islands', name:'Мастер владений', metric:'islands', maxValue:5, winnerIds:['p1','p2'] },
+        { id:'wealth', name:'Мастер казны', metric:'wealth', maxValue:40, winnerIds:['p2'] },
+        { id:'army', name:'Мастер армии', metric:'army', maxValue:8, winnerIds:['p1'] },
+        { id:'fleet', name:'Мастер флота', metric:'fleet', maxValue:11, winnerIds:['p2'] },
+        { id:'prestige', name:'Мастер престижа', metric:'prestige', maxValue:7, winnerIds:['p1'] },
+        { id:'legendary', name:'Мастер легендарных мест', metric:'legendaryPlaces', maxValue:3, winnerIds:[] },
+      ],
+      playerMetrics: [
+        { playerId:'p1', metrics:{ islands:5, wealth:30, army:8, fleet:9, prestige:7, legendaryPlaces:3 } },
+        { playerId:'p2', metrics:{ islands:5, wealth:40, army:6, fleet:11, prestige:5, legendaryPlaces:2 } },
+      ],
+    },
+    players:[{id:'p1',name:'Анна'},{id:'p2',name:'Борис'}],
+  };
+  const context = vm.createContext({
+    state:{room,myId:'p1',spectating:false},
+    document:{createElement:node},
+    $:id=>{ if(!nodes.has(id)) nodes.set(id,node()); return nodes.get(id); },
+    playerName:id=>room.players.find(p=>p.id===id)?.name || 'Игрок',
+    escapeHtml:value=>String(value),
+    socket:{emit(){}}, setError(){},
+  });
+  vm.runInContext(app.slice(start,end) + '\nrenderEndGame();', context);
+  assert.equal(nodes.get('finalTitles').children.length, 6);
+  assert.match(nodes.get('finalTitles').children[0].innerHTML, /Анна, Борис/);
+  assert.match(nodes.get('finalTitles').children[5].innerHTML, /Нет обладателя/);
+  assert.equal(nodes.get('finalPlayerMetrics').children.length, 2);
+  assert.equal(nodes.get('finalPlayerMetrics').children[0].children[1].children.length, 12);
+});

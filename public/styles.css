@@ -1100,3 +1100,53 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 .assignment-priority, .assignment-progress { margin-top: 8px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); line-height: 1.4; color: var(--text); }
 .assignment-priority { border-color: rgba(240,196,91,.58); }
 .assignment-progress { border-color: rgba(112,188,214,.48); }
+
+
+/* Stage 8 / Step 7.7 — end-game consensus and final results */
+.end-game-panel { display: grid; gap: 10px; border-color: rgba(240,196,91,.34); }
+.end-game-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.end-game-propose { background: transparent; border-style: dashed; }
+.end-game-confirmations { display: grid; gap: 6px; }
+.end-game-confirmation { display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
+.end-game-confirmation strong { font-size: 12px; text-align: right; }
+.end-game-waiting { padding: 4px 0; }
+
+.final-results-panel { display: grid; gap: 18px; margin: 12px 0; overflow: auto; }
+.final-results-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.final-results-head h1 { margin: 3px 0 0; }
+.final-results-kicker { color: var(--accent); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+.final-title-grid, .final-player-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.final-title-card, .final-player-card { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
+.final-title-card { display: grid; gap: 5px; }
+.final-title-name { font-weight: 800; }
+.final-title-card > strong { font-size: 24px; color: var(--accent); }
+.final-title-metric { color: var(--muted); font-size: 12px; }
+.final-title-winners { margin-top: 3px; font-weight: 700; overflow-wrap: anywhere; }
+.final-metrics-section { display: grid; gap: 10px; }
+.final-metrics-section h2, .final-player-card h3 { margin: 0; }
+.final-player-metrics { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 6px 12px; margin-top: 9px; }
+.final-player-metrics span { color: var(--muted); }
+.final-player-metrics strong { text-align: right; }
+
+.game.finished-state > .game-hud,
+.game.finished-state > .status,
+.game.finished-state > .layout,
+.game.finished-state > .mobile-game-nav,
+.game.finished-state > .mobile-action-dock { display: none !important; }
+
+@media (max-width: 900px) {
+  body.game-active .end-game-panel { margin: 6px 0; padding: 10px; }
+  body.game-active .final-results-panel {
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 12px 10px calc(14px + env(safe-area-inset-bottom));
+    border-radius: 0;
+    overflow-y: auto;
+  }
+  .final-results-head { position: sticky; top: -12px; z-index: 2; padding: 10px 0 8px; background: var(--panel); }
+  .final-title-grid, .final-player-grid { grid-template-columns: 1fr; }
+  .final-title-card, .final-player-card { width: 100%; }
+  .end-game-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .end-game-actions > .end-game-waiting, .end-game-actions > .end-game-propose { grid-column: 1 / -1; }
+}

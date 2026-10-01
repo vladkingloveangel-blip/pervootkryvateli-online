@@ -168,6 +168,34 @@
         </div>
       </section>
 
+      <section id="endGamePanel" class="panel end-game-panel hidden" aria-live="polite">
+        <div class="section-head">
+          <div>
+            <h2 id="endGameTitle">Завершение партии</h2>
+            <div id="endGameSummary" class="muted">Игроки могут единогласно договориться завершить партию после текущего раунда.</div>
+          </div>
+          <span id="endGameBadge" class="mini-badge">служебное</span>
+        </div>
+        <div id="endGameConfirmations" class="end-game-confirmations"></div>
+        <div id="endGameActions" class="end-game-actions"></div>
+      </section>
+
+      <section id="finalResultsPanel" class="panel final-results-panel hidden" aria-live="polite">
+        <div class="final-results-head">
+          <div>
+            <span class="final-results-kicker">Партия завершена</span>
+            <h1>Итоги экспедиции</h1>
+            <p id="finalResultsRound" class="muted"></p>
+          </div>
+          <div class="mini-badge">6 титулов</div>
+        </div>
+        <div id="finalTitles" class="final-title-grid"></div>
+        <div class="final-metrics-section">
+          <h2>Итоговые показатели игроков</h2>
+          <div id="finalPlayerMetrics" class="final-player-grid"></div>
+        </div>
+      </section>
+
       <section class="layout">
         <div class="map-column">
           <div class="map-toolbar panel">
