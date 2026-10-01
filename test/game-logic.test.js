@@ -153,7 +153,7 @@ const {
   completeExpeditionAtArrival,
   playerAtExpeditionPlace,
 } = require('../game-logic');
-const { BALANCE, MAP_META, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS, BUILDINGS, CHARACTERS, ANCHORS, LEGENDARY_PLACES, LEGENDARY_CARDS } = require('../game-data');
+const { BALANCE, MAP_META, ASSIGNMENT_CARDS, FACTIONS, ESCORTS, HAZARDS, ISLAND_DEFS, BUILDINGS, CHARACTERS, ANCHORS, LEGENDARY_PLACES, LEGENDARY_CARDS, SAILING_EVENT_CARDS } = require('../game-data');
 
 function has(cells, row, col) { return cells.some(c => c.row === row && c.col === col); }
 
@@ -1410,12 +1410,17 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 }
 
 // Шторм предлагает допустимые береговые клетки целевого острова.
+// В.21 сохраняет старый id для save-compatibility, но staging-канон переносит к Ренаике.
 {
   const room = { islands: cloneIslands() };
   const p = { shipClass: 'frigate' };
-  const options = stormCellOptions(room, p, 'landin');
+  const storm = SAILING_EVENT_CARDS.find(card => card.id === 'storm-chertonia');
+  assert.ok(storm);
+  assert.equal(storm.name, 'Шторм: Ренаика');
+  assert.equal(storm.islandId, 'renaika');
+  const options = stormCellOptions(room, p, storm.islandId);
   assert.ok(options.length > 0);
-  const island = room.islands.find(i => i.id === 'landin');
+  const island = room.islands.find(i => i.id === 'renaika');
   assert.equal(options.every(o => island.cells.some(([r,c]) => r === o.row && c === o.col)), true);
 }
 

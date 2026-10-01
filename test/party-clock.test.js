@@ -31,13 +31,22 @@ test('leader, clockwise order and six complete personal circles', { timeout: 300
     assert.equal(result.ok,true,`${event}: ${result.error||''}`);
     return (await next)[0];
   }
+  // Staging/playtest author override: a complete game may start with two players.
+  const minimumPlayers=await Promise.all(Array.from({length:2},()=>connect()));
+  const minimumCreated=await emit(minimumPlayers[0],'createRoom',{name:'Minimum One'});
+  const minimumJoined=await emit(minimumPlayers[1],'joinRoom',{code:minimumCreated.code,name:'Minimum Two'});
+  assert.equal(minimumCreated.ok && minimumJoined.ok,true);
+  await change(minimumPlayers[0],'setLeader',{playerId:minimumCreated.playerId});
+  await change(minimumPlayers[0],'setReady',{ready:true});
+  await change(minimumPlayers[1],'setReady',{ready:true});
+  assert.equal((await emit(minimumPlayers[0],'startGame')).ok,true);
+  minimumPlayers.forEach(socket=>socket.disconnect());
+
   const players=await Promise.all(Array.from({length:4},()=>connect()));
   const created=await emit(players[0],'createRoom',{name:'One'});
   const ids=[created.playerId];
   assert.equal(created.ok,true);
-  for(let i=1;i<3;i++)ids.push((await emit(players[i],'joinRoom',{code:created.code,name:`Player ${i+1}`})).playerId);
-  assert.match((await emit(players[0],'startGame')).error,/4–6/);
-  ids.push((await emit(players[3],'joinRoom',{code:created.code,name:'Player 4'})).playerId);
+  for(let i=1;i<4;i++)ids.push((await emit(players[i],'joinRoom',{code:created.code,name:`Player ${i+1}`})).playerId);
   assert.equal((await emit(players[1],'setLeader',{playerId:ids[1]})).ok,false);
   assert.equal((await emit(players[0],'setSeatingOrder',{playerIds:[ids[0],ids[0],ids[1],ids[2]]})).ok,false);
   assert.equal((await emit(players[0],'startGame')).ok,false);

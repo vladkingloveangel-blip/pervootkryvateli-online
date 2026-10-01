@@ -12,7 +12,7 @@ test('legacy profile references remain valid while canonical master data stays s
   assert.deepEqual(validateCompatibility(rules,legacy),[]);
   assert.equal(runtime.RUNTIME_PROFILE,'stage-6-events-legends-6.7');
   assert.equal(runtime.BALANCE.session.startingDucats,rules.session.startingDucats);
-  assert.equal(runtime.BALANCE.session.players.min,4);
+  assert.equal(runtime.BALANCE.session.players.min,2);
   assert.equal(runtime.BALANCE.session.players.max,6);
   assert.equal(runtime.BALANCE.session.circlesPerRound,6);
   assert.deepEqual(runtime.SHIP_LEVELS[legacy.shipLevel7.level],{...legacy.shipLevel7,retired:true});
