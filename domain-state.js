@@ -1189,6 +1189,175 @@ function getPendingLegendaryReactionResolution(room) {
 }
 
 
+
+const PRE_TURN_RESOLUTION_FLOW_LEGACY_SNAPSHOT = Symbol('domain-state.pre-turn-resolution-flow-legacy-snapshot');
+const PRE_TURN_STAGES = Object.freeze(['sailing', 'political', 'assignment']);
+
+function preTurnStageFromLegacy(stage) {
+  return stage === 'feud' ? 'political' : cloneDetached(stage);
+}
+
+function preTurnStageToLegacy(stage) {
+  return stage === 'political' ? 'feud' : cloneDetached(stage);
+}
+
+function preTurnResolutionFlowFromLegacy(legacy) {
+  if (legacy === undefined || legacy === null) return legacy;
+  if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) {
+    throw new TypeError('PreTurnResolutionFlow expects a legacy eventPhase object, null, or undefined.');
+  }
+  const flow = {};
+  for (const key of ['active', 'personalTurn', 'turnPlayerId', 'currentPlayerId', 'politicalSnapshot', 'lastCard', 'taxResult']) {
+    if (hasOwn(legacy, key)) flow[key] = cloneDetached(legacy[key]);
+  }
+  if (hasOwn(legacy, 'stage')) flow.stage = preTurnStageFromLegacy(legacy.stage);
+
+  const indexes = {};
+  if (hasOwn(legacy, 'playerIndex')) indexes.sailing = cloneDetached(legacy.playerIndex);
+  if (hasOwn(legacy, 'feudIndex')) indexes.political = cloneDetached(legacy.feudIndex);
+  if (hasOwn(legacy, 'assignmentIndex')) indexes.assignment = cloneDetached(legacy.assignmentIndex);
+  if (hasOwn(legacy, 'replacementIndex')) indexes.replacement = cloneDetached(legacy.replacementIndex);
+  if (Object.keys(indexes).length) flow.indexes = indexes;
+
+  const queues = {};
+  if (hasOwn(legacy, 'feudQueue')) queues.political = cloneDetached(legacy.feudQueue);
+  if (hasOwn(legacy, 'assignmentQueue')) queues.assignment = cloneDetached(legacy.assignmentQueue);
+  if (hasOwn(legacy, 'replacementQueue')) queues.replacement = cloneDetached(legacy.replacementQueue);
+  if (Object.keys(queues).length) flow.queues = queues;
+
+  if (hasOwn(legacy, 'observatoryReplacementsUsed')) {
+    flow.counters = { observatoryReplacementsUsed: cloneDetached(legacy.observatoryReplacementsUsed) };
+  }
+
+  Object.defineProperty(flow, PRE_TURN_RESOLUTION_FLOW_LEGACY_SNAPSHOT, {
+    value: cloneDetached(legacy),
+    enumerable: false,
+  });
+  return flow;
+}
+
+function preTurnResolutionFlowToLegacy(flow) {
+  if (flow === undefined || flow === null) return flow;
+  if (!flow || typeof flow !== 'object' || Array.isArray(flow)) {
+    throw new TypeError('PreTurnResolutionFlow legacy conversion expects an object, null, or undefined.');
+  }
+  const snapshot = flow[PRE_TURN_RESOLUTION_FLOW_LEGACY_SNAPSHOT];
+  const legacy = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) ? cloneDetached(snapshot) : {};
+
+  for (const key of ['active', 'personalTurn', 'turnPlayerId', 'currentPlayerId', 'politicalSnapshot', 'lastCard', 'taxResult']) {
+    if (hasOwn(flow, key)) legacy[key] = cloneDetached(flow[key]);
+  }
+  if (hasOwn(flow, 'stage')) legacy.stage = preTurnStageToLegacy(flow.stage);
+
+  if (flow.indexes && typeof flow.indexes === 'object' && !Array.isArray(flow.indexes)) {
+    if (hasOwn(flow.indexes, 'sailing')) legacy.playerIndex = cloneDetached(flow.indexes.sailing);
+    if (hasOwn(flow.indexes, 'political')) legacy.feudIndex = cloneDetached(flow.indexes.political);
+    if (hasOwn(flow.indexes, 'assignment')) legacy.assignmentIndex = cloneDetached(flow.indexes.assignment);
+    if (hasOwn(flow.indexes, 'replacement')) legacy.replacementIndex = cloneDetached(flow.indexes.replacement);
+  }
+
+  if (flow.queues && typeof flow.queues === 'object' && !Array.isArray(flow.queues)) {
+    if (hasOwn(flow.queues, 'political')) legacy.feudQueue = cloneDetached(flow.queues.political);
+    if (hasOwn(flow.queues, 'assignment')) legacy.assignmentQueue = cloneDetached(flow.queues.assignment);
+    if (hasOwn(flow.queues, 'replacement')) legacy.replacementQueue = cloneDetached(flow.queues.replacement);
+  }
+
+  if (flow.counters && typeof flow.counters === 'object' && !Array.isArray(flow.counters)
+      && hasOwn(flow.counters, 'observatoryReplacementsUsed')) {
+    legacy.observatoryReplacementsUsed = cloneDetached(flow.counters.observatoryReplacementsUsed);
+  }
+  return legacy;
+}
+
+function getPreTurnResolutionFlow(room) {
+  if (!room || typeof room !== 'object') throw new TypeError('getPreTurnResolutionFlow requires a room object.');
+  if (!hasOwn(room, 'eventPhase')) return undefined;
+  return preTurnResolutionFlowFromLegacy(room.eventPhase);
+}
+
+function setPreTurnResolutionFlow(room, flow) {
+  if (!room || typeof room !== 'object') throw new TypeError('setPreTurnResolutionFlow requires a room object.');
+  room.eventPhase = preTurnResolutionFlowToLegacy(flow);
+  return getPreTurnResolutionFlow(room);
+}
+
+function clearPreTurnResolutionFlow(room) {
+  if (!room || typeof room !== 'object') throw new TypeError('clearPreTurnResolutionFlow requires a room object.');
+  room.eventPhase = null;
+  return null;
+}
+
+function mutatePreTurnResolutionFlow(room, mutator) {
+  const flow = getPreTurnResolutionFlow(room);
+  if (!flow || typeof flow !== 'object') return flow;
+  mutator(flow);
+  return setPreTurnResolutionFlow(room, flow);
+}
+
+function getPreTurnStage(room) {
+  return getPreTurnResolutionFlow(room)?.stage;
+}
+
+function setPreTurnStage(room, stage, options = {}) {
+  if (!PRE_TURN_STAGES.includes(stage)) throw new TypeError('PreTurnResolutionFlow stage must be sailing, political, or assignment.');
+  return mutatePreTurnResolutionFlow(room, flow => {
+    flow.stage = stage;
+    if (hasOwn(options, 'index')) {
+      flow.indexes ||= {};
+      flow.indexes[stage] = cloneDetached(options.index);
+    }
+    if (hasOwn(options, 'currentPlayerId')) flow.currentPlayerId = cloneDetached(options.currentPlayerId);
+  });
+}
+
+function setPreTurnActive(room, active) {
+  return mutatePreTurnResolutionFlow(room, flow => { flow.active = Boolean(active); });
+}
+
+function getPreTurnStageIndex(room, stage = getPreTurnStage(room)) {
+  return getPreTurnResolutionFlow(room)?.indexes?.[stage];
+}
+
+function setPreTurnStageIndex(room, stage, index) {
+  if (!PRE_TURN_STAGES.includes(stage)) throw new TypeError('PreTurnResolutionFlow cursor stage must be sailing, political, or assignment.');
+  return mutatePreTurnResolutionFlow(room, flow => {
+    flow.indexes ||= {};
+    flow.indexes[stage] = cloneDetached(index);
+  });
+}
+
+function advancePreTurnStageIndex(room, stage, amount = 1) {
+  const current = Number(getPreTurnStageIndex(room, stage)) || 0;
+  const next = current + (Number(amount) || 0);
+  setPreTurnStageIndex(room, stage, next);
+  return next;
+}
+
+function setPreTurnCurrentPlayer(room, playerId) {
+  return mutatePreTurnResolutionFlow(room, flow => { flow.currentPlayerId = cloneDetached(playerId); });
+}
+
+function setPreTurnLastCard(room, card) {
+  return mutatePreTurnResolutionFlow(room, flow => { flow.lastCard = cloneDetached(card); });
+}
+
+function getPreTurnObservatoryReplacementsUsed(room) {
+  return Math.max(0, Number(getPreTurnResolutionFlow(room)?.counters?.observatoryReplacementsUsed) || 0);
+}
+
+function incrementObservatoryReplacement(room) {
+  const next = getPreTurnObservatoryReplacementsUsed(room) + 1;
+  mutatePreTurnResolutionFlow(room, flow => {
+    flow.counters ||= {};
+    flow.counters.observatoryReplacementsUsed = next;
+  });
+  return next;
+}
+
+function setPreTurnTaxResult(room, result) {
+  return mutatePreTurnResolutionFlow(room, flow => { flow.taxResult = cloneDetached(result); });
+}
+
 const RESOLUTION_QUEUE_FIELD = 'pendingExpeditionRewards';
 
 function resolutionQueueBacking(room, create = false) {
@@ -1361,6 +1530,23 @@ module.exports = {
   getPendingFeudResolution,
   getPendingAssignmentChoiceResolution,
   getPendingLegendaryReactionResolution,
+  PRE_TURN_STAGES,
+  preTurnResolutionFlowFromLegacy,
+  preTurnResolutionFlowToLegacy,
+  getPreTurnResolutionFlow,
+  setPreTurnResolutionFlow,
+  clearPreTurnResolutionFlow,
+  getPreTurnStage,
+  setPreTurnStage,
+  setPreTurnActive,
+  getPreTurnStageIndex,
+  setPreTurnStageIndex,
+  advancePreTurnStageIndex,
+  setPreTurnCurrentPlayer,
+  setPreTurnLastCard,
+  getPreTurnObservatoryReplacementsUsed,
+  incrementObservatoryReplacement,
+  setPreTurnTaxResult,
   RESOLUTION_QUEUE_FIELD,
   listResolutionQueue,
   peekResolutionQueue,

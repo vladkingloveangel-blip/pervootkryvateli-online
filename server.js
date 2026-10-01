@@ -194,6 +194,20 @@ const {
 const { seaEncounterSource } = require('./sea-encounter-source');
 const { sailingEventSource, releaseStoredBenefitReservation } = require('./sailing-event-source');
 const { canonicalizePoliticalEffectOccurrence, politicalEffectSource } = require('./political-effect-source');
+const {
+  preTurnResolutionFlowToLegacy,
+  getPreTurnResolutionFlow,
+  setPreTurnResolutionFlow,
+  clearPreTurnResolutionFlow,
+  setPreTurnStage,
+  setPreTurnActive,
+  advancePreTurnStageIndex,
+  setPreTurnCurrentPlayer,
+  setPreTurnLastCard,
+  getPreTurnObservatoryReplacementsUsed,
+  incrementObservatoryReplacement,
+  setPreTurnTaxResult,
+} = require('./domain-state');
 
 const app = express();
 const server = http.createServer(app);
@@ -514,6 +528,8 @@ function publicRoom(room, viewerId = null) {
   const pendingFeud = pendingLegacy(room, 'feud');
   const pendingAssignmentChoice = pendingLegacy(room, 'assignment-choice');
   const pendingLegendaryReaction = pendingLegacy(room, 'legendary-reaction');
+  const preTurnFlow = getPreTurnResolutionFlow(room);
+  const legacyEventPhase = preTurnFlow == null ? preTurnFlow : preTurnResolutionFlowToLegacy(preTurnFlow);
 
   return {
     version: '0.33.0',
@@ -526,21 +542,21 @@ function publicRoom(room, viewerId = null) {
     circle: room.circle,
     turnIndex: room.turnIndex,
     activePlayerId: active?.id || null,
-    eventPhase: room.eventPhase ? {
-      active: Boolean(room.eventPhase.active),
-      personalTurn: Boolean(room.eventPhase.personalTurn),
-      currentPlayerId: room.eventPhase.currentPlayerId || null,
-      playerIndex: Number(room.eventPhase.playerIndex) || 0,
-      totalPlayers: room.eventPhase.personalTurn ? 1 : room.order.length,
-      stage: room.eventPhase.stage || 'sailing',
-      observatoryReplacementsUsed: Math.max(0, Number(room.eventPhase.observatoryReplacementsUsed) || 0),
-      feudIndex: Number(room.eventPhase.feudIndex) || 0,
-      feudTotal: room.eventPhase.feudQueue?.length || 0,
-      assignmentIndex: Number(room.eventPhase.assignmentIndex) || 0,
-      assignmentTotal: room.eventPhase.assignmentQueue?.length || 0,
-      replacementIndex: Number(room.eventPhase.replacementIndex) || 0,
-      replacementTotal: room.eventPhase.replacementQueue?.length || 0,
-      lastCard: room.eventPhase.lastCard ? { ...room.eventPhase.lastCard } : null,
+    eventPhase: legacyEventPhase ? {
+      active: Boolean(legacyEventPhase.active),
+      personalTurn: Boolean(legacyEventPhase.personalTurn),
+      currentPlayerId: legacyEventPhase.currentPlayerId || null,
+      playerIndex: Number(legacyEventPhase.playerIndex) || 0,
+      totalPlayers: legacyEventPhase.personalTurn ? 1 : room.order.length,
+      stage: legacyEventPhase.stage || 'sailing',
+      observatoryReplacementsUsed: Math.max(0, Number(legacyEventPhase.observatoryReplacementsUsed) || 0),
+      feudIndex: Number(legacyEventPhase.feudIndex) || 0,
+      feudTotal: legacyEventPhase.feudQueue?.length || 0,
+      assignmentIndex: Number(legacyEventPhase.assignmentIndex) || 0,
+      assignmentTotal: legacyEventPhase.assignmentQueue?.length || 0,
+      replacementIndex: Number(legacyEventPhase.replacementIndex) || 0,
+      replacementTotal: legacyEventPhase.replacementQueue?.length || 0,
+      lastCard: legacyEventPhase.lastCard ? { ...legacyEventPhase.lastCard } : null,
     } : null,
     pendingEvent: pendingEvent ? {
       id: pendingEvent.id,
@@ -823,7 +839,7 @@ function publicRoom(room, viewerId = null) {
         expeditionHistory: expeditionHistoryRecords.map(expeditionHistoryRecordToLegacy),
         expeditionHistoryCount: expeditionHistoryRecords.length,
         expeditionTakenThisRound: p.id === viewerId ? expeditionTakenThisRound(p, room.round) > 0 : false,
-        canTakeExpedition: p.id === viewerId && active?.id === p.id && room.phase === 'actions' && (Number(room.actionsLeft) || 0) > 0 && !room.eventPhase?.active && !hasPendingDecision(room)
+        canTakeExpedition: p.id === viewerId && active?.id === p.id && room.phase === 'actions' && (Number(room.actionsLeft) || 0) > 0 && !getPreTurnResolutionFlow(room)?.active && !hasPendingDecision(room)
           ? canTakeExpedition(room, p).ok : false,
         legendaryCards: p.id === viewerId ? legendaryAbilities.map(ability => ({ id: ability.payload.id, name: ability.payload.name, handIndex: ability.source.index })) : [],
         legendaryCardCount: legendaryAbilities.length,
@@ -1374,7 +1390,7 @@ function advanceFleetAdjustment(room) {
   room.pendingFleetAdjustment = null;
   if (activateNextFleetAdjustment(room)) return true;
   if (queueEscortCapacityDecisionsIfNeeded(room)) return true;
-  if (!queueIslandCorrectionIfNeeded(room, null, 'последствия боя или изменения флотилии') && room.eventPhase?.active) processEventPhase(room);
+  if (!queueIslandCorrectionIfNeeded(room, null, 'последствия боя или изменения флотилии') && getPreTurnResolutionFlow(room)?.active) processEventPhase(room);
   return false;
 }
 
@@ -1571,7 +1587,7 @@ function queueIslandCorrectionIfNeeded(room, preferredIslandId = null, reason = 
 function continueAfterIslandCorrection(room) {
   if (hasPendingDecision(room)) return;
   if (queueIslandCorrectionIfNeeded(room)) return;
-  if (room.eventPhase?.active) processEventPhase(room);
+  if (getPreTurnResolutionFlow(room)?.active) processEventPhase(room);
 }
 
 function queueStatePrizeFromAssault(room, attacker, result) {
@@ -1827,7 +1843,7 @@ function saveHeldEventCard(player, card, kind, extra = {}) {
 function applyCurrentTurnEffect(room, player, effect, value) {
   // Events and feud cards drawn in the sixth circle affect that same personal turn (§3.4).
   // The fallback remains only for compatibility with legacy non-personal event-phase saves.
-  if (room.eventPhase?.personalTurn) {
+  if (getPreTurnResolutionFlow(room)?.personalTurn) {
     addActiveTurnEffect(player, effect, value);
     return;
   }
@@ -1850,8 +1866,8 @@ function queueEventDecision(room, player, card, kind, options, extra = {}) {
     origin: 'event-phase',
     ...extra,
   });
-  room.eventPhase.currentPlayerId = player.id;
-  room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: card.name, pending: true };
+  setPreTurnCurrentPlayer(room, player.id);
+  setPreTurnLastCard(room, { playerId: player.id, playerName: player.name, cardName: card.name, pending: true });
 }
 
 function resolveSailingEventCard(room, player, card) {
@@ -2037,8 +2053,8 @@ function queueFeudDecision(room, player, factionId, card, kind, options, extra =
     id: crypto.randomUUID(), playerId: player.id, factionId, cardName: card.name, kind,
     options: (options || []).map(o => ({ ...o })), feudCard: { ...card }, ...extra,
   });
-  room.eventPhase.currentPlayerId = player.id;
-  room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: card.name, factionId, factionName: FACTIONS[factionId]?.name, pending: true, source: 'feud' };
+  setPreTurnCurrentPlayer(room, player.id);
+  setPreTurnLastCard(room, { playerId: player.id, playerName: player.name, cardName: card.name, factionId, factionName: FACTIONS[factionId]?.name, pending: true, source: 'feud' });
 }
 
 function removeCargoByHold(player, holdId) {
@@ -2222,36 +2238,36 @@ function resolveFeudCard(room, player, factionId, rawCard) {
 
 function canUseObservatoryEventReplacement(room, player) {
   const effect = BUILDINGS.observatory?.effect;
-  if (!room?.eventPhase?.active || !player || effect?.type !== 'replace-event') return false;
+  const flow = getPreTurnResolutionFlow(room);
+  if (!flow?.active || !player || effect?.type !== 'replace-event') return false;
   const limit = Math.max(0, Number(effect.limit) || 0);
-  const used = Math.max(0, Number(room.eventPhase.observatoryReplacementsUsed) || 0);
+  const used = getPreTurnObservatoryReplacementsUsed(room);
   if (limit < 1 || used >= limit) return false;
   return hasOwnedBuilding(room, player.id, 'observatory');
 }
 
 function processEventPhase(room) {
-  if (!room.eventPhase?.active || hasPendingResolution(room, 'event') || hasPendingResolution(room, 'feud') || hasPendingResolution(room, 'assignment-choice') || room.pendingIslandCorrection || room.pendingFleetAdjustment) return;
+  let flow = getPreTurnResolutionFlow(room);
+  if (!flow?.active || hasPendingResolution(room, 'event') || hasPendingResolution(room, 'feud') || hasPendingResolution(room, 'assignment-choice') || room.pendingIslandCorrection || room.pendingFleetAdjustment) return;
   if (queueEscortCapacityDecisionsIfNeeded(room)) return;
   let safety = 0;
-  while (room.eventPhase.active && !hasPendingResolution(room, 'event') && !hasPendingResolution(room, 'feud') && !hasPendingResolution(room, 'assignment-choice') && !room.pendingIslandCorrection && !room.pendingFleetAdjustment && safety++ < 160) {
+  while ((flow = getPreTurnResolutionFlow(room))?.active && !hasPendingResolution(room, 'event') && !hasPendingResolution(room, 'feud') && !hasPendingResolution(room, 'assignment-choice') && !room.pendingIslandCorrection && !room.pendingFleetAdjustment && safety++ < 160) {
     if (queueEscortCapacityDecisionsIfNeeded(room)) return;
-    if (room.eventPhase.stage === 'sailing') {
-      const index = Number(room.eventPhase.playerIndex) || 0;
-      const playerIds = room.eventPhase.personalTurn ? [room.eventPhase.turnPlayerId] : room.order;
+    if (flow.stage === 'sailing') {
+      const index = Number(flow.indexes?.sailing) || 0;
+      const playerIds = flow.personalTurn ? [flow.turnPlayerId] : room.order;
       if (index >= playerIds.length) {
-        room.eventPhase.stage = 'feud';
-        room.eventPhase.feudIndex = 0;
-        room.eventPhase.currentPlayerId = room.eventPhase.feudQueue?.[0]?.playerId || null;
+        setPreTurnStage(room, 'political', { index: 0, currentPlayerId: flow.queues?.political?.[0]?.playerId || null });
         log(room, 'Фаза событий: карты плавания разрешены. Начинается выдача карт вражды по статусам, зафиксированным в начале фазы.');
         continue;
       }
       const playerId = playerIds[index];
       const player = playerById(room, playerId);
-      room.eventPhase.currentPlayerId = playerId;
-      if (!player) { room.eventPhase.playerIndex += 1; continue; }
+      setPreTurnCurrentPlayer(room, playerId);
+      if (!player) { advancePreTurnStageIndex(room, 'sailing'); continue; }
       const card = drawSailingEventCard(room);
-      if (!card) { log(room, `Фаза событий: для ${player.name} не удалось взять карту события.`); room.eventPhase.playerIndex += 1; continue; }
-      room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: card.name, pending: false, source: 'sailing' };
+      if (!card) { log(room, `Фаза событий: для ${player.name} не удалось взять карту события.`); advancePreTurnStageIndex(room, 'sailing'); continue; }
+      setPreTurnLastCard(room, { playerId: player.id, playerName: player.name, cardName: card.name, pending: false, source: 'sailing' });
       log(room, `Фаза событий: ${player.name} открывает «${card.name}».`);
       if (canUseObservatoryEventReplacement(room, player)) {
         setPendingLegacy(room, 'event', {
@@ -2259,56 +2275,49 @@ function processEventPhase(room) {
           eventCard: { ...card }, origin: 'event-phase',
           options: [{ id: 'keep', name: 'Оставить карту' }, { id: 'replace', name: 'Сбросить и взять вторую' }],
         });
-        room.eventPhase.lastCard.pending = true;
+        setPreTurnLastCard(room, { playerId: player.id, playerName: player.name, cardName: card.name, pending: true, source: 'sailing' });
         log(room, `${player.name}: Обсерватория позволяет оставить первую карту или сбросить её без применения и взять обязательную вторую.`);
         return;
       }
       const resolved = resolveSailingEventCard(room, player, card);
       if (resolved.pending) return;
       if (!resolved.holdEventCard) sailingEventSource(room).markUsed(card);
-      room.eventPhase.playerIndex += 1;
+      advancePreTurnStageIndex(room, 'sailing');
       continue;
     }
-
-    if (room.eventPhase.stage === 'feud') {
-      const index = Number(room.eventPhase.feudIndex) || 0;
-      const queue = room.eventPhase.feudQueue || [];
+    if (flow.stage === 'political') {
+      const index = Number(flow.indexes?.political) || 0;
+      const queue = flow.queues?.political || [];
       if (index >= queue.length) {
-        room.eventPhase.stage = 'assignment';
-        room.eventPhase.assignmentIndex = 0;
-        room.eventPhase.currentPlayerId = room.eventPhase.assignmentQueue?.[0]?.playerId || null;
+        setPreTurnStage(room, 'assignment', { index: 0, currentPlayerId: flow.queues?.assignment?.[0]?.playerId || null });
         log(room, 'Фаза событий: карты вражды разрешены. Начинается выдача поручений сюзерена.');
         continue;
       }
       const item = queue[index];
       const player = playerById(room, item.playerId);
-      room.eventPhase.currentPlayerId = item.playerId;
-      if (!player || !stateExists(room, item.factionId)) { room.eventPhase.feudIndex += 1; continue; }
+      setPreTurnCurrentPlayer(room, item.playerId);
+      if (!player || !stateExists(room, item.factionId)) { advancePreTurnStageIndex(room, 'political'); continue; }
       const drawn = drawFeudCard(room, item.factionId);
-      if (!drawn) { room.eventPhase.feudIndex += 1; continue; }
+      if (!drawn) { advancePreTurnStageIndex(room, 'political'); continue; }
       const card = canonicalFeudCard(item.factionId, drawn);
-      room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: card.name, factionId: item.factionId, factionName: FACTIONS[item.factionId]?.name, pending: false, source: 'feud' };
+      setPreTurnLastCard(room, { playerId: player.id, playerName: player.name, cardName: card.name, factionId: item.factionId, factionName: FACTIONS[item.factionId]?.name, pending: false, source: 'feud' });
       log(room, `Фаза событий: ${player.name} получает карту вражды от ${FACTIONS[item.factionId]?.name}: «${card.name}».`);
       const resolved = resolveFeudCard(room, player, item.factionId, card);
       if (resolved.pending) return;
       politicalEffectSource(room, item.factionId).markUsed(card);
-      room.eventPhase.feudIndex += 1;
+      advancePreTurnStageIndex(room, 'political');
       if (queueFleetAdjustment(room, player, `Карта вражды ${FACTIONS[item.factionId]?.name || item.factionId}: «${card.name}».`)) return;
       if (queueIslandCorrectionIfNeeded(room, null, `карта вражды ${FACTIONS[item.factionId]?.name || item.factionId}: «${card.name}»`)) return;
       continue;
     }
-
-    if (room.eventPhase.stage === 'assignment') {
-      const index = Number(room.eventPhase.assignmentIndex) || 0;
-      const queue = room.eventPhase.assignmentQueue || [];
-      if (index >= queue.length) {
-        finishEventPhase(room);
-        return;
-      }
+    if (flow.stage === 'assignment') {
+      const index = Number(flow.indexes?.assignment) || 0;
+      const queue = flow.queues?.assignment || [];
+      if (index >= queue.length) { finishEventPhase(room); return; }
       const item = queue[index];
       const player = playerById(room, item.playerId);
-      room.eventPhase.currentPlayerId = item.playerId;
-      room.eventPhase.assignmentIndex += 1;
+      setPreTurnCurrentPlayer(room, item.playerId);
+      advancePreTurnStageIndex(room, 'assignment');
       if (!player || player.suzerainId !== item.factionId || getActiveAssignmentTask(player) || !stateExists(room, item.factionId)) continue;
       if (hasOwnedBuilding(room, player.id, 'embassy')) {
         const offered = offerAssignmentCards(room, player, item.factionId, 2);
@@ -2318,7 +2327,7 @@ function processEventPhase(room) {
         }
         if (offered.cards.length === 1) {
           const issued = chooseAssignmentOffer(room, player, item.factionId, offered.cards, offered.cards[0].id);
-          room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: issued.assignment.card.text, factionId: item.factionId, factionName: FACTIONS[item.factionId]?.name, pending: false, source: 'assignment' };
+          setPreTurnLastCard(room, { playerId: player.id, playerName: player.name, cardName: issued.assignment.card.text, factionId: item.factionId, factionName: FACTIONS[item.factionId]?.name, pending: false, source: 'assignment' });
           log(room, `${player.name}: Посольство нашло только одно допустимое поручение ${FACTIONS[item.factionId]?.name}: «${issued.assignment.card.text}».`);
           continue;
         }
@@ -2326,21 +2335,19 @@ function processEventPhase(room) {
           id: crypto.randomUUID(), kind: 'embassy', playerId: player.id, factionId: item.factionId,
           options: offered.cards.map(card => ({ ...card })), canReplace: false, replaceError: null,
         });
-        room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: 'Выбор поручения Посольством', factionId: item.factionId, factionName: FACTIONS[item.factionId]?.name, pending: true, source: 'assignment' };
+        setPreTurnLastCard(room, { playerId: player.id, playerName: player.name, cardName: 'Выбор поручения Посольством', factionId: item.factionId, factionName: FACTIONS[item.factionId]?.name, pending: true, source: 'assignment' });
         log(room, `${player.name}: Посольство даёт выбор из двух допустимых поручений ${FACTIONS[item.factionId]?.name}.`);
         return;
       }
-
       const issued = issueAssignment(room, player, item.factionId);
       if (!issued.ok) {
         log(room, `${player.name}: у ${FACTIONS[item.factionId]?.name || item.factionId} сейчас нет подходящего поручения.`);
         continue;
       }
-      room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: issued.assignment.card.text, factionId: item.factionId, factionName: FACTIONS[item.factionId]?.name, pending: false, source: 'assignment' };
+      setPreTurnLastCard(room, { playerId: player.id, playerName: player.name, cardName: issued.assignment.card.text, factionId: item.factionId, factionName: FACTIONS[item.factionId]?.name, pending: false, source: 'assignment' });
       log(room, `${player.name} получает поручение ${FACTIONS[item.factionId]?.name}: «${issued.assignment.card.text}». Награда ${issued.assignment.card.reward} дукатов.`);
       continue;
     }
-
     finishEventPhase(room);
   }
 }
@@ -2361,37 +2368,38 @@ function startEventPhase(room) {
   room.fleetAdjustmentQueue = [];
   clearPendingResolution(room, 'legendary-reaction');
   const snapshot = { [player.id]: eventPoliticalSnapshot(room)[player.id] };
-  room.eventPhase = {
-    active: true, personalTurn: true, turnPlayerId: player.id, stage: 'sailing', playerIndex: 0, currentPlayerId: player.id, lastCard: null,
-    observatoryReplacementsUsed: 0,
-    politicalSnapshot: snapshot,
-    feudQueue: buildFeudQueue(room, snapshot), feudIndex: 0,
-    assignmentQueue: buildAssignmentQueue(room, snapshot), assignmentIndex: 0,
-    replacementQueue: [], replacementIndex: 0,
-  };
+  const politicalQueue = buildFeudQueue(room, snapshot);
+  const assignmentQueue = buildAssignmentQueue(room, snapshot);
+  setPreTurnResolutionFlow(room, {
+    active: true, personalTurn: true, turnPlayerId: player.id, stage: 'sailing', currentPlayerId: player.id,
+    indexes: { sailing: 0, political: 0, assignment: 0, replacement: 0 },
+    queues: { political: politicalQueue, assignment: assignmentQueue, replacement: [] },
+    politicalSnapshot: snapshot, counters: { observatoryReplacementsUsed: 0 }, lastCard: null,
+  });
   log(room, `Раунд ${room.round}, шестой круг: ${player.name} получает карты перед своим личным ходом.`);
-  room.eventPhase.taxResult = applyVassalTaxForTurn(room, snapshot, player.id);
+  const taxResult = applyVassalTaxForTurn(room, snapshot, player.id);
+  setPreTurnTaxResult(room, taxResult);
   processEventPhase(room);
 }
 
 function finishEventPhase(room) {
-  if (room.eventPhase?.personalTurn) {
-    room.eventPhase.active = false;
-    room.eventPhase = null;
+  const flow = getPreTurnResolutionFlow(room);
+  if (flow?.personalTurn) {
+    setPreTurnActive(room, false);
+    clearPreTurnResolutionFlow(room);
     clearPendingResolution(room, 'event');
     clearPendingResolution(room, 'feud');
     clearPendingResolution(room, 'assignment-choice');
     continueTurnAfterCards(room);
     return;
   }
-  if (room.eventPhase) room.eventPhase.active = false;
+  if (flow) setPreTurnActive(room, false);
   clearPendingResolution(room, 'event');
   clearPendingResolution(room, 'feud');
   clearPendingResolution(room, 'assignment-choice');
   advanceRound(room);
   beginTurn(room);
 }
-
 function advanceRound(room) {
   room.round += 1;
   room.circle = 1;
@@ -2414,9 +2422,9 @@ function advanceRound(room) {
 function finishPendingFeudCard(room, pending) {
   politicalEffectSource(room, pending.factionId).markUsed(pending.feudCard);
   const player = playerById(room, pending.playerId);
-  room.eventPhase.lastCard = { playerId: pending.playerId, playerName: player?.name || 'Игрок', cardName: pending.cardName, factionId: pending.factionId, factionName: FACTIONS[pending.factionId]?.name, pending: false, source: 'feud' };
+  setPreTurnLastCard(room, { playerId: pending.playerId, playerName: player?.name || 'Игрок', cardName: pending.cardName, factionId: pending.factionId, factionName: FACTIONS[pending.factionId]?.name, pending: false, source: 'feud' });
   clearPendingResolution(room, 'feud');
-  room.eventPhase.feudIndex += 1;
+  advancePreTurnStageIndex(room, 'political');
   const reason = `карта вражды ${FACTIONS[pending.factionId]?.name || pending.factionId}: «${pending.cardName}»`;
   if (player && queueFleetAdjustment(room, player, reason)) return;
   if (!queueIslandCorrectionIfNeeded(room, null, reason)) processEventPhase(room);
@@ -2502,28 +2510,27 @@ function completePendingFeud(room, pending, choice) {
 function continueAfterObservedSailingCard(room, player, card) {
   if (!card) {
     clearPendingResolution(room, 'event');
-    room.eventPhase.playerIndex += 1;
+    advancePreTurnStageIndex(room, 'sailing');
     processEventPhase(room);
     return { ok: true, empty: true };
   }
-  room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: card.name, pending: false, source: 'sailing' };
+  setPreTurnLastCard(room, { playerId: player.id, playerName: player.name, cardName: card.name, pending: false, source: 'sailing' });
   const resolved = resolveSailingEventCard(room, player, card);
   if (resolved.pending) return { ok: true, pending: true };
   if (!resolved.holdEventCard) sailingEventSource(room).markUsed(card);
   clearPendingResolution(room, 'event');
-  room.eventPhase.playerIndex += 1;
+  advancePreTurnStageIndex(room, 'sailing');
   processEventPhase(room);
   return { ok: true, pending: false };
 }
-
 function finishPendingEvent(room, pending) {
   const origin = pending.origin || 'event-phase';
   if (origin === 'event-phase') {
     if (pending.eventCard) sailingEventSource(room).markUsed(pending.eventCard);
     clearPendingResolution(room, 'event');
-    if (room.eventPhase?.active) {
-      room.eventPhase.lastCard = { playerId: pending.playerId, playerName: playerById(room, pending.playerId)?.name || 'Игрок', cardName: pending.cardName, pending: false, source: 'sailing' };
-      room.eventPhase.playerIndex += 1;
+    if (getPreTurnResolutionFlow(room)?.active) {
+      setPreTurnLastCard(room, { playerId: pending.playerId, playerName: playerById(room, pending.playerId)?.name || 'Игрок', cardName: pending.cardName, pending: false, source: 'sailing' });
+      advancePreTurnStageIndex(room, 'sailing');
       if (!queueIslandCorrectionIfNeeded(room, null, `событие плавания «${pending.cardName}»`)) processEventPhase(room);
     }
     return;
@@ -3251,7 +3258,7 @@ io.on('connection', socket => {
     const p = currentPlayer(room);
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Экспедицию можно получить только в свой личный ход.' });
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
-    if (room.eventPhase?.active) return ackSafe(ack, { ok: false, error: 'Сначала завершите обязательные карты шестого круга.' });
+    if (getPreTurnResolutionFlow(room)?.active) return ackSafe(ack, { ok: false, error: 'Сначала завершите обязательные карты шестого круга.' });
     if (room.phase !== 'actions' || room.actionsLeft <= 0) return ackSafe(ack, { ok: false, error: 'Получение экспедиции требует одного доступного действия.' });
     const result = takeExpedition(room, p);
     if (!result.ok) return ackSafe(ack, result);
@@ -3745,10 +3752,10 @@ io.on('connection', socket => {
       const player = playerById(room, pending.playerId);
       if (!player) return ackSafe(ack, { ok: false, error: 'Игрок не найден.' });
       const first = pending.eventCard ? { ...pending.eventCard } : null;
-      room.eventPhase.observatoryReplacementsUsed = Math.max(0, Number(room.eventPhase.observatoryReplacementsUsed) || 0) + 1;
       clearPendingResolution(room, 'event');
       let card = first;
       if (choice === 'replace') {
+        incrementObservatoryReplacement(room);
         card = sailingEventSource(room).replaceObserved(first);
         log(room, card ? `${player.name}: Обсерватория сбрасывает «${first?.name || 'первую карту'}» и обязательно разыгрывает «${card.name}».`
           : `${player.name}: Обсерватория сбрасывает первую карту, но колода событий пуста.`);
@@ -4217,7 +4224,7 @@ io.on('connection', socket => {
     const result = chooseAssignmentOffer(room, player, pending.factionId, pending.options || [], assignmentId);
     if (!result.ok) return ackSafe(ack, result);
     log(room, player.name + ' выбирает через Посольство поручение ' + (FACTIONS[pending.factionId]?.name || pending.factionId) + ': «' + result.assignment.card.text + '».');
-    room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: result.assignment.card.text, factionId: pending.factionId, factionName: FACTIONS[pending.factionId]?.name, pending: false, source: 'assignment' };
+    setPreTurnLastCard(room, { playerId: player.id, playerName: player.name, cardName: result.assignment.card.text, factionId: pending.factionId, factionName: FACTIONS[pending.factionId]?.name, pending: false, source: 'assignment' });
     clearPendingResolution(room, 'assignment-choice');
     processEventPhase(room);
     ackSafe(ack, { ok: true });
