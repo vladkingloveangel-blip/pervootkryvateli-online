@@ -353,3 +353,44 @@ test('UI-7 unifies authoritative pending choices in one mobile Decision Layer', 
   assert.match(styles, /body\.game-active \.decision-backdrop[\s\S]*?pointer-events: auto/);
   assert.doesNotMatch(index, /id="decisionClose"/);
 });
+
+
+test('UI-8 adds queued Result Cards without turning client diffs into game authority', () => {
+  assert.match(index, /id="resultLayer" class="result-layer hidden"/);
+  assert.match(index, /id="resultContinueBtn"/);
+  assert.match(index, /id="toastStack"/);
+
+  const start = app.indexOf('  function enqueueResultCard(');
+  const end = app.indexOf('\n  function mobileDecisionDescriptor(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /state\.resultQueue\.push/);
+  assert.match(code, /state\.resultQueue\.length > 5/);
+  assert.match(code, /const decision = mobileDecisionDescriptor\(state\.room\)/);
+  assert.match(code, /anchorResultCard/);
+  assert.match(code, /seaBattleResultCard/);
+  assert.match(code, /assaultResultCard/);
+  assert.doesNotMatch(code, /previousRoom|diffRoom|inferEventResult/);
+
+  assert.match(app, /fightAnchor', \{\}, handleAnchorResultAck/);
+  assert.match(app, /handleSeaBattleResultAck\(res, target\.name\)/);
+  assert.match(app, /handleAssaultResultAck\(res, island\.name\)/);
+  assert.match(app, /kicker: 'КАРТОГРАФ'/);
+  assert.match(app, /Разведан гарнизон:/);
+  assert.match(app, /Разведана казна:/);
+
+  // Decision Layer must remain above any queued result.
+  assert.match(styles, /body\.game-active\.decision-layer-open \.result-layer \{\s*display: none !important;/);
+  assert.match(styles, /UI-8 — result cards and lightweight feedback/);
+});
+
+test('UI-8 result acknowledgement is presentation-only', () => {
+  const start = app.indexOf('  function dismissResultCard()');
+  const end = app.indexOf('\n\n  function renderResultLayer()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /state\.activeResult = null/);
+  assert.doesNotMatch(code, /socket\.emit/);
+  assert.match(app, /\$\('resultContinueBtn'\)\.addEventListener\('click', dismissResultCard\)/);
+});

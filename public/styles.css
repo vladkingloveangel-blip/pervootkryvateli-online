@@ -1530,3 +1530,147 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     pointer-events: none;
   }
 }
+
+
+/* UI-8 — result cards and lightweight feedback */
+.result-layer { display: none; }
+.toast-stack { display: none; }
+
+@media (max-width: 900px) {
+  body.game-active .result-layer {
+    position: absolute;
+    z-index: 105;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    pointer-events: none;
+  }
+
+  body.game-active .result-layer.hidden {
+    display: none !important;
+  }
+
+  body.game-active .result-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(2,15,20,.52);
+    backdrop-filter: blur(2px);
+    pointer-events: auto;
+  }
+
+  body.game-active .result-card {
+    position: relative;
+    z-index: 1;
+    width: min(430px, 100%);
+    max-height: min(78dvh, 680px);
+    overflow-y: auto;
+    display: grid;
+    gap: 10px;
+    padding: 18px 16px 16px;
+    border: 1px solid rgba(240,196,91,.46);
+    border-radius: 18px;
+    background: rgba(8,37,44,.985);
+    box-shadow: 0 18px 48px rgba(0,0,0,.52);
+    pointer-events: auto;
+  }
+
+  body.game-active .result-kicker {
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .09em;
+  }
+
+  body.game-active .result-card h2 {
+    margin: 0;
+    font-size: 21px;
+    line-height: 1.15;
+  }
+
+  body.game-active .result-body {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  body.game-active .result-details {
+    display: grid;
+    gap: 6px;
+  }
+
+  body.game-active .result-detail {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(255,255,255,.035);
+    font-size: 12px;
+  }
+
+  body.game-active .result-detail span {
+    color: var(--muted);
+  }
+
+  body.game-active .result-detail strong {
+    text-align: right;
+  }
+
+  body.game-active .result-continue {
+    width: 100%;
+    min-height: 46px;
+  }
+
+  body.game-active .result-layer[data-tone="success"] .result-card {
+    border-color: rgba(106,211,156,.52);
+  }
+
+  body.game-active .result-layer[data-tone="danger"] .result-card {
+    border-color: rgba(239,119,119,.58);
+  }
+
+  body.game-active.result-layer-open .game-action-bar,
+  body.game-active.result-layer-open .map-toolbar,
+  body.game-active.result-layer-open .mobile-game-nav {
+    pointer-events: none;
+  }
+
+  body.game-active .toast-stack {
+    position: absolute;
+    z-index: 115;
+    top: 64px;
+    left: 50%;
+    width: min(360px, calc(100vw - 24px));
+    transform: translateX(-50%);
+    display: grid;
+    gap: 6px;
+    pointer-events: none;
+  }
+
+  body.game-active .game-toast {
+    padding: 9px 11px;
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    background: rgba(7,31,37,.94);
+    box-shadow: 0 8px 22px rgba(0,0,0,.32);
+    color: var(--text);
+    font-size: 12px;
+    text-align: center;
+    backdrop-filter: blur(8px);
+  }
+
+  body.game-active .game-toast.toast-success {
+    border-color: rgba(106,211,156,.48);
+  }
+
+  body.game-active .game-toast.toast-danger {
+    border-color: rgba(239,119,119,.55);
+  }
+
+  body.game-active.decision-layer-open .result-layer {
+    display: none !important;
+  }
+}

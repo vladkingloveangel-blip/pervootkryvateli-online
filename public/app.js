@@ -1,7 +1,7 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '' };
+  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '', resultQueue: [], activeResult: null, toastQueue: [] };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
   const shipName = id => state.room?.shipCatalog?.[id]?.name || state.shipCatalog?.[id]?.name || $('shipSelect').querySelector(`option[value="${id}"]`)?.textContent || 'Корабль';
   fetch('/api/rules').then(response => response.ok ? response.json() : null).then(rules => {
@@ -445,6 +445,9 @@
     state.myId = null;
     state.code = null;
     state.playerToken = null;
+    state.resultQueue = [];
+    state.activeResult = null;
+    state.toastQueue = [];
     closeMapInfo();
     openMobileTab('map');
     setGameScreenActive(false);
@@ -686,6 +689,7 @@
     btn.addEventListener('click', () => openMobileTab(btn.dataset.mobileNav));
   });
   $('mobileSheetClose').addEventListener('click', () => openMobileTab('map'));
+  $('resultContinueBtn').addEventListener('click', dismissResultCard);
   $('hudPlayerBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : openMobileTab('ship'));
   $('hudDucatsBtn').addEventListener('click', () => openMobileTab('ship'));
   $('hudGloryBtn').addEventListener('click', () => openMobileTab('players'));
@@ -1068,6 +1072,8 @@
     renderAlliances();
     renderCombat();
     renderDecisionLayer();
+    renderResultLayer();
+    renderToastStack();
     renderMap();
     updateContextualActionPanels();
   }
@@ -1473,6 +1479,184 @@
     }
 
     setCopy('ОЖИДАНИЕ', 'Состояние обновляется', 'Ожидаем следующего шага партии.');
+  }
+
+  function enqueueResultCard(result) {
+    if (!result || !result.title) return;
+    const entry = {
+      kicker: result.kicker || 'РЕЗУЛЬТАТ',
+      title: result.title,
+      body: result.body || '',
+      details: Array.isArray(result.details) ? result.details.slice(0, 8) : [],
+      tone: result.tone || 'neutral',
+    };
+    state.resultQueue.push(entry);
+    if (state.resultQueue.length > 5) state.resultQueue.splice(0, state.resultQueue.length - 5);
+    // Do not render immediately from the ack callback. The next authoritative
+    // roomState render gets first chance to expose a higher-priority Decision Layer.
+  }
+
+  function enqueueToast(message, tone = 'neutral') {
+    if (!message) return;
+    const toast = { id: `${Date.now()}:${Math.random()}`, message: String(message), tone };
+    state.toastQueue.push(toast);
+    if (state.toastQueue.length > 4) state.toastQueue.splice(0, state.toastQueue.length - 4);
+    renderToastStack();
+    setTimeout(() => {
+      state.toastQueue = state.toastQueue.filter(item => item.id !== toast.id);
+      renderToastStack();
+    }, 2800);
+  }
+
+  function renderToastStack() {
+    const stack = $('toastStack');
+    if (!stack) return;
+    stack.innerHTML = '';
+    for (const toast of state.toastQueue.slice(-3)) {
+      const item = document.createElement('div');
+      item.className = `game-toast toast-${toast.tone}`;
+      item.textContent = toast.message;
+      stack.appendChild(item);
+    }
+  }
+
+  function dismissResultCard() {
+    state.activeResult = null;
+    renderResultLayer();
+  }
+
+  function renderResultLayer() {
+    const layer = $('resultLayer');
+    if (!layer) return;
+    const mobile = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
+    const decision = mobileDecisionDescriptor(state.room);
+    if (!mobile || !state.room?.started || state.room.finished || state.room.phase === 'finished' || decision) {
+      layer.classList.add('hidden');
+      document.body.classList.remove('result-layer-open');
+      return;
+    }
+
+    if (!state.activeResult && state.resultQueue.length) state.activeResult = state.resultQueue.shift();
+    const result = state.activeResult;
+    layer.classList.toggle('hidden', !result);
+    document.body.classList.toggle('result-layer-open', Boolean(result));
+    if (!result) return;
+
+    $('resultKicker').textContent = result.kicker;
+    $('resultTitle').textContent = result.title;
+    $('resultBody').textContent = result.body || '';
+    const details = $('resultDetails');
+    details.innerHTML = '';
+    for (const detail of result.details || []) {
+      const row = document.createElement('div');
+      row.className = 'result-detail';
+      const label = document.createElement('span');
+      label.textContent = detail.label || '';
+      const value = document.createElement('strong');
+      value.textContent = detail.value == null ? '' : String(detail.value);
+      row.append(label, value);
+      details.appendChild(row);
+    }
+    layer.dataset.tone = result.tone || 'neutral';
+  }
+
+  function anchorResultCard(res) {
+    const result = res?.result;
+    if (!res?.ok || !result?.triggered) return null;
+    const outcome = result.outcome;
+    const title = outcome === 'win' ? 'Победа на морском якоре'
+      : outcome === 'loss' ? 'Поражение на морском якоре'
+      : outcome === 'tie' ? 'Ничья на морском якоре'
+      : 'На море тихо';
+    const details = [
+      { label: 'Встреча', value: result.card?.name || '—' },
+      { label: 'Ваша артиллерия', value: result.fleetPower ?? '—' },
+      { label: 'Противник', value: result.card?.artillery ?? '—' },
+    ];
+    let body = result.anchor?.name || 'Морское столкновение';
+    if (outcome === 'win') {
+      details.push({ label: 'Награда', value: `+${result.reward?.gross ?? result.card?.reward ?? 0} дукатов` });
+      if (result.reward?.debtPaid) details.push({ label: 'В погашение долга', value: result.reward.debtPaid });
+      if (result.fleetPoints) details.push({ label: 'Очки флота', value: `+${result.fleetPoints}` });
+      body = 'Вы выиграли столкновение и получили награду.';
+    } else if (outcome === 'loss') {
+      details.push({ label: 'Штраф', value: result.penalty?.required ?? 0 });
+      if (result.penalty?.addedDebt) details.push({ label: 'Новый долг', value: `+${result.penalty.addedDebt}` });
+      body = 'Флотилия уступила противнику. Уровень корабля от этого столкновения не снижается.';
+    } else if (outcome === 'tie') {
+      body = 'Силы равны. Награды и дополнительных последствий нет.';
+    } else {
+      body = 'Опасности не встретилось. Действие не расходуется.';
+    }
+    return { kicker: 'МОРСКОЙ ЯКОРЬ', title, body, details, tone: outcome === 'win' ? 'success' : outcome === 'loss' ? 'danger' : 'neutral' };
+  }
+
+  function seaBattleResultCard(res, targetName) {
+    const result = res?.result;
+    if (!res?.ok || !result || res.pending) return null;
+    const outcome = result.outcome;
+    const mineWon = outcome === 'attacker';
+    const title = outcome === 'tie' ? 'Морской бой завершён вничью' : mineWon ? 'Победа в морском бою' : 'Поражение в морском бою';
+    const details = [
+      { label: 'Вы', value: result.attackerPower ?? '—' },
+      { label: targetName || 'Противник', value: result.defenderPower ?? '—' },
+    ];
+    if (Number(result.loot) > 0) details.push({ label: 'Добыча', value: `${result.loot} дукатов` });
+    const myFleetAward = (result.fleetPointAwards || []).find(item => String(item.playerId) === String(state.myId));
+    if (myFleetAward?.points) details.push({ label: 'Ваши очки флота', value: `+${myFleetAward.points}` });
+    const myLoot = Number(result.lootShares?.[state.myId]) || 0;
+    if (myLoot > 0) details.push({ label: 'Ваша доля добычи', value: `+${myLoot} дукатов` });
+    const ownLoss = (result.levelLosses || []).find(item => String(item.playerId) === String(state.myId));
+    if (ownLoss) details.push({ label: 'Ваш корабль', value: ownLoss.prevented ? 'Потеря уровня предотвращена' : 'Потерян уровень' });
+    return {
+      kicker: 'МОРСКОЙ БОЙ',
+      title,
+      body: outcome === 'tie' ? 'Контроль и уровни не меняются.' : `Бой против ${targetName || 'противника'} разрешён сервером.`,
+      details,
+      tone: mineWon ? 'success' : outcome === 'tie' ? 'neutral' : 'danger',
+    };
+  }
+
+  function assaultResultCard(res, islandName) {
+    const result = res?.result;
+    if (!res?.ok || !result || res.pending) return null;
+    const outcome = result.outcome;
+    const title = outcome === 'attacker' ? 'Остров захвачен' : outcome === 'defender' ? 'Штурм отражён' : 'Штурм завершён вничью';
+    const details = [
+      { label: 'Ваше войско', value: result.attackerPower ?? '—' },
+      { label: 'Защита острова', value: result.defense?.total ?? '—' },
+    ];
+    const myAward = (result.armyPointAwards || []).find(item => String(item.playerId) === String(state.myId));
+    if (myAward?.points) details.push({ label: 'Ваши очки армии', value: `+${myAward.points}` });
+    if (result.captureRetention) details.push({ label: 'Инфраструктура', value: `сохранится ${result.captureRetention.keepCount}/${result.captureRetention.initialCount}` });
+    if ((result.rewardNotes || []).length) details.push({ label: 'Награда', value: result.rewardNotes.join(', ') });
+    return {
+      kicker: 'ШТУРМ',
+      title,
+      body: outcome === 'attacker' ? `${islandName || 'Остров'} переходит под ваш контроль.`
+        : outcome === 'defender' ? `Защита ${islandName || 'острова'} устояла.`
+        : 'Контроль над островом не меняется.',
+      details,
+      tone: outcome === 'attacker' ? 'success' : outcome === 'defender' ? 'danger' : 'neutral',
+    };
+  }
+
+  function handleAnchorResultAck(res) {
+    handleGameAck(res);
+    const card = anchorResultCard(res);
+    if (card) enqueueResultCard(card);
+  }
+
+  function handleSeaBattleResultAck(res, targetName) {
+    handleGameAck(res);
+    const card = seaBattleResultCard(res, targetName);
+    if (card) enqueueResultCard(card);
+  }
+
+  function handleAssaultResultAck(res, islandName) {
+    handleGameAck(res);
+    const card = assaultResultCard(res, islandName);
+    if (card) enqueueResultCard(card);
   }
 
   function mobileDecisionDescriptor(room) {
@@ -2399,7 +2583,18 @@
           b.textContent = `Картограф: посмотреть «${option.name}» · ${option.distance} кл. · 1 действие`;
           b.disabled = !(myTurn && mine.phase === 'navigation' && mine.roll === null && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending());
           b.addEventListener('click', () => socket.emit('useCartographer', { color: option.color }, res => {
-            if (res?.ok && res.card) state.characterPeek = `${res.anchorName}: «${res.card.name}» · арт. ${res.card.artillery ?? '—'} · награда ${res.card.reward}`;
+            if (res?.ok && res.card) {
+              state.characterPeek = `${res.anchorName}: «${res.card.name}» · арт. ${res.card.artillery ?? '—'} · награда ${res.card.reward}`;
+              enqueueResultCard({
+                kicker: 'КАРТОГРАФ',
+                title: `Верхняя карта: ${res.anchorName}`,
+                body: `«${res.card.name}»`,
+                details: [
+                  { label: 'Артиллерия', value: res.card.artillery ?? '—' },
+                  { label: 'Награда', value: res.card.reward ?? '—' },
+                ],
+              });
+            }
             handleGameAck(res); renderFleet();
           }));
           actions.appendChild(b);
@@ -2429,7 +2624,10 @@
           const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
           b.textContent = `Гарнизон: ${island.name} · ${distance} кл. · 1 действие`;
           b.disabled = !canAct;
-          b.addEventListener('click', () => socket.emit('useScout', { mode: 'garrison', islandId: island.id }, handleGameAck));
+          b.addEventListener('click', () => socket.emit('useScout', { mode: 'garrison', islandId: island.id }, res => {
+            handleGameAck(res);
+            if (res?.ok) enqueueToast(`Разведан гарнизон: ${island.name}`, 'success');
+          }));
           actions.appendChild(b);
         }
         if (!garrisonTargets.length) {
@@ -2444,7 +2642,10 @@
           const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
           b.textContent = `Деньги: ${player.name} · ${distance} кл. · 1 действие`;
           b.disabled = !canAct;
-          b.addEventListener('click', () => socket.emit('useScout', { mode: 'money', targetPlayerId: player.id }, handleGameAck));
+          b.addEventListener('click', () => socket.emit('useScout', { mode: 'money', targetPlayerId: player.id }, res => {
+            handleGameAck(res);
+            if (res?.ok) enqueueToast(`Разведана казна: ${player.name}`, 'success');
+          }));
           actions.appendChild(b);
         }
         if (!moneyTargets.length) {
@@ -2722,7 +2923,7 @@
       button.textContent = 'Вступить в бой · 1 действие';
       button.title = 'Если открыта карта «На море тихо», действие не расходуется.';
       button.disabled = !canFight;
-      button.addEventListener('click', () => socket.emit('fightAnchor', {}, handleGameAck));
+      button.addEventListener('click', () => socket.emit('fightAnchor', {}, handleAnchorResultAck));
       actions.appendChild(button);
     }
   }
@@ -3094,12 +3295,12 @@
         solo.textContent = `Атаковать · ${mine.fleetArtillery}:${target.fleetArtillery}`;
         solo.disabled = !canAct || firstRound || mine.inPeaceZone || target.inPeaceZone || usedAttackTargets.has(target.id) || (mine.brokenAlliesThisTurn || []).includes(target.id) || Boolean(target.legendaryStatus?.shipVeilTurns);
         if (usedAttackTargets.has(target.id)) solo.title = 'Лимит нападения на этого игрока в текущем раунде уже использован.';
-        solo.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
+        solo.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, res => handleSeaBattleResultAck(res, target.name)));
         const together = document.createElement('button');
         together.type = 'button';
         together.textContent = `Позвать союзника (${attackAllies.length})`;
         together.disabled = solo.disabled || attackAllies.length === 0;
-        together.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
+        together.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, res => handleSeaBattleResultAck(res, target.name)));
         row.appendChild(solo); row.appendChild(together);
         card.appendChild(row);
         actions.appendChild(card);
@@ -3140,12 +3341,12 @@
         solo.textContent = 'Штурмовать · одному';
         solo.disabled = !canAct || mine.inPeaceZone || (firstRound && pvpIsland) || (island.ownerId && usedAttackTargets.has(island.ownerId)) || (island.ownerId && (mine.brokenAlliesThisTurn || []).includes(island.ownerId)) || Boolean(island.legendaryVeil?.remaining);
         if (island.ownerId && usedAttackTargets.has(island.ownerId)) solo.title = 'Лимит нападения на владельца этого острова в текущем раунде уже использован.';
-        solo.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
+        solo.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, res => handleAssaultResultAck(res, island.name)));
         const together = document.createElement('button');
         together.type = 'button';
         together.textContent = `Штурмовать · союз (${attackAllies.length})`;
         together.disabled = solo.disabled || attackAllies.length === 0;
-        together.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
+        together.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, res => handleAssaultResultAck(res, island.name)));
         row.appendChild(solo); row.appendChild(together);
         card.appendChild(row);
         actions.appendChild(card);

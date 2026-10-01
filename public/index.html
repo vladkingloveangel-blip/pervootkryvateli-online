@@ -414,6 +414,19 @@
         </div>
       </section>
 
+      <section id="resultLayer" class="result-layer hidden" role="dialog" aria-modal="true" aria-labelledby="resultTitle" aria-describedby="resultBody">
+        <div class="result-backdrop" aria-hidden="true"></div>
+        <article class="result-card">
+          <span id="resultKicker" class="result-kicker">Результат</span>
+          <h2 id="resultTitle">—</h2>
+          <div id="resultBody" class="result-body"></div>
+          <div id="resultDetails" class="result-details"></div>
+          <button id="resultContinueBtn" class="primary result-continue" type="button">Продолжить</button>
+        </article>
+      </section>
+
+      <div id="toastStack" class="toast-stack" aria-live="polite" aria-atomic="false"></div>
+
       <section id="mobileActionDock" class="mobile-action-dock hidden" aria-label="Быстрые действия">
         <button id="dockRollBtn" class="primary" type="button">🎲 Бросить</button>
         <button id="dockSkipBtn" type="button">Остаться</button>
