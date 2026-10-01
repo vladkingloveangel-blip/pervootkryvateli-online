@@ -1,3 +1,5 @@
+const { migrateRoomState } = require('./save-migrations');
+
 // Keep the complete server state, including decks and pending decisions, private.
 function roomSnapshot(room) {
   const snapshot = JSON.parse(JSON.stringify(room));
@@ -34,7 +36,12 @@ class RoomStore {
     // Validate everything before making the restored rooms available.
     const restored = [];
     for (const row of result.rows) {
-      const room = row.state;
+      let room;
+      try {
+        room = migrateRoomState(row.state).state;
+      } catch (err) {
+        throw new Error(`Invalid saved room: ${row.code}: ${err.message}`);
+      }
       if (!room || room.code !== row.code || !Array.isArray(room.players) || !Array.isArray(room.islands) || !Array.isArray(room.order)) {
         throw new Error(`Invalid saved room: ${row.code}`);
       }

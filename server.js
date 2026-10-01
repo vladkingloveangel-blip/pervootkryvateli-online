@@ -8,6 +8,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { Pool } = require('pg');
 const { RoomStore, isUnfinished } = require('./room-store');
+const { CURRENT_DIGITAL_MODEL_SCHEMA_VERSION } = require('./save-migrations');
 const { MAP_META, CITADEL, HAZARDS, SHIPS, SHIP_LEVELS, SHIP_UPGRADES, ESCORTS, COLORS, BUILDINGS, CHARACTERS, GOODS, CITADEL_CELLS, ANCHORS, FACTIONS, POLITICAL_FACTION_ORDER, ASSIGNMENT_DEFINITIONS, LEGENDARY_PLACES, LEGENDARY_PLACE_RULES, PLACE_DISCOVERY_DEFINITIONS } = require('./game-data');
 const {
   cloneIslands,
@@ -3004,6 +3005,7 @@ io.on('connection', socket => {
     const player = newPlayer(socket, { ...data, accountUser }, COLORS[0]);
     const room = {
       code,
+      digitalModelSchemaVersion: CURRENT_DIGITAL_MODEL_SCHEMA_VERSION,
       rulesDataVersion: RULESET.rulesetVersion,
       rulesSchemaVersion: RULESET.schemaVersion,
       runtimeProfile: RUNTIME_PROFILE,

@@ -7,6 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const net = require('node:net');
 const { io } = require('socket.io-client');
+const { CURRENT_DIGITAL_MODEL_SCHEMA_VERSION } = require('../save-migrations');
 
 test('accounts, moves, restart recovery, private My Games, reattachment and admin observation', { timeout: 40000 }, async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pervo-rooms-'));
@@ -69,6 +70,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   const created = await emit(first, 'createRoom', { accountToken: a.token, name: 'One' });
   assert.equal(created.ok, true); assert.equal(rows().length, 1); // ack means durable
   const code = created.code;
+  assert.equal(rows()[0].state.digitalModelSchemaVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
   const joinedSecond = await emit(second, 'joinRoom', { code, accountToken: b.token, name: 'Two' });
   const joinedThird = await emit(third, 'joinRoom', { code, accountToken: c.token, name: 'Three' });
   const joinedFourth = await emit(fourth, 'joinRoom', { code, accountToken: d.token, name: 'Four' });
@@ -86,6 +88,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   for(const [view,ownerId] of [[firstView,created.playerId],[secondView,joinedSecond.playerId]]) {
     assert.ok(view);
     assert.equal(Object.hasOwn(view,'log'),false);
+    assert.equal(Object.hasOwn(view,'digitalModelSchemaVersion'),false);
     for(const key of ['eventDecks','feudDecks','assignmentDecks']) assert.equal(Object.hasOwn(view,key),false,key);
     for(const p of view.players) {
       if(p.id===ownerId) {

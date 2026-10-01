@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { newDb } = require('pg-mem');
 const { RoomStore, roomSnapshot } = require('../room-store');
+const { CURRENT_DIGITAL_MODEL_SCHEMA_VERSION } = require('../save-migrations');
 const { normalizeScoutRevealGrants } = require('../scout-runtime');
 const logger = { log() {}, error() {} };
 const room = () => ({ code: 'ABCDE', started: true, players: [{ id: 'p1', accountId: 'a1', socketId: 'stale', connected: true, token: 'private', ducats: 42 }], islands: [{ ownerId: 'p1' }], order: ['p1'], phase: 'action', pendingBattle: { invites: [{ response: null }] }, legendaryDeck: ['secret'], round: 3 });
@@ -23,7 +24,7 @@ test('unversioned rooms retain retired content, old deck copies, islands and pen
   await store.init(new Map()); await store.save(original);
   const restored = new Map(); await new RoomStore(db, { logger }).init(restored);
   const saved = restored.get(original.code);
-  assert.deepEqual(saved, { ...original, players: [{ ...original.players[0], connected: false, socketId: null }] });
+  assert.deepEqual(saved, { ...original, digitalModelSchemaVersion: CURRENT_DIGITAL_MODEL_SCHEMA_VERSION, players: [{ ...original.players[0], connected: false, socketId: null }] });
   assert.equal(saved.rulesDataVersion, undefined);
   const { shipStats, drawAnchorCard, drawSailingEventCard, drawTreasureCard, drawLegendaryCard, drawFeudCard } = require('../game-logic');
   const { SHIPS, SHIP_LEVELS, SHIP_UPGRADES } = require('../game-data');
@@ -52,7 +53,7 @@ test('JSONB round trip preserves full state, clears connections and skips finish
   const restored = new Map();
   await new RoomStore(db, { logger }).init(restored);
   assert.equal(restored.size, 1);
-  assert.deepEqual(restored.get('ABCDE'), { ...original, players: [{ ...original.players[0], connected: false, socketId: null }] });
+  assert.deepEqual(restored.get('ABCDE'), { ...original, digitalModelSchemaVersion: CURRENT_DIGITAL_MODEL_SCHEMA_VERSION, players: [{ ...original.players[0], connected: false, socketId: null }] });
   await store.remove('ABCDE');
   assert.equal((await db.query('SELECT * FROM game_rooms WHERE code = $1', ['ABCDE'])).rowCount, 0);
 });
@@ -137,6 +138,7 @@ test('legacy restored room without Scout grants normalizes to an empty runtime-s
   assert.deepEqual(saved.scoutRevealGrants, []);
   assert.deepEqual(saved.legacySentinel, { keep: true });
   assert.equal(saved.rulesDataVersion, undefined);
+  assert.equal(saved.digitalModelSchemaVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
 });
 
 test('guest mode works without a database', async () => {
