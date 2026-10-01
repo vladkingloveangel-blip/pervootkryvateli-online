@@ -101,6 +101,7 @@ const simpleCatalog = m(o(f('id name price area category resource produces branc
 const characterCatalog = m(o(f('id name admiraltyLevel acquireActionCost useActionCost')));
 const battle = o({ ...f('id kind attackerId targetPlayerId islandId viewerInvite'), invites:a(o(f('playerId side status'))) });
 const alliance = o(f('id fromId toId viewerRole'));
+const endGameConsensus = o({ ...f('status proposedById finishAfterRound'), confirmedPlayerIds:a(S) });
 
 const own = (x,k) => Boolean(x) && Object.prototype.hasOwnProperty.call(x,k);
 const scalar = v => v === null || ['string','number','boolean'].includes(typeof v);
@@ -204,7 +205,7 @@ function projectRoomForViewer(roomView, viewerContext=null){
   const c=ctx(viewerContext), out={};
   for(const key of 'version code started hostId leaderId round circle turnIndex activePlayerId'.split(' ')) put(out,roomView,key,S);
   for(const key of ['seatingOrder','order']) put(out,roomView,key,a(S));
-  for(const [key,schema] of [['eventPhase',eventPhase],['treasurePool',pool],['legendaryPool',pool],['legendaryPlaces',a(legendaryPlace)],['namedPlaceCards',a(namedPlace)],['alliances',a(a(S))],['pendingBattle',battle],['pendingAlliance',alliance],['characterCatalog',characterCatalog],['buildingCatalog',simpleCatalog],['goodsCatalog',simpleCatalog],['shipUpgradeCatalog',simpleCatalog]]) put(out,roomView,key,schema);
+  for(const [key,schema] of [['eventPhase',eventPhase],['treasurePool',pool],['legendaryPool',pool],['legendaryPlaces',a(legendaryPlace)],['namedPlaceCards',a(namedPlace)],['alliances',a(a(S))],['pendingBattle',battle],['pendingAlliance',alliance],['endGameConsensus',endGameConsensus],['characterCatalog',characterCatalog],['buildingCatalog',simpleCatalog],['goodsCatalog',simpleCatalog],['shipUpgradeCatalog',simpleCatalog]]) put(out,roomView,key,schema);
   projectPersonalPendingFamilies(out,roomView,c);
   if(own(roomView,'eventPhase')) out.eventPhase=projectEventPhaseForViewer(roomView.eventPhase,c);
   if(Array.isArray(roomView.players)) out.players=roomView.players.map(v=>projectPlayerForViewer(v,c));
@@ -227,7 +228,7 @@ function projectOpponentFacingRoomView(legacyRoomView, viewerContext=null){
   if(Array.isArray(out.players)) out.players=out.players.map(v=>projectPlayerForViewer(v,c));
   if(Array.isArray(out.islands)) out.islands=out.islands.map(v=>projectIslandForViewer(v,c));
   projectPersonalPendingFamilies(out,legacyRoomView,c);
-  for(const [key,schema] of [['pendingBattle',battle],['pendingAlliance',alliance]]) {
+  for(const [key,schema] of [['pendingBattle',battle],['pendingAlliance',alliance],['endGameConsensus',endGameConsensus]]) {
     if(own(out,key)) out[key]=p(out[key],schema);
   }
   if(own(out,'eventPhase')) out.eventPhase=projectEventPhaseForViewer(legacyRoomView.eventPhase,c);

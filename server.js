@@ -8,6 +8,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { Pool } = require('pg');
 const { RoomStore, isUnfinished } = require('./room-store');
+const { endGameConsensusView, proposeEndGameConsensus, confirmEndGameConsensus, rejectEndGameConsensus } = require('./end-game-consensus');
 const { CURRENT_DIGITAL_MODEL_SCHEMA_VERSION } = require('./save-migrations');
 const { createAssignmentPoolState, assignmentPool } = require('./assignment-pool');
 const { createExpeditionPoolState } = require('./expedition-pool');
@@ -543,6 +544,7 @@ function publicRoom(room, viewerId = null) {
     circle: room.circle,
     turnIndex: room.turnIndex,
     activePlayerId: active?.id || null,
+    endGameConsensus: endGameConsensusView(room),
     eventPhase: legacyEventPhase ? {
       active: Boolean(legacyEventPhase.active),
       personalTurn: Boolean(legacyEventPhase.personalTurn),
@@ -957,14 +959,23 @@ function closeRoomInternal(room, reason = 'Комната закрыта.') {
   persistRoom(roomStore.remove(code));
 }
 
-function emitRoom(room) {
-  queueIslandCorrectionIfNeeded(room);
-  queueEscortCapacityDecisionsIfNeeded(room);
-  persistRoom(roomStore.save(room));
+function broadcastRoom(room) {
   for (const p of room.players) {
     if (p.socketId) io.to(p.socketId).emit('roomState', projectOpponentFacingRoomView(publicRoom(room, p.id), scoutViewerContext(room, p.id)));
   }
   io.to(`admin-watch:${room.code}`).emit('adminRoomState', adminRoomState(room));
+}
+
+function emitRoom(room) {
+  queueIslandCorrectionIfNeeded(room);
+  queueEscortCapacityDecisionsIfNeeded(room);
+  persistRoom(roomStore.save(room));
+  broadcastRoom(room);
+}
+
+function emitConsensusRoom(room) {
+  persistRoom(roomStore.save(room));
+  broadcastRoom(room);
 }
 
 function log(room, text) {
@@ -3275,6 +3286,34 @@ io.on('connection', socket => {
     beginTurn(room);
     ackSafe(ack, { ok: true });
     emitRoom(room);
+  });
+
+
+  onSocketEvent(socket, 'proposeEndGame', (_data, ack) => {
+    const room = getRoom(socket.data.roomCode);
+    if (!room) return ackSafe(ack, { ok: false, error: 'Комната не найдена.' });
+    const result = proposeEndGameConsensus(room, socket.data.playerId);
+    if (!result.ok) return ackSafe(ack, result);
+    ackSafe(ack, { ok: true, endGameConsensus: result.consensus });
+    emitConsensusRoom(room);
+  });
+
+  onSocketEvent(socket, 'confirmEndGame', (_data, ack) => {
+    const room = getRoom(socket.data.roomCode);
+    if (!room) return ackSafe(ack, { ok: false, error: 'Комната не найдена.' });
+    const result = confirmEndGameConsensus(room, socket.data.playerId);
+    if (!result.ok) return ackSafe(ack, result);
+    ackSafe(ack, { ok: true, endGameConsensus: result.consensus });
+    emitConsensusRoom(room);
+  });
+
+  onSocketEvent(socket, 'rejectEndGame', (_data, ack) => {
+    const room = getRoom(socket.data.roomCode);
+    if (!room) return ackSafe(ack, { ok: false, error: 'Комната не найдена.' });
+    const result = rejectEndGameConsensus(room, socket.data.playerId);
+    if (!result.ok) return ackSafe(ack, result);
+    ackSafe(ack, { ok: true, endGameConsensus: null });
+    emitConsensusRoom(room);
   });
 
 
