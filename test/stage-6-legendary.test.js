@@ -176,14 +176,15 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
 
   const persisted = readDb().game_rooms[0].state;
   const persistedTarget = persisted.players.find(player => player.id === targetId);
-  assert.equal(persistedTarget.legendaryEffects.shipVeil, undefined);
-  assert.equal(persistedTarget.legendaryEffects.shipVeilReaction.expiry, 'end-of-current-turn');
-  assert.equal(persistedTarget.legendaryEffects.shipVeilReaction.expiresOnPlayerId, sourceId);
+  assert.equal(persistedTarget.temporaryEffects.active.some(effect => effect.kind === 'ship-veil'), false);
+  const persistedReaction = persistedTarget.temporaryEffects.active.find(effect => effect.kind === 'ship-veil-reaction');
+  assert.equal(persistedReaction.duration.expiry, 'end-of-current-turn');
+  assert.equal(persistedReaction.duration.expiresOnPlayerId, sourceId);
 
   await change(sourceSocket, 'endTurn', {}, targetSocket);
   const afterTurn = readDb().game_rooms[0].state;
   const afterTarget = afterTurn.players.find(player => player.id === targetId);
-  assert.equal(afterTarget.legendaryEffects.shipVeilReaction, undefined);
+  assert.equal(afterTarget.temporaryEffects.active.some(effect => effect.kind === 'ship-veil-reaction'), false);
 
   // Уже действующий Покров не запрещает объявить враждебную карту: нападающий
   // тратит карту и действие, после чего защита отменяет только её эффект.
@@ -245,9 +246,10 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   assert.equal(protectedTargetView.legendaryStatus.shipVeilTurns, 0);
   assert.equal(protectedTargetView.legendaryStatus.seaCursePenalty, 0);
   const protectedPersisted = readDb().game_rooms[0].state.players.find(player => player.id === targetId);
-  assert.equal(protectedPersisted.legendaryEffects.shipVeil, undefined);
-  assert.equal(protectedPersisted.legendaryEffects.shipVeilReaction.expiry, 'end-of-current-turn');
-  assert.equal(protectedPersisted.legendaryEffects.shipVeilReaction.expiresOnPlayerId, sourceId);
+  assert.equal(protectedPersisted.temporaryEffects.active.some(effect => effect.kind === 'ship-veil'), false);
+  const protectedReaction = protectedPersisted.temporaryEffects.active.find(effect => effect.kind === 'ship-veil-reaction');
+  assert.equal(protectedReaction.duration.expiry, 'end-of-current-turn');
+  assert.equal(protectedReaction.duration.expiresOnPlayerId, sourceId);
   assert.equal(readDb().game_rooms[0].state.log.some(entry => entry.text.includes('действующий «Покров моря» отменяет эффект') && entry.text.includes('защита сохраняется только до конца текущего хода')), true);
 
   // 6.6: простое посещение легендарного острова не открывает его; нужна первая военная победа.

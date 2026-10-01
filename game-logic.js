@@ -62,6 +62,7 @@ const {
   addIslandVeilReaction,
   removeIslandVeilReaction,
   listIslandLegendaryEffects,
+  adoptLegacyTemporaryEffects,
   pendingResolutionFromLegacy,
   pendingResolutionToLegacy,
   getPendingResolution,
@@ -692,62 +693,69 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
   if (!room || !Array.isArray(room.players)) return base;
   let changed = Boolean(base.changed);
 
-  if (!room.legendaryPlacesExplored || typeof room.legendaryPlacesExplored !== 'object' || Array.isArray(room.legendaryPlacesExplored)) {
-    room.legendaryPlacesExplored = {};
-    changed = true;
-  }
-
-  // Legacy named cards may repair a missing registry entry, but never override
-  // an existing authoritative first-discovery owner.
-  for (const player of room.players) {
-    if (!Array.isArray(player.namedPlaceCards)) continue;
-    for (const saved of player.namedPlaceCards) {
-      const canonical = PLACE_DISCOVERY_DEFINITIONS.find(card => card.id === saved?.id || card.placeId === saved?.placeId);
-      if (!canonical || hasDiscovery(room, canonical.placeId)) continue;
-      claimDiscovery(room, canonical.placeId, player.id, LEGENDARY_PLACE_RULES);
+  const persistedDiscoveries = room.discoveries && typeof room.discoveries === 'object' && !Array.isArray(room.discoveries);
+  if (!persistedDiscoveries) {
+    if (!room.legendaryPlacesExplored || typeof room.legendaryPlacesExplored !== 'object' || Array.isArray(room.legendaryPlacesExplored)) {
+      room.legendaryPlacesExplored = {};
       changed = true;
+    }
+
+    // Legacy named cards may repair a missing registry entry, but never override
+    // an existing authoritative first-discovery owner.
+    for (const player of room.players) {
+      if (!Array.isArray(player.namedPlaceCards)) continue;
+      for (const saved of player.namedPlaceCards) {
+        const canonical = PLACE_DISCOVERY_DEFINITIONS.find(card => card.id === saved?.id || card.placeId === saved?.placeId);
+        if (!canonical || hasDiscovery(room, canonical.placeId)) continue;
+        claimDiscovery(room, canonical.placeId, player.id, LEGENDARY_PLACE_RULES);
+        changed = true;
+      }
     }
   }
 
   for (const player of room.players) {
-    if (!Array.isArray(player.namedPlaceCards)) {
-      player.namedPlaceCards = [];
-      changed = true;
-    }
-
-    const repairedNamedCards = [];
-    const seenCanonicalIds = new Set();
-    for (const saved of player.namedPlaceCards) {
-      const canonical = PLACE_DISCOVERY_DEFINITIONS.find(card => card.id === saved?.id || card.placeId === saved?.placeId);
-      if (!canonical) {
+    if (persistedDiscoveries) {
+      if (Object.hasOwn(player, 'namedPlaceCards')) {
+        delete player.namedPlaceCards;
+        changed = true;
+      }
+    } else {
+      if (!Array.isArray(player.namedPlaceCards)) {
+        player.namedPlaceCards = [];
+        changed = true;
+      }
+      const repairedNamedCards = [];
+      const seenCanonicalIds = new Set();
+      for (const saved of player.namedPlaceCards) {
+        const canonical = PLACE_DISCOVERY_DEFINITIONS.find(card => card.id === saved?.id || card.placeId === saved?.placeId);
+        if (!canonical) {
+          repairedNamedCards.push(saved);
+          continue;
+        }
+        const discovery = getDiscovery(room, canonical.placeId, LEGENDARY_PLACE_RULES);
+        if (!discovery || String(discovery.ownerId) !== String(player.id)) {
+          changed = true;
+          continue;
+        }
+        if (seenCanonicalIds.has(canonical.id)) {
+          changed = true;
+          continue;
+        }
+        seenCanonicalIds.add(canonical.id);
         repairedNamedCards.push(saved);
-        continue;
       }
-      const discovery = getDiscovery(room, canonical.placeId, LEGENDARY_PLACE_RULES);
-      if (!discovery || String(discovery.ownerId) !== String(player.id)) {
+      if (repairedNamedCards.length !== player.namedPlaceCards.length) player.namedPlaceCards = repairedNamedCards;
+
+      for (const card of PLACE_DISCOVERY_DEFINITIONS) {
+        const discovery = getDiscovery(room, card.placeId, LEGENDARY_PLACE_RULES);
+        if (!discovery || String(discovery.ownerId) !== String(player.id)) continue;
+        if (player.namedPlaceCards.some(saved => saved?.id === card.id || saved?.placeId === card.placeId)) continue;
+        player.namedPlaceCards.push(JSON.parse(JSON.stringify(card)));
         changed = true;
-        continue;
       }
-      if (seenCanonicalIds.has(canonical.id)) {
-        changed = true;
-        continue;
-      }
-      seenCanonicalIds.add(canonical.id);
-      repairedNamedCards.push(saved);
-    }
-    if (repairedNamedCards.length !== player.namedPlaceCards.length) {
-      player.namedPlaceCards = repairedNamedCards;
     }
 
-    for (const card of PLACE_DISCOVERY_DEFINITIONS) {
-      const discovery = getDiscovery(room, card.placeId, LEGENDARY_PLACE_RULES);
-      if (!discovery || String(discovery.ownerId) !== String(player.id)) continue;
-      if (player.namedPlaceCards.some(saved => saved?.id === card.id || saved?.placeId === card.placeId)) continue;
-      player.namedPlaceCards.push(JSON.parse(JSON.stringify(card)));
-      changed = true;
-    }
-
-    if (usesDigitalExpeditionPool(room)) {
+if (usesDigitalExpeditionPool(room)) {
       if (!Array.isArray(player.expeditionCompletions)) {
         player.expeditionCompletions = [];
         changed = true;
@@ -820,7 +828,9 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
       player.legendaryCards = [];
       changed = true;
     }
-    if (!player.legendaryEffects || typeof player.legendaryEffects !== 'object' || Array.isArray(player.legendaryEffects)) {
+    if (Object.hasOwn(player, 'temporaryEffects')) {
+      if (adoptLegacyTemporaryEffects(player, 'player')) changed = true;
+    } else if (!player.legendaryEffects || typeof player.legendaryEffects !== 'object' || Array.isArray(player.legendaryEffects)) {
       player.legendaryEffects = { seaCurses: [] };
       changed = true;
     } else if (!Array.isArray(player.legendaryEffects.seaCurses)) {
@@ -836,6 +846,10 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
       player.savedEventCards = [];
       changed = true;
     }
+  }
+
+  for (const island of room.islands || []) {
+    if (Object.hasOwn(island, 'temporaryEffects') && adoptLegacyTemporaryEffects(island, 'island')) changed = true;
   }
 
   if (usesDigitalExpeditionPool(room)) {
@@ -1231,11 +1245,14 @@ function claimLegendaryPlaceDiscovery(room, player, placeId, rng = Math.random) 
   }
 
   const card = namedPlaceCardFor(place.id);
-  player.namedPlaceCards ||= [];
-  let namedCard = null;
-  if (card && !player.namedPlaceCards.some(item => item.id === card.id)) {
-    namedCard = JSON.parse(JSON.stringify(card));
-    player.namedPlaceCards.push(namedCard);
+  let namedCard = card ? JSON.parse(JSON.stringify(card)) : null;
+  if (!Object.hasOwn(room, 'discoveries')) {
+    player.namedPlaceCards ||= [];
+    if (card && !player.namedPlaceCards.some(item => item.id === card.id)) {
+      player.namedPlaceCards.push(JSON.parse(JSON.stringify(card)));
+    } else if (card) {
+      namedCard = null;
+    }
   }
 
   const legendaryCards = [];

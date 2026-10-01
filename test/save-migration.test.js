@@ -10,6 +10,7 @@ const {
   ASSIGNMENT_POOL_DIGITAL_MODEL_SCHEMA_VERSION,
   EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION,
   PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION,
+  DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION,
   RANDOM_SOURCE_STATE_FIELD,
   migrateRoomState,
 } = require('../save-migrations');
@@ -409,7 +410,7 @@ test('1 -> 2 -> 3 -> 4 -> 5 chains source and player-state migrations without mu
   assert.equal(result.migrated, true);
   assert.equal(result.fromVersion, 1);
   assert.equal(result.toVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
-  assert.equal(result.state.digitalModelSchemaVersion, PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION);
+  assert.equal(result.state.digitalModelSchemaVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
   assert.deepEqual(raw, before);
 
   for (const field of ['anchorDecks', 'eventDeck', 'feudDecks', 'assignmentDecks', 'expeditionDeck']) {
@@ -819,7 +820,7 @@ test('completion releases a migrated active occurrence exactly once after restar
   assert.equal(storage.available.filter(item => item.id === active.id).length, 1);
 });
 
-test('already-current schema 5 save is a content-exact no-op and second migration is idempotent', () => {
+test('already-current schema 6 save is a content-exact no-op and second migration is idempotent', () => {
   const current = migrateRoomState(assignmentFixture().raw).state;
   const direct = migrateRoomState(current);
   assert.equal(direct.migrated, false);
@@ -897,7 +898,7 @@ test('4 -> 5 migrates active assignment, duplicate abilities and stored benefit 
 
   assert.equal(calls, 0);
   assert.equal(result.fromVersion, EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION);
-  assert.equal(result.toVersion, PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION);
+  assert.equal(result.toVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
   assert.deepEqual(raw, before);
   const player = result.state.players[0];
   for (const field of ['activeAssignment', 'legendaryCards', 'specialCards', 'savedEventCards']) {
@@ -989,17 +990,24 @@ test('stored-event reservation survives migration/restart and consume releases i
   assert.equal(restored.randomSourceState.sailingEvent.recyclable.filter(item => item.copy === sourceCard.copy).length, 1);
 });
 
-test('4 -> 5 preserves treasure-cargo assignmentInstanceId linkage and leaves 6.6/6.7 state untouched', () => {
+test('4 -> 5 -> 6 preserves task linkage, migrates discovery/effects and leaves 6.7 state untouched', () => {
   const { raw } = v4TaskInventoryFixture();
   const before = structuredClone(raw);
   const migrated = migrateRoomState(raw).state;
   const player = migrated.players[0];
   assert.equal(getActiveAssignmentTask(player).id, listStoredBenefits(player)[0].payload.assignmentInstanceId);
+  assert.equal(migrated.digitalModelSchemaVersion, DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION);
 
   for (const field of ['namedPlaceCards', 'legendaryEffects', 'activeTurnEffects', 'nextTurnEffects']) {
-    assert.deepEqual(player[field], before.players[0][field], field);
+    assert.equal(Object.hasOwn(player, field), false, field);
   }
-  assert.deepEqual(migrated.legendaryPlacesExplored, before.legendaryPlacesExplored);
+  assert.equal(Object.hasOwn(migrated, 'legendaryPlacesExplored'), false);
+  assert.equal(migrated.discoveries.existing.ownerId, 'p-inventory');
+  assert.equal(migrated.discoveries.existing.rewardGranted, true);
+  assert.ok(player.temporaryEffects.active.some(effect => effect.kind === 'sea-curse'));
+  assert.ok(player.temporaryEffects.active.some(effect => effect.kind === 'active-turn:movePenalty'));
+  assert.ok(player.temporaryEffects.scheduled.some(effect => effect.kind === 'active-turn:moveBonus'));
+
   assert.deepEqual(migrated.pendingEvent, before.pendingEvent);
   assert.deepEqual(migrated.pendingLegendaryReaction, before.pendingLegendaryReaction);
   assert.deepEqual(migrated.eventPhase, before.eventPhase);

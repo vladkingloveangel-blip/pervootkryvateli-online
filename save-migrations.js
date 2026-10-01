@@ -6,10 +6,11 @@ const SOURCE_STATE_DIGITAL_MODEL_SCHEMA_VERSION = 2;
 const ASSIGNMENT_POOL_DIGITAL_MODEL_SCHEMA_VERSION = 3;
 const EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION = 4;
 const PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION = 5;
-const CURRENT_DIGITAL_MODEL_SCHEMA_VERSION = PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION;
+const DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION = 6;
+const CURRENT_DIGITAL_MODEL_SCHEMA_VERSION = DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION;
 const RANDOM_SOURCE_STATE_FIELD = 'randomSourceState';
 
-const { ASSIGNMENT_DEFINITIONS, CONSUMABLE_ABILITY_DEFINITIONS } = require('./game-data');
+const { ASSIGNMENT_DEFINITIONS, CONSUMABLE_ABILITY_DEFINITIONS, PLACE_DISCOVERY_DEFINITIONS } = require('./game-data');
 
 function cloneState(value) {
   return structuredClone(value);
@@ -479,6 +480,265 @@ function migrateLegacyPlayerTaskInventory(player) {
   return migrated;
 }
 
+
+
+function canonicalNamedPlaceId(card) {
+  if (!isRecord(card)) return null;
+  const canonical = (PLACE_DISCOVERY_DEFINITIONS || []).find(definition =>
+    definition?.id === card.id || definition?.placeId === card.placeId
+  );
+  return canonical?.placeId || (typeof card.placeId === 'string' && card.placeId ? card.placeId : null);
+}
+
+function discoveryRecord(placeId, ownerId, legacyValue = undefined) {
+  const record = {
+    placeId: String(placeId),
+    ownerId,
+    claimedById: ownerId,
+    state: 'claimed',
+    rewardGranted: true,
+  };
+  if (isRecord(legacyValue)) {
+    const extras = { ...legacyValue };
+    delete extras.placeId;
+    delete extras.ownerId;
+    delete extras.claimedById;
+    delete extras.claimedBy;
+    delete extras.state;
+    delete extras.rewardGranted;
+    if (Object.keys(extras).length) record.legacyData = extras;
+  }
+  return record;
+}
+
+function migrateLegacyDiscoveries(state) {
+  const records = isRecord(state?.discoveries) ? cloneState(state.discoveries) : {};
+  const registry = state?.legendaryPlacesExplored;
+
+  if (isRecord(registry)) {
+    for (const [placeId, rawOwner] of Object.entries(registry)) {
+      if (Object.hasOwn(records, placeId)) continue;
+      const ownerId = isRecord(rawOwner)
+        ? (rawOwner.ownerId ?? rawOwner.claimedById ?? rawOwner.claimedBy ?? null)
+        : rawOwner;
+      if (ownerId === undefined || ownerId === null || String(ownerId) === '') continue;
+      records[placeId] = discoveryRecord(placeId, ownerId, rawOwner);
+    }
+  }
+
+  for (const player of state?.players || []) {
+    for (const card of (Array.isArray(player?.namedPlaceCards) ? player.namedPlaceCards : [])) {
+      const placeId = canonicalNamedPlaceId(card);
+      if (!placeId || Object.hasOwn(records, placeId)) continue;
+      if (player?.id === undefined || player?.id === null || String(player.id) === '') continue;
+      records[placeId] = discoveryRecord(placeId, player.id);
+    }
+  }
+
+  return records;
+}
+
+function legacyRecordExtras(raw, knownKeys) {
+  if (!isRecord(raw)) return undefined;
+  const extras = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!knownKeys.has(key)) extras[key] = value;
+  }
+  return Object.keys(extras).length ? extras : undefined;
+}
+
+function persistedEffectRecord({
+  kind,
+  id,
+  ownerId,
+  targetType,
+  targetId,
+  state = 'active',
+  source = {},
+  duration = {},
+  payload = {},
+  legacyData,
+}) {
+  const record = { kind, id, ownerId, targetType, targetId, state, source, duration, payload };
+  if (legacyData && Object.keys(legacyData).length) record.legacyData = legacyData;
+  return record;
+}
+
+function migrateLegacyPlayerEffects(player) {
+  const existing = isRecord(player?.temporaryEffects) ? cloneState(player.temporaryEffects) : {};
+  let active = Array.isArray(existing.active) ? existing.active : [];
+  let scheduled = Array.isArray(existing.scheduled) ? existing.scheduled : [];
+  const targetId = player?.id ?? null;
+
+  if (Object.hasOwn(player || {}, 'activeTurnEffects')) {
+    active = active.filter(record => !String(record?.kind || '').startsWith('active-turn:'));
+    for (const [key, value] of Object.entries(isRecord(player?.activeTurnEffects) ? player.activeTurnEffects : {})) {
+      active.push(persistedEffectRecord({
+        kind: 'active-turn:' + key,
+        id: 'active-turn:' + key,
+        ownerId: targetId,
+        targetType: 'player',
+        targetId,
+        source: { backing: 'temporaryEffects.active', key },
+        duration: { scope: 'personal-turn' },
+        payload: { value },
+      }));
+    }
+  }
+
+  if (Object.hasOwn(player || {}, 'nextTurnEffects')) {
+    scheduled = scheduled.filter(record => !String(record?.kind || '').startsWith('active-turn:'));
+    for (const [key, value] of Object.entries(isRecord(player?.nextTurnEffects) ? player.nextTurnEffects : {})) {
+      scheduled.push(persistedEffectRecord({
+        kind: 'active-turn:' + key,
+        id: 'next-turn:' + key,
+        ownerId: targetId,
+        targetType: 'player',
+        targetId,
+        state: 'scheduled',
+        source: { backing: 'temporaryEffects.scheduled', key, legacyBacking: 'nextTurnEffects' },
+        duration: { activation: 'next-personal-turn' },
+        payload: { value },
+      }));
+    }
+  }
+
+  if (Object.hasOwn(player || {}, 'legendaryEffects')) {
+    active = active.filter(record => !['ship-veil', 'sea-curse', 'ship-veil-reaction'].includes(record?.kind));
+    const legendary = isRecord(player?.legendaryEffects) ? player.legendaryEffects : {};
+    if (isRecord(legendary.shipVeil)) {
+      active.push(persistedEffectRecord({
+        kind: 'ship-veil',
+        id: 'ship-veil',
+        ownerId: targetId,
+        targetType: 'player',
+        targetId,
+        source: {
+          backing: 'temporaryEffects.active',
+          sourcePlayerId: legendary.shipVeil.sourcePlayerId ?? null,
+        },
+        duration: {
+          remaining: legendary.shipVeil.remaining,
+          ignoreTurnNo: Object.hasOwn(legendary.shipVeil, 'ignoreTurnNo') ? legendary.shipVeil.ignoreTurnNo : null,
+        },
+        payload: {},
+        legacyData: legacyRecordExtras(legendary.shipVeil, new Set(['remaining', 'sourcePlayerId', 'ignoreTurnNo'])),
+      }));
+    }
+    for (const [index, curse] of (Array.isArray(legendary.seaCurses) ? legendary.seaCurses : []).entries()) {
+      if (!isRecord(curse)) continue;
+      active.push(persistedEffectRecord({
+        kind: 'sea-curse',
+        id: 'sea-curse:' + index,
+        ownerId: targetId,
+        targetType: 'player',
+        targetId,
+        source: {
+          backing: 'temporaryEffects.active',
+          sourcePlayerId: Object.hasOwn(curse, 'sourcePlayerId') ? curse.sourcePlayerId : null,
+        },
+        duration: { remaining: curse.remaining },
+        payload: { penalty: curse.penalty },
+        legacyData: legacyRecordExtras(curse, new Set(['remaining', 'penalty', 'sourcePlayerId'])),
+      }));
+    }
+    if (isRecord(legendary.shipVeilReaction)) {
+      active.push(persistedEffectRecord({
+        kind: 'ship-veil-reaction',
+        id: 'ship-veil-reaction',
+        ownerId: targetId,
+        targetType: 'player',
+        targetId,
+        source: { backing: 'temporaryEffects.active' },
+        duration: {
+          expiry: legendary.shipVeilReaction.expiry,
+          expiresOnPlayerId: legendary.shipVeilReaction.expiresOnPlayerId,
+        },
+        payload: {},
+        legacyData: legacyRecordExtras(legendary.shipVeilReaction, new Set(['expiry', 'expiresOnPlayerId'])),
+      }));
+    }
+    const compatibility = isRecord(existing.compatibility) ? cloneState(existing.compatibility) : {};
+    const legendaryExtras = legacyRecordExtras(legendary, new Set(['shipVeil', 'seaCurses', 'shipVeilReaction']));
+    if (legendaryExtras) compatibility.legendaryEffects = legendaryExtras;
+    if (Object.keys(compatibility).length) existing.compatibility = compatibility;
+  }
+
+  return { ...existing, active, scheduled };
+}
+
+function migrateLegacyIslandEffects(island) {
+  const existing = isRecord(island?.temporaryEffects) ? cloneState(island.temporaryEffects) : {};
+  let active = Array.isArray(existing.active) ? existing.active : [];
+  const targetId = island?.id ?? null;
+
+  if (Object.hasOwn(island || {}, 'legendaryVeil')) {
+    active = active.filter(record => record?.kind !== 'island-veil');
+    if (isRecord(island.legendaryVeil)) {
+      active.push(persistedEffectRecord({
+        kind: 'island-veil',
+        id: 'island-veil',
+        ownerId: island?.ownerId ?? null,
+        targetType: 'island',
+        targetId,
+        source: {
+          backing: 'temporaryEffects.active',
+          sourcePlayerId: island.legendaryVeil.sourcePlayerId ?? null,
+        },
+        duration: {
+          remaining: island.legendaryVeil.remaining,
+          ignoreTurnNo: Object.hasOwn(island.legendaryVeil, 'ignoreTurnNo') ? island.legendaryVeil.ignoreTurnNo : null,
+        },
+        payload: {},
+        legacyData: legacyRecordExtras(island.legendaryVeil, new Set(['remaining', 'sourcePlayerId', 'ignoreTurnNo'])),
+      }));
+    }
+  }
+
+  if (Object.hasOwn(island || {}, 'legendaryVeilReaction')) {
+    active = active.filter(record => record?.kind !== 'island-veil-reaction');
+    if (isRecord(island.legendaryVeilReaction)) {
+      active.push(persistedEffectRecord({
+        kind: 'island-veil-reaction',
+        id: 'island-veil-reaction',
+        ownerId: island?.ownerId ?? null,
+        targetType: 'island',
+        targetId,
+        source: {
+          backing: 'temporaryEffects.active',
+          sourcePlayerId: island.legendaryVeilReaction.sourcePlayerId ?? null,
+        },
+        duration: {
+          expiry: island.legendaryVeilReaction.expiry,
+          expiresOnPlayerId: island.legendaryVeilReaction.expiresOnPlayerId,
+        },
+        payload: {},
+        legacyData: legacyRecordExtras(island.legendaryVeilReaction, new Set(['expiry', 'sourcePlayerId', 'expiresOnPlayerId'])),
+      }));
+    }
+  }
+
+  return { ...existing, active };
+}
+
+function migrateLegacyDiscoveryEffectPlayer(player) {
+  if (!isRecord(player)) return player;
+  const migrated = { ...player, temporaryEffects: migrateLegacyPlayerEffects(player) };
+  delete migrated.namedPlaceCards;
+  delete migrated.activeTurnEffects;
+  delete migrated.nextTurnEffects;
+  delete migrated.legendaryEffects;
+  return migrated;
+}
+
+function migrateLegacyDiscoveryEffectIsland(island) {
+  if (!isRecord(island)) return island;
+  const migrated = { ...island, temporaryEffects: migrateLegacyIslandEffects(island) };
+  delete migrated.legendaryVeil;
+  delete migrated.legendaryVeilReaction;
+  return migrated;
+}
+
 function migrateVersion0To1(state) {
   return {
     ...state,
@@ -585,12 +845,25 @@ function migrateVersion4To5(state) {
   return next;
 }
 
+function migrateVersion5To6(state) {
+  const next = {
+    ...state,
+    [DIGITAL_MODEL_SCHEMA_VERSION_FIELD]: DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION,
+    discoveries: migrateLegacyDiscoveries(state),
+  };
+  delete next.legendaryPlacesExplored;
+  if (Array.isArray(state?.players)) next.players = state.players.map(migrateLegacyDiscoveryEffectPlayer);
+  if (Array.isArray(state?.islands)) next.islands = state.islands.map(migrateLegacyDiscoveryEffectIsland);
+  return next;
+}
+
 const MIGRATIONS = new Map([
   [0, { toVersion: INITIAL_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion0To1 }],
   [1, { toVersion: SOURCE_STATE_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion1To2 }],
   [2, { toVersion: ASSIGNMENT_POOL_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion2To3 }],
   [3, { toVersion: EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion3To4 }],
   [4, { toVersion: PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion4To5 }],
+  [5, { toVersion: DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion5To6 }],
 ]);
 
 function readDigitalModelSchemaVersion(rawRoom) {
@@ -637,6 +910,7 @@ module.exports = {
   ASSIGNMENT_POOL_DIGITAL_MODEL_SCHEMA_VERSION,
   EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION,
   PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION,
+  DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION,
   RANDOM_SOURCE_STATE_FIELD,
   migrateRoomState,
 };

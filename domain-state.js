@@ -1112,58 +1112,58 @@ function discardStoredBenefit(player, savedCardId) {
 function discoveryDefinitionFor(placeDefinitions, placeId) {
   const id = String(placeId || '');
   if (!id || !placeDefinitions) return null;
-  if (Array.isArray(placeDefinitions)) {
-    return placeDefinitions.find(definition => String(definition?.id || '') === id) || null;
-  }
+  if (Array.isArray(placeDefinitions)) return placeDefinitions.find(definition => String(definition?.id || '') === id) || null;
   if (typeof placeDefinitions !== 'object') return null;
   if (String(placeDefinitions.id || '') === id) return placeDefinitions;
   const direct = placeDefinitions[id];
   return direct && typeof direct === 'object' && !Array.isArray(direct) ? direct : null;
 }
 
-function discoveryFromRegistryEntry(placeId, ownerId, placeDefinitions = null) {
+function discoveryRegistryBacking(room) {
+  if (room && hasOwn(room, 'discoveries')) {
+    if (!room.discoveries || typeof room.discoveries !== 'object' || Array.isArray(room.discoveries)) return null;
+    return { kind: 'persisted', registry: room.discoveries };
+  }
+  const registry = room?.legendaryPlacesExplored;
+  if (!registry || typeof registry !== 'object' || Array.isArray(registry)) return null;
+  return { kind: 'legacy', registry };
+}
+
+function discoveryFromRegistryEntry(placeId, rawEntry, placeDefinitions = null, backingKind = 'legacy') {
   const id = String(placeId || '');
+  const ownerId = backingKind === 'persisted' && rawEntry && typeof rawEntry === 'object' && !Array.isArray(rawEntry)
+    ? (rawEntry.ownerId ?? rawEntry.claimedById ?? rawEntry.claimedBy)
+    : rawEntry;
   if (!id || ownerId === undefined || ownerId === null || String(ownerId) === '') return null;
   const definition = discoveryDefinitionFor(placeDefinitions, id);
-  const source = {
-    registry: 'legendaryPlacesExplored',
-    placeId: id,
-  };
+  const source = { registry: backingKind === 'persisted' ? 'discoveries' : 'legendaryPlacesExplored', placeId: id };
   if (definition) {
     if (hasOwn(definition, 'kind')) source.placeKind = cloneDetached(definition.kind);
     if (hasOwn(definition, 'mapPlaceId')) source.mapPlaceId = cloneDetached(definition.mapPlaceId);
     if (hasOwn(definition, 'islandId')) source.islandId = cloneDetached(definition.islandId);
   }
   return Discovery.view({
-    kind: 'legendary-place',
-    id,
-    ownerId: cloneDetached(ownerId),
-    claimedById: cloneDetached(ownerId),
-    state: 'claimed',
-    source,
-    payload: definition ? cloneDetached(definition) : { id },
+    kind: 'legendary-place', id, ownerId: cloneDetached(ownerId), claimedById: cloneDetached(ownerId),
+    state: 'claimed', source, payload: definition ? cloneDetached(definition) : { id },
   });
 }
 
 function getDiscovery(room, placeId, placeDefinitions = null) {
-  const registry = room?.legendaryPlacesExplored;
+  const backing = discoveryRegistryBacking(room);
   const id = String(placeId || '');
-  if (!id || !registry || typeof registry !== 'object' || Array.isArray(registry) || !hasOwn(registry, id)) return null;
-  return discoveryFromRegistryEntry(id, registry[id], placeDefinitions);
+  if (!id || !backing || !hasOwn(backing.registry, id)) return null;
+  return discoveryFromRegistryEntry(id, backing.registry[id], placeDefinitions, backing.kind);
 }
 
 function listDiscoveries(room, placeDefinitions = null) {
-  const registry = room?.legendaryPlacesExplored;
-  if (!registry || typeof registry !== 'object' || Array.isArray(registry)) return [];
-  return Object.keys(registry)
-    .map(placeId => getDiscovery(room, placeId, placeDefinitions))
-    .filter(Boolean);
+  const backing = discoveryRegistryBacking(room);
+  if (!backing) return [];
+  return Object.keys(backing.registry).map(placeId => getDiscovery(room, placeId, placeDefinitions)).filter(Boolean);
 }
 
 function listPlayerDiscoveries(room, playerId, placeDefinitions = null) {
   if (playerId === undefined || playerId === null) return [];
-  return listDiscoveries(room, placeDefinitions)
-    .filter(discovery => String(discovery.ownerId) === String(playerId));
+  return listDiscoveries(room, placeDefinitions).filter(discovery => String(discovery.ownerId) === String(playerId));
 }
 
 function hasDiscovery(room, placeId) {
@@ -1174,63 +1174,94 @@ function claimDiscovery(room, placeId, playerId, placeDefinitions = null) {
   if (!room || typeof room !== 'object') throw new TypeError('claimDiscovery requires a room object.');
   const id = String(placeId || '');
   if (!id) throw new TypeError('claimDiscovery requires a placeId.');
-  if (playerId === undefined || playerId === null || String(playerId) === '') {
-    throw new TypeError('claimDiscovery requires a playerId.');
-  }
-  if (!room.legendaryPlacesExplored || typeof room.legendaryPlacesExplored !== 'object' || Array.isArray(room.legendaryPlacesExplored)) {
-    room.legendaryPlacesExplored = {};
-  }
+  if (playerId === undefined || playerId === null || String(playerId) === '') throw new TypeError('claimDiscovery requires a playerId.');
 
-  const existing = getDiscovery(room, id, placeDefinitions);
-  if (existing) {
-    return {
-      first: false,
-      existingOwnerId: existing.ownerId,
-      ownerId: existing.ownerId,
-      discovery: existing,
+  if (hasOwn(room, 'discoveries')) {
+    if (!room.discoveries || typeof room.discoveries !== 'object' || Array.isArray(room.discoveries)) room.discoveries = {};
+    const existing = getDiscovery(room, id, placeDefinitions);
+    if (existing) return { first: false, existingOwnerId: existing.ownerId, ownerId: existing.ownerId, discovery: existing };
+    room.discoveries[id] = {
+      placeId: id, ownerId: cloneDetached(playerId), claimedById: cloneDetached(playerId),
+      state: 'claimed', rewardGranted: true,
     };
+    const discovery = getDiscovery(room, id, placeDefinitions);
+    return { first: true, existingOwnerId: null, ownerId: discovery.ownerId, discovery };
   }
 
+  if (!room.legendaryPlacesExplored || typeof room.legendaryPlacesExplored !== 'object' || Array.isArray(room.legendaryPlacesExplored)) room.legendaryPlacesExplored = {};
+  const existing = getDiscovery(room, id, placeDefinitions);
+  if (existing) return { first: false, existingOwnerId: existing.ownerId, ownerId: existing.ownerId, discovery: existing };
   room.legendaryPlacesExplored[id] = playerId;
   const discovery = getDiscovery(room, id, placeDefinitions);
-  return {
-    first: true,
-    existingOwnerId: null,
-    ownerId: discovery.ownerId,
-    discovery,
-  };
+  return { first: true, existingOwnerId: null, ownerId: discovery.ownerId, discovery };
 }
 
-
 const ACTIVE_TURN_NUMERIC_EFFECTS = new Set(['moveBonus', 'movePenalty']);
+
+function temporaryEffectState(target, create = false) {
+  if (!target || typeof target !== 'object' || !hasOwn(target, 'temporaryEffects')) return null;
+  if (!target.temporaryEffects || typeof target.temporaryEffects !== 'object' || Array.isArray(target.temporaryEffects)) {
+    if (!create) return null;
+    target.temporaryEffects = {};
+  }
+  if (create) {
+    if (!Array.isArray(target.temporaryEffects.active)) target.temporaryEffects.active = [];
+    if (!Array.isArray(target.temporaryEffects.scheduled)) target.temporaryEffects.scheduled = [];
+  }
+  return target.temporaryEffects;
+}
+
+function persistedTemporaryEffectView(target, record, targetType) {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+  const ownerId = hasOwn(record, 'ownerId') ? record.ownerId : (targetType === 'player' ? target?.id : target?.ownerId);
+  return TemporaryEffect.view({
+    kind: cloneDetached(record.kind), id: cloneDetached(record.id), ownerId: cloneDetached(ownerId),
+    targetType: cloneDetached(record.targetType || targetType),
+    targetId: cloneDetached(hasOwn(record, 'targetId') ? record.targetId : target?.id),
+    state: cloneDetached(record.state || 'active'), source: cloneDetached(record.source || {}),
+    payload: cloneDetached(record.payload || {}), duration: cloneDetached(record.duration || {}),
+  });
+}
+
+function persistedActiveEffects(target) {
+  const state = temporaryEffectState(target, false);
+  return state && Array.isArray(state.active) ? state.active : null;
+}
+
+function persistedScheduledEffects(target) {
+  const state = temporaryEffectState(target, false);
+  return state && Array.isArray(state.scheduled) ? state.scheduled : null;
+}
 
 function activeTurnEffectFromLegacy(player, effectKind, value) {
   const key = String(effectKind || '');
   if (!key || value === undefined) return null;
   return TemporaryEffect.view({
-    kind: `active-turn:${key}`,
-    id: `active-turn:${key}`,
-    ownerId: player?.id,
-    targetType: 'player',
-    targetId: player?.id,
-    state: 'active',
-    source: { backing: 'activeTurnEffects', key },
-    duration: { scope: 'personal-turn' },
+    kind: 'active-turn:' + key, id: 'active-turn:' + key, ownerId: player?.id,
+    targetType: 'player', targetId: player?.id, state: 'active',
+    source: { backing: 'activeTurnEffects', key }, duration: { scope: 'personal-turn' },
     payload: { value: cloneDetached(value) },
   });
 }
 
 function listActiveTurnEffects(player) {
+  const persisted = persistedActiveEffects(player);
+  if (persisted) return persisted.filter(record => record?.state !== 'scheduled' && String(record?.kind || '').startsWith('active-turn:'))
+    .map(record => persistedTemporaryEffectView(player, record, 'player')).filter(Boolean);
   const backing = player?.activeTurnEffects;
   if (!backing || typeof backing !== 'object' || Array.isArray(backing)) return [];
-  return Object.entries(backing)
-    .map(([key, value]) => activeTurnEffectFromLegacy(player, key, value))
-    .filter(Boolean);
+  return Object.entries(backing).map(([key, value]) => activeTurnEffectFromLegacy(player, key, value)).filter(Boolean);
 }
 
 function getActiveTurnEffect(player, effectKind) {
   const key = String(effectKind || '');
-  if (!key || !player?.activeTurnEffects || typeof player.activeTurnEffects !== 'object' || Array.isArray(player.activeTurnEffects) || !hasOwn(player.activeTurnEffects, key)) return null;
+  if (!key) return null;
+  const persisted = persistedActiveEffects(player);
+  if (persisted) {
+    const record = persisted.find(item => item?.state !== 'scheduled' && (item?.source?.key === key || item?.kind === 'active-turn:' + key));
+    return persistedTemporaryEffectView(player, record, 'player');
+  }
+  if (!player?.activeTurnEffects || typeof player.activeTurnEffects !== 'object' || Array.isArray(player.activeTurnEffects) || !hasOwn(player.activeTurnEffects, key)) return null;
   return activeTurnEffectFromLegacy(player, key, player.activeTurnEffects[key]);
 }
 
@@ -1239,66 +1270,159 @@ function getActiveTurnEffectValue(player, effectKind) {
 }
 
 function activeTurnEffectsSnapshot(player) {
-  return Object.fromEntries(listActiveTurnEffects(player).map(effect => [effect.source.key, cloneDetached(effect.payload.value)]));
+  return Object.fromEntries(listActiveTurnEffects(player).map(effect => [
+    effect.source.key || String(effect.kind || '').replace(/^active-turn:/, ''), cloneDetached(effect.payload.value),
+  ]));
+}
+
+function writePersistedActiveTurnEffect(player, effectKind, value) {
+  const state = temporaryEffectState(player, true);
+  const key = String(effectKind);
+  const index = state.active.findIndex(item => item?.state !== 'scheduled' && (item?.source?.key === key || item?.kind === 'active-turn:' + key));
+  const previous = index >= 0 ? state.active[index] : {};
+  const record = {
+    ...previous, kind: 'active-turn:' + key, id: 'active-turn:' + key,
+    ownerId: player?.id, targetType: 'player', targetId: player?.id, state: 'active',
+    source: { ...(previous.source || {}), backing: 'temporaryEffects.active', key },
+    duration: { ...(previous.duration || {}), scope: 'personal-turn' },
+    payload: { ...(previous.payload || {}), value: cloneDetached(value) },
+  };
+  if (index >= 0) state.active[index] = record; else state.active.push(record);
+  return persistedTemporaryEffectView(player, record, 'player');
 }
 
 function addActiveTurnEffect(player, effectKind, value) {
   if (!player || typeof player !== 'object') throw new TypeError('addActiveTurnEffect requires a player object.');
   const key = String(effectKind || '');
   if (!key) throw new TypeError('addActiveTurnEffect requires an effect kind.');
-  if (!player.activeTurnEffects || typeof player.activeTurnEffects !== 'object' || Array.isArray(player.activeTurnEffects)) player.activeTurnEffects = {};
-  if (ACTIVE_TURN_NUMERIC_EFFECTS.has(key)) {
-    player.activeTurnEffects[key] = (Number(player.activeTurnEffects[key]) || 0) + (Number(value) || 0);
-  } else {
-    player.activeTurnEffects[key] = Boolean(value);
+  if (temporaryEffectState(player, false)) {
+    const current = getActiveTurnEffectValue(player, key);
+    const next = ACTIVE_TURN_NUMERIC_EFFECTS.has(key) ? (Number(current) || 0) + (Number(value) || 0) : Boolean(value);
+    return writePersistedActiveTurnEffect(player, key, next);
   }
+  if (!player.activeTurnEffects || typeof player.activeTurnEffects !== 'object' || Array.isArray(player.activeTurnEffects)) player.activeTurnEffects = {};
+  if (ACTIVE_TURN_NUMERIC_EFFECTS.has(key)) player.activeTurnEffects[key] = (Number(player.activeTurnEffects[key]) || 0) + (Number(value) || 0);
+  else player.activeTurnEffects[key] = Boolean(value);
   return getActiveTurnEffect(player, key);
 }
 
 function clearActiveTurnEffects(player) {
   if (!player || typeof player !== 'object') return [];
+  const state = temporaryEffectState(player, false);
+  if (state) {
+    state.active = (Array.isArray(state.active) ? state.active : []).filter(record => !String(record?.kind || '').startsWith('active-turn:'));
+    return [];
+  }
   player.activeTurnEffects = {};
   return [];
 }
 
+function scheduleNextTurnEffect(player, effectKind, value) {
+  if (!player || typeof player !== 'object') throw new TypeError('scheduleNextTurnEffect requires a player object.');
+  const key = String(effectKind || '');
+  if (!key) throw new TypeError('scheduleNextTurnEffect requires an effect kind.');
+  const state = temporaryEffectState(player, false);
+  if (state) {
+    if (!Array.isArray(state.scheduled)) state.scheduled = [];
+    const index = state.scheduled.findIndex(item => item?.source?.key === key || item?.kind === 'active-turn:' + key);
+    const previous = index >= 0 ? state.scheduled[index] : {};
+    const current = previous?.payload?.value;
+    const next = ACTIVE_TURN_NUMERIC_EFFECTS.has(key) ? (Number(current) || 0) + (Number(value) || 0) : Boolean(value);
+    const record = {
+      ...previous, kind: 'active-turn:' + key, id: 'next-turn:' + key,
+      ownerId: player?.id, targetType: 'player', targetId: player?.id, state: 'scheduled',
+      source: { ...(previous.source || {}), backing: 'temporaryEffects.scheduled', key, legacyBacking: 'nextTurnEffects' },
+      duration: { ...(previous.duration || {}), activation: 'next-personal-turn' },
+      payload: { ...(previous.payload || {}), value: cloneDetached(next) },
+    };
+    if (index >= 0) state.scheduled[index] = record; else state.scheduled.push(record);
+    return persistedTemporaryEffectView(player, record, 'player');
+  }
+  const legacy = player.nextTurnEffects ||= {};
+  if (ACTIVE_TURN_NUMERIC_EFFECTS.has(key)) legacy[key] = (Number(legacy[key]) || 0) + (Number(value) || 0);
+  else legacy[key] = Boolean(value);
+  return TemporaryEffect.view({
+    kind: 'active-turn:' + key, id: 'next-turn:' + key, ownerId: player.id,
+    targetType: 'player', targetId: player.id, state: 'scheduled',
+    source: { backing: 'nextTurnEffects', key }, duration: { activation: 'next-personal-turn' },
+    payload: { value: cloneDetached(legacy[key]) },
+  });
+}
+
+function scheduledTurnEffectsSnapshot(player) {
+  const scheduled = persistedScheduledEffects(player);
+  if (scheduled) {
+    const result = {};
+    for (const record of scheduled) {
+      const key = record?.source?.key || String(record?.kind || '').replace(/^active-turn:/, '');
+      if (!key || !String(record?.kind || '').startsWith('active-turn:')) continue;
+      result[key] = cloneDetached(record?.payload?.value);
+    }
+    return result;
+  }
+  return player?.nextTurnEffects && typeof player.nextTurnEffects === 'object' && !Array.isArray(player.nextTurnEffects)
+    ? cloneDetached(player.nextTurnEffects) : {};
+}
+
 function activateNextTurnEffects(player) {
   if (!player || typeof player !== 'object') return [];
-  const pending = player.nextTurnEffects && typeof player.nextTurnEffects === 'object' && !Array.isArray(player.nextTurnEffects)
-    ? cloneDetached(player.nextTurnEffects)
-    : {};
+  const state = temporaryEffectState(player, false);
+  if (state) {
+    const pending = scheduledTurnEffectsSnapshot(player);
+    clearActiveTurnEffects(player);
+    for (const [effectKind, value] of Object.entries(pending)) addActiveTurnEffect(player, effectKind, value);
+    state.scheduled = (Array.isArray(state.scheduled) ? state.scheduled : []).filter(record => !String(record?.kind || '').startsWith('active-turn:'));
+    return listActiveTurnEffects(player);
+  }
+  const pending = player.nextTurnEffects && typeof player.nextTurnEffects === 'object' && !Array.isArray(player.nextTurnEffects) ? cloneDetached(player.nextTurnEffects) : {};
   clearActiveTurnEffects(player);
   for (const [effectKind, value] of Object.entries(pending)) addActiveTurnEffect(player, effectKind, value);
   player.nextTurnEffects = {};
   return listActiveTurnEffects(player);
 }
 
-function ensurePlayerLegendaryEffectBacking(player) {
+function legacyLegendaryEffectBacking(player) {
   if (!player.legendaryEffects || typeof player.legendaryEffects !== 'object' || Array.isArray(player.legendaryEffects)) player.legendaryEffects = {};
   return player.legendaryEffects;
+}
+
+function persistedEffectByKind(target, kind, targetType) {
+  const active = persistedActiveEffects(target);
+  if (!active) return null;
+  return persistedTemporaryEffectView(target, active.find(item => item?.kind === kind), targetType);
+}
+
+function replacePersistedEffect(target, kind, record, targetType) {
+  const state = temporaryEffectState(target, true);
+  const index = state.active.findIndex(item => item?.kind === kind);
+  const previous = index >= 0 ? state.active[index] : {};
+  const next = { ...previous, ...record, kind };
+  if (index >= 0) state.active[index] = next; else state.active.push(next);
+  return persistedTemporaryEffectView(target, next, targetType);
+}
+
+function removePersistedEffect(target, kind, targetType) {
+  const state = temporaryEffectState(target, false);
+  if (!state || !Array.isArray(state.active)) return null;
+  const index = state.active.findIndex(item => item?.kind === kind);
+  if (index < 0) return null;
+  const [removed] = state.active.splice(index, 1);
+  return persistedTemporaryEffectView(target, removed, targetType);
 }
 
 function shipVeilEffectFromLegacy(player, legacy = player?.legendaryEffects?.shipVeil) {
   if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) return null;
   return TemporaryEffect.view({
-    kind: 'ship-veil',
-    id: 'ship-veil',
-    ownerId: player?.id,
-    targetType: 'player',
-    targetId: player?.id,
-    state: 'active',
-    source: {
-      backing: 'legendaryEffects.shipVeil',
-      sourcePlayerId: cloneDetached(legacy.sourcePlayerId),
-    },
-    duration: {
-      remaining: cloneDetached(legacy.remaining),
-      ignoreTurnNo: hasOwn(legacy, 'ignoreTurnNo') ? cloneDetached(legacy.ignoreTurnNo) : null,
-    },
+    kind: 'ship-veil', id: 'ship-veil', ownerId: player?.id, targetType: 'player',
+    targetId: player?.id, state: 'active',
+    source: { backing: 'legendaryEffects.shipVeil', sourcePlayerId: cloneDetached(legacy.sourcePlayerId) },
+    duration: { remaining: cloneDetached(legacy.remaining), ignoreTurnNo: hasOwn(legacy, 'ignoreTurnNo') ? cloneDetached(legacy.ignoreTurnNo) : null },
     payload: {},
   });
 }
 
 function getShipVeilEffect(player) {
+  if (persistedActiveEffects(player)) return persistedEffectByKind(player, 'ship-veil', 'player');
   return shipVeilEffectFromLegacy(player);
 }
 
@@ -1307,16 +1431,22 @@ function addShipVeilEffect(player, effect) {
   const input = effect || {};
   const duration = input.duration && typeof input.duration === 'object' ? input.duration : input;
   const source = input.source && typeof input.source === 'object' ? input.source : input;
-  const backing = ensurePlayerLegendaryEffectBacking(player);
+  if (temporaryEffectState(player, false)) return replacePersistedEffect(player, 'ship-veil', {
+    id: 'ship-veil', ownerId: player.id, targetType: 'player', targetId: player.id, state: 'active',
+    source: { backing: 'temporaryEffects.active', sourcePlayerId: cloneDetached(source.sourcePlayerId) },
+    duration: { remaining: cloneDetached(duration.remaining), ignoreTurnNo: hasOwn(duration, 'ignoreTurnNo') ? cloneDetached(duration.ignoreTurnNo) : null },
+    payload: {},
+  }, 'player');
+  const backing = legacyLegendaryEffectBacking(player);
   backing.shipVeil = {
-    remaining: cloneDetached(duration.remaining),
-    sourcePlayerId: cloneDetached(source.sourcePlayerId),
+    remaining: cloneDetached(duration.remaining), sourcePlayerId: cloneDetached(source.sourcePlayerId),
     ignoreTurnNo: hasOwn(duration, 'ignoreTurnNo') ? cloneDetached(duration.ignoreTurnNo) : null,
   };
   return getShipVeilEffect(player);
 }
 
 function removeShipVeilEffect(player) {
+  if (persistedActiveEffects(player)) return removePersistedEffect(player, 'ship-veil', 'player');
   const effect = getShipVeilEffect(player);
   if (player?.legendaryEffects && typeof player.legendaryEffects === 'object') delete player.legendaryEffects.shipVeil;
   return effect;
@@ -1341,23 +1471,16 @@ function tickShipVeilEffect(player, personalTurnNo) {
 function seaCurseEffectFromLegacy(player, legacy, index = 0) {
   if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) return null;
   return TemporaryEffect.view({
-    kind: 'sea-curse',
-    id: `sea-curse:${index}`,
-    ownerId: player?.id,
-    targetType: 'player',
-    targetId: player?.id,
-    state: 'active',
-    source: {
-      backing: 'legendaryEffects.seaCurses',
-      index,
-      sourcePlayerId: cloneDetached(legacy.sourcePlayerId),
-    },
-    duration: { remaining: cloneDetached(legacy.remaining) },
-    payload: { penalty: cloneDetached(legacy.penalty) },
+    kind: 'sea-curse', id: 'sea-curse:' + index, ownerId: player?.id, targetType: 'player',
+    targetId: player?.id, state: 'active',
+    source: { backing: 'legendaryEffects.seaCurses', index, sourcePlayerId: cloneDetached(legacy.sourcePlayerId) },
+    duration: { remaining: cloneDetached(legacy.remaining) }, payload: { penalty: cloneDetached(legacy.penalty) },
   });
 }
 
 function listSeaCurseEffects(player) {
+  const persisted = persistedActiveEffects(player);
+  if (persisted) return persisted.filter(item => item?.kind === 'sea-curse').map(record => persistedTemporaryEffectView(player, record, 'player')).filter(Boolean);
   const curses = player?.legendaryEffects?.seaCurses;
   if (!Array.isArray(curses)) return [];
   return curses.map((legacy, index) => seaCurseEffectFromLegacy(player, legacy, index)).filter(Boolean);
@@ -1369,17 +1492,38 @@ function addSeaCurseEffect(player, effect) {
   const duration = input.duration && typeof input.duration === 'object' ? input.duration : input;
   const source = input.source && typeof input.source === 'object' ? input.source : input;
   const payload = input.payload && typeof input.payload === 'object' ? input.payload : input;
-  const backing = ensurePlayerLegendaryEffectBacking(player);
+  if (temporaryEffectState(player, false)) {
+    const state = temporaryEffectState(player, true);
+    const sequence = Math.max(0, ...state.active.filter(item => item?.kind === 'sea-curse').map(item => {
+      const match = String(item?.id || '').match(/^sea-curse:(\d+)$/);
+      return match ? Number(match[1]) + 1 : 0;
+    }));
+    const record = {
+      kind: 'sea-curse', id: 'sea-curse:' + sequence, ownerId: player.id,
+      targetType: 'player', targetId: player.id, state: 'active',
+      source: { backing: 'temporaryEffects.active', sourcePlayerId: hasOwn(source, 'sourcePlayerId') ? cloneDetached(source.sourcePlayerId) : null },
+      duration: { remaining: cloneDetached(duration.remaining) }, payload: { penalty: cloneDetached(payload.penalty) },
+    };
+    state.active.push(record);
+    return persistedTemporaryEffectView(player, record, 'player');
+  }
+  const backing = legacyLegendaryEffectBacking(player);
   if (!Array.isArray(backing.seaCurses)) backing.seaCurses = [];
   backing.seaCurses.push({
-    remaining: cloneDetached(duration.remaining),
-    penalty: cloneDetached(payload.penalty),
+    remaining: cloneDetached(duration.remaining), penalty: cloneDetached(payload.penalty),
     sourcePlayerId: hasOwn(source, 'sourcePlayerId') ? cloneDetached(source.sourcePlayerId) : null,
   });
   return seaCurseEffectFromLegacy(player, backing.seaCurses[backing.seaCurses.length - 1], backing.seaCurses.length - 1);
 }
 
 function removeSeaCurseEffect(player, index) {
+  const persisted = persistedActiveEffects(player);
+  if (persisted) {
+    const matching = persisted.map((record, actualIndex) => ({ record, actualIndex })).filter(item => item.record?.kind === 'sea-curse');
+    if (!Number.isInteger(index) || index < 0 || index >= matching.length) return null;
+    const [record] = persisted.splice(matching[index].actualIndex, 1);
+    return persistedTemporaryEffectView(player, record, 'player');
+  }
   const curses = player?.legendaryEffects?.seaCurses;
   if (!Array.isArray(curses) || !Number.isInteger(index) || index < 0 || index >= curses.length) return null;
   const removed = seaCurseEffectFromLegacy(player, curses[index], index);
@@ -1388,6 +1532,21 @@ function removeSeaCurseEffect(player, index) {
 }
 
 function tickSeaCurseEffects(player) {
+  const persisted = persistedActiveEffects(player);
+  if (persisted) {
+    const state = temporaryEffectState(player, true);
+    const expired = [];
+    const next = [];
+    for (const record of state.active) {
+      if (record?.kind !== 'sea-curse') { next.push(record); continue; }
+      const effect = persistedTemporaryEffectView(player, record, 'player');
+      const remaining = Math.max(0, (Number(effect.duration.remaining) || 0) - 1);
+      if (!remaining) { expired.push(effect); continue; }
+      next.push({ ...record, duration: { ...(record.duration || {}), remaining } });
+    }
+    state.active = next;
+    return { active: listSeaCurseEffects(player), expired };
+  }
   const curses = listSeaCurseEffects(player);
   if (!curses.length) {
     if (player?.legendaryEffects && !Array.isArray(player.legendaryEffects.seaCurses)) player.legendaryEffects.seaCurses = [];
@@ -1397,17 +1556,13 @@ function tickSeaCurseEffects(player) {
   const expired = [];
   for (const effect of curses) {
     effect.duration.remaining = Math.max(0, (Number(effect.duration.remaining) || 0) - 1);
-    if (!effect.duration.remaining) {
-      expired.push(effect);
-      continue;
-    }
+    if (!effect.duration.remaining) { expired.push(effect); continue; }
     activeLegacy.push({
-      remaining: cloneDetached(effect.duration.remaining),
-      penalty: cloneDetached(effect.payload.penalty),
+      remaining: cloneDetached(effect.duration.remaining), penalty: cloneDetached(effect.payload.penalty),
       sourcePlayerId: hasOwn(effect.source, 'sourcePlayerId') ? cloneDetached(effect.source.sourcePlayerId) : null,
     });
   }
-  const backing = ensurePlayerLegendaryEffectBacking(player);
+  const backing = legacyLegendaryEffectBacking(player);
   backing.seaCurses = activeLegacy;
   return { active: listSeaCurseEffects(player), expired };
 }
@@ -1415,72 +1570,55 @@ function tickSeaCurseEffects(player) {
 function shipVeilReactionEffectFromLegacy(player, legacy = player?.legendaryEffects?.shipVeilReaction) {
   if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) return null;
   return TemporaryEffect.view({
-    kind: 'ship-veil-reaction',
-    id: 'ship-veil-reaction',
-    ownerId: player?.id,
-    targetType: 'player',
-    targetId: player?.id,
-    state: 'active',
+    kind: 'ship-veil-reaction', id: 'ship-veil-reaction', ownerId: player?.id,
+    targetType: 'player', targetId: player?.id, state: 'active',
     source: { backing: 'legendaryEffects.shipVeilReaction' },
-    duration: {
-      expiry: cloneDetached(legacy.expiry),
-      expiresOnPlayerId: cloneDetached(legacy.expiresOnPlayerId),
-    },
-    payload: {},
+    duration: { expiry: cloneDetached(legacy.expiry), expiresOnPlayerId: cloneDetached(legacy.expiresOnPlayerId) }, payload: {},
   });
 }
 
 function getShipVeilReaction(player) {
+  if (persistedActiveEffects(player)) return persistedEffectByKind(player, 'ship-veil-reaction', 'player');
   return shipVeilReactionEffectFromLegacy(player);
 }
 
 function addShipVeilReaction(player, effect) {
   if (!player || typeof player !== 'object') throw new TypeError('addShipVeilReaction requires a player object.');
   const duration = effect?.duration && typeof effect.duration === 'object' ? effect.duration : (effect || {});
-  const backing = ensurePlayerLegendaryEffectBacking(player);
-  backing.shipVeilReaction = {
-    expiry: cloneDetached(duration.expiry),
-    expiresOnPlayerId: cloneDetached(duration.expiresOnPlayerId),
-  };
+  if (temporaryEffectState(player, false)) return replacePersistedEffect(player, 'ship-veil-reaction', {
+    id: 'ship-veil-reaction', ownerId: player.id, targetType: 'player', targetId: player.id, state: 'active',
+    source: { backing: 'temporaryEffects.active' },
+    duration: { expiry: cloneDetached(duration.expiry), expiresOnPlayerId: cloneDetached(duration.expiresOnPlayerId) }, payload: {},
+  }, 'player');
+  const backing = legacyLegendaryEffectBacking(player);
+  backing.shipVeilReaction = { expiry: cloneDetached(duration.expiry), expiresOnPlayerId: cloneDetached(duration.expiresOnPlayerId) };
   return getShipVeilReaction(player);
 }
 
 function removeShipVeilReaction(player) {
+  if (persistedActiveEffects(player)) return removePersistedEffect(player, 'ship-veil-reaction', 'player');
   const effect = getShipVeilReaction(player);
   if (player?.legendaryEffects && typeof player.legendaryEffects === 'object') delete player.legendaryEffects.shipVeilReaction;
   return effect;
 }
 
 function listPlayerLegendaryEffects(player) {
-  return [
-    getShipVeilEffect(player),
-    ...listSeaCurseEffects(player),
-    getShipVeilReaction(player),
-  ].filter(Boolean);
+  return [getShipVeilEffect(player), ...listSeaCurseEffects(player), getShipVeilReaction(player)].filter(Boolean);
 }
 
 function islandVeilEffectFromLegacy(island, legacy = island?.legendaryVeil) {
   if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) return null;
   return TemporaryEffect.view({
-    kind: 'island-veil',
-    id: 'island-veil',
-    ownerId: island?.ownerId || null,
-    targetType: 'island',
-    targetId: island?.id,
-    state: 'active',
-    source: {
-      backing: 'legendaryVeil',
-      sourcePlayerId: cloneDetached(legacy.sourcePlayerId),
-    },
-    duration: {
-      remaining: cloneDetached(legacy.remaining),
-      ignoreTurnNo: hasOwn(legacy, 'ignoreTurnNo') ? cloneDetached(legacy.ignoreTurnNo) : null,
-    },
+    kind: 'island-veil', id: 'island-veil', ownerId: island?.ownerId || null,
+    targetType: 'island', targetId: island?.id, state: 'active',
+    source: { backing: 'legendaryVeil', sourcePlayerId: cloneDetached(legacy.sourcePlayerId) },
+    duration: { remaining: cloneDetached(legacy.remaining), ignoreTurnNo: hasOwn(legacy, 'ignoreTurnNo') ? cloneDetached(legacy.ignoreTurnNo) : null },
     payload: {},
   });
 }
 
 function getIslandVeilEffect(island) {
+  if (persistedActiveEffects(island)) return persistedEffectByKind(island, 'island-veil', 'island');
   return islandVeilEffectFromLegacy(island);
 }
 
@@ -1489,15 +1627,21 @@ function addIslandVeilEffect(island, effect) {
   const input = effect || {};
   const duration = input.duration && typeof input.duration === 'object' ? input.duration : input;
   const source = input.source && typeof input.source === 'object' ? input.source : input;
+  if (temporaryEffectState(island, false)) return replacePersistedEffect(island, 'island-veil', {
+    id: 'island-veil', ownerId: island.ownerId || null, targetType: 'island', targetId: island.id, state: 'active',
+    source: { backing: 'temporaryEffects.active', sourcePlayerId: cloneDetached(source.sourcePlayerId) },
+    duration: { remaining: cloneDetached(duration.remaining), ignoreTurnNo: hasOwn(duration, 'ignoreTurnNo') ? cloneDetached(duration.ignoreTurnNo) : null },
+    payload: {},
+  }, 'island');
   island.legendaryVeil = {
-    remaining: cloneDetached(duration.remaining),
-    sourcePlayerId: cloneDetached(source.sourcePlayerId),
+    remaining: cloneDetached(duration.remaining), sourcePlayerId: cloneDetached(source.sourcePlayerId),
     ignoreTurnNo: hasOwn(duration, 'ignoreTurnNo') ? cloneDetached(duration.ignoreTurnNo) : null,
   };
   return getIslandVeilEffect(island);
 }
 
 function removeIslandVeilEffect(island) {
+  if (persistedActiveEffects(island)) return removePersistedEffect(island, 'island-veil', 'island');
   const effect = getIslandVeilEffect(island);
   if (island && typeof island === 'object') island.legendaryVeil = null;
   return effect;
@@ -1522,25 +1666,15 @@ function tickIslandVeilEffect(island, sourcePlayerId, personalTurnNo) {
 function islandVeilReactionEffectFromLegacy(island, legacy = island?.legendaryVeilReaction) {
   if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) return null;
   return TemporaryEffect.view({
-    kind: 'island-veil-reaction',
-    id: 'island-veil-reaction',
-    ownerId: island?.ownerId || null,
-    targetType: 'island',
-    targetId: island?.id,
-    state: 'active',
-    source: {
-      backing: 'legendaryVeilReaction',
-      sourcePlayerId: cloneDetached(legacy.sourcePlayerId),
-    },
-    duration: {
-      expiry: cloneDetached(legacy.expiry),
-      expiresOnPlayerId: cloneDetached(legacy.expiresOnPlayerId),
-    },
-    payload: {},
+    kind: 'island-veil-reaction', id: 'island-veil-reaction', ownerId: island?.ownerId || null,
+    targetType: 'island', targetId: island?.id, state: 'active',
+    source: { backing: 'legendaryVeilReaction', sourcePlayerId: cloneDetached(legacy.sourcePlayerId) },
+    duration: { expiry: cloneDetached(legacy.expiry), expiresOnPlayerId: cloneDetached(legacy.expiresOnPlayerId) }, payload: {},
   });
 }
 
 function getIslandVeilReaction(island) {
+  if (persistedActiveEffects(island)) return persistedEffectByKind(island, 'island-veil-reaction', 'island');
   return islandVeilReactionEffectFromLegacy(island);
 }
 
@@ -1549,15 +1683,20 @@ function addIslandVeilReaction(island, effect) {
   const input = effect || {};
   const duration = input.duration && typeof input.duration === 'object' ? input.duration : input;
   const source = input.source && typeof input.source === 'object' ? input.source : input;
+  if (temporaryEffectState(island, false)) return replacePersistedEffect(island, 'island-veil-reaction', {
+    id: 'island-veil-reaction', ownerId: island.ownerId || null, targetType: 'island', targetId: island.id, state: 'active',
+    source: { backing: 'temporaryEffects.active', sourcePlayerId: cloneDetached(source.sourcePlayerId) },
+    duration: { expiry: cloneDetached(duration.expiry), expiresOnPlayerId: cloneDetached(duration.expiresOnPlayerId) }, payload: {},
+  }, 'island');
   island.legendaryVeilReaction = {
-    expiry: cloneDetached(duration.expiry),
-    sourcePlayerId: cloneDetached(source.sourcePlayerId),
+    expiry: cloneDetached(duration.expiry), sourcePlayerId: cloneDetached(source.sourcePlayerId),
     expiresOnPlayerId: cloneDetached(duration.expiresOnPlayerId),
   };
   return getIslandVeilReaction(island);
 }
 
 function removeIslandVeilReaction(island) {
+  if (persistedActiveEffects(island)) return removePersistedEffect(island, 'island-veil-reaction', 'island');
   const effect = getIslandVeilReaction(island);
   if (island && typeof island === 'object') island.legendaryVeilReaction = null;
   return effect;
@@ -1565,6 +1704,55 @@ function removeIslandVeilReaction(island) {
 
 function listIslandLegendaryEffects(island) {
   return [getIslandVeilEffect(island), getIslandVeilReaction(island)].filter(Boolean);
+}
+
+function adoptLegacyTemporaryEffects(target, targetType = 'player') {
+  const state = temporaryEffectState(target, false);
+  if (!state) return false;
+  let changed = false;
+  if (targetType === 'player') {
+    if (hasOwn(target, 'activeTurnEffects')) {
+      state.active = (Array.isArray(state.active) ? state.active : []).filter(record => !String(record?.kind || '').startsWith('active-turn:'));
+      for (const [key, value] of Object.entries(target.activeTurnEffects && typeof target.activeTurnEffects === 'object' && !Array.isArray(target.activeTurnEffects) ? target.activeTurnEffects : {})) writePersistedActiveTurnEffect(target, key, value);
+      delete target.activeTurnEffects;
+      changed = true;
+    }
+    if (hasOwn(target, 'nextTurnEffects')) {
+      state.scheduled = (Array.isArray(state.scheduled) ? state.scheduled : []).filter(record => !String(record?.kind || '').startsWith('active-turn:'));
+      for (const [key, value] of Object.entries(target.nextTurnEffects && typeof target.nextTurnEffects === 'object' && !Array.isArray(target.nextTurnEffects) ? target.nextTurnEffects : {})) scheduleNextTurnEffect(target, key, value);
+      delete target.nextTurnEffects;
+      changed = true;
+    }
+    if (hasOwn(target, 'legendaryEffects')) {
+      state.active = (Array.isArray(state.active) ? state.active : []).filter(record => !['ship-veil', 'sea-curse', 'ship-veil-reaction'].includes(record?.kind));
+      const legacy = target.legendaryEffects && typeof target.legendaryEffects === 'object' && !Array.isArray(target.legendaryEffects) ? target.legendaryEffects : {};
+      if (legacy.shipVeil && typeof legacy.shipVeil === 'object') addShipVeilEffect(target, legacy.shipVeil);
+      for (const curse of (Array.isArray(legacy.seaCurses) ? legacy.seaCurses : [])) addSeaCurseEffect(target, curse);
+      if (legacy.shipVeilReaction && typeof legacy.shipVeilReaction === 'object') addShipVeilReaction(target, legacy.shipVeilReaction);
+      const extras = {};
+      for (const [key, value] of Object.entries(legacy)) if (!['shipVeil', 'seaCurses', 'shipVeilReaction'].includes(key)) extras[key] = cloneDetached(value);
+      if (Object.keys(extras).length) {
+        state.compatibility ||= {};
+        state.compatibility.legendaryEffects = extras;
+      }
+      delete target.legendaryEffects;
+      changed = true;
+    }
+  } else if (targetType === 'island') {
+    if (hasOwn(target, 'legendaryVeil')) {
+      removePersistedEffect(target, 'island-veil', 'island');
+      if (target.legendaryVeil && typeof target.legendaryVeil === 'object') addIslandVeilEffect(target, target.legendaryVeil);
+      delete target.legendaryVeil;
+      changed = true;
+    }
+    if (hasOwn(target, 'legendaryVeilReaction')) {
+      removePersistedEffect(target, 'island-veil-reaction', 'island');
+      if (target.legendaryVeilReaction && typeof target.legendaryVeilReaction === 'object') addIslandVeilReaction(target, target.legendaryVeilReaction);
+      delete target.legendaryVeilReaction;
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 
@@ -1997,6 +2185,8 @@ module.exports = {
   activeTurnEffectsSnapshot,
   addActiveTurnEffect,
   clearActiveTurnEffects,
+  scheduleNextTurnEffect,
+  scheduledTurnEffectsSnapshot,
   activateNextTurnEffects,
   shipVeilEffectFromLegacy,
   getShipVeilEffect,
@@ -2023,6 +2213,7 @@ module.exports = {
   addIslandVeilReaction,
   removeIslandVeilReaction,
   listIslandLegendaryEffects,
+  adoptLegacyTemporaryEffects,
   PENDING_RESOLUTION_FAMILIES,
   pendingResolutionFromLegacy,
   pendingResolutionToLegacy,

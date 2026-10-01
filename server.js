@@ -206,6 +206,8 @@ const {
   incrementObservatoryReplacement,
   setPreTurnTaxResult,
   activateNextTurnEffects,
+  scheduleNextTurnEffect,
+  scheduledTurnEffectsSnapshot,
 } = require('./domain-state');
 
 const app = express();
@@ -823,7 +825,10 @@ function publicRoom(room, viewerId = null) {
         nextActionLimit: p.id === viewerId ? (p.nextActionLimit || null) : null,
         specialCards: p.id === viewerId ? specialAbilities.map(ability => ability.payload.name) : [],
         specialCardCount: specialAbilities.length,
-        namedPlaceCards: (p.namedPlaceCards || []).map(card => ({ id: card.id, name: card.name, placeId: card.placeId })),
+        namedPlaceCards: playerDiscoveries
+          .map(discovery => PLACE_DISCOVERY_DEFINITIONS.find(card => String(card.placeId) === String(discovery.id)))
+          .filter(Boolean)
+          .map(card => ({ id: card.id, name: card.name, placeId: card.placeId })),
         namedPlaceCardCount: playerDiscoveries.length,
         activeExpedition: activeExpeditionTask ? {
           cardId: activeExpeditionTask.id,
@@ -855,7 +860,7 @@ function publicRoom(room, viewerId = null) {
           goodId: benefit.payload?.goodId || null,
         })) : [],
         savedEventCardCount: storedBenefits.length,
-        nextTurnEffects: p.id === viewerId ? { ...(p.nextTurnEffects || {}) } : {},
+        nextTurnEffects: p.id === viewerId ? scheduledTurnEffectsSnapshot(p) : {},
         activeTurnEffects: activeTurnEffectsSnapshot(p),
         landCompany: p.landCompany ? { ...p.landCompany } : null,
         canDismissLandCompanyHere: p.id === viewerId ? canDismissLandCompany(room, p).ok : false,
@@ -1847,12 +1852,7 @@ function applyCurrentTurnEffect(room, player, effect, value) {
     addActiveTurnEffect(player, effect, value);
     return;
   }
-  const target = player.nextTurnEffects ||= {};
-  if (effect === 'moveBonus' || effect === 'movePenalty') {
-    target[effect] = (Number(target[effect]) || 0) + (Number(value) || 0);
-  } else {
-    target[effect] = Boolean(value);
-  }
+  scheduleNextTurnEffect(player, effect, value);
 }
 
 function queueEventDecision(room, player, card, kind, options, extra = {}) {
@@ -2870,6 +2870,15 @@ function attachPlayer(socket, room, player) {
   socket.join(room.code);
 }
 
+function persistedIslands() {
+  return cloneIslands().map(island => {
+    const next = { ...island, temporaryEffects: { active: [], scheduled: [] } };
+    delete next.legendaryVeil;
+    delete next.legendaryVeilReaction;
+    return next;
+  });
+}
+
 function newPlayer(socket, data, color) {
   const shipClass = SHIPS[data?.shipClass] ? data.shipClass : 'brigantine';
   return {
@@ -2890,7 +2899,6 @@ function newPlayer(socket, data, color) {
     col: MAP_META.startCell[1],
     consumableAbilities: [],
     consumableAbilitySequence: 0,
-    namedPlaceCards: [],
     activeExpeditionTask: null,
     expeditionCompletions: [],
     expeditionAccessUsage: { round: null, draws: 0 },
@@ -2919,10 +2927,8 @@ function newPlayer(socket, data, color) {
     attackCountsThisRound: {},
     brokenAlliesThisTurn: [],
     pendingLandinEscort: false,
-    legendaryEffects: { seaCurses: [] },
+    temporaryEffects: { active: [], scheduled: [] },
     storedBenefits: [],
-    nextTurnEffects: {},
-    activeTurnEffects: {},
     visitedAnchors: [],
     lastAnchorEncounter: null,
     suzerainId: null,
@@ -3015,7 +3021,7 @@ io.on('connection', socket => {
       leaderId: null,
       seatingOrder: [player.id],
       players: [player],
-      islands: cloneIslands(),
+      islands: persistedIslands(),
       started: false,
       order: [],
       turnIndex: 0,
@@ -3046,7 +3052,7 @@ io.on('connection', socket => {
         expeditionPool: expeditionPoolState,
       },
       pendingExpeditionRewards: [],
-      legendaryPlacesExplored: {},
+      discoveries: {},
       factionState: {},
       log: [],
     };
@@ -3223,7 +3229,7 @@ io.on('connection', socket => {
     if (!room.players.every(p => p.ready)) return ackSafe(ack, { ok: false, error: 'Перед стартом все игроки должны нажать «Готов».' });
 
     room.started = true;
-    room.islands = cloneIslands();
+    room.islands = persistedIslands();
     room.order = determineOrder(room);
     room.turnIndex = 0;
     room.completedTurns = 0;
@@ -3255,11 +3261,12 @@ io.on('connection', socket => {
     };
     delete room.expeditionDeck;
     room.pendingExpeditionRewards = [];
-    room.legendaryPlacesExplored = {};
+    room.discoveries = {};
+    delete room.legendaryPlacesExplored;
     room.factionState = {};
     room.players.forEach(p => {
       p.row = 0; p.col = 0; p.ducats = BALANCE.session.startingDucats; p.debt = 0; p.level = 1; p.consumableAbilities = []; p.consumableAbilitySequence = 0; delete p.specialCards; delete p.legendaryCards; p.cargo = null; p.upgrades = []; p.disabledUpgradeIds = []; p.escorts = []; p.levelInactiveEscortIds = []; p.nextEscortId = 0;
-      p.glory = 0; p.fleetPoints = 0; p.fleetPointRound = room.round; p.fleetPointOpponentIds = []; p.armyPoints = 0; p.armyPointRound = room.round; p.armyPointOpponentIds = []; p.skipTurns = 0; p.personalTurnNo = 0; p.attackLimitRound = room.round; p.attackCountsThisRound = {}; p.brokenAlliesThisTurn = []; p.pendingLandinEscort = false; p.activeExpeditionTask = null; p.expeditionCompletions = []; p.expeditionAccessUsage = { round: null, draws: 0 }; delete p.activeExpedition; delete p.expeditionHistory; delete p.expeditionDrawRound; delete p.expeditionsDrawnThisRound; p.legendaryEffects = { seaCurses: [] }; p.storedBenefits = []; delete p.savedEventCards; p.nextTurnEffects = {}; p.activeTurnEffects = {}; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignmentTask = null; delete p.activeAssignment; p.landCompany = null; p.bastionPriority = []; p.inactiveBastionIslandIds = []; p.character = null; p.characterReplacedRound = null; p.palaceUsed = false;
+      p.glory = 0; p.fleetPoints = 0; p.fleetPointRound = room.round; p.fleetPointOpponentIds = []; p.armyPoints = 0; p.armyPointRound = room.round; p.armyPointOpponentIds = []; p.skipTurns = 0; p.personalTurnNo = 0; p.attackLimitRound = room.round; p.attackCountsThisRound = {}; p.brokenAlliesThisTurn = []; p.pendingLandinEscort = false; p.activeExpeditionTask = null; p.expeditionCompletions = []; p.expeditionAccessUsage = { round: null, draws: 0 }; delete p.activeExpedition; delete p.expeditionHistory; delete p.expeditionDrawRound; delete p.expeditionsDrawnThisRound; p.temporaryEffects = { active: [], scheduled: [] }; delete p.legendaryEffects; delete p.nextTurnEffects; delete p.activeTurnEffects; delete p.namedPlaceCards; p.storedBenefits = []; delete p.savedEventCards; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignmentTask = null; delete p.activeAssignment; p.landCompany = null; p.bastionPriority = []; p.inactiveBastionIslandIds = []; p.character = null; p.characterReplacedRound = null; p.palaceUsed = false;
     });
     refreshFactionExistence(room);
     log(room, `Партия началась. Порядок: ${room.order.map(id => room.players.find(p => p.id === id)?.name).join(' → ')}.`);
