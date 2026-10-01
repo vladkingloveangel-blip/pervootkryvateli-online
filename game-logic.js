@@ -99,13 +99,12 @@ const {
   ISLAND_BY_CELL,
   HAZARDS,
   ANCHORS,
-  ANCHOR_CARDS,
   ANCHOR_BY_CELL,
   LEGENDARY_PLACES,
   LEGENDARY_PLACE_RULES,
-  NAMED_PLACE_CARDS,
-  EXPEDITION_CARDS,
-  ASSIGNMENT_CARDS,
+  PLACE_DISCOVERY_DEFINITIONS,
+  EXPEDITION_DEFINITIONS,
+  ASSIGNMENT_DEFINITIONS,
   FACTIONS,
   POLITICAL_FACTION_ORDER,
   SPECIAL_LAND,
@@ -544,7 +543,7 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
     changed = true;
   }
 
-  for (const factionId of Object.keys(ASSIGNMENT_CARDS)) {
+  for (const factionId of Object.keys(ASSIGNMENT_DEFINITIONS)) {
     if (!room.assignmentDecks[factionId]) {
       const reservedIds = new Set(room.players
         .map(player => getActiveAssignmentTask(player))
@@ -628,7 +627,7 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
   for (const player of room.players) {
     if (!Array.isArray(player.namedPlaceCards)) continue;
     for (const saved of player.namedPlaceCards) {
-      const canonical = NAMED_PLACE_CARDS.find(card => card.id === saved?.id || card.placeId === saved?.placeId);
+      const canonical = PLACE_DISCOVERY_DEFINITIONS.find(card => card.id === saved?.id || card.placeId === saved?.placeId);
       if (!canonical || hasDiscovery(room, canonical.placeId)) continue;
       claimDiscovery(room, canonical.placeId, player.id, LEGENDARY_PLACE_RULES);
       changed = true;
@@ -644,7 +643,7 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
     const repairedNamedCards = [];
     const seenCanonicalIds = new Set();
     for (const saved of player.namedPlaceCards) {
-      const canonical = NAMED_PLACE_CARDS.find(card => card.id === saved?.id || card.placeId === saved?.placeId);
+      const canonical = PLACE_DISCOVERY_DEFINITIONS.find(card => card.id === saved?.id || card.placeId === saved?.placeId);
       if (!canonical) {
         repairedNamedCards.push(saved);
         continue;
@@ -665,7 +664,7 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
       player.namedPlaceCards = repairedNamedCards;
     }
 
-    for (const card of NAMED_PLACE_CARDS) {
+    for (const card of PLACE_DISCOVERY_DEFINITIONS) {
       const discovery = getDiscovery(room, card.placeId, LEGENDARY_PLACE_RULES);
       if (!discovery || String(discovery.ownerId) !== String(player.id)) continue;
       if (player.namedPlaceCards.some(saved => saved?.id === card.id || saved?.placeId === card.placeId)) continue;
@@ -677,7 +676,7 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
       player.expeditionHistory = [];
       changed = true;
     } else {
-      const validExpeditionPlaces = new Set(EXPEDITION_CARDS.map(card => card.placeId));
+      const validExpeditionPlaces = new Set(EXPEDITION_DEFINITIONS.map(card => card.placeId));
       const filteredHistory = player.expeditionHistory.filter(item => validExpeditionPlaces.has(item?.placeId));
       if (filteredHistory.length !== player.expeditionHistory.length) {
         player.expeditionHistory = filteredHistory;
@@ -690,7 +689,7 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
     }
     if (player.activeExpedition) {
       const active = player.activeExpedition;
-      const canonical = EXPEDITION_CARDS.find(card => card.id === active.cardId || card.placeId === active.placeId);
+      const canonical = EXPEDITION_DEFINITIONS.find(card => card.id === active.cardId || card.placeId === active.placeId);
       if (!canonical) {
         player.activeExpedition = null;
         changed = true;
@@ -732,7 +731,7 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
     room.expeditionDeck.drawPile = room.expeditionDeck.drawPile.filter(card => !reservedExpeditionIds.has(card.id));
     changed = true;
   } else {
-    const canonicalIds = new Set(EXPEDITION_CARDS.map(card => card.id));
+    const canonicalIds = new Set(EXPEDITION_DEFINITIONS.map(card => card.id));
     const filteredDeck = room.expeditionDeck.drawPile.filter(card => canonicalIds.has(card?.id) && !reservedExpeditionIds.has(card.id));
     if (filteredDeck.length !== room.expeditionDeck.drawPile.length) {
       room.expeditionDeck.drawPile = filteredDeck;
@@ -1091,7 +1090,7 @@ function legendaryPlaceForIsland(islandId) {
 }
 
 function namedPlaceCardFor(placeId) {
-  return NAMED_PLACE_CARDS.find(card => card.placeId === String(placeId || '')) || null;
+  return PLACE_DISCOVERY_DEFINITIONS.find(card => card.placeId === String(placeId || '')) || null;
 }
 
 function claimLegendaryPlaceDiscovery(room, player, placeId, rng = Math.random) {
@@ -1228,7 +1227,7 @@ function completeExpeditionAtArrival(room, player, rng = Math.random) {
     return { ok: true, active: true, completed: false, requiresLeaveAndReturn: true };
   }
 
-  const card = task.payload || EXPEDITION_CARDS.find(item => item.id === task.id);
+  const card = task.payload || EXPEDITION_DEFINITIONS.find(item => item.id === task.id);
   if (!card) return { ok: false, active: true, completed: false, error: 'Карта активной экспедиции не найдена.' };
   const place = legendaryPlaceRule(placeId);
   if (expeditionCompletionCount(player, placeId) === 0) {

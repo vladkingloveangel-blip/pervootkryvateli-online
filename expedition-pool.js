@@ -1,6 +1,6 @@
 'use strict';
 
-const { EXPEDITION_CARDS } = require('./game-data');
+const { EXPEDITION_DEFINITIONS } = require('./game-data');
 
 function expandExpeditionDefinitions(definitions) {
   const occurrences = [];
@@ -22,7 +22,7 @@ function shuffleExpeditions(cards, rng = Math.random) {
 }
 
 function createExpeditionStorage(rng = Math.random) {
-  return { drawPile: shuffleExpeditions(expandExpeditionDefinitions(EXPEDITION_CARDS), rng) };
+  return { drawPile: shuffleExpeditions(expandExpeditionDefinitions(EXPEDITION_DEFINITIONS), rng) };
 }
 
 function sameOccurrence(left, right) {

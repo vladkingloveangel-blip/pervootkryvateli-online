@@ -1,6 +1,6 @@
 'use strict';
 
-const { ANCHOR_CARDS } = require('./game-data');
+const { SEA_ENCOUNTER_DEFINITIONS } = require('./game-data');
 const { shuffleWithRng } = require('./random-sources');
 
 function expandSeaEncounterDefinitions(definitions) {
@@ -14,7 +14,7 @@ function expandSeaEncounterDefinitions(definitions) {
 
 function createSeaEncounterStorage(rng = Math.random) {
   const storage = {};
-  for (const [color, definitions] of Object.entries(ANCHOR_CARDS)) {
+  for (const [color, definitions] of Object.entries(SEA_ENCOUNTER_DEFINITIONS)) {
     storage[color] = {
       drawPile: shuffleWithRng(expandSeaEncounterDefinitions(definitions), rng),
       discard: [],
@@ -24,7 +24,7 @@ function createSeaEncounterStorage(rng = Math.random) {
 }
 
 function ensureSeaEncounterBacking(room, color, rng = Math.random) {
-  if (!room || !ANCHOR_CARDS[color]) return null;
+  if (!room || !SEA_ENCOUNTER_DEFINITIONS[color]) return null;
   room.anchorDecks ||= createSeaEncounterStorage(rng);
   room.anchorDecks[color] ||= { drawPile: [], discard: [] };
   const backing = room.anchorDecks[color];

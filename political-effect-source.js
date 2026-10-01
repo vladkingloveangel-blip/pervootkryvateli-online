@@ -1,6 +1,6 @@
 'use strict';
 
-const { FEUD_CARDS, POLITICAL_FACTION_ORDER } = require('./game-data');
+const { POLITICAL_EFFECT_DEFINITIONS, POLITICAL_FACTION_ORDER } = require('./game-data');
 const { shuffleWithRng } = require('./random-sources');
 
 function expandPoliticalEffectDefinitions(definitions) {
@@ -16,7 +16,7 @@ function createPoliticalEffectStorage(rng = Math.random) {
   const storage = {};
   for (const factionId of POLITICAL_FACTION_ORDER) {
     storage[factionId] = {
-      drawPile: shuffleWithRng(expandPoliticalEffectDefinitions(FEUD_CARDS[factionId] || []), rng),
+      drawPile: shuffleWithRng(expandPoliticalEffectDefinitions(POLITICAL_EFFECT_DEFINITIONS[factionId] || []), rng),
       discard: [],
     };
   }
@@ -25,7 +25,7 @@ function createPoliticalEffectStorage(rng = Math.random) {
 
 function canonicalizePoliticalEffectOccurrence(factionId, rawOccurrence) {
   if (!rawOccurrence) return null;
-  const canonical = (FEUD_CARDS[factionId] || []).find(definition =>
+  const canonical = (POLITICAL_EFFECT_DEFINITIONS[factionId] || []).find(definition =>
     definition.id === rawOccurrence.masterCardId || definition.id === rawOccurrence.id
   );
   return canonical
@@ -41,14 +41,14 @@ function occurrenceKey(factionId, occurrence) {
 }
 
 function politicalEffectSource(room, factionId, rng = Math.random) {
-  if (!room || !FEUD_CARDS[factionId]) return null;
+  if (!room || !POLITICAL_EFFECT_DEFINITIONS[factionId]) return null;
 
   function backing({ create = false } = {}) {
     if (!room.feudDecks && create) room.feudDecks = createPoliticalEffectStorage(rng);
     if (!room.feudDecks) return null;
     if (!room.feudDecks[factionId] && create) {
       room.feudDecks[factionId] = {
-        drawPile: shuffleWithRng(expandPoliticalEffectDefinitions(FEUD_CARDS[factionId] || []), rng),
+        drawPile: shuffleWithRng(expandPoliticalEffectDefinitions(POLITICAL_EFFECT_DEFINITIONS[factionId] || []), rng),
         discard: [],
       };
     }

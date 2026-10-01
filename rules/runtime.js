@@ -42,7 +42,7 @@ const FACTIONS = Object.fromEntries(Object.entries(rules.politics.factions)
     // Author decision: Kadingir's final conquest prize follows §9.6 — 50 ducats.
     fullConquestPrize: copy(faction.fullConquestPrize),
   }]));
-const FEUD_CARDS = Object.fromEntries(Object.entries(rules.events.feud).map(([factionId, cards]) => [
+const POLITICAL_EFFECT_DEFINITIONS = Object.fromEntries(Object.entries(rules.events.feud).map(([factionId, cards]) => [
   factionId,
   cards.map(card => ({
     id: card.id,
@@ -55,6 +55,27 @@ const FEUD_CARDS = Object.fromEntries(Object.entries(rules.events.feud).map(([fa
   })),
 ]));
 const POLITICAL_FACTION_ORDER = rules.politics.order.filter(id => id in FACTIONS);
+
+const SEA_ENCOUNTER_DEFINITIONS = rules.sea;
+const SAILING_EVENT_DEFINITIONS = rules.events.sailing.map(card => copy(card));
+const ASSIGNMENT_DEFINITIONS = Object.fromEntries(POLITICAL_FACTION_ORDER
+  .filter(id => FACTIONS[id]?.canHaveVassal)
+  .map(id => [id, copy(rules.politics.assignments[id] || [])]));
+const EXPEDITION_DEFINITIONS = rules.legends.expeditions.map(card => copy(card));
+const TREASURE_OUTCOME_DEFINITIONS = rules.legends.treasures.map(card => copy(card));
+const CONSUMABLE_ABILITY_DEFINITIONS = rules.legends.legendary.map(card => copy(card));
+const PLACE_DISCOVERY_DEFINITIONS = rules.legends.namedCards.map(card => copy(card));
+
+// Digital semantic definitions; legacy *_CARDS exports below are compatibility aliases.
+const ANCHOR_CARDS = SEA_ENCOUNTER_DEFINITIONS;
+const SAILING_EVENT_CARDS = SAILING_EVENT_DEFINITIONS;
+const FEUD_CARDS = POLITICAL_EFFECT_DEFINITIONS;
+const ASSIGNMENT_CARDS = ASSIGNMENT_DEFINITIONS;
+const EXPEDITION_CARDS = EXPEDITION_DEFINITIONS;
+const TREASURE_CARDS = TREASURE_OUTCOME_DEFINITIONS;
+const LEGENDARY_CARDS = CONSUMABLE_ABILITY_DEFINITIONS;
+const NAMED_PLACE_CARDS = PLACE_DISCOVERY_DEFINITIONS;
+
 module.exports = {
   RULESET: rules.metadata, RUNTIME_PROFILE: 'stage-6-events-legends-6.7',
   BALANCE: {
@@ -66,8 +87,8 @@ module.exports = {
     landCompany: rules.economy.landCompany, combat: rules.scoring.combat, fleetScoring: rules.scoring.fleet, armyScoring: rules.scoring.army,
     loadingLimitPerIslandPerRound: rules.economy.loadingLimitPerIslandPerRound,
     gloryCapture: legacy.gloryCapture, treasuryLossRatio: legacy.treasuryLossRatio,
-    reclaimIslandFallback: rules.events.feud.lionia.find(c => c.effect.type === 'reclaim-island').effect.fallbackDucats,
-    legendaryEffects: Object.fromEntries(rules.legends.legendary.map(c => [c.id, c.effect])),
+    reclaimIslandFallback: POLITICAL_EFFECT_DEFINITIONS.lionia.find(c => c.type === 'reclaim-island').fallbackDucats,
+    legendaryEffects: Object.fromEntries(CONSUMABLE_ABILITY_DEFINITIONS.map(c => [c.id, c.effect])),
     legendaryPool: copy(rules.legends.legendaryPool),
     treasurePool: copy(rules.legends.treasurePool),
     expeditionLimits: copy(rules.legends.expeditionLimits),
@@ -76,18 +97,23 @@ module.exports = {
   ESCORTS: { ...rules.fleet.escorts, [legacy.removedEscort.id]: { ...legacy.removedEscort, retired: true } },
   GOODS: rules.economy.goods, BUILDINGS, BUILDING_UPGRADES, CHARACTERS, MILITARY_REWARDS, FACTIONS,
   POLITICAL_FACTION_ORDER,
-  // Five suzerains issue assignments. Mayo has no vassalage and therefore no assignment deck.
-  ASSIGNMENT_CARDS: Object.fromEntries(POLITICAL_FACTION_ORDER
-    .filter(id => FACTIONS[id]?.canHaveVassal)
-    .map(id => [id, copy(rules.politics.assignments[id] || [])])),
-  ANCHOR_CARDS: rules.sea,
-  SAILING_EVENT_CARDS: rules.events.sailing.map(card => copy(card)),
-  FEUD_CARDS,
+  SEA_ENCOUNTER_DEFINITIONS,
+  SAILING_EVENT_DEFINITIONS,
+  POLITICAL_EFFECT_DEFINITIONS,
+  ASSIGNMENT_DEFINITIONS,
+  EXPEDITION_DEFINITIONS,
+  TREASURE_OUTCOME_DEFINITIONS,
+  CONSUMABLE_ABILITY_DEFINITIONS,
+  PLACE_DISCOVERY_DEFINITIONS,
   LEGENDARY_PLACE_RULES: rules.legends.places.map(place => copy(place)),
-  NAMED_PLACE_CARDS: rules.legends.namedCards.map(card => copy(card)),
-  EXPEDITION_CARDS: rules.legends.expeditions.map(card => copy(card)),
-  LEGENDARY_CARDS: rules.legends.legendary.map(card => copy(card)),
-  // Digital treasure results: four canonical outcomes, selected independently.
-  TREASURE_CARDS: rules.legends.treasures.map(card => copy(card)),
+  // Compatibility aliases. Each alias is the exact same runtime object as its semantic export.
+  ANCHOR_CARDS,
+  SAILING_EVENT_CARDS,
+  FEUD_CARDS,
+  ASSIGNMENT_CARDS,
+  EXPEDITION_CARDS,
+  TREASURE_CARDS,
+  LEGENDARY_CARDS,
+  NAMED_PLACE_CARDS,
   ANCHOR_GLORY: legacy.anchorGlory,
 };

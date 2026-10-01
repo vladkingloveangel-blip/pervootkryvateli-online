@@ -1,6 +1,6 @@
 'use strict';
 
-const { BALANCE, TREASURE_CARDS, LEGENDARY_CARDS } = require('./game-data');
+const { BALANCE, TREASURE_OUTCOME_DEFINITIONS, CONSUMABLE_ABILITY_DEFINITIONS } = require('./game-data');
 const { selectIndependent } = require('./random-sources');
 
 function cloneDefinition(value) {
@@ -10,14 +10,14 @@ function cloneDefinition(value) {
 function canonicalLegendaryCandidates() {
   const ids = Array.isArray(BALANCE.legendaryPool?.typeIds) && BALANCE.legendaryPool.typeIds.length
     ? BALANCE.legendaryPool.typeIds
-    : LEGENDARY_CARDS.map(definition => definition.id);
+    : CONSUMABLE_ABILITY_DEFINITIONS.map(definition => definition.id);
   return ids
-    .map(id => LEGENDARY_CARDS.find(definition => definition.id === id))
+    .map(id => CONSUMABLE_ABILITY_DEFINITIONS.find(definition => definition.id === id))
     .filter(Boolean);
 }
 
 function selectTreasureOutcome(rng = Math.random) {
-  return cloneDefinition(selectIndependent(TREASURE_CARDS, rng));
+  return cloneDefinition(selectIndependent(TREASURE_OUTCOME_DEFINITIONS, rng));
 }
 
 function selectLegendaryAbility(rng = Math.random) {

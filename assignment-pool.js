@@ -1,6 +1,6 @@
 'use strict';
 
-const { ASSIGNMENT_CARDS } = require('./game-data');
+const { ASSIGNMENT_DEFINITIONS } = require('./game-data');
 const { ELIGIBILITY, selectFilteredTasks, shuffleWithRng } = require('./random-sources');
 const { getActiveAssignmentTask } = require('./domain-state');
 
@@ -15,9 +15,9 @@ function expandAssignmentDefinitions(definitions) {
 
 function createAssignmentStorage(rng = Math.random) {
   const storage = {};
-  for (const factionId of Object.keys(ASSIGNMENT_CARDS)) {
+  for (const factionId of Object.keys(ASSIGNMENT_DEFINITIONS)) {
     storage[factionId] = {
-      drawPile: shuffleWithRng(expandAssignmentDefinitions(ASSIGNMENT_CARDS[factionId] || []), rng),
+      drawPile: shuffleWithRng(expandAssignmentDefinitions(ASSIGNMENT_DEFINITIONS[factionId] || []), rng),
       discard: [],
       removed: [],
     };
@@ -62,7 +62,7 @@ function reservedOccurrences(room, factionId) {
 }
 
 function assignmentPool(room, factionId, rng = Math.random, options = {}) {
-  if (!room || !ASSIGNMENT_CARDS[factionId]) return null;
+  if (!room || !ASSIGNMENT_DEFINITIONS[factionId]) return null;
   const classify = typeof options.classify === 'function' ? options.classify : null;
 
   function backing({ create = false } = {}) {

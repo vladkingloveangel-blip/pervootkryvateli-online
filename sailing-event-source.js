@@ -1,6 +1,6 @@
 'use strict';
 
-const { SAILING_EVENT_CARDS } = require('./game-data');
+const { SAILING_EVENT_DEFINITIONS } = require('./game-data');
 const { shuffleWithRng } = require('./random-sources');
 
 function expandSailingEventDefinitions(definitions) {
@@ -14,14 +14,14 @@ function expandSailingEventDefinitions(definitions) {
 
 function createSailingEventStorage(rng = Math.random) {
   return {
-    drawPile: shuffleWithRng(expandSailingEventDefinitions(SAILING_EVENT_CARDS), rng),
+    drawPile: shuffleWithRng(expandSailingEventDefinitions(SAILING_EVENT_DEFINITIONS), rng),
     discard: [],
   };
 }
 
 function canonicalizeSailingEventOccurrence(rawOccurrence) {
   if (!rawOccurrence) return null;
-  const canonical = SAILING_EVENT_CARDS.find(definition =>
+  const canonical = SAILING_EVENT_DEFINITIONS.find(definition =>
     definition.id === rawOccurrence.masterCardId || definition.id === rawOccurrence.id
   );
   return canonical

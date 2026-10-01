@@ -8,7 +8,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { Pool } = require('pg');
 const { RoomStore, isUnfinished } = require('./room-store');
-const { MAP_META, CITADEL, HAZARDS, SHIPS, SHIP_LEVELS, SHIP_UPGRADES, ESCORTS, COLORS, BUILDINGS, CHARACTERS, GOODS, CITADEL_CELLS, ANCHORS, FACTIONS, POLITICAL_FACTION_ORDER, ASSIGNMENT_CARDS, LEGENDARY_PLACES, LEGENDARY_PLACE_RULES, NAMED_PLACE_CARDS } = require('./game-data');
+const { MAP_META, CITADEL, HAZARDS, SHIPS, SHIP_LEVELS, SHIP_UPGRADES, ESCORTS, COLORS, BUILDINGS, CHARACTERS, GOODS, CITADEL_CELLS, ANCHORS, FACTIONS, POLITICAL_FACTION_ORDER, ASSIGNMENT_DEFINITIONS, LEGENDARY_PLACES, LEGENDARY_PLACE_RULES, PLACE_DISCOVERY_DEFINITIONS } = require('./game-data');
 const {
   cloneIslands,
   reachableCells,
@@ -663,7 +663,7 @@ function publicRoom(room, viewerId = null) {
       };
     }),
     feudDecks: Object.fromEntries(POLITICAL_FACTION_ORDER.map(id => [id, { remaining: room.feudDecks?.[id]?.drawPile?.length || 0, discard: room.feudDecks?.[id]?.discard?.length || 0 }])),
-    assignmentDecks: Object.fromEntries(Object.keys(ASSIGNMENT_CARDS).map(id => [id, { remaining: room.assignmentDecks?.[id]?.drawPile?.length || 0, discard: room.assignmentDecks?.[id]?.discard?.length || 0, removed: room.assignmentDecks?.[id]?.removed?.length || 0 }])),
+    assignmentDecks: Object.fromEntries(Object.keys(ASSIGNMENT_DEFINITIONS).map(id => [id, { remaining: room.assignmentDecks?.[id]?.drawPile?.length || 0, discard: room.assignmentDecks?.[id]?.discard?.length || 0, removed: room.assignmentDecks?.[id]?.removed?.length || 0 }])),
     legendaryPlaces: LEGENDARY_PLACE_RULES.map(place => ({
       id: place.id,
       name: place.name,
@@ -676,7 +676,7 @@ function publicRoom(room, viewerId = null) {
       unresolved: place.unresolved || null,
       exploredBy: getDiscovery(room, place.id, place)?.ownerId || null,
     })),
-    namedPlaceCards: NAMED_PLACE_CARDS.map(card => ({
+    namedPlaceCards: PLACE_DISCOVERY_DEFINITIONS.map(card => ({
       id: card.id,
       name: card.name,
       placeId: card.placeId,
@@ -1124,7 +1124,7 @@ function buildAssignmentQueue(room, snapshot) {
   for (const playerId of room.order || []) {
     const snap = snapshot?.[playerId];
     if (!snap?.suzerainId || snap.hadAssignment) continue;
-    if (!ASSIGNMENT_CARDS[snap.suzerainId]) continue;
+    if (!ASSIGNMENT_DEFINITIONS[snap.suzerainId]) continue;
     queue.push({ playerId, factionId: snap.suzerainId });
   }
   return queue;
