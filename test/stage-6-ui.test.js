@@ -238,3 +238,23 @@ test('7.7 finished finalResult renderer keeps six canonical titles and shared ho
   assert.equal(nodes.get('finalPlayerMetrics').children.length, 2);
   assert.equal(nodes.get('finalPlayerMetrics').children[0].children[1].children.length, 12);
 });
+
+
+test('UI-4 mobile shell makes the map the permanent gameplay surface without deleting legacy controls', () => {
+  assert.match(index, /id="gameWorldShell" class="layout game-world-shell"/);
+  assert.match(index, /id="mapViewport" class="map-viewport"/);
+  assert.match(index, /id="gameSidePanel"/);
+  assert.match(index, /id="mobileGameNav"/);
+
+  assert.match(styles, /UI-4 — mobile-first fullscreen map shell/);
+  assert.match(styles, /body\.game-active \.game-world-shell \{[\s\S]*?position: absolute;[\s\S]*?inset: 0;/);
+  assert.match(styles, /body\.game-active \.game-world-shell \.map-viewport \{[\s\S]*?position: absolute;[\s\S]*?inset: 0;[\s\S]*?height: 100%;/);
+  assert.match(styles, /body\.game-active \.game-hud \{[\s\S]*?position: absolute;[\s\S]*?z-index: 50;/);
+  assert.match(styles, /body\.game-active \.game-world-shell \.map-toolbar \{[\s\S]*?position: absolute;[\s\S]*?z-index: 46;/);
+  assert.match(styles, /body\.game-active \.finished-state \.game-world-shell \{\s*display: none;/);
+
+  // UI-4 is shell-only: no mechanic panel or command path is removed yet.
+  for (const id of ['eventContent','politicsContent','fleetContent','anchorContent','islandContent','combatContent','playersPanel','endGamePanel']) {
+    assert.match(index, new RegExp('id="' + id + '"'), id + ' remains available during migration');
+  }
+});
