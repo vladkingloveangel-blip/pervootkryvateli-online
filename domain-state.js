@@ -619,6 +619,99 @@ function discardStoredBenefit(player, savedCardId) {
   return consumeStoredBenefit(player, savedCardId);
 }
 
+
+function discoveryDefinitionFor(placeDefinitions, placeId) {
+  const id = String(placeId || '');
+  if (!id || !placeDefinitions) return null;
+  if (Array.isArray(placeDefinitions)) {
+    return placeDefinitions.find(definition => String(definition?.id || '') === id) || null;
+  }
+  if (typeof placeDefinitions !== 'object') return null;
+  if (String(placeDefinitions.id || '') === id) return placeDefinitions;
+  const direct = placeDefinitions[id];
+  return direct && typeof direct === 'object' && !Array.isArray(direct) ? direct : null;
+}
+
+function discoveryFromRegistryEntry(placeId, ownerId, placeDefinitions = null) {
+  const id = String(placeId || '');
+  if (!id || ownerId === undefined || ownerId === null || String(ownerId) === '') return null;
+  const definition = discoveryDefinitionFor(placeDefinitions, id);
+  const source = {
+    registry: 'legendaryPlacesExplored',
+    placeId: id,
+  };
+  if (definition) {
+    if (hasOwn(definition, 'kind')) source.placeKind = cloneDetached(definition.kind);
+    if (hasOwn(definition, 'mapPlaceId')) source.mapPlaceId = cloneDetached(definition.mapPlaceId);
+    if (hasOwn(definition, 'islandId')) source.islandId = cloneDetached(definition.islandId);
+  }
+  return Discovery.view({
+    kind: 'legendary-place',
+    id,
+    ownerId: cloneDetached(ownerId),
+    claimedById: cloneDetached(ownerId),
+    state: 'claimed',
+    source,
+    payload: definition ? cloneDetached(definition) : { id },
+  });
+}
+
+function getDiscovery(room, placeId, placeDefinitions = null) {
+  const registry = room?.legendaryPlacesExplored;
+  const id = String(placeId || '');
+  if (!id || !registry || typeof registry !== 'object' || Array.isArray(registry) || !hasOwn(registry, id)) return null;
+  return discoveryFromRegistryEntry(id, registry[id], placeDefinitions);
+}
+
+function listDiscoveries(room, placeDefinitions = null) {
+  const registry = room?.legendaryPlacesExplored;
+  if (!registry || typeof registry !== 'object' || Array.isArray(registry)) return [];
+  return Object.keys(registry)
+    .map(placeId => getDiscovery(room, placeId, placeDefinitions))
+    .filter(Boolean);
+}
+
+function listPlayerDiscoveries(room, playerId, placeDefinitions = null) {
+  if (playerId === undefined || playerId === null) return [];
+  return listDiscoveries(room, placeDefinitions)
+    .filter(discovery => String(discovery.ownerId) === String(playerId));
+}
+
+function hasDiscovery(room, placeId) {
+  return Boolean(getDiscovery(room, placeId));
+}
+
+function claimDiscovery(room, placeId, playerId, placeDefinitions = null) {
+  if (!room || typeof room !== 'object') throw new TypeError('claimDiscovery requires a room object.');
+  const id = String(placeId || '');
+  if (!id) throw new TypeError('claimDiscovery requires a placeId.');
+  if (playerId === undefined || playerId === null || String(playerId) === '') {
+    throw new TypeError('claimDiscovery requires a playerId.');
+  }
+  if (!room.legendaryPlacesExplored || typeof room.legendaryPlacesExplored !== 'object' || Array.isArray(room.legendaryPlacesExplored)) {
+    room.legendaryPlacesExplored = {};
+  }
+
+  const existing = getDiscovery(room, id, placeDefinitions);
+  if (existing) {
+    return {
+      first: false,
+      existingOwnerId: existing.ownerId,
+      ownerId: existing.ownerId,
+      discovery: existing,
+    };
+  }
+
+  room.legendaryPlacesExplored[id] = playerId;
+  const discovery = getDiscovery(room, id, placeDefinitions);
+  return {
+    first: true,
+    existingOwnerId: null,
+    ownerId: discovery.ownerId,
+    discovery,
+  };
+}
+
 function createLegacyFieldAdapter(target, key, contract, options = {}) {
   if (!target || typeof target !== 'object') throw new TypeError('Legacy field adapter requires a target object.');
   if (!contract || typeof contract.view !== 'function' || typeof contract.toLegacy !== 'function') {
@@ -695,6 +788,12 @@ module.exports = {
   storeBenefit,
   consumeStoredBenefit,
   discardStoredBenefit,
+  discoveryFromRegistryEntry,
+  getDiscovery,
+  listDiscoveries,
+  listPlayerDiscoveries,
+  hasDiscovery,
+  claimDiscovery,
   presenceOf,
   createLegacyFieldAdapter,
 };

@@ -31,6 +31,11 @@ const {
   storeBenefit,
   consumeStoredBenefit,
   discardStoredBenefit,
+  getDiscovery,
+  listDiscoveries,
+  listPlayerDiscoveries,
+  hasDiscovery,
+  claimDiscovery,
 } = domainState;
 const { BALANCE, MAP_META } = require('./game-data');
 const { selectTreasureOutcome, selectLegendaryAbility, selectTreasureCandidates } = require('./digital-random-sources');
@@ -563,14 +568,14 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
     changed = true;
   }
 
-  // Recover the public first-discovery registry from any saved named cards before
-  // filling missing player-facing arrays.
+  // Legacy named cards may repair a missing registry entry, but never override
+  // an existing authoritative first-discovery owner.
   for (const player of room.players) {
     if (!Array.isArray(player.namedPlaceCards)) continue;
     for (const saved of player.namedPlaceCards) {
       const canonical = NAMED_PLACE_CARDS.find(card => card.id === saved?.id || card.placeId === saved?.placeId);
-      if (!canonical || room.legendaryPlacesExplored[canonical.placeId]) continue;
-      room.legendaryPlacesExplored[canonical.placeId] = player.id;
+      if (!canonical || hasDiscovery(room, canonical.placeId)) continue;
+      claimDiscovery(room, canonical.placeId, player.id, LEGENDARY_PLACE_RULES);
       changed = true;
     }
   }
@@ -580,9 +585,35 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
       player.namedPlaceCards = [];
       changed = true;
     }
+
+    const repairedNamedCards = [];
+    const seenCanonicalIds = new Set();
+    for (const saved of player.namedPlaceCards) {
+      const canonical = NAMED_PLACE_CARDS.find(card => card.id === saved?.id || card.placeId === saved?.placeId);
+      if (!canonical) {
+        repairedNamedCards.push(saved);
+        continue;
+      }
+      const discovery = getDiscovery(room, canonical.placeId, LEGENDARY_PLACE_RULES);
+      if (!discovery || String(discovery.ownerId) !== String(player.id)) {
+        changed = true;
+        continue;
+      }
+      if (seenCanonicalIds.has(canonical.id)) {
+        changed = true;
+        continue;
+      }
+      seenCanonicalIds.add(canonical.id);
+      repairedNamedCards.push(saved);
+    }
+    if (repairedNamedCards.length !== player.namedPlaceCards.length) {
+      player.namedPlaceCards = repairedNamedCards;
+    }
+
     for (const card of NAMED_PLACE_CARDS) {
-      if (room.legendaryPlacesExplored[card.placeId] !== player.id) continue;
-      if (player.namedPlaceCards.some(saved => saved?.id === card.id)) continue;
+      const discovery = getDiscovery(room, card.placeId, LEGENDARY_PLACE_RULES);
+      if (!discovery || String(discovery.ownerId) !== String(player.id)) continue;
+      if (player.namedPlaceCards.some(saved => saved?.id === card.id || saved?.placeId === card.placeId)) continue;
       player.namedPlaceCards.push(JSON.parse(JSON.stringify(card)));
       changed = true;
     }
@@ -1011,11 +1042,19 @@ function namedPlaceCardFor(placeId) {
 function claimLegendaryPlaceDiscovery(room, player, placeId, rng = Math.random) {
   const place = legendaryPlaceRule(placeId);
   if (!room || !player || !place) return { ok: false, first: false, place: place || null, namedCard: null, legendaryCards: [] };
-  room.legendaryPlacesExplored ||= {};
-  const exploredBy = room.legendaryPlacesExplored[place.id] || null;
-  if (exploredBy) return { ok: true, first: false, place, exploredBy, namedCard: null, legendaryCards: [] };
 
-  room.legendaryPlacesExplored[place.id] = player.id;
+  const claim = claimDiscovery(room, place.id, player.id, place);
+  if (!claim.first) {
+    return {
+      ok: true,
+      first: false,
+      place,
+      exploredBy: claim.discovery?.ownerId || claim.ownerId || null,
+      namedCard: null,
+      legendaryCards: [],
+    };
+  }
+
   const card = namedPlaceCardFor(place.id);
   player.namedPlaceCards ||= [];
   let namedCard = null;
@@ -1037,7 +1076,7 @@ function claimLegendaryPlaceDiscovery(room, player, placeId, rng = Math.random) 
     ok: true,
     first: true,
     place,
-    exploredBy: player.id,
+    exploredBy: claim.discovery.ownerId,
     namedCard,
     legendaryCards,
     legendaryCard: legendaryCards[0] || null,
@@ -3791,6 +3830,11 @@ module.exports = {
   storeBenefit,
   consumeStoredBenefit,
   discardStoredBenefit,
+  getDiscovery,
+  listDiscoveries,
+  listPlayerDiscoveries,
+  hasDiscovery,
+  claimDiscovery,
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,

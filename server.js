@@ -111,6 +111,8 @@ const {
   expeditionHistoryRecordToLegacy,
   expeditionTakenThisRound,
   resetExpeditionRoundUsage,
+  getDiscovery,
+  listPlayerDiscoveries,
   listLegendaryAbilities,
   listSpecialAbilities,
   grantLegendaryAbility,
@@ -619,7 +621,7 @@ function publicRoom(room, viewerId = null) {
       rewardCount: place.unresolved ? 0 : Math.max(0, Number(place.reward?.count) || 0),
       rewardStatus: place.rewardStatus || null,
       unresolved: place.unresolved || null,
-      exploredBy: room.legendaryPlacesExplored?.[place.id] || null,
+      exploredBy: getDiscovery(room, place.id, place)?.ownerId || null,
     })),
     namedPlaceCards: NAMED_PLACE_CARDS.map(card => ({
       id: card.id,
@@ -627,7 +629,7 @@ function publicRoom(room, viewerId = null) {
       placeId: card.placeId,
       visibility: card.visibility,
       iconKey: card.iconKey || null,
-      claimedBy: room.legendaryPlacesExplored?.[card.placeId] || null,
+      claimedBy: getDiscovery(room, card.placeId, LEGENDARY_PLACE_RULES)?.ownerId || null,
     })),
     alliances: (room.alliances || []).map(pair => [...pair]),
     pendingAlliance: room.pendingAlliance && (room.pendingAlliance.fromId === viewerId || room.pendingAlliance.toId === viewerId)
@@ -666,7 +668,7 @@ function publicRoom(room, viewerId = null) {
         row: place.row,
         col: place.col,
         reward: place.reward || null,
-        exploredBy: room.legendaryPlacesExplored?.[place.id] || null,
+        exploredBy: getDiscovery(room, place.id, place)?.ownerId || null,
       })),
       citadel: {
         id: CITADEL.id,
@@ -738,6 +740,7 @@ function publicRoom(room, viewerId = null) {
       const legendaryAbilities = listLegendaryAbilities(p) || [];
       const specialAbilities = listSpecialAbilities(p) || [];
       const storedBenefits = listStoredBenefits(p) || [];
+      const playerDiscoveries = listPlayerDiscoveries(room, p.id, LEGENDARY_PLACE_RULES);
       return {
         id: p.id,
         name: p.name,
@@ -767,7 +770,7 @@ function publicRoom(room, viewerId = null) {
         specialCards: p.id === viewerId ? specialAbilities.map(ability => ability.payload.name) : [],
         specialCardCount: specialAbilities.length,
         namedPlaceCards: (p.namedPlaceCards || []).map(card => ({ id: card.id, name: card.name, placeId: card.placeId })),
-        namedPlaceCardCount: (p.namedPlaceCards || []).length,
+        namedPlaceCardCount: playerDiscoveries.length,
         activeExpedition: activeExpeditionTask ? {
           cardId: activeExpeditionTask.id,
           name: activeExpeditionTask.source?.name || activeExpeditionTask.payload?.name,
