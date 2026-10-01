@@ -130,6 +130,9 @@ const {
   expeditionHistoryRecordToLegacy,
   expeditionTakenThisRound,
   resetExpeditionRoundUsage,
+  enqueueResolution,
+  dequeueResolution,
+  resolutionQueueLength,
   getDiscovery,
   listPlayerDiscoveries,
   listLegendaryAbilities,
@@ -2526,7 +2529,7 @@ function finishPendingEvent(room, pending) {
     return;
   }
   clearPendingResolution(room, 'event');
-  if (origin !== 'treasure-hunter') drainExpeditionTreasureRewards(room);
+  if (origin === 'expedition') drainExpeditionTreasureRewards(room);
 }
 
 
@@ -2799,9 +2802,8 @@ function resolveExpeditionTreasureReward(room, player, reward) {
 
 function drainExpeditionTreasureRewards(room) {
   if (hasPendingResolution(room, 'event')) return true;
-  room.pendingExpeditionRewards ||= [];
-  while (room.pendingExpeditionRewards.length) {
-    const queued = room.pendingExpeditionRewards.shift();
+  while (resolutionQueueLength(room) > 0) {
+    const queued = dequeueResolution(room);
     const player = playerById(room, queued.playerId);
     if (!player) continue;
     const result = resolveExpeditionTreasureReward(room, player, queued);
@@ -2815,8 +2817,7 @@ function handleExpeditionArrival(room, player) {
   if (!completion?.completed) return completion;
   const name = completion.place?.name || completion.card?.name || 'экспедиция';
   log(room, `${player.name} завершает экспедицию «${name}» без расхода действия. Карта экспедиции возвращена в колоду; место добавлено в личную историю.`);
-  room.pendingExpeditionRewards ||= [];
-  room.pendingExpeditionRewards.push({
+  enqueueResolution(room, {
     playerId: player.id,
     expeditionName: name,
     treasureAssignmentInstanceId: getActiveAssignmentTask(player)?.id || null,

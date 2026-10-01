@@ -72,6 +72,11 @@ const {
   getPendingFeudResolution,
   getPendingAssignmentChoiceResolution,
   getPendingLegendaryReactionResolution,
+  listResolutionQueue,
+  peekResolutionQueue,
+  enqueueResolution,
+  dequeueResolution,
+  resolutionQueueLength,
 } = domainState;
 const { BALANCE, MAP_META } = require('./game-data');
 const { selectTreasureOutcome, selectLegendaryAbility, selectTreasureCandidates } = require('./digital-random-sources');
@@ -3905,6 +3910,11 @@ module.exports = {
   getPendingFeudResolution,
   getPendingAssignmentChoiceResolution,
   getPendingLegendaryReactionResolution,
+  listResolutionQueue,
+  peekResolutionQueue,
+  enqueueResolution,
+  dequeueResolution,
+  resolutionQueueLength,
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,

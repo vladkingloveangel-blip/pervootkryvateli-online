@@ -210,7 +210,8 @@ test('server source routes four pending families through facade and leaves other
   assert.match(server, /room\?\.pendingFleetAdjustment|room\.pendingFleetAdjustment/);
   assert.match(server, /room\?\.pendingBattle|room\.pendingBattle/);
   assert.match(server, /room\?\.pendingAlliance|room\.pendingAlliance/);
-  assert.doesNotMatch(domain, /pendingExpeditionRewards/);
+  assert.equal((domain.match(/pendingExpeditionRewards/g) || []).length, 1);
+  assert.match(domain, /const RESOLUTION_QUEUE_FIELD = 'pendingExpeditionRewards'/);
 });
 
 test('Treasure Hunter server flow uses persisted candidates only after activation and never drains expedition rewards for its origin', () => {
@@ -243,8 +244,8 @@ test('Treasure Hunter server flow uses persisted candidates only after activatio
   const finishStart = server.indexOf('function finishPendingEvent');
   const finishEnd = server.indexOf('function resolveTreasureHunterChoice', finishStart);
   const finish = server.slice(finishStart, finishEnd);
-  assert.match(finish, /origin !== 'treasure-hunter'/);
-  assert.match(finish, /drainExpeditionTreasureRewards\(room\)/);
+  assert.match(finish, /if \(origin === 'expedition'\) drainExpeditionTreasureRewards\(room\)/);
+  assert.doesNotMatch(finish, /origin !== 'treasure-hunter'/);
 
   const priority = server.slice(server.indexOf('const ASSIGNMENT_PRIORITY_EVENTS'), server.indexOf('function sameAssignmentOption'));
   assert.match(priority, /useTreasureHunter/);

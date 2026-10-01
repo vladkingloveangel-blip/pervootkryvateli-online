@@ -1188,6 +1188,54 @@ function getPendingLegendaryReactionResolution(room) {
   return getPendingResolution(room, 'legendary-reaction');
 }
 
+
+const RESOLUTION_QUEUE_FIELD = 'pendingExpeditionRewards';
+
+function resolutionQueueBacking(room, create = false) {
+  if (!room || typeof room !== 'object') throw new TypeError('ResolutionQueue requires a room object.');
+  if (!hasOwn(room, RESOLUTION_QUEUE_FIELD)) {
+    if (!create) return null;
+    room[RESOLUTION_QUEUE_FIELD] = [];
+  }
+  const queue = room[RESOLUTION_QUEUE_FIELD];
+  if (!Array.isArray(queue)) {
+    throw new TypeError('ResolutionQueue backing must be an array. Run compatibility normalization first.');
+  }
+  return queue;
+}
+
+function listResolutionQueue(room) {
+  const queue = resolutionQueueBacking(room, false);
+  return queue ? cloneDetached(queue) : [];
+}
+
+function peekResolutionQueue(room) {
+  const queue = resolutionQueueBacking(room, false);
+  if (!queue?.length) return undefined;
+  return cloneDetached(queue[0]);
+}
+
+function enqueueResolution(room, item) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    throw new TypeError('enqueueResolution expects a legacy queue item object.');
+  }
+  const queue = resolutionQueueBacking(room, true);
+  const stored = cloneDetached(item);
+  queue.push(stored);
+  return cloneDetached(stored);
+}
+
+function dequeueResolution(room) {
+  const queue = resolutionQueueBacking(room, false);
+  if (!queue?.length) return undefined;
+  return cloneDetached(queue.shift());
+}
+
+function resolutionQueueLength(room) {
+  const queue = resolutionQueueBacking(room, false);
+  return queue?.length || 0;
+}
+
 function createLegacyFieldAdapter(target, key, contract, options = {}) {
   if (!target || typeof target !== 'object') throw new TypeError('Legacy field adapter requires a target object.');
   if (!contract || typeof contract.view !== 'function' || typeof contract.toLegacy !== 'function') {
@@ -1313,6 +1361,12 @@ module.exports = {
   getPendingFeudResolution,
   getPendingAssignmentChoiceResolution,
   getPendingLegendaryReactionResolution,
+  RESOLUTION_QUEUE_FIELD,
+  listResolutionQueue,
+  peekResolutionQueue,
+  enqueueResolution,
+  dequeueResolution,
+  resolutionQueueLength,
   presenceOf,
   createLegacyFieldAdapter,
 };
