@@ -1674,3 +1674,145 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     display: none !important;
   }
 }
+
+
+/* UI-9 — reusable map object bottom sheet */
+.object-sheet { display: none; }
+
+@media (max-width: 900px) {
+  body.game-active .map-info-card {
+    display: none !important;
+  }
+
+  body.game-active .object-sheet {
+    position: absolute;
+    z-index: 72;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: grid;
+    grid-template-rows: auto auto minmax(0, auto) auto;
+    gap: 8px;
+    max-height: min(46dvh, 430px);
+    padding: 6px 12px calc(76px + env(safe-area-inset-bottom, 0px));
+    border: 1px solid rgba(240,196,91,.34);
+    border-bottom: 0;
+    border-radius: 18px 18px 0 0;
+    background: rgba(8,37,44,.97);
+    box-shadow: 0 -14px 34px rgba(0,0,0,.4);
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+  }
+
+  body.game-active .object-sheet.hidden {
+    display: none !important;
+  }
+
+  body.game-active .object-sheet.expanded {
+    max-height: min(86dvh, 780px);
+  }
+
+  body.game-active .object-sheet-handle {
+    justify-self: center;
+    width: 42px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.3);
+  }
+
+  body.game-active .object-sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  body.game-active .object-sheet-heading {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  body.game-active .object-sheet-kind {
+    color: var(--accent);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .08em;
+  }
+
+  body.game-active .object-sheet-heading strong {
+    overflow: hidden;
+    font-size: 19px;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.game-active .object-sheet-head-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  body.game-active .object-sheet-head-actions button {
+    width: 38px;
+    min-width: 38px;
+    min-height: 38px;
+    padding: 0;
+  }
+
+  body.game-active .object-sheet-body {
+    min-height: 0;
+    overflow-y: auto;
+    display: grid;
+    gap: 5px;
+    color: var(--muted);
+    font-size: 12px;
+    overscroll-behavior: contain;
+  }
+
+  body.game-active .object-sheet-body > span {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+  }
+
+  body.game-active .object-sheet-body strong {
+    color: var(--text);
+    text-align: right;
+  }
+
+  body.game-active .object-sheet-actions {
+    display: grid;
+    gap: 7px;
+  }
+
+  body.game-active .object-sheet-actions button {
+    min-height: 44px;
+  }
+
+  body.game-active.object-sheet-open .game-action-bar {
+    bottom: calc(min(46dvh, 430px) + 8px);
+  }
+
+  body.game-active .object-sheet.expanded ~ .game-action-bar {
+    display: none !important;
+  }
+
+  body.game-active.decision-layer-open .object-sheet,
+  body.game-active.result-layer-open .object-sheet {
+    pointer-events: none;
+  }
+
+  body.game-active .token {
+    border: 1px solid rgba(255,255,255,.55);
+    padding: 0;
+    cursor: pointer;
+  }
+
+  body.game-active .token:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}

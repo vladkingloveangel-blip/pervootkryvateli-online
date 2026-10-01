@@ -394,6 +394,22 @@
         </aside>
       </section>
 
+      <section id="objectSheet" class="object-sheet hidden" role="dialog" aria-modal="false" aria-labelledby="objectSheetTitle">
+        <div class="object-sheet-handle" aria-hidden="true"></div>
+        <div class="object-sheet-head">
+          <div class="object-sheet-heading">
+            <span id="objectSheetKind" class="object-sheet-kind">Объект карты</span>
+            <strong id="objectSheetTitle">—</strong>
+          </div>
+          <div class="object-sheet-head-actions">
+            <button id="objectSheetExpand" class="small" type="button" aria-label="Развернуть карточку">⌃</button>
+            <button id="objectSheetClose" class="small" type="button" aria-label="Закрыть карточку">✕</button>
+          </div>
+        </div>
+        <div id="objectSheetBody" class="object-sheet-body"></div>
+        <div id="objectSheetActions" class="object-sheet-actions"></div>
+      </section>
+
       <section id="gameActionBar" class="game-action-bar hidden" aria-live="polite" aria-label="Текущее действие">
         <div class="game-action-copy">
           <span id="gameActionKicker" class="game-action-kicker">Ожидание</span>

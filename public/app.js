@@ -690,6 +690,8 @@
   });
   $('mobileSheetClose').addEventListener('click', () => openMobileTab('map'));
   $('resultContinueBtn').addEventListener('click', dismissResultCard);
+  $('objectSheetClose').addEventListener('click', closeMapInfo);
+  $('objectSheetExpand').addEventListener('click', toggleObjectSheetExpanded);
   $('hudPlayerBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : openMobileTab('ship'));
   $('hudDucatsBtn').addEventListener('click', () => openMobileTab('ship'));
   $('hudGloryBtn').addEventListener('click', () => openMobileTab('players'));
@@ -786,6 +788,7 @@
 
   function openMobileTab(tab = 'map') {
     closeGameAccountMenu();
+    if (tab !== 'map' && state.mapSelection) closeMapInfo();
     state.mobileTab = tab;
     const side = $('gameSidePanel');
     const isMap = tab === 'map';
@@ -1722,6 +1725,7 @@
     }
 
     const descriptor = mobileDecisionDescriptor(state.room);
+    if (descriptor && state.mapSelection) closeMapInfo();
     layer.classList.toggle('hidden', !descriptor);
     document.body.classList.toggle('decision-layer-open', Boolean(descriptor));
     if (!descriptor) {
@@ -3374,6 +3378,12 @@
     card.classList.add('hidden');
     card.style.visibility = '';
     card.style.maxHeight = '';
+    const sheet = $('objectSheet');
+    if (sheet) {
+      sheet.classList.add('hidden');
+      sheet.classList.remove('expanded');
+      document.body.classList.remove('object-sheet-open');
+    }
   }
 
   function positionMapInfoAt(row, col) {
@@ -3419,6 +3429,88 @@
     const anchor = state.mapSelection?.anchor;
     if (!anchor || $('mapInfoCard').classList.contains('hidden')) return;
     positionMapInfoAt(anchor.row, anchor.col);
+  }
+
+  function mapObjectKindLabel(kind, data) {
+    if (kind === 'island') {
+      if (data.ownerId === state.myId) return 'ВАШ ОСТРОВ';
+      if (data.ownerId) return 'ОСТРОВ ИГРОКА';
+      if (data.kind === 'state') return 'ГОСУДАРСТВЕННЫЙ ОСТРОВ';
+      return 'ОСТРОВ';
+    }
+    if (kind === 'citadel') return 'ЦИТАДЕЛЬ';
+    if (kind === 'anchor') return 'МОРСКОЙ ЯКОРЬ';
+    if (kind === 'legendary') return 'ЛЕГЕНДАРНОЕ МЕСТО';
+    if (kind === 'hazard') return 'МОРСКАЯ ОПАСНОСТЬ';
+    if (kind === 'player') return data.id === state.myId ? 'ВАША ФЛОТИЛИЯ' : 'ФЛОТИЛИЯ ИГРОКА';
+    return 'ОБЪЕКТ КАРТЫ';
+  }
+
+  function renderObjectSheetFromMapInfo(kind, data) {
+    const sheet = $('objectSheet');
+    if (!sheet) return;
+    $('objectSheetKind').textContent = mapObjectKindLabel(kind, data);
+    $('objectSheetTitle').textContent = $('mapInfoTitle').textContent || data.name || 'Объект';
+    $('objectSheetBody').innerHTML = $('mapInfoMeta').innerHTML;
+
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    const legacyAction = $('mapInfoAction');
+    if (!legacyAction.classList.contains('hidden')) {
+      const action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'primary';
+      action.textContent = legacyAction.textContent;
+      action.addEventListener('click', () => legacyAction.onclick?.());
+      actions.appendChild(action);
+    }
+
+    sheet.classList.remove('hidden');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function toggleObjectSheetExpanded() {
+    const sheet = $('objectSheet');
+    if (!sheet || sheet.classList.contains('hidden')) return;
+    const expanded = sheet.classList.toggle('expanded');
+    $('objectSheetExpand').textContent = expanded ? '⌄' : '⌃';
+    $('objectSheetExpand').setAttribute('aria-label', expanded ? 'Свернуть карточку' : 'Развернуть карточку');
+  }
+
+  function showPlayerMapInfo(player) {
+    const publicStats = [];
+    publicStats.push(`<span>Корабль: <strong>${escapeHtml(shipName(player.shipClass))} ${ROMAN[player.level] || player.level}</strong></span>`);
+    if (player.fleetArtillery != null) publicStats.push(`<span>Артиллерия: <strong>${player.fleetArtillery}</strong></span>`);
+    if (player.assaultArmy != null) publicStats.push(`<span>Войско: <strong>${player.assaultArmy}</strong></span>`);
+    if (player.totalCargoCapacity != null) publicStats.push(`<span>Груз: <strong>${player.totalCargoCapacity}</strong> вместимость</span>`);
+    publicStats.push(`<span>Статус: <strong>${player.connected ? 'в сети' : 'отключён'}</strong></span>`);
+
+    state.mapSelection = { kind: 'player', id: player.id, anchor: { row: player.row, col: player.col } };
+    $('mapInfoTitle').textContent = player.name;
+    $('mapInfoMeta').innerHTML = publicStats.join('');
+    const action = $('mapInfoAction');
+    action.classList.add('hidden');
+    action.onclick = null;
+
+    if (player.id === state.myId) {
+      action.textContent = 'Открыть флотилию';
+      action.classList.remove('hidden');
+      action.onclick = () => { closeMapInfo(); openMobileTab('ship'); };
+    } else {
+      action.textContent = 'Открыть игрока';
+      action.classList.remove('hidden');
+      action.onclick = () => { closeMapInfo(); openMobileTab('players'); };
+    }
+
+    const mobile = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
+    if (mobile) {
+      $('mapInfoCard').classList.add('hidden');
+      renderObjectSheetFromMapInfo('player', player);
+    } else {
+      const card = $('mapInfoCard');
+      card.classList.remove('hidden');
+      positionMapInfoAt(player.row, player.col);
+    }
   }
 
   function showMapInfo(kind, data, anchor = null) {
@@ -3474,8 +3566,15 @@
       };
       meta.innerHTML = `<span>${escapeHtml(descriptions[data.type] || 'Опасная морская клетка.')}</span>`;
     }
-    card.classList.remove('hidden');
-    positionMapInfoAt(resolvedAnchor.row, resolvedAnchor.col);
+    const mobile = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
+    if (mobile) {
+      card.classList.add('hidden');
+      card.style.visibility = '';
+      renderObjectSheetFromMapInfo(kind, data);
+    } else {
+      card.classList.remove('hidden');
+      positionMapInfoAt(resolvedAnchor.row, resolvedAnchor.col);
+    }
   }
 
   function addMapCellButton(layer, row, col, className, label, onClick) {
@@ -3627,13 +3726,20 @@
     }
 
     r.players.forEach((p, idx) => {
-      const t = document.createElement('div');
+      const t = document.createElement('button');
+      t.type = 'button';
       t.className = `token${p.id === state.myId ? ' you' : ''}`;
       t.style.left = `calc(${p.col} * 100% / ${cols} + ${(idx % 3) * 4}px)`;
       t.style.top = `calc(${p.row} * 100% / ${rows} + ${Math.floor(idx / 3) * 4}px)`;
       t.style.background = p.color;
       t.textContent = '⚓';
       t.title = p.name;
+      t.setAttribute('aria-label', `Открыть флотилию игрока ${p.name}`);
+      t.addEventListener('click', event => {
+        event.stopPropagation();
+        if (isDecisionPending()) return;
+        showPlayerMapInfo(p);
+      });
       tokenLayer.appendChild(t);
     });
 

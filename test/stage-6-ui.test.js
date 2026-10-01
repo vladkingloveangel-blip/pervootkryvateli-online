@@ -394,3 +394,46 @@ test('UI-8 result acknowledgement is presentation-only', () => {
   assert.doesNotMatch(code, /socket\.emit/);
   assert.match(app, /\$\('resultContinueBtn'\)\.addEventListener\('click', dismissResultCard\)/);
 });
+
+
+test('UI-9 replaces the mobile map info popup with one reusable object bottom sheet', () => {
+  assert.match(index, /id="objectSheet" class="object-sheet hidden"/);
+  assert.match(index, /id="objectSheetKind"/);
+  assert.match(index, /id="objectSheetTitle"/);
+  assert.match(index, /id="objectSheetBody"/);
+  assert.match(index, /id="objectSheetActions"/);
+  assert.match(index, /id="objectSheetExpand"/);
+  assert.match(index, /id="objectSheetClose"/);
+
+  const start = app.indexOf('  function mapObjectKindLabel(');
+  const end = app.indexOf('\n  function showMapInfo(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /renderObjectSheetFromMapInfo/);
+  assert.match(code, /toggleObjectSheetExpanded/);
+  assert.match(code, /showPlayerMapInfo/);
+  assert.match(code, /mapInfoMeta/);
+  assert.match(code, /legacyAction\.onclick/);
+
+  const showStart = app.indexOf('  function showMapInfo(');
+  const showEnd = app.indexOf('\n  function ', showStart + 1);
+  const showCode = app.slice(showStart, showEnd);
+  assert.match(showCode, /matchMedia\('\(max-width: 900px\)'\)/);
+  assert.match(showCode, /renderObjectSheetFromMapInfo\(kind, data\)/);
+  assert.match(showCode, /positionMapInfoAt\(resolvedAnchor\.row, resolvedAnchor\.col\)/);
+
+  assert.match(app, /document\.createElement\('button'\);[\s\S]*?showPlayerMapInfo\(p\)/);
+  assert.match(app, /\$\('objectSheetClose'\)\.addEventListener\('click', closeMapInfo\)/);
+  assert.match(app, /\$\('objectSheetExpand'\)\.addEventListener\('click', toggleObjectSheetExpanded\)/);
+  assert.match(styles, /UI-9 — reusable map object bottom sheet/);
+  assert.match(styles, /body\.game-active \.map-info-card \{\s*display: none !important;/);
+  assert.match(styles, /body\.game-active \.object-sheet\.expanded/);
+});
+
+test('UI-9 mandatory decisions close voluntary object selection', () => {
+  const start = app.indexOf('  function renderDecisionLayer()');
+  const end = app.indexOf('\n  function renderControls()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /if \(descriptor && state\.mapSelection\) closeMapInfo\(\)/);
+});
