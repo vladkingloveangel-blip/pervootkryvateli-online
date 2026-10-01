@@ -646,7 +646,7 @@ function migrateLegacyPlayerEffects(player) {
           sourcePlayerId: Object.hasOwn(curse, 'sourcePlayerId') ? curse.sourcePlayerId : null,
         },
         duration: { remaining: curse.remaining },
-        payload: { penalty: curse.penalty },
+        payload: Object.hasOwn(curse, 'penalty') ? { penalty: curse.penalty } : {},
         legacyData: legacyRecordExtras(curse, new Set(['remaining', 'penalty', 'sourcePlayerId'])),
       }));
     }

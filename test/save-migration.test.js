@@ -1041,3 +1041,307 @@ test('4 -> 5 -> 6 -> 7 preserves task linkage and migrates discovery/effects/pen
   }
   assert.deepEqual(migrated.unknownRoot, before.unknownRoot);
 });
+
+
+function matrixOccurrenceKey(occurrence) {
+  if (!occurrence || typeof occurrence !== 'object') return String(occurrence ?? null);
+  const id = occurrence.masterCardId
+    || occurrence.id
+    || occurrence.conditionKey
+    || occurrence.expeditionId
+    || occurrence.cardId
+    || occurrence.placeId
+    || 'unknown';
+  return String(id) + ':' + String(occurrence.copy ?? 'legacy');
+}
+
+function matrixFirstFromGroup(group, field) {
+  const out = {};
+  for (const [key, storage] of Object.entries(group || {})) {
+    if (!Array.isArray(storage?.[field])) continue;
+    out[key] = matrixOccurrenceKey(storage[field][0] || null);
+  }
+  return out;
+}
+
+function matrixExpectedNextSnapshot(state) {
+  const sources = state?.[RANDOM_SOURCE_STATE_FIELD] || {};
+  return {
+    seaEncounter: sources.seaEncounter
+      ? matrixFirstFromGroup(sources.seaEncounter, 'available')
+      : matrixFirstFromGroup(state?.anchorDecks, 'drawPile'),
+    sailingEvent: sources.sailingEvent
+      ? matrixOccurrenceKey(sources.sailingEvent.available?.[0] || null)
+      : matrixOccurrenceKey(state?.eventDeck?.drawPile?.[0] || null),
+    politicalEffect: sources.politicalEffect
+      ? matrixFirstFromGroup(sources.politicalEffect, 'available')
+      : matrixFirstFromGroup(state?.feudDecks, 'drawPile'),
+    assignmentPool: sources.assignmentPool
+      ? matrixFirstFromGroup(sources.assignmentPool, 'available')
+      : matrixFirstFromGroup(state?.assignmentDecks, 'drawPile'),
+    expeditionPool: sources.expeditionPool
+      ? matrixOccurrenceKey(sources.expeditionPool.available?.[0] || null)
+      : matrixOccurrenceKey(state?.expeditionDeck?.drawPile?.[0] || null),
+  };
+}
+
+function migrationContinuationFingerprint(state) {
+  return {
+    players: (state?.players || []).map(player => ({
+      id: player?.id,
+      activeAssignmentTask: player?.activeAssignmentTask ?? null,
+      activeExpeditionTask: player?.activeExpeditionTask ?? null,
+      expeditionCompletions: player?.expeditionCompletions ?? [],
+      expeditionAccessUsage: player?.expeditionAccessUsage ?? null,
+      consumableAbilities: player?.consumableAbilities ?? [],
+      storedBenefits: player?.storedBenefits ?? [],
+      temporaryEffects: player?.temporaryEffects ?? null,
+      pendingConsumableAbilityGrants: player?.pendingConsumableAbilityGrants ?? null,
+    })),
+    pendingResolutions: state?.pendingResolutions ?? null,
+    resolutionQueue: state?.resolutionQueue ?? null,
+    preTurnResolutionFlow: state?.preTurnResolutionFlow ?? null,
+    discoveries: state?.discoveries ?? null,
+    randomSourceState: state?.[RANDOM_SOURCE_STATE_FIELD] ?? null,
+  };
+}
+
+function migrationReservationSnapshot(state) {
+  const sources = state?.[RANDOM_SOURCE_STATE_FIELD] || {};
+  const mapReserved = group => Object.fromEntries(
+    Object.entries(group || {})
+      .filter(([, storage]) => Array.isArray(storage?.reserved))
+      .map(([key, storage]) => [key, storage.reserved.map(matrixOccurrenceKey)])
+  );
+  return {
+    sailingEvent: Array.isArray(sources.sailingEvent?.reserved)
+      ? sources.sailingEvent.reserved.map(matrixOccurrenceKey)
+      : [],
+    politicalEffect: mapReserved(sources.politicalEffect),
+    assignmentPool: mapReserved(sources.assignmentPool),
+    expeditionPool: Array.isArray(sources.expeditionPool?.reserved)
+      ? sources.expeditionPool.reserved.map(matrixOccurrenceKey)
+      : [],
+  };
+}
+
+function assertNoDuplicateReservationKeys(snapshot, label) {
+  const lists = [
+    ['sailingEvent', snapshot.sailingEvent],
+    ['expeditionPool', snapshot.expeditionPool],
+    ...Object.entries(snapshot.politicalEffect).map(([key, value]) => ['politicalEffect.' + key, value]),
+    ...Object.entries(snapshot.assignmentPool).map(([key, value]) => ['assignmentPool.' + key, value]),
+  ];
+  for (const [path, values] of lists) {
+    assert.equal(new Set(values).size, values.length, label + ': duplicate reservation at ' + path);
+  }
+}
+
+function migrationRandomContinuationTrace(state) {
+  const room = structuredClone(state);
+  const rng = sequence([0.91, 0.13, 0.77, 0.24, 0.66, 0.05, 0.48, 0.32]);
+  const sources = room?.[RANDOM_SOURCE_STATE_FIELD] || {};
+  const trace = {};
+
+  const seaColor = Object.keys(sources.seaEncounter || {})
+    .find(color => Array.isArray(sources.seaEncounter?.[color]?.available));
+  if (seaColor) {
+    const source = seaEncounterSource(room, seaColor, rng);
+    trace.seaEncounter = {
+      color: seaColor,
+      peek: matrixOccurrenceKey(source.peekNext()),
+      consume: matrixOccurrenceKey(source.consumeNext()),
+    };
+  }
+
+  if (Array.isArray(sources.sailingEvent?.available)) {
+    trace.sailingEvent = matrixOccurrenceKey(sailingEventSource(room, rng).consumeNext());
+  }
+
+  const politicalFaction = Object.keys(sources.politicalEffect || {})
+    .find(factionId => Array.isArray(sources.politicalEffect?.[factionId]?.available));
+  if (politicalFaction) {
+    trace.politicalEffect = {
+      factionId: politicalFaction,
+      next: matrixOccurrenceKey(politicalEffectSource(room, politicalFaction, rng).consumeNext()),
+    };
+  }
+
+  const assignmentFaction = Object.keys(sources.assignmentPool || {})
+    .find(factionId => Array.isArray(sources.assignmentPool?.[factionId]?.available));
+  if (assignmentFaction) {
+    const source = assignmentPool(room, assignmentFaction, rng, { classify: () => 'eligible' });
+    const player = room.players?.[0] || { id: 'matrix-player' };
+    trace.assignmentPool = source.offerEligible(player, 1).map(matrixOccurrenceKey);
+  }
+
+  if (Array.isArray(sources.expeditionPool?.available)) {
+    const source = expeditionPool(room, rng, { isEligible: () => true });
+    const player = room.players?.[0] || { id: 'matrix-player' };
+    trace.expeditionPool = matrixOccurrenceKey(source.takeEligible(player));
+  }
+
+  return { trace, rngCalls: rng.calls() };
+}
+
+function migrateWithRngTrap(raw) {
+  const originalRandom = Math.random;
+  let calls = 0;
+  Math.random = () => {
+    calls += 1;
+    throw new Error('migration/reload must not consume RNG');
+  };
+  try {
+    return { result: migrateRoomState(raw), calls };
+  } finally {
+    Math.random = originalRandom;
+  }
+}
+
+function withMatrixFutureMarkers(raw, generation) {
+  raw.matrixFutureField = { generation, nested: ['keep', { exact: true }] };
+  if (raw.players?.[0]) raw.players[0].matrixFuturePlayerField = { generation, keep: true };
+  return raw;
+}
+
+function oldestSupportedMatrixFixture() {
+  const raw = v1Fixture();
+  delete raw.digitalModelSchemaVersion;
+  raw.code = 'MATRIX-OLDEST';
+  raw.treasureDeck = { drawPile: [{ id: 'retired-treasure', copy: 1 }], discard: [] };
+  raw.legendaryDeck = { drawPile: [{ id: 'retired-legendary', copy: 1 }], discard: [] };
+  raw.players[0].replacedAssignmentConditions = ['retired-condition'];
+  return withMatrixFutureMarkers(raw, 'oldest-supported');
+}
+
+function currentPreRefactorMatrixFixture() {
+  const raw = v1Fixture();
+  delete raw.digitalModelSchemaVersion;
+  raw.code = 'MATRIX-PRE';
+  raw.round = 9;
+
+  const factionId = Object.keys(ASSIGNMENT_DEFINITIONS).find(id => ASSIGNMENT_DEFINITIONS[id]?.length);
+  const definition = ASSIGNMENT_DEFINITIONS[factionId][0];
+  const activeOccurrence = { ...structuredClone(definition), copy: 7, matrixActiveMarker: true };
+  const nextOccurrence = { ...structuredClone(definition), copy: 8, matrixNextMarker: true };
+  raw.players[0].activeAssignment = {
+    instanceId: 'matrix-current-task',
+    factionId,
+    card: activeOccurrence,
+    issuedRound: 8,
+    progress: { step: 3, nested: { keep: true } },
+  };
+  raw.assignmentDecks = {
+    [factionId]: {
+      drawPile: [nextOccurrence],
+      discard: [],
+      removed: [],
+      matrixFutureBucket: { keep: true },
+    },
+  };
+  raw.pendingEvent = {
+    id: 'matrix-sampled-choice',
+    playerId: raw.players[0].id,
+    kind: 'treasure-choice',
+    origin: 'treasure-hunter',
+    options: [{ id: '0' }, { id: '1' }],
+    treasureCandidates: [
+      { id: 'income-x1', matrixSample: 'first' },
+      { id: 'full-diamonds-hold', matrixSample: 'second' },
+    ],
+    continuation: { actionIndex: 2 },
+  };
+  raw.pendingExpeditionRewards = [{
+    playerId: raw.players[0].id,
+    expeditionName: 'matrix-reward',
+    treasureAssignmentInstanceId: 'matrix-current-task',
+  }];
+  return withMatrixFutureMarkers(raw, 'current-pre-refactor');
+}
+
+function midStage6MatrixFixture() {
+  const raw = v3ExpeditionFixture().raw;
+  raw.code = 'MATRIX-MID6';
+  return withMatrixFutureMarkers(raw, 'mid-stage-6');
+}
+
+function alreadyCurrentMatrixFixture() {
+  const raw = migrateRoomState(v4TaskInventoryFixture().raw).state;
+  raw.code = 'MATRIX-CURRENT';
+  return withMatrixFutureMarkers(raw, 'already-migrated-current');
+}
+
+const migrationMatrixScenarios = [
+  {
+    name: 'oldest supported unversioned save',
+    expectedFromVersion: 0,
+    make: oldestSupportedMatrixFixture,
+  },
+  {
+    name: 'mid-Stage-6 schema 3 save',
+    expectedFromVersion: ASSIGNMENT_POOL_DIGITAL_MODEL_SCHEMA_VERSION,
+    make: midStage6MatrixFixture,
+  },
+  {
+    name: 'current pre-refactor unversioned save',
+    expectedFromVersion: 0,
+    make: currentPreRefactorMatrixFixture,
+  },
+  {
+    name: 'already-migrated current schema save',
+    expectedFromVersion: CURRENT_DIGITAL_MODEL_SCHEMA_VERSION,
+    make: alreadyCurrentMatrixFixture,
+  },
+];
+
+for (const scenario of migrationMatrixScenarios) {
+  test('6.9 idempotence/double-reload matrix: ' + scenario.name, () => {
+    const raw = scenario.make();
+    const rawBefore = structuredClone(raw);
+    const expectedNext = matrixExpectedNextSnapshot(rawBefore);
+
+    const firstRun = migrateWithRngTrap(raw);
+    assert.equal(firstRun.calls, 0);
+    assert.equal(firstRun.result.fromVersion, scenario.expectedFromVersion);
+    assert.equal(firstRun.result.toVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
+    assert.equal(firstRun.result.state.digitalModelSchemaVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
+    assert.equal(firstRun.result.migrated, scenario.expectedFromVersion !== CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
+    assert.deepEqual(raw, rawBefore);
+
+    const firstState = firstRun.result.state;
+    assert.deepEqual(matrixExpectedNextSnapshot(firstState), expectedNext);
+    assert.deepEqual(firstState.matrixFutureField, rawBefore.matrixFutureField);
+    if (rawBefore.players?.[0]) {
+      assert.deepEqual(firstState.players[0].matrixFuturePlayerField, rawBefore.players[0].matrixFuturePlayerField);
+    }
+
+    const continuationBeforeReload = migrationContinuationFingerprint(firstState);
+    const reservationsBeforeReload = migrationReservationSnapshot(firstState);
+    const randomTraceBeforeReload = migrationRandomContinuationTrace(firstState);
+    assertNoDuplicateReservationKeys(reservationsBeforeReload, scenario.name);
+
+    const reloaded = JSON.parse(JSON.stringify(firstState));
+    assert.deepEqual(reloaded, firstState);
+
+    const secondRun = migrateWithRngTrap(reloaded);
+    assert.equal(secondRun.calls, 0);
+    assert.equal(secondRun.result.migrated, false);
+    assert.equal(secondRun.result.fromVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
+    assert.equal(secondRun.result.toVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
+    assert.deepEqual(secondRun.result.state, firstState);
+
+    const continuationAfterReload = migrationContinuationFingerprint(secondRun.result.state);
+    const reservationsAfterReload = migrationReservationSnapshot(secondRun.result.state);
+    const randomTraceAfterReload = migrationRandomContinuationTrace(secondRun.result.state);
+
+    assert.deepEqual(continuationAfterReload, continuationBeforeReload);
+    assert.deepEqual(reservationsAfterReload, reservationsBeforeReload);
+    assert.deepEqual(randomTraceAfterReload, randomTraceBeforeReload);
+    assertNoDuplicateReservationKeys(reservationsAfterReload, scenario.name + ' after reload');
+
+    assert.deepEqual(secondRun.result.state.pendingResolutions, firstState.pendingResolutions);
+    assert.deepEqual(secondRun.result.state.resolutionQueue, firstState.resolutionQueue);
+    assert.deepEqual(secondRun.result.state.preTurnResolutionFlow, firstState.preTurnResolutionFlow);
+    assert.deepEqual(secondRun.result.state.discoveries, firstState.discoveries);
+  });
+}
