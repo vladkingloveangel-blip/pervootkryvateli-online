@@ -608,7 +608,9 @@ test('4.4 corrective: general gameplay gate reports private pending generically'
   const source=fs.readFileSync(path.join(__dirname,'..','server.js'),'utf8');
   const match=source.match(/function pendingDecisionError\(room\) \{([\s\S]*?)\n\}/);
   assert.ok(match,'pendingDecisionError source');
-  const pendingDecisionError=new Function('room',match[1]);
+  const { hasPendingResolution } = require('../domain-state');
+  const evaluatePendingDecisionError=new Function('room','hasPendingResolution',match[1]);
+  const pendingDecisionError=room=>evaluatePendingDecisionError(room,hasPendingResolution);
   const families=['pendingEvent','pendingFeud','pendingAssignmentChoice','pendingIslandCorrection','pendingFleetAdjustment','pendingLegendaryReaction'];
   for(const key of families) {
     const error=pendingDecisionError({[key]:{kind:'SECRET_KIND'}});

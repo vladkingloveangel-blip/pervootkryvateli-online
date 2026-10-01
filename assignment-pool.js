@@ -2,7 +2,7 @@
 
 const { ASSIGNMENT_DEFINITIONS } = require('./game-data');
 const { ELIGIBILITY, selectFilteredTasks, shuffleWithRng } = require('./random-sources');
-const { getActiveAssignmentTask } = require('./domain-state');
+const { getActiveAssignmentTask, getPendingAssignmentChoiceResolution } = require('./domain-state');
 
 function expandAssignmentDefinitions(definitions) {
   const occurrences = [];
@@ -54,8 +54,8 @@ function reservedOccurrences(room, factionId) {
     const task = getActiveAssignmentTask(player);
     if (task?.source?.factionId === factionId && task.payload) reserved.push(task.payload);
   }
-  const pending = room?.pendingAssignmentChoice;
-  if (pending?.kind === 'embassy' && pending.factionId === factionId) {
+  const pending = getPendingAssignmentChoiceResolution(room);
+  if (pending?.kind === 'embassy' && pending.payload?.factionId === factionId) {
     for (const occurrence of pending.options || []) if (occurrence) reserved.push(occurrence);
   }
   return reserved;

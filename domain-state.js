@@ -772,6 +772,17 @@ function clearActiveTurnEffects(player) {
   return [];
 }
 
+function activateNextTurnEffects(player) {
+  if (!player || typeof player !== 'object') return [];
+  const pending = player.nextTurnEffects && typeof player.nextTurnEffects === 'object' && !Array.isArray(player.nextTurnEffects)
+    ? cloneDetached(player.nextTurnEffects)
+    : {};
+  clearActiveTurnEffects(player);
+  for (const [effectKind, value] of Object.entries(pending)) addActiveTurnEffect(player, effectKind, value);
+  player.nextTurnEffects = {};
+  return listActiveTurnEffects(player);
+}
+
 function ensurePlayerLegendaryEffectBacking(player) {
   if (!player.legendaryEffects || typeof player.legendaryEffects !== 'object' || Array.isArray(player.legendaryEffects)) player.legendaryEffects = {};
   return player.legendaryEffects;
@@ -1494,6 +1505,7 @@ module.exports = {
   activeTurnEffectsSnapshot,
   addActiveTurnEffect,
   clearActiveTurnEffects,
+  activateNextTurnEffects,
   shipVeilEffectFromLegacy,
   getShipVeilEffect,
   addShipVeilEffect,

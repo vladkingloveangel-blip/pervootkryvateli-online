@@ -207,6 +207,7 @@ const {
   getPreTurnObservatoryReplacementsUsed,
   incrementObservatoryReplacement,
   setPreTurnTaxResult,
+  activateNextTurnEffects,
 } = require('./domain-state');
 
 const app = express();
@@ -1188,8 +1189,9 @@ function hasPendingDecision(room) {
 function pendingDecisionError(room) {
   if (room?.pendingAlliance) return 'Сначала завершите предложение союза.';
   if (room?.pendingBattle) return 'Сначала завершите текущий совместный бой.';
-  if (room?.pendingEvent || room?.pendingFeud || room?.pendingAssignmentChoice ||
-      room?.pendingIslandCorrection || room?.pendingFleetAdjustment || room?.pendingLegendaryReaction) {
+  if (hasPendingResolution(room, 'event') || hasPendingResolution(room, 'feud') ||
+      hasPendingResolution(room, 'assignment-choice') || hasPendingResolution(room, 'legendary-reaction') ||
+      room?.pendingIslandCorrection || room?.pendingFleetAdjustment) {
     return 'Ожидается обязательное решение игрока.';
   }
   return null;
@@ -2646,8 +2648,7 @@ function beginTurn(room) {
 
   p.personalTurnNo = (Number(p.personalTurnNo) || 0) + 1;
   p.brokenAlliesThisTurn = [];
-  p.activeTurnEffects = { ...(p.nextTurnEffects || {}) };
-  p.nextTurnEffects = {};
+  activateNextTurnEffects(p);
   if (room.circle === BALANCE.session.eventCircle) {
     startEventPhase(room);
     return;
