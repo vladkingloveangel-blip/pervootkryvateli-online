@@ -348,7 +348,7 @@ test('UI-7 unifies authoritative pending choices in one mobile Decision Layer', 
   assert.match(code, /room\.pendingAlliance\?\.viewerRole === 'recipient'/);
   assert.match(code, /room\.pendingDecision\?\.waiting/);
 
-  assert.match(app, /renderCombat\(\);\s*renderDecisionLayer\(\);\s*renderMap\(\);/);
+  assert.match(app, /renderCombat\(\);\s*renderDecisionLayer\(\);\s*renderResultLayer\(\);\s*renderToastStack\(\);\s*renderMap\(\);/);
   assert.match(styles, /UI-7 — unified mandatory Decision Layer/);
   assert.match(styles, /body\.game-active \.decision-backdrop[\s\S]*?pointer-events: auto/);
   assert.doesNotMatch(index, /id="decisionClose"/);
