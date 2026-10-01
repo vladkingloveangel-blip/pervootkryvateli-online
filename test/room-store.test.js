@@ -4,6 +4,7 @@ const { newDb } = require('pg-mem');
 const { RoomStore, roomSnapshot } = require('../room-store');
 const { CURRENT_DIGITAL_MODEL_SCHEMA_VERSION, migrateRoomState } = require('../save-migrations');
 const { normalizeScoutRevealGrants } = require('../scout-runtime');
+const { getPendingResolution, pendingResolutionToLegacy } = require('../domain-state');
 const logger = { log() {}, error() {} };
 const room = () => ({ code: 'ABCDE', started: true, players: [{ id: 'p1', accountId: 'a1', socketId: 'stale', connected: true, token: 'private', ducats: 42 }], islands: [{ ownerId: 'p1' }], order: ['p1'], phase: 'action', pendingBattle: { invites: [{ response: null }] }, legendaryDeck: ['secret'], round: 3 });
 function pool() { const { Pool } = newDb({ noAstCoverageCheck: true }).adapters.createPg(); return new Pool(); }
@@ -42,7 +43,7 @@ test('unversioned rooms retain retired content, old deck copies, islands and pen
   assert.equal(drawLegendaryCard(playable,()=>0).id,'sea-veil');
   assert.equal(playable.legendaryDeck.drawPile.length,1); // цифровой выбор не потребляет старую физическую колоду; её удалит серверная нормализация
   assert.equal(drawFeudCard(playable,'lionia').percent,50);
-  assert.equal(playable.pendingAssignmentChoice.id,'old-choice');
+  assert.equal(pendingResolutionToLegacy(getPendingResolution(playable, 'assignment-choice')).id,'old-choice');
 });
 
 test('JSONB round trip preserves full state, clears connections and skips finished games', async () => {

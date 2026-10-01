@@ -20,6 +20,10 @@ const {
   activateNextTurnEffects,
   tickSeaCurseEffects,
   tickIslandVeilEffect,
+  getPendingResolution,
+  pendingResolutionToLegacy,
+  getPreTurnResolutionFlow,
+  listResolutionQueue,
 } = require('../domain-state');
 const { claimLegendaryPlaceDiscovery, legendaryMovementPenalty } = require('../game-logic');
 const { NAMED_PLACE_CARDS } = require('../game-data');
@@ -78,7 +82,7 @@ function fixture() {
   };
 }
 
-test('5 -> 6 migrates discoveries and typed effects purely; duplicate named-place state cannot steal ownership', () => {
+test('5 -> 6 -> 7 migrates discoveries/effects then orchestration purely; duplicate named-place state cannot steal ownership', () => {
   const raw = fixture();
   const before = structuredClone(raw);
   let calls = 0;
@@ -93,7 +97,6 @@ test('5 -> 6 migrates discoveries and typed effects purely; duplicate named-plac
 
   assert.equal(calls, 0);
   assert.equal(result.fromVersion, PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION);
-  assert.equal(result.toVersion, DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION);
   assert.equal(result.toVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
   assert.deepEqual(raw, before);
   assert.equal(result.state.discoveries.kraken.ownerId, 'p1');
@@ -102,10 +105,11 @@ test('5 -> 6 migrates discoveries and typed effects purely; duplicate named-plac
   assert.equal(Object.hasOwn(result.state.players[0], 'namedPlaceCards'), false);
   assert.equal(Object.hasOwn(result.state.players[1], 'namedPlaceCards'), false);
   assert.equal(getDiscovery(result.state, 'kraken').ownerId, 'p1');
-  assert.deepEqual(result.state.pendingExpeditionRewards, before.pendingExpeditionRewards);
-  assert.deepEqual(result.state.pendingEvent, before.pendingEvent);
-  assert.deepEqual(result.state.pendingLegendaryReaction, before.pendingLegendaryReaction);
-  assert.deepEqual(result.state.eventPhase, before.eventPhase);
+  assert.deepEqual(listResolutionQueue(result.state), before.pendingExpeditionRewards);
+  assert.deepEqual(pendingResolutionToLegacy(getPendingResolution(result.state, 'event')), before.pendingEvent);
+  assert.deepEqual(pendingResolutionToLegacy(getPendingResolution(result.state, 'legendary-reaction')), before.pendingLegendaryReaction);
+  assert.equal(getPreTurnResolutionFlow(result.state).stage, 'political');
+  for (const field of ['pendingExpeditionRewards','pendingEvent','pendingLegendaryReaction','eventPhase']) assert.equal(Object.hasOwn(result.state, field), false, field);
   assert.deepEqual(result.state.unknownRoot, before.unknownRoot);
   assert.deepEqual(result.state.players[0].futurePlayerField, before.players[0].futurePlayerField);
   assert.deepEqual(result.state.islands[0].futureIslandField, before.islands[0].futureIslandField);

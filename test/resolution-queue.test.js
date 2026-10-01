@@ -15,6 +15,8 @@ const {
   enqueueResolution,
   dequeueResolution,
   resolutionQueueLength,
+  getPendingResolution,
+  pendingResolutionToLegacy,
 } = require('../domain-state');
 const { ASSIGNMENT_CARDS, TREASURE_CARDS } = require('../game-data');
 const { projectOpponentFacingRoomView, projectRoomForViewer } = require('../state-projection');
@@ -132,23 +134,22 @@ test('5.9 server consumers use facade, capture assignment at expedition completi
   assert.doesNotMatch(finish, /origin !== 'treasure-hunter'/);
 });
 
-test('normal server runtime has no direct pendingExpeditionRewards push/shift/length/iteration', () => {
+test('normal server runtime uses target resolutionQueue while legacy pendingExpeditionRewards remains compatibility-only', () => {
   const server = source('server.js');
-  const direct = server.split('\n').filter(line => line.includes('pendingExpeditionRewards'));
-  assert.equal(direct.length, 2, direct.join('\n'));
-  assert.match(direct[0], /pendingExpeditionRewards: \[\]/);
-  assert.match(direct[1], /room\.pendingExpeditionRewards = \[\]/);
-  assert.equal(direct.some(line => /\.push|\.shift|\.length|for\s*\(|for\s+.*of/.test(line)), false);
+  const legacyDirect = server.split('\n').filter(line => line.includes('pendingExpeditionRewards'));
+  assert.equal(legacyDirect.length, 0, legacyDirect.join('\n'));
+  const targetDirect = server.split('\n').filter(line => line.includes('resolutionQueue'));
+  assert.equal(targetDirect.length >= 2, true);
+  assert.equal(targetDirect.some(line => /\.push|\.shift|for\s*\(|for\s+.*of/.test(line)), false);
 
   const game = source('game-logic.js');
   const gameDirect = game.split('\n').filter(line => line.includes('pendingExpeditionRewards'));
-  assert.equal(gameDirect.length, 2);
+  assert.equal(gameDirect.length >= 1, true);
   assert.match(gameDirect.join('\n'), /!Array\.isArray\(room\.pendingExpeditionRewards\)/);
-  assert.match(gameDirect.join('\n'), /room\.pendingExpeditionRewards = \[\]/);
 
   const domain = source('domain-state.js');
-  assert.equal((domain.match(/pendingExpeditionRewards/g) || []).length, 1);
-  assert.match(domain, /const RESOLUTION_QUEUE_FIELD = 'pendingExpeditionRewards'/);
+  assert.match(domain, /const RESOLUTION_QUEUE_FIELD = 'resolutionQueue'/);
+  assert.match(domain, /const LEGACY_RESOLUTION_QUEUE_FIELD = 'pendingExpeditionRewards'/);
   assert.doesNotMatch(domain, /drawTreasureCard|selectTreasureOutcome|Math\.random|rng/);
 });
 
@@ -351,8 +352,9 @@ test('restart mid expedition pending keeps queued B blocked, then cargo response
 
   db = readDb();
   room = db.game_rooms[0].state;
-  assert.equal(room.pendingEvent.id, 'expedition-A-pending');
-  assert.deepEqual(room.pendingExpeditionRewards, [{
+  const restoredPending = pendingResolutionToLegacy(getPendingResolution(room, 'event'));
+  assert.equal(restoredPending.id, 'expedition-A-pending');
+  assert.deepEqual(listResolutionQueue(room), [{
     playerId: activeId,
     expeditionName: 'B queued reward',
     treasureAssignmentInstanceId: 'old-captured-assignment',
@@ -367,13 +369,14 @@ test('restart mid expedition pending keeps queued B blocked, then cargo response
   room = db.game_rooms[0].state;
   const afterResponseRng = rngCalls();
   assert.equal(afterResponseRng - beforeResponseRng, 1, 'only queued B treasure is sampled after persisted A continuation resolves');
-  assert.equal(room.pendingEvent, null);
-  assert.deepEqual(room.pendingExpeditionRewards, []);
+  assert.equal(getPendingResolution(room, 'event'), null);
+  assert.deepEqual(listResolutionQueue(room), []);
   assert.equal(room.players.find(player => player.id === activeId).activeAssignment.instanceId, 'new-current-assignment');
 
   const texts = room.log.map(entry => entry.text);
   assert.equal(texts.filter(text => text.includes('B queued reward')).length, 1);
   assert.equal(texts.filter(text => text.includes('Экспедиция «A»: Полный трюм алмазов')).length, 1);
-  assert.equal(Object.hasOwn(room, 'resolutionQueue'), false);
+  assert.equal(Object.hasOwn(room, 'resolutionQueue'), true);
+  assert.equal(Object.hasOwn(room, 'pendingExpeditionRewards'), false);
   assert.equal(Object.hasOwn(room, 'rewardQueue'), false);
 });

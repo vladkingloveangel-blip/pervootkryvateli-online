@@ -18,6 +18,7 @@ const {
   setPendingResolution,
   clearPendingResolution,
   hasPendingResolution,
+  listResolutionQueue,
 } = require('../domain-state');
 const {
   prepareTreasureHunterChoice,
@@ -210,8 +211,8 @@ test('server source routes four pending families through facade and leaves other
   assert.match(server, /room\?\.pendingFleetAdjustment|room\.pendingFleetAdjustment/);
   assert.match(server, /room\?\.pendingBattle|room\.pendingBattle/);
   assert.match(server, /room\?\.pendingAlliance|room\.pendingAlliance/);
-  assert.equal((domain.match(/pendingExpeditionRewards/g) || []).length, 1);
-  assert.match(domain, /const RESOLUTION_QUEUE_FIELD = 'pendingExpeditionRewards'/);
+  assert.match(domain, /const PENDING_RESOLUTION_FIELD = 'pendingResolutions'/);
+  assert.match(domain, /const RESOLUTION_QUEUE_FIELD = 'resolutionQueue'/);
 });
 
 test('Treasure Hunter server flow uses persisted candidates only after activation and never drains expedition rewards for its origin', () => {
@@ -386,7 +387,8 @@ test('Treasure Hunter activation/restart/choice persists exact pending while cha
 
   db = readDb();
   room = db.game_rooms[0].state;
-  const persisted = room.pendingEvent;
+  const persistedResolution = getPendingResolution(room, 'event');
+  const persisted = pendingResolutionToLegacy(persistedResolution);
   const persistedCandidates = structuredClone(persisted.treasureCandidates);
   assert.equal(persisted.kind, 'treasure-choice');
   assert.equal(persisted.origin, 'treasure-hunter');
@@ -399,8 +401,9 @@ test('Treasure Hunter activation/restart/choice persists exact pending while cha
   const invalid = await emit(actorSocket, 'respondEvent', { eventId: persisted.id, choice: '9' });
   assert.equal(invalid.ok, false);
   db = readDb();
-  assert.equal(db.game_rooms[0].state.pendingEvent.id, persisted.id);
-  assert.deepEqual(db.game_rooms[0].state.pendingEvent.treasureCandidates, persistedCandidates);
+  let pendingAfterInvalid = pendingResolutionToLegacy(getPendingResolution(db.game_rooms[0].state, 'event'));
+  assert.equal(pendingAfterInvalid.id, persisted.id);
+  assert.deepEqual(pendingAfterInvalid.treasureCandidates, persistedCandidates);
   assert.equal(db.game_rooms[0].state.actionsLeft, 1);
 
   const blockedEnd = await emit(actorSocket, 'endTurn', {});
@@ -410,8 +413,9 @@ test('Treasure Hunter activation/restart/choice persists exact pending while cha
   actorSocket.disconnect();
   await new Promise(resolve => setTimeout(resolve, 100));
   db = readDb();
-  assert.equal(db.game_rooms[0].state.pendingEvent.id, persisted.id);
-  assert.deepEqual(db.game_rooms[0].state.pendingEvent.treasureCandidates, persistedCandidates);
+  const pendingAfterDisconnect = pendingResolutionToLegacy(getPendingResolution(db.game_rooms[0].state, 'event'));
+  assert.equal(pendingAfterDisconnect.id, persisted.id);
+  assert.deepEqual(pendingAfterDisconnect.treasureCandidates, persistedCandidates);
 
   await stop();
   opponentSocket.disconnect();
@@ -429,10 +433,10 @@ test('Treasure Hunter activation/restart/choice persists exact pending while cha
   assert.equal(resolved.ok, true);
   db = readDb();
   room = db.game_rooms[0].state;
-  assert.equal(room.pendingEvent, null);
+  assert.equal(getPendingResolution(room, 'event'), null);
   assert.equal(room.actionsLeft, 1);
   assert.equal(room.players.find(player => player.id === activeId).character, null);
-  assert.deepEqual(room.pendingExpeditionRewards, [{ playerId: 'missing-player', expeditionName: 'must-not-drain' }]);
+  assert.deepEqual(listResolutionQueue(room), [{ playerId: 'missing-player', expeditionName: 'must-not-drain' }]);
 });
 
 test('Treasure Hunter full-diamonds choice transitions to zero-cost persisted cargo choice and finishes it', { timeout: 45000 }, async t => {
@@ -522,21 +526,22 @@ test('Treasure Hunter full-diamonds choice transitions to zero-cost persisted ca
   assert.deepEqual({ ok: choice.ok, pending: choice.pending }, { ok: true, pending: true });
 
   let saved = JSON.parse(fs.readFileSync(file, 'utf8')).game_rooms[0].state;
-  assert.equal(saved.pendingEvent.kind, 'cargo');
-  assert.equal(saved.pendingEvent.origin, 'treasure-hunter');
-  assert.equal(saved.pendingEvent.id, 'treasure-cargo-transition');
-  assert.equal(saved.pendingEvent.options.length >= 2, true);
+  let savedPending = pendingResolutionToLegacy(getPendingResolution(saved, 'event'));
+  assert.equal(savedPending.kind, 'cargo');
+  assert.equal(savedPending.origin, 'treasure-hunter');
+  assert.equal(savedPending.id, 'treasure-cargo-transition');
+  assert.equal(savedPending.options.length >= 2, true);
   assert.equal(saved.actionsLeft, 1);
-  assert.deepEqual(saved.pendingExpeditionRewards, [{ playerId: 'missing-player', expeditionName: 'must-stay' }]);
+  assert.deepEqual(listResolutionQueue(saved), [{ playerId: 'missing-player', expeditionName: 'must-stay' }]);
 
-  const holdId = saved.pendingEvent.options[0].id;
-  const finish = await emit(socket, 'respondEvent', { eventId: saved.pendingEvent.id, holdId });
+  const holdId = savedPending.options[0].id;
+  const finish = await emit(socket, 'respondEvent', { eventId: savedPending.id, holdId });
   assert.equal(finish.ok, true);
   saved = JSON.parse(fs.readFileSync(file, 'utf8')).game_rooms[0].state;
-  assert.equal(saved.pendingEvent, null);
+  assert.equal(getPendingResolution(saved, 'event'), null);
   assert.equal(saved.actionsLeft, 1);
   const player = saved.players.find(item => item.id === activeId);
   const cargo = holdId === 'main' ? player.cargo : player.escorts.find(escort => escort.id === holdId)?.cargo;
   assert.equal(cargo.goodId, 'diamonds');
-  assert.deepEqual(saved.pendingExpeditionRewards, [{ playerId: 'missing-player', expeditionName: 'must-stay' }]);
+  assert.deepEqual(listResolutionQueue(saved), [{ playerId: 'missing-player', expeditionName: 'must-stay' }]);
 });

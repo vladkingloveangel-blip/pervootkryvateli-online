@@ -7,7 +7,8 @@ const ASSIGNMENT_POOL_DIGITAL_MODEL_SCHEMA_VERSION = 3;
 const EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION = 4;
 const PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION = 5;
 const DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION = 6;
-const CURRENT_DIGITAL_MODEL_SCHEMA_VERSION = DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION;
+const PENDING_ORCHESTRATION_DIGITAL_MODEL_SCHEMA_VERSION = 7;
+const CURRENT_DIGITAL_MODEL_SCHEMA_VERSION = PENDING_ORCHESTRATION_DIGITAL_MODEL_SCHEMA_VERSION;
 const RANDOM_SOURCE_STATE_FIELD = 'randomSourceState';
 
 const { ASSIGNMENT_DEFINITIONS, CONSUMABLE_ABILITY_DEFINITIONS, PLACE_DISCOVERY_DEFINITIONS } = require('./game-data');
@@ -739,6 +740,123 @@ function migrateLegacyDiscoveryEffectIsland(island) {
   return migrated;
 }
 
+
+
+const PENDING_RESOLUTION_MIGRATION_FAMILIES = Object.freeze({
+  event: Object.freeze({ field: 'pendingEvent', actorField: 'playerId' }),
+  feud: Object.freeze({ field: 'pendingFeud', actorField: 'playerId' }),
+  'assignment-choice': Object.freeze({ field: 'pendingAssignmentChoice', actorField: 'playerId' }),
+  'legendary-reaction': Object.freeze({ field: 'pendingLegendaryReaction', actorField: 'targetPlayerId' }),
+});
+
+const PRE_TURN_LEGACY_ROOT_FIELDS = new Set([
+  'active', 'personalTurn', 'turnPlayerId', 'currentPlayerId', 'politicalSnapshot', 'lastCard', 'taxResult',
+  'stage', 'playerIndex', 'feudIndex', 'assignmentIndex', 'replacementIndex',
+  'feudQueue', 'assignmentQueue', 'replacementQueue', 'observatoryReplacementsUsed',
+]);
+
+function migrateLegacyPendingResolution(family, legacy) {
+  if (legacy === undefined || legacy === null) return legacy;
+  if (!isRecord(legacy)) return undefined;
+  const config = PENDING_RESOLUTION_MIGRATION_FAMILIES[family];
+  const payload = {};
+  for (const [key, value] of Object.entries(legacy)) {
+    if (key === 'id' || key === 'kind' || key === config.actorField || key === 'options') continue;
+    payload[key] = cloneState(value);
+  }
+  const record = {
+    family,
+    state: 'pending',
+    source: { backing: 'pendingResolutions', legacyField: config.field },
+    payload,
+  };
+  if (Object.hasOwn(legacy, 'id')) record.id = cloneState(legacy.id);
+  if (Object.hasOwn(legacy, 'kind')) record.kind = cloneState(legacy.kind);
+  if (Object.hasOwn(legacy, config.actorField)) {
+    record.actorPlayerId = cloneState(legacy[config.actorField]);
+    record.actorId = cloneState(legacy[config.actorField]);
+  }
+  if (Object.hasOwn(legacy, 'options')) record.options = cloneState(legacy.options);
+  return record;
+}
+
+function migrateLegacyPreTurnResolutionFlow(legacy) {
+  if (legacy === undefined || legacy === null) return legacy;
+  if (!isRecord(legacy)) return undefined;
+  const flow = {};
+  for (const key of ['active', 'personalTurn', 'turnPlayerId', 'currentPlayerId', 'politicalSnapshot', 'lastCard', 'taxResult']) {
+    if (Object.hasOwn(legacy, key)) flow[key] = cloneState(legacy[key]);
+  }
+  if (Object.hasOwn(legacy, 'stage')) flow.stage = legacy.stage === 'feud' ? 'political' : cloneState(legacy.stage);
+
+  const indexes = {};
+  if (Object.hasOwn(legacy, 'playerIndex')) indexes.sailing = cloneState(legacy.playerIndex);
+  if (Object.hasOwn(legacy, 'feudIndex')) indexes.political = cloneState(legacy.feudIndex);
+  if (Object.hasOwn(legacy, 'assignmentIndex')) indexes.assignment = cloneState(legacy.assignmentIndex);
+  if (Object.hasOwn(legacy, 'replacementIndex')) indexes.replacement = cloneState(legacy.replacementIndex);
+  if (Object.keys(indexes).length) flow.indexes = indexes;
+
+  const queues = {};
+  if (Object.hasOwn(legacy, 'feudQueue')) queues.political = cloneState(legacy.feudQueue);
+  if (Object.hasOwn(legacy, 'assignmentQueue')) queues.assignment = cloneState(legacy.assignmentQueue);
+  if (Object.hasOwn(legacy, 'replacementQueue')) queues.replacement = cloneState(legacy.replacementQueue);
+  if (Object.keys(queues).length) flow.queues = queues;
+
+  if (Object.hasOwn(legacy, 'observatoryReplacementsUsed')) {
+    flow.counters = { observatoryReplacementsUsed: cloneState(legacy.observatoryReplacementsUsed) };
+  }
+
+  const legacyData = {};
+  for (const [key, value] of Object.entries(legacy)) {
+    if (!PRE_TURN_LEGACY_ROOT_FIELDS.has(key)) legacyData[key] = cloneState(value);
+  }
+  if (Object.keys(legacyData).length) flow.legacyData = legacyData;
+  return flow;
+}
+
+function migrateVersion6To7(state) {
+  const next = {
+    ...state,
+    [DIGITAL_MODEL_SCHEMA_VERSION_FIELD]: PENDING_ORCHESTRATION_DIGITAL_MODEL_SCHEMA_VERSION,
+  };
+
+  const pendingResolutions = isRecord(state?.pendingResolutions) ? cloneState(state.pendingResolutions) : {};
+  let ownsPendingResolutions = Object.hasOwn(state || {}, 'pendingResolutions');
+  for (const [family, config] of Object.entries(PENDING_RESOLUTION_MIGRATION_FAMILIES)) {
+    if (!Object.hasOwn(state || {}, config.field)) continue;
+    const legacy = state[config.field];
+    const converted = migrateLegacyPendingResolution(family, legacy);
+    if (converted === undefined && legacy !== undefined) continue;
+    pendingResolutions[family] = converted;
+    delete next[config.field];
+    ownsPendingResolutions = true;
+  }
+  if (ownsPendingResolutions) next.pendingResolutions = pendingResolutions;
+
+  if (Object.hasOwn(state || {}, 'pendingExpeditionRewards') && Array.isArray(state.pendingExpeditionRewards)) {
+    const existingQueue = isRecord(state.resolutionQueue) ? cloneState(state.resolutionQueue) : {};
+    next.resolutionQueue = {
+      ...existingQueue,
+      kind: 'resolution-queue',
+      items: cloneState(state.pendingExpeditionRewards),
+    };
+    delete next.pendingExpeditionRewards;
+  }
+
+  if (Object.hasOwn(state || {}, 'eventPhase')) {
+    const convertedFlow = migrateLegacyPreTurnResolutionFlow(state.eventPhase);
+    if (convertedFlow !== undefined || state.eventPhase === undefined) {
+      const existingFlow = isRecord(state.preTurnResolutionFlow) ? cloneState(state.preTurnResolutionFlow) : {};
+      next.preTurnResolutionFlow = convertedFlow && isRecord(convertedFlow)
+        ? { ...existingFlow, ...convertedFlow }
+        : convertedFlow;
+      delete next.eventPhase;
+    }
+  }
+
+  return next;
+}
+
 function migrateVersion0To1(state) {
   return {
     ...state,
@@ -864,6 +982,7 @@ const MIGRATIONS = new Map([
   [3, { toVersion: EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion3To4 }],
   [4, { toVersion: PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion4To5 }],
   [5, { toVersion: DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion5To6 }],
+  [6, { toVersion: PENDING_ORCHESTRATION_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion6To7 }],
 ]);
 
 function readDigitalModelSchemaVersion(rawRoom) {
@@ -911,6 +1030,7 @@ module.exports = {
   EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION,
   PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION,
   DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION,
+  PENDING_ORCHESTRATION_DIGITAL_MODEL_SCHEMA_VERSION,
   RANDOM_SOURCE_STATE_FIELD,
   migrateRoomState,
 };

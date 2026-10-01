@@ -3035,15 +3035,17 @@ io.on('connection', socket => {
       alliances: [],
       pendingAlliance: null,
       pendingBattle: null,
-      pendingEvent: null,
-      pendingFeud: null,
-      pendingAssignmentChoice: null,
+      pendingResolutions: {
+        event: null,
+        feud: null,
+        'assignment-choice': null,
+        'legendary-reaction': null,
+      },
       pendingIslandCorrection: null,
       pendingFleetAdjustment: null,
       fleetAdjustmentQueue: [],
-      pendingLegendaryReaction: null,
       scoutRevealGrants: [],
-      eventPhase: null,
+      preTurnResolutionFlow: null,
       randomSourceState: {
         seaEncounter: seaEncounterState,
         sailingEvent: sailingEventState,
@@ -3051,7 +3053,7 @@ io.on('connection', socket => {
         assignmentPool: assignmentPoolState,
         expeditionPool: expeditionPoolState,
       },
-      pendingExpeditionRewards: [],
+      resolutionQueue: { kind: 'resolution-queue', items: [] },
       discoveries: {},
       factionState: {},
       log: [],
@@ -3245,7 +3247,7 @@ io.on('connection', socket => {
     room.pendingFleetAdjustment = null;
     room.fleetAdjustmentQueue = [];
     clearPendingResolution(room, 'legendary-reaction');
-    room.eventPhase = null;
+    clearPreTurnResolutionFlow(room);
     // Preserve the pre-6.2 source reset RNG call order exactly.
     const seaEncounterState = createSeaEncounterSourceState();
     const sailingEventState = createSailingEventSourceState();
@@ -3260,7 +3262,7 @@ io.on('connection', socket => {
       expeditionPool: expeditionPoolState,
     };
     delete room.expeditionDeck;
-    room.pendingExpeditionRewards = [];
+    room.resolutionQueue = { kind: 'resolution-queue', items: [] };
     room.discoveries = {};
     delete room.legendaryPlacesExplored;
     room.factionState = {};

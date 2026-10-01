@@ -8,6 +8,7 @@ const path = require('node:path');
 const net = require('node:net');
 const { io } = require('socket.io-client');
 const { CURRENT_DIGITAL_MODEL_SCHEMA_VERSION, migrateRoomState } = require('../save-migrations');
+const { getPendingResolution, pendingResolutionToLegacy } = require('../domain-state');
 
 test('accounts, moves, restart recovery, private My Games, reattachment and admin observation', { timeout: 40000 }, async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pervo-rooms-'));
@@ -364,8 +365,9 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   for(const secret of logSecrets) assert.equal(afterRestart.log.some(entry=>entry.text===secret),true);
   const afterOldPlayer = afterRestart.players.find(p => p.id === created.playerId);
   const restartPendingFeudKey = `${restartPendingFeudCard.masterCardId || restartPendingFeudCard.id}:${restartPendingFeudCard.copy ?? 'legacy'}`;
-  assert.equal(afterRestart.pendingFeud.id, 'restart-pending-feud');
-  assert.equal(afterRestart.pendingFeud.feudCard.id, restartPendingFeudCard.id);
+  const restoredPendingFeud = pendingResolutionToLegacy(getPendingResolution(afterRestart, 'feud'));
+  assert.equal(restoredPendingFeud.id, 'restart-pending-feud');
+  assert.equal(restoredPendingFeud.feudCard.id, restartPendingFeudCard.id);
   const restoredPoliticalSource = afterRestart.randomSourceState.politicalEffect.kadingir;
   assert.equal(restoredPoliticalSource.available.length, 9);
   assert.equal(restoredPoliticalSource.recyclable.length, 0);
@@ -388,7 +390,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(restoredAssignmentPool.mori.reserved.length, 1);
   assert.equal(restoredAssignmentPool.mori.reserved[0].id, legacyMoriCard.id);
   assert.deepEqual(restoredAssignmentPool.lionia.permanentlyExcluded, []);
-  assert.equal(afterRestart.pendingAssignmentChoice, null);
+  assert.equal(getPendingResolution(afterRestart, 'assignment-choice'), null);
   assert.equal(Object.hasOwn(afterOldPlayer,'replacedAssignmentConditions'), false);
   assert.equal(Object.hasOwn(afterOldPlayer, 'activeAssignment'), false);
   assert.match(afterOldPlayer.activeAssignmentTask.instanceId, /^legacy:/);
@@ -401,6 +403,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
     const copy = structuredClone(value);
     if (copy.randomSourceState) delete copy.randomSourceState.assignmentPool;
     delete copy.assignmentDecks; delete copy.pendingAssignmentChoice;
+    if (copy.pendingResolutions) copy.pendingResolutions['assignment-choice'] = null;
     for (const player of copy.players) { delete player.activeAssignment; delete player.activeAssignmentTask; delete player.replacedAssignmentConditions; }
     return copy;
   };

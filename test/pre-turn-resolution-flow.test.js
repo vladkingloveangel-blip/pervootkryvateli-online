@@ -296,12 +296,12 @@ test('Observatory replacement counter increments only in replace branch and faca
   assert.doesNotMatch(facade, /Math\.random|\brng\b|drawSailingEventCard|drawFeudCard|offerAssignmentCards|buildFeudQueue|buildAssignmentQueue|eventPoliticalSnapshot|applyVassalTaxForTurn/);
 });
 
-test('normal server runtime has no direct sensitive eventPhase field management and no new persisted flow field', () => {
+test('normal server runtime has no direct sensitive eventPhase management and initializes target preTurnResolutionFlow', () => {
   const server = source('server.js');
   assert.doesNotMatch(server, /room\.eventPhase\??\.(stage|playerIndex|feudIndex|assignmentIndex|currentPlayerId|lastCard|observatoryReplacementsUsed|taxResult)/);
-  const assignments = server.split('\n').filter(line => line.includes('room.eventPhase ='));
-  assert.equal(assignments.length, 1);
-  assert.match(assignments[0], /room\.eventPhase = null/);
+  assert.equal(server.split('\n').filter(line => line.includes('room.eventPhase =')).length, 0);
+  assert.match(server, /preTurnResolutionFlow: null/);
+  assert.match(server, /clearPreTurnResolutionFlow\(room\)/);
   for (const field of ['preTurnFlow', 'resolutionFlow', 'eventFlow', 'preTurnResolution', 'flowState']) {
     assert.doesNotMatch(server, new RegExp('room\\.' + field + '\\b'));
   }

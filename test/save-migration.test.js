@@ -11,6 +11,7 @@ const {
   EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION,
   PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION,
   DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION,
+  PENDING_ORCHESTRATION_DIGITAL_MODEL_SCHEMA_VERSION,
   RANDOM_SOURCE_STATE_FIELD,
   migrateRoomState,
 } = require('../save-migrations');
@@ -35,6 +36,11 @@ const {
   listSpecialAbilities,
   listStoredBenefits,
   consumeStoredBenefit,
+  getPendingResolution,
+  pendingResolutionToLegacy,
+  getPreTurnResolutionFlow,
+  preTurnResolutionFlowToLegacy,
+  listResolutionQueue,
 } = require('../domain-state');
 
 const logger = { log() {}, error() {} };
@@ -435,9 +441,17 @@ test('1 -> 2 -> 3 -> 4 -> 5 chains source and player-state migrations without mu
 
   assert.deepEqual(sources.expeditionPool.available, before.expeditionDeck.drawPile);
   assert.deepEqual(sources.expeditionPool.reserved, [{ id: 'exp-a' }]);
-  for (const field of ['pendingExpeditionRewards','pendingEvent','pendingFeud','pendingAssignmentChoice','pendingLegendaryReaction','eventPhase']) {
-    assert.deepEqual(result.state[field], before[field], field);
+  assert.deepEqual(listResolutionQueue(result.state), before.pendingExpeditionRewards);
+  for (const [family, field] of [['event','pendingEvent'], ['feud','pendingFeud'], ['assignment-choice','pendingAssignmentChoice'], ['legendary-reaction','pendingLegendaryReaction']]) {
+    const pending = getPendingResolution(result.state, family);
+    assert.deepEqual(pending == null ? pending : pendingResolutionToLegacy(pending), before[field], field);
+    assert.equal(Object.hasOwn(result.state, field), false, field);
   }
+  const flow = getPreTurnResolutionFlow(result.state);
+  assert.equal(flow?.active, before.eventPhase.active);
+  assert.equal(flow?.stage, before.eventPhase.stage === 'feud' ? 'political' : before.eventPhase.stage);
+  assert.equal(Object.hasOwn(result.state, 'eventPhase'), false);
+  assert.equal(Object.hasOwn(result.state, 'pendingExpeditionRewards'), false);
   const migratedPlayer = result.state.players[0];
   for (const legacyField of ['activeAssignment', 'legendaryCards', 'specialCards', 'savedEventCards']) {
     assert.equal(Object.hasOwn(migratedPlayer, legacyField), false, legacyField);
@@ -509,9 +523,10 @@ test('2 -> 3 preserves Embassy option order and id+copy identity while reserving
   const migrated = migrateRoomState(raw).state;
   const storage = migrated[RANDOM_SOURCE_STATE_FIELD].assignmentPool[assignmentFactionId];
 
-  assert.deepEqual(migrated.pendingAssignmentChoice, beforePending);
+  const migratedPending = pendingResolutionToLegacy(getPendingResolution(migrated, 'assignment-choice'));
+  assert.deepEqual(migratedPending, beforePending);
   assert.deepEqual(
-    migrated.pendingAssignmentChoice.options.map(occurrenceKey),
+    migratedPending.options.map(occurrenceKey),
     [embassyB, embassyA].map(occurrenceKey)
   );
   assert.deepEqual(
@@ -623,7 +638,8 @@ test('active and Embassy reservations survive JSON restart without redraw or res
   const storage = restored[RANDOM_SOURCE_STATE_FIELD].assignmentPool[assignmentFactionId];
 
   assert.deepEqual(storage.reserved.map(occurrenceKey), [active, embassyB, embassyA].map(occurrenceKey));
-  assert.deepEqual(restored.pendingAssignmentChoice.options.map(occurrenceKey), [embassyB, embassyA].map(occurrenceKey));
+  const restoredPending = pendingResolutionToLegacy(getPendingResolution(restored, 'assignment-choice'));
+  assert.deepEqual(restoredPending.options.map(occurrenceKey), [embassyB, embassyA].map(occurrenceKey));
   assert.equal(restored.players[0].activeAssignmentTask.definitionId, active.id);
 
   const other = { id: 'other', activeAssignment: null };
@@ -721,9 +737,12 @@ test('3 -> 4 -> 5 migrates ExpeditionPool then player task/inventory state with 
   assert.deepEqual(p1.activeAssignmentTask, { instanceId: 'assignment-stays', factionId: 'lionia' });
   assert.equal(p1.consumableAbilities.length, 2);
   assert.equal(p1.storedBenefits.length, 1);
-  assert.deepEqual(result.state.pendingExpeditionRewards, before.pendingExpeditionRewards);
-  assert.deepEqual(result.state.pendingLegendaryReaction, before.pendingLegendaryReaction);
-  assert.deepEqual(result.state.eventPhase, before.eventPhase);
+  assert.deepEqual(listResolutionQueue(result.state), before.pendingExpeditionRewards);
+  const legendaryPending = getPendingResolution(result.state, 'legendary-reaction');
+  assert.deepEqual(legendaryPending == null ? legendaryPending : pendingResolutionToLegacy(legendaryPending), before.pendingLegendaryReaction);
+  const flow = getPreTurnResolutionFlow(result.state);
+  assert.equal(flow?.active, before.eventPhase.active);
+  assert.equal(flow?.stage, before.eventPhase.stage === 'feud' ? 'political' : before.eventPhase.stage);
 });
 
 test('migrated restart preserves startedAtTarget and current-round usage without redrawing the active occurrence', () => {
@@ -820,7 +839,7 @@ test('completion releases a migrated active occurrence exactly once after restar
   assert.equal(storage.available.filter(item => item.id === active.id).length, 1);
 });
 
-test('already-current schema 6 save is a content-exact no-op and second migration is idempotent', () => {
+test('already-current schema 7 save is a content-exact no-op and second migration is idempotent', () => {
   const current = migrateRoomState(assignmentFixture().raw).state;
   const direct = migrateRoomState(current);
   assert.equal(direct.migrated, false);
@@ -990,13 +1009,13 @@ test('stored-event reservation survives migration/restart and consume releases i
   assert.equal(restored.randomSourceState.sailingEvent.recyclable.filter(item => item.copy === sourceCard.copy).length, 1);
 });
 
-test('4 -> 5 -> 6 preserves task linkage, migrates discovery/effects and leaves 6.7 state untouched', () => {
+test('4 -> 5 -> 6 -> 7 preserves task linkage and migrates discovery/effects/pending orchestration', () => {
   const { raw } = v4TaskInventoryFixture();
   const before = structuredClone(raw);
   const migrated = migrateRoomState(raw).state;
   const player = migrated.players[0];
   assert.equal(getActiveAssignmentTask(player).id, listStoredBenefits(player)[0].payload.assignmentInstanceId);
-  assert.equal(migrated.digitalModelSchemaVersion, DISCOVERY_EFFECT_DIGITAL_MODEL_SCHEMA_VERSION);
+  assert.equal(migrated.digitalModelSchemaVersion, PENDING_ORCHESTRATION_DIGITAL_MODEL_SCHEMA_VERSION);
 
   for (const field of ['namedPlaceCards', 'legendaryEffects', 'activeTurnEffects', 'nextTurnEffects']) {
     assert.equal(Object.hasOwn(player, field), false, field);
@@ -1008,8 +1027,17 @@ test('4 -> 5 -> 6 preserves task linkage, migrates discovery/effects and leaves 
   assert.ok(player.temporaryEffects.active.some(effect => effect.kind === 'active-turn:movePenalty'));
   assert.ok(player.temporaryEffects.scheduled.some(effect => effect.kind === 'active-turn:moveBonus'));
 
-  assert.deepEqual(migrated.pendingEvent, before.pendingEvent);
-  assert.deepEqual(migrated.pendingLegendaryReaction, before.pendingLegendaryReaction);
-  assert.deepEqual(migrated.eventPhase, before.eventPhase);
+  const pendingEvent = getPendingResolution(migrated, 'event');
+  const pendingLegendary = getPendingResolution(migrated, 'legendary-reaction');
+  assert.deepEqual(pendingEvent == null ? pendingEvent : pendingResolutionToLegacy(pendingEvent), before.pendingEvent);
+  assert.deepEqual(pendingLegendary == null ? pendingLegendary : pendingResolutionToLegacy(pendingLegendary), before.pendingLegendaryReaction);
+  const flow = getPreTurnResolutionFlow(migrated);
+  assert.equal(flow?.active, before.eventPhase.active);
+  assert.equal(flow?.stage, before.eventPhase.stage === 'feud' ? 'political' : before.eventPhase.stage);
+  assert.equal(flow?.indexes?.sailing, before.eventPhase.playerIndex);
+  assert.deepEqual(listResolutionQueue(migrated), before.pendingExpeditionRewards || []);
+  for (const field of ['pendingEvent','pendingFeud','pendingAssignmentChoice','pendingLegendaryReaction','eventPhase','pendingExpeditionRewards']) {
+    assert.equal(Object.hasOwn(migrated, field), false, field);
+  }
   assert.deepEqual(migrated.unknownRoot, before.unknownRoot);
 });

@@ -1757,6 +1757,7 @@ function adoptLegacyTemporaryEffects(target, targetType = 'player') {
 
 
 const PENDING_RESOLUTION_LEGACY_SNAPSHOT = Symbol('domain-state.pending-resolution-legacy-snapshot');
+const PENDING_RESOLUTION_FIELD = 'pendingResolutions';
 const PENDING_RESOLUTION_FAMILIES = Object.freeze({
   event: Object.freeze({ field: 'pendingEvent', actorField: 'playerId' }),
   feud: Object.freeze({ field: 'pendingFeud', actorField: 'playerId' }),
@@ -1767,7 +1768,7 @@ const PENDING_RESOLUTION_FAMILIES = Object.freeze({
 function pendingResolutionFamilyConfig(family) {
   const key = String(family || '');
   const config = PENDING_RESOLUTION_FAMILIES[key];
-  if (!config) throw new TypeError(`Unknown PendingResolution family: ${key || '(empty)'}`);
+  if (!config) throw new TypeError('Unknown PendingResolution family: ' + (key || '(empty)'));
   return { family: key, ...config };
 }
 
@@ -1804,6 +1805,45 @@ function pendingResolutionFromLegacy(family, legacy) {
   return resolution;
 }
 
+function pendingResolutionFromPersisted(family, persisted) {
+  if (persisted === undefined || persisted === null) return persisted;
+  if (!persisted || typeof persisted !== 'object' || Array.isArray(persisted)) {
+    throw new TypeError('PendingResolution persisted backing must be an object, null, or undefined.');
+  }
+  const config = pendingResolutionFamilyConfig(family);
+  return PendingResolution.view({
+    ...cloneDetached(persisted),
+    family: config.family,
+    state: persisted.state || 'pending',
+    source: {
+      ...(persisted.source && typeof persisted.source === 'object' && !Array.isArray(persisted.source)
+        ? cloneDetached(persisted.source)
+        : {}),
+      backing: PENDING_RESOLUTION_FIELD,
+      legacyField: config.field,
+    },
+  });
+}
+
+function pendingResolutionToPersisted(resolution) {
+  if (resolution === undefined || resolution === null) return resolution;
+  if (!PendingResolution.is(resolution) || resolution.state !== 'pending') {
+    throw new TypeError('Persisted pending resolution writes expect a pending PendingResolution.');
+  }
+  const config = pendingResolutionFamilyConfig(resolution.family);
+  const persisted = PendingResolution.toLegacy(resolution, {});
+  persisted.family = config.family;
+  persisted.state = 'pending';
+  persisted.source = {
+    ...(persisted.source && typeof persisted.source === 'object' && !Array.isArray(persisted.source)
+      ? persisted.source
+      : {}),
+    backing: PENDING_RESOLUTION_FIELD,
+    legacyField: config.field,
+  };
+  return cloneDetached(persisted);
+}
+
 function pendingResolutionToLegacy(resolution) {
   if (resolution === undefined || resolution === null) return resolution;
   if (!PendingResolution.is(resolution) || resolution.state !== 'pending') {
@@ -1826,9 +1866,24 @@ function pendingResolutionToLegacy(resolution) {
   return legacy;
 }
 
+function pendingResolutionPersistedBacking(room, create = false) {
+  if (!room || typeof room !== 'object') return null;
+  if (!hasOwn(room, PENDING_RESOLUTION_FIELD)) return null;
+  if (!room[PENDING_RESOLUTION_FIELD] || typeof room[PENDING_RESOLUTION_FIELD] !== 'object' || Array.isArray(room[PENDING_RESOLUTION_FIELD])) {
+    if (!create) throw new TypeError('PendingResolution persisted backing must be an object.');
+    room[PENDING_RESOLUTION_FIELD] = {};
+  }
+  return room[PENDING_RESOLUTION_FIELD];
+}
+
 function getPendingResolution(room, family) {
   if (!room || typeof room !== 'object') return undefined;
   const config = pendingResolutionFamilyConfig(family);
+  const persisted = pendingResolutionPersistedBacking(room, false);
+  if (persisted) {
+    if (!hasOwn(persisted, config.family)) return undefined;
+    return pendingResolutionFromPersisted(config.family, persisted[config.family]);
+  }
   if (!hasOwn(room, config.field)) return undefined;
   return pendingResolutionFromLegacy(config.family, room[config.field]);
 }
@@ -1836,6 +1891,23 @@ function getPendingResolution(room, family) {
 function setPendingResolution(room, family, resolution) {
   if (!room || typeof room !== 'object') throw new TypeError('setPendingResolution requires a room object.');
   const config = pendingResolutionFamilyConfig(family);
+  const persisted = pendingResolutionPersistedBacking(room, false);
+  if (persisted) {
+    if (resolution === undefined) {
+      delete persisted[config.family];
+      return undefined;
+    }
+    if (resolution === null) {
+      persisted[config.family] = null;
+      return null;
+    }
+    if (!PendingResolution.is(resolution) || resolution.family !== config.family) {
+      throw new TypeError('setPendingResolution expects a ' + config.family + ' PendingResolution.');
+    }
+    persisted[config.family] = pendingResolutionToPersisted(resolution);
+    return getPendingResolution(room, config.family);
+  }
+
   if (resolution === undefined) {
     delete room[config.field];
     return undefined;
@@ -1845,7 +1917,7 @@ function setPendingResolution(room, family, resolution) {
     return null;
   }
   if (!PendingResolution.is(resolution) || resolution.family !== config.family) {
-    throw new TypeError(`setPendingResolution expects a ${config.family} PendingResolution.`);
+    throw new TypeError('setPendingResolution expects a ' + config.family + ' PendingResolution.');
   }
   room[config.field] = pendingResolutionToLegacy(resolution);
   return getPendingResolution(room, config.family);
@@ -1854,7 +1926,9 @@ function setPendingResolution(room, family, resolution) {
 function clearPendingResolution(room, family) {
   if (!room || typeof room !== 'object') throw new TypeError('clearPendingResolution requires a room object.');
   const config = pendingResolutionFamilyConfig(family);
-  room[config.field] = null;
+  const persisted = pendingResolutionPersistedBacking(room, false);
+  if (persisted) persisted[config.family] = null;
+  else room[config.field] = null;
   return null;
 }
 
@@ -1876,10 +1950,15 @@ function getPendingLegendaryReactionResolution(room) {
   return getPendingResolution(room, 'legendary-reaction');
 }
 
-
-
 const PRE_TURN_RESOLUTION_FLOW_LEGACY_SNAPSHOT = Symbol('domain-state.pre-turn-resolution-flow-legacy-snapshot');
+const PRE_TURN_RESOLUTION_FLOW_PERSISTED_SNAPSHOT = Symbol('domain-state.pre-turn-resolution-flow-persisted-snapshot');
+const PRE_TURN_RESOLUTION_FLOW_FIELD = 'preTurnResolutionFlow';
 const PRE_TURN_STAGES = Object.freeze(['sailing', 'political', 'assignment']);
+const PRE_TURN_LEGACY_ROOT_FIELDS = new Set([
+  'active', 'personalTurn', 'turnPlayerId', 'currentPlayerId', 'politicalSnapshot', 'lastCard', 'taxResult',
+  'stage', 'playerIndex', 'feudIndex', 'assignmentIndex', 'replacementIndex',
+  'feudQueue', 'assignmentQueue', 'replacementQueue', 'observatoryReplacementsUsed',
+]);
 
 function preTurnStageFromLegacy(stage) {
   return stage === 'feud' ? 'political' : cloneDetached(stage);
@@ -1924,13 +2003,68 @@ function preTurnResolutionFlowFromLegacy(legacy) {
   return flow;
 }
 
+function preTurnResolutionFlowFromPersisted(persisted) {
+  if (persisted === undefined || persisted === null) return persisted;
+  if (!persisted || typeof persisted !== 'object' || Array.isArray(persisted)) {
+    throw new TypeError('PreTurnResolutionFlow persisted backing must be an object, null, or undefined.');
+  }
+  const flow = {};
+  for (const key of ['active', 'personalTurn', 'turnPlayerId', 'currentPlayerId', 'politicalSnapshot', 'lastCard', 'taxResult', 'stage']) {
+    if (hasOwn(persisted, key)) flow[key] = cloneDetached(persisted[key]);
+  }
+  for (const key of ['indexes', 'queues', 'counters']) {
+    if (hasOwn(persisted, key)) flow[key] = cloneDetached(persisted[key]);
+  }
+  Object.defineProperty(flow, PRE_TURN_RESOLUTION_FLOW_PERSISTED_SNAPSHOT, {
+    value: cloneDetached(persisted),
+    enumerable: false,
+  });
+  return flow;
+}
+
+function preTurnLegacyData(legacy) {
+  if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) return {};
+  const extra = {};
+  for (const [key, value] of Object.entries(legacy)) {
+    if (!PRE_TURN_LEGACY_ROOT_FIELDS.has(key)) extra[key] = cloneDetached(value);
+  }
+  return extra;
+}
+
+function preTurnResolutionFlowToPersisted(flow) {
+  if (flow === undefined || flow === null) return flow;
+  if (!flow || typeof flow !== 'object' || Array.isArray(flow)) {
+    throw new TypeError('PreTurnResolutionFlow persisted conversion expects an object, null, or undefined.');
+  }
+  const snapshot = flow[PRE_TURN_RESOLUTION_FLOW_PERSISTED_SNAPSHOT];
+  const persisted = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) ? cloneDetached(snapshot) : {};
+  for (const key of ['active', 'personalTurn', 'turnPlayerId', 'currentPlayerId', 'politicalSnapshot', 'lastCard', 'taxResult', 'stage', 'indexes', 'queues', 'counters']) {
+    delete persisted[key];
+    if (hasOwn(flow, key)) persisted[key] = cloneDetached(flow[key]);
+  }
+
+  const legacySnapshot = flow[PRE_TURN_RESOLUTION_FLOW_LEGACY_SNAPSHOT];
+  if (legacySnapshot && typeof legacySnapshot === 'object' && !Array.isArray(legacySnapshot)) {
+    const extra = preTurnLegacyData(legacySnapshot);
+    if (Object.keys(extra).length) persisted.legacyData = { ...(persisted.legacyData || {}), ...extra };
+  }
+  return persisted;
+}
+
 function preTurnResolutionFlowToLegacy(flow) {
   if (flow === undefined || flow === null) return flow;
   if (!flow || typeof flow !== 'object' || Array.isArray(flow)) {
     throw new TypeError('PreTurnResolutionFlow legacy conversion expects an object, null, or undefined.');
   }
-  const snapshot = flow[PRE_TURN_RESOLUTION_FLOW_LEGACY_SNAPSHOT];
-  const legacy = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) ? cloneDetached(snapshot) : {};
+  const legacySnapshot = flow[PRE_TURN_RESOLUTION_FLOW_LEGACY_SNAPSHOT];
+  const persistedSnapshot = flow[PRE_TURN_RESOLUTION_FLOW_PERSISTED_SNAPSHOT];
+  const legacy = legacySnapshot && typeof legacySnapshot === 'object' && !Array.isArray(legacySnapshot)
+    ? cloneDetached(legacySnapshot)
+    : persistedSnapshot?.legacyData && typeof persistedSnapshot.legacyData === 'object' && !Array.isArray(persistedSnapshot.legacyData)
+      ? cloneDetached(persistedSnapshot.legacyData)
+      : {};
+
+  for (const key of PRE_TURN_LEGACY_ROOT_FIELDS) delete legacy[key];
 
   for (const key of ['active', 'personalTurn', 'turnPlayerId', 'currentPlayerId', 'politicalSnapshot', 'lastCard', 'taxResult']) {
     if (hasOwn(flow, key)) legacy[key] = cloneDetached(flow[key]);
@@ -1959,19 +2093,27 @@ function preTurnResolutionFlowToLegacy(flow) {
 
 function getPreTurnResolutionFlow(room) {
   if (!room || typeof room !== 'object') throw new TypeError('getPreTurnResolutionFlow requires a room object.');
+  if (hasOwn(room, PRE_TURN_RESOLUTION_FLOW_FIELD)) {
+    return preTurnResolutionFlowFromPersisted(room[PRE_TURN_RESOLUTION_FLOW_FIELD]);
+  }
   if (!hasOwn(room, 'eventPhase')) return undefined;
   return preTurnResolutionFlowFromLegacy(room.eventPhase);
 }
 
 function setPreTurnResolutionFlow(room, flow) {
   if (!room || typeof room !== 'object') throw new TypeError('setPreTurnResolutionFlow requires a room object.');
-  room.eventPhase = preTurnResolutionFlowToLegacy(flow);
+  if (hasOwn(room, PRE_TURN_RESOLUTION_FLOW_FIELD)) {
+    room[PRE_TURN_RESOLUTION_FLOW_FIELD] = preTurnResolutionFlowToPersisted(flow);
+  } else {
+    room.eventPhase = preTurnResolutionFlowToLegacy(flow);
+  }
   return getPreTurnResolutionFlow(room);
 }
 
 function clearPreTurnResolutionFlow(room) {
   if (!room || typeof room !== 'object') throw new TypeError('clearPreTurnResolutionFlow requires a room object.');
-  room.eventPhase = null;
+  if (hasOwn(room, PRE_TURN_RESOLUTION_FLOW_FIELD)) room[PRE_TURN_RESOLUTION_FLOW_FIELD] = null;
+  else room.eventPhase = null;
   return null;
 }
 
@@ -2046,15 +2188,39 @@ function setPreTurnTaxResult(room, result) {
   return mutatePreTurnResolutionFlow(room, flow => { flow.taxResult = cloneDetached(result); });
 }
 
-const RESOLUTION_QUEUE_FIELD = 'pendingExpeditionRewards';
+const RESOLUTION_QUEUE_FIELD = 'resolutionQueue';
+const LEGACY_RESOLUTION_QUEUE_FIELD = 'pendingExpeditionRewards';
+
+function targetResolutionQueueBacking(room, create = false) {
+  if (!hasOwn(room, RESOLUTION_QUEUE_FIELD)) return null;
+  let state = room[RESOLUTION_QUEUE_FIELD];
+  if (!state || typeof state !== 'object' || Array.isArray(state)) {
+    if (!create) throw new TypeError('ResolutionQueue persisted backing must be an object.');
+    state = room[RESOLUTION_QUEUE_FIELD] = { kind: 'resolution-queue', items: [] };
+  }
+  if (!Array.isArray(state.items)) {
+    if (!create) throw new TypeError('ResolutionQueue persisted items must be an array. Run compatibility normalization first.');
+    state.items = [];
+  }
+  if (!state.kind) state.kind = 'resolution-queue';
+  return state.items;
+}
 
 function resolutionQueueBacking(room, create = false) {
   if (!room || typeof room !== 'object') throw new TypeError('ResolutionQueue requires a room object.');
-  if (!hasOwn(room, RESOLUTION_QUEUE_FIELD)) {
+  const target = targetResolutionQueueBacking(room, create);
+  if (target) return target;
+
+  if (!hasOwn(room, LEGACY_RESOLUTION_QUEUE_FIELD)) {
     if (!create) return null;
-    room[RESOLUTION_QUEUE_FIELD] = [];
+    const targetProfile = hasOwn(room, PENDING_RESOLUTION_FIELD) || hasOwn(room, PRE_TURN_RESOLUTION_FLOW_FIELD);
+    if (targetProfile) {
+      room[RESOLUTION_QUEUE_FIELD] = { kind: 'resolution-queue', items: [] };
+      return room[RESOLUTION_QUEUE_FIELD].items;
+    }
+    room[LEGACY_RESOLUTION_QUEUE_FIELD] = [];
   }
-  const queue = room[RESOLUTION_QUEUE_FIELD];
+  const queue = room[LEGACY_RESOLUTION_QUEUE_FIELD];
   if (!Array.isArray(queue)) {
     throw new TypeError('ResolutionQueue backing must be an array. Run compatibility normalization first.');
   }
@@ -2074,7 +2240,7 @@ function peekResolutionQueue(room) {
 
 function enqueueResolution(room, item) {
   if (!item || typeof item !== 'object' || Array.isArray(item)) {
-    throw new TypeError('enqueueResolution expects a legacy queue item object.');
+    throw new TypeError('enqueueResolution expects a queue item object.');
   }
   const queue = resolutionQueueBacking(room, true);
   const stored = cloneDetached(item);
@@ -2091,6 +2257,58 @@ function dequeueResolution(room) {
 function resolutionQueueLength(room) {
   const queue = resolutionQueueBacking(room, false);
   return queue?.length || 0;
+}
+
+function adoptLegacyPendingOrchestration(room) {
+  if (!room || typeof room !== 'object') return false;
+  let changed = false;
+
+  const pendingBacking = pendingResolutionPersistedBacking(room, false);
+  if (pendingBacking) {
+    for (const [family, config] of Object.entries(PENDING_RESOLUTION_FAMILIES)) {
+      if (!hasOwn(room, config.field)) continue;
+      const legacy = room[config.field];
+      if (!hasOwn(pendingBacking, family) || pendingBacking[family] == null) {
+        try {
+          const semantic = pendingResolutionFromLegacy(family, legacy);
+          pendingBacking[family] = pendingResolutionToPersisted(semantic);
+        } catch {
+          continue;
+        }
+      }
+      delete room[config.field];
+      changed = true;
+    }
+  }
+
+  if (hasOwn(room, RESOLUTION_QUEUE_FIELD)
+      && room[RESOLUTION_QUEUE_FIELD] && typeof room[RESOLUTION_QUEUE_FIELD] === 'object'
+      && !Array.isArray(room[RESOLUTION_QUEUE_FIELD])
+      && Array.isArray(room[RESOLUTION_QUEUE_FIELD].items)
+      && hasOwn(room, LEGACY_RESOLUTION_QUEUE_FIELD)
+      && Array.isArray(room[LEGACY_RESOLUTION_QUEUE_FIELD])) {
+    if (!room[RESOLUTION_QUEUE_FIELD].items.length && room[LEGACY_RESOLUTION_QUEUE_FIELD].length) {
+      room[RESOLUTION_QUEUE_FIELD].items = cloneDetached(room[LEGACY_RESOLUTION_QUEUE_FIELD]);
+    }
+    delete room[LEGACY_RESOLUTION_QUEUE_FIELD];
+    changed = true;
+  }
+
+  if (hasOwn(room, PRE_TURN_RESOLUTION_FLOW_FIELD) && hasOwn(room, 'eventPhase')) {
+    const legacy = room.eventPhase;
+    if (room[PRE_TURN_RESOLUTION_FLOW_FIELD] == null) {
+      try {
+        const semantic = preTurnResolutionFlowFromLegacy(legacy);
+        room[PRE_TURN_RESOLUTION_FLOW_FIELD] = preTurnResolutionFlowToPersisted(semantic);
+      } catch {
+        return changed;
+      }
+    }
+    delete room.eventPhase;
+    changed = true;
+  }
+
+  return changed;
 }
 
 function createLegacyFieldAdapter(target, key, contract, options = {}) {
@@ -2214,8 +2432,11 @@ module.exports = {
   removeIslandVeilReaction,
   listIslandLegendaryEffects,
   adoptLegacyTemporaryEffects,
+  PENDING_RESOLUTION_FIELD,
   PENDING_RESOLUTION_FAMILIES,
   pendingResolutionFromLegacy,
+  pendingResolutionFromPersisted,
+  pendingResolutionToPersisted,
   pendingResolutionToLegacy,
   getPendingResolution,
   setPendingResolution,
@@ -2225,8 +2446,11 @@ module.exports = {
   getPendingFeudResolution,
   getPendingAssignmentChoiceResolution,
   getPendingLegendaryReactionResolution,
+  PRE_TURN_RESOLUTION_FLOW_FIELD,
   PRE_TURN_STAGES,
   preTurnResolutionFlowFromLegacy,
+  preTurnResolutionFlowFromPersisted,
+  preTurnResolutionFlowToPersisted,
   preTurnResolutionFlowToLegacy,
   getPreTurnResolutionFlow,
   setPreTurnResolutionFlow,
@@ -2243,11 +2467,13 @@ module.exports = {
   incrementObservatoryReplacement,
   setPreTurnTaxResult,
   RESOLUTION_QUEUE_FIELD,
+  LEGACY_RESOLUTION_QUEUE_FIELD,
   listResolutionQueue,
   peekResolutionQueue,
   enqueueResolution,
   dequeueResolution,
   resolutionQueueLength,
+  adoptLegacyPendingOrchestration,
   presenceOf,
   createLegacyFieldAdapter,
 };

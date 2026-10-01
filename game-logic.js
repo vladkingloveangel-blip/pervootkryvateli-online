@@ -78,6 +78,9 @@ const {
   enqueueResolution,
   dequeueResolution,
   resolutionQueueLength,
+  getPreTurnResolutionFlow,
+  setPreTurnResolutionFlow,
+  adoptLegacyPendingOrchestration,
 } = domainState;
 const { BALANCE, MAP_META } = require('./game-data');
 const { selectTreasureOutcome, selectLegendaryAbility, selectTreasureCandidates } = require('./digital-random-sources');
@@ -586,8 +589,10 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
     delete room.pendingBattle.captureMode;
     changed = true;
   }
-  if (room.pendingLegendaryReaction && Object.hasOwn(room.pendingLegendaryReaction, 'captureMode')) {
-    delete room.pendingLegendaryReaction.captureMode;
+  const pendingLegendaryReaction = getPendingLegendaryReactionResolution(room);
+  if (pendingLegendaryReaction?.payload && Object.hasOwn(pendingLegendaryReaction.payload, 'captureMode')) {
+    delete pendingLegendaryReaction.payload.captureMode;
+    setPendingResolution(room, 'legendary-reaction', pendingLegendaryReaction);
     changed = true;
   }
   if (Object.hasOwn(room, 'legendaryDeck')) {
@@ -620,8 +625,9 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
         .map(player => getActiveAssignmentTask(player))
         .filter(task => task?.source?.factionId === factionId && task.payload?.id)
         .map(task => task.payload.id));
-      if (room.pendingAssignmentChoice?.kind === 'embassy' && room.pendingAssignmentChoice.factionId === factionId) {
-        for (const card of room.pendingAssignmentChoice.options || []) if (card?.id) reservedIds.add(card.id);
+      const pendingAssignment = getPendingAssignmentChoiceResolution(room);
+      if (pendingAssignment?.kind === 'embassy' && pendingAssignment.payload?.factionId === factionId) {
+        for (const card of pendingAssignment.options || []) if (card?.id) reservedIds.add(card.id);
       }
       const restoredDeck = canonicalStorage[factionId];
       restoredDeck.drawPile = restoredDeck.drawPile.filter(card => !reservedIds.has(card.id));
@@ -670,17 +676,22 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
     }
   }
 
-  if (room.pendingAssignmentChoice && room.pendingAssignmentChoice.kind !== 'embassy') {
-    room.pendingAssignmentChoice = null;
+  const pendingAssignmentChoice = getPendingAssignmentChoiceResolution(room);
+  if (pendingAssignmentChoice && pendingAssignmentChoice.kind !== 'embassy') {
+    clearPendingResolution(room, 'assignment-choice');
     changed = true;
   }
 
-  if (room.eventPhase?.active && room.eventPhase.stage === 'assignment-replace') {
-    room.eventPhase.stage = 'assignment';
-    room.eventPhase.assignmentQueue ||= [];
-    room.eventPhase.assignmentIndex = room.eventPhase.assignmentQueue.length;
-    delete room.eventPhase.replacementQueue;
-    delete room.eventPhase.replacementIndex;
+  const preTurnFlow = getPreTurnResolutionFlow(room);
+  if (preTurnFlow?.active && preTurnFlow.stage === 'assignment-replace') {
+    preTurnFlow.stage = 'assignment';
+    preTurnFlow.queues ||= {};
+    preTurnFlow.queues.assignment ||= [];
+    preTurnFlow.indexes ||= {};
+    preTurnFlow.indexes.assignment = preTurnFlow.queues.assignment.length;
+    delete preTurnFlow.queues.replacement;
+    delete preTurnFlow.indexes.replacement;
+    setPreTurnResolutionFlow(room, preTurnFlow);
     changed = true;
     resumeEventPhase = true;
   }
@@ -689,9 +700,10 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
 }
 
 function normalizeStage6Compatibility(room, rng = Math.random) {
+  const orchestrationChanged = adoptLegacyPendingOrchestration(room);
   const base = normalizeAssignmentCompatibility(room, rng);
-  if (!room || !Array.isArray(room.players)) return base;
-  let changed = Boolean(base.changed);
+  if (!room || !Array.isArray(room.players)) return { ...base, changed: Boolean(base.changed || orchestrationChanged) };
+  let changed = Boolean(base.changed || orchestrationChanged);
 
   const persistedDiscoveries = room.discoveries && typeof room.discoveries === 'object' && !Array.isArray(room.discoveries);
   if (!persistedDiscoveries) {
@@ -873,7 +885,16 @@ if (usesDigitalExpeditionPool(room)) {
       }
     }
   }
-  if (!Array.isArray(room.pendingExpeditionRewards)) {
+  const targetOrchestration = Object.hasOwn(room, 'pendingResolutions')
+    || Object.hasOwn(room, 'preTurnResolutionFlow')
+    || Object.hasOwn(room, 'resolutionQueue');
+  if (targetOrchestration) {
+    if (!room.resolutionQueue || typeof room.resolutionQueue !== 'object' || Array.isArray(room.resolutionQueue)
+        || !Array.isArray(room.resolutionQueue.items)) {
+      room.resolutionQueue = { kind: 'resolution-queue', items: [] };
+      changed = true;
+    }
+  } else if (!Array.isArray(room.pendingExpeditionRewards)) {
     room.pendingExpeditionRewards = [];
     changed = true;
   }
