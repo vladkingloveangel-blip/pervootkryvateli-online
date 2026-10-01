@@ -404,6 +404,16 @@
         <div id="gameActionButtons" class="game-action-buttons"></div>
       </section>
 
+      <section id="decisionLayer" class="decision-layer hidden" role="dialog" aria-modal="true" aria-labelledby="decisionTitle" aria-describedby="decisionBody">
+        <div class="decision-backdrop" aria-hidden="true"></div>
+        <div class="decision-card">
+          <span id="decisionKicker" class="decision-kicker">Требуется ваше решение</span>
+          <h2 id="decisionTitle">—</h2>
+          <div id="decisionBody" class="decision-body"></div>
+          <div id="decisionActions" class="decision-actions"></div>
+        </div>
+      </section>
+
       <section id="mobileActionDock" class="mobile-action-dock hidden" aria-label="Быстрые действия">
         <button id="dockRollBtn" class="primary" type="button">🎲 Бросить</button>
         <button id="dockSkipBtn" type="button">Остаться</button>

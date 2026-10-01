@@ -1424,3 +1424,109 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     flex: 1 1 0;
   }
 }
+
+
+/* UI-7 — unified mandatory Decision Layer */
+.decision-layer { display: none; }
+
+@media (max-width: 900px) {
+  body.game-active .decision-layer {
+    position: absolute;
+    z-index: 110;
+    inset: 0;
+    display: grid;
+    align-items: end;
+    justify-items: stretch;
+    pointer-events: none;
+  }
+
+  body.game-active .decision-layer.hidden {
+    display: none !important;
+  }
+
+  body.game-active .decision-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(2,15,20,.62);
+    backdrop-filter: blur(2px);
+    pointer-events: auto;
+  }
+
+  body.game-active .decision-card {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-height: min(78dvh, 720px);
+    overflow-y: auto;
+    display: grid;
+    gap: 10px;
+    padding: 18px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+    border: 1px solid rgba(240,196,91,.42);
+    border-bottom: 0;
+    border-radius: 18px 18px 0 0;
+    background: rgba(8,37,44,.985);
+    box-shadow: 0 -16px 42px rgba(0,0,0,.48);
+    pointer-events: auto;
+    overscroll-behavior: contain;
+  }
+
+  body.game-active .decision-kicker {
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .09em;
+  }
+
+  body.game-active .decision-card h2 {
+    margin: 0;
+    font-size: 20px;
+    line-height: 1.15;
+  }
+
+  body.game-active .decision-body {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.45;
+    white-space: normal;
+  }
+
+  body.game-active .decision-actions {
+    display: grid;
+    gap: 8px;
+  }
+
+  body.game-active .decision-actions > button,
+  body.game-active .decision-actions .build-btn,
+  body.game-active .decision-actions .saved-event-card,
+  body.game-active .decision-actions .combat-target {
+    width: 100%;
+  }
+
+  body.game-active .decision-actions button {
+    min-height: 46px;
+  }
+
+  body.game-active .decision-actions .saved-event-card,
+  body.game-active .decision-actions .combat-target {
+    display: grid;
+    gap: 7px;
+    padding: 9px;
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    background: rgba(255,255,255,.035);
+  }
+
+  body.game-active .decision-empty {
+    padding: 10px;
+    border: 1px dashed var(--line);
+    border-radius: 10px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  body.game-active.decision-layer-open .game-action-bar,
+  body.game-active.decision-layer-open .map-toolbar,
+  body.game-active.decision-layer-open .mobile-game-nav {
+    pointer-events: none;
+  }
+}

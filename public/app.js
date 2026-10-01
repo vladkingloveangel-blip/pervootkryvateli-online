@@ -1067,6 +1067,7 @@
     renderIsland();
     renderAlliances();
     renderCombat();
+    renderDecisionLayer();
     renderMap();
     updateContextualActionPanels();
   }
@@ -1472,6 +1473,103 @@
     }
 
     setCopy('ОЖИДАНИЕ', 'Состояние обновляется', 'Ожидаем следующего шага партии.');
+  }
+
+  function mobileDecisionDescriptor(room) {
+    if (!room) return null;
+    if (room.pendingLegendaryReaction?.viewerCanRespond) return {
+      kind: 'decision', kicker: 'ТРЕБУЕТСЯ ВАШЕ РЕШЕНИЕ', title: 'Легендарная реакция',
+      contentId: 'legendaryContent', actionsId: 'legendaryActions',
+    };
+    if (room.pendingEvent?.viewerCanRespond) return {
+      kind: 'decision', kicker: 'СОБЫТИЕ', title: room.pendingEvent.cardName || 'Решение по событию',
+      contentId: 'eventContent', actionsId: 'eventActions',
+    };
+    if (room.pendingFeud?.viewerCanRespond) return {
+      kind: 'decision', kicker: 'ВРАЖДА', title: room.pendingFeud.cardName || 'Решение по вражде',
+      contentId: 'eventContent', actionsId: 'eventActions',
+    };
+    if (room.pendingAssignmentChoice?.viewerCanRespond) return {
+      kind: 'decision', kicker: 'ПОРУЧЕНИЕ', title: 'Выберите поручение сюзерена',
+      contentId: 'assignmentContent', actionsId: 'assignmentActions',
+    };
+    if (room.pendingIslandCorrection?.viewerCanRespond) return {
+      kind: 'decision', kicker: 'ОБЯЗАТЕЛЬНОЕ РЕШЕНИЕ', title: room.pendingIslandCorrection.islandName || 'Исправление острова',
+      contentId: 'islandCorrectionContent', actionsId: 'islandCorrectionActions',
+    };
+    if (room.pendingFleetAdjustment?.viewerCanRespond) return {
+      kind: 'decision', kicker: 'ОБЯЗАТЕЛЬНОЕ РЕШЕНИЕ', title: 'Настройка флотилии',
+      contentId: 'fleetAdjustmentContent', actionsId: 'fleetAdjustmentActions',
+    };
+    if (room.pendingBattle?.viewerInvite) return {
+      kind: 'decision', kicker: 'СОВМЕСТНЫЙ БОЙ', title: 'Присоединиться к бою?',
+      contentId: 'combatContent', actionsId: 'combatActions',
+    };
+    if (room.pendingAlliance?.viewerRole === 'recipient') return {
+      kind: 'decision', kicker: 'ПРЕДЛОЖЕНИЕ СОЮЗА', title: `${playerName(room.pendingAlliance.fromId)} предлагает союз`,
+      contentId: 'allianceContent', actionsId: 'allianceActions',
+    };
+    if (room.pendingAlliance?.viewerRole === 'sender') return {
+      kind: 'waiting', kicker: 'ОЖИДАНИЕ', title: `Ждём ответа: ${playerName(room.pendingAlliance.toId)}`,
+      contentId: 'allianceContent', actionsId: 'allianceActions',
+    };
+    if (room.pendingBattle) return {
+      kind: 'waiting', kicker: 'БОЙ', title: 'Ожидаются ответы участников',
+      contentId: 'combatContent', actionsId: 'combatActions',
+    };
+    if (room.pendingDecision?.waiting) return {
+      kind: 'waiting', kicker: 'ОЖИДАНИЕ', title: `Ждём решения: ${playerName(room.pendingDecision.actorPlayerId)}`,
+      body: 'Продолжение партии заблокировано до обязательного решения этого игрока.',
+    };
+    return null;
+  }
+
+  function renderDecisionLayer() {
+    const layer = $('decisionLayer');
+    const actions = $('decisionActions');
+    const body = $('decisionBody');
+    const mobile = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
+    if (!mobile || !state.room?.started || state.room.finished || state.room.phase === 'finished') {
+      layer.classList.add('hidden');
+      document.body.classList.remove('decision-layer-open');
+      actions.innerHTML = '';
+      body.innerHTML = '';
+      return;
+    }
+
+    const descriptor = mobileDecisionDescriptor(state.room);
+    layer.classList.toggle('hidden', !descriptor);
+    document.body.classList.toggle('decision-layer-open', Boolean(descriptor));
+    if (!descriptor) {
+      actions.innerHTML = '';
+      body.innerHTML = '';
+      return;
+    }
+
+    state.mobileTab = 'map';
+    $('gameSidePanel').classList.remove('mobile-open');
+    document.body.classList.remove('mobile-sheet-open');
+    document.querySelectorAll('[data-mobile-nav]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mobileNav === 'map');
+    });
+
+    $('decisionKicker').textContent = descriptor.kicker;
+    $('decisionTitle').textContent = descriptor.title;
+    const sourceContent = descriptor.contentId ? $(descriptor.contentId) : null;
+    body.textContent = descriptor.body || sourceContent?.textContent?.trim() || (descriptor.kind === 'waiting' ? 'Ожидается решение другого игрока.' : 'Выберите один из доступных вариантов.');
+
+    actions.innerHTML = '';
+    const sourceActions = descriptor.actionsId ? $(descriptor.actionsId) : null;
+    if (sourceActions) {
+      while (sourceActions.firstChild) actions.appendChild(sourceActions.firstChild);
+    }
+
+    if (descriptor.kind === 'decision' && !actions.children.length) {
+      const fallback = document.createElement('div');
+      fallback.className = 'decision-empty';
+      fallback.textContent = 'Варианты решения обновляются. Если они не появились, дождитесь следующего обновления состояния.';
+      actions.appendChild(fallback);
+    }
   }
 
   function renderControls() {

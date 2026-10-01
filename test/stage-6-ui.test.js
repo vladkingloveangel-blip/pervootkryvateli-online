@@ -316,3 +316,40 @@ test('UI-6 provides one state-driven mobile action bar over the map', () => {
   assert.match(index, /class="panel controls" data-ui-tab="actions"/);
   assert.match(index, /id="mobileActionDock"/);
 });
+
+
+test('UI-7 unifies authoritative pending choices in one mobile Decision Layer', () => {
+  assert.match(index, /id="decisionLayer" class="decision-layer hidden"/);
+  assert.match(index, /aria-modal="true"/);
+  assert.match(index, /id="decisionTitle"/);
+  assert.match(index, /id="decisionBody"/);
+  assert.match(index, /id="decisionActions"/);
+
+  const start = app.indexOf('  function mobileDecisionDescriptor(');
+  const end = app.indexOf('\n  function renderControls()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  for (const key of [
+    'pendingEvent','pendingFeud','pendingAssignmentChoice','pendingIslandCorrection',
+    'pendingFleetAdjustment','pendingLegendaryReaction','pendingBattle','pendingAlliance','pendingDecision'
+  ]) assert.match(code, new RegExp(key));
+
+  // UI-7 deliberately reuses the already-tested legacy action callbacks rather than
+  // duplicating socket payload construction in a second UI rules path.
+  assert.match(code, /while \(sourceActions\.firstChild\) actions\.appendChild\(sourceActions\.firstChild\);/);
+  assert.match(code, /room\.pendingEvent\?\.viewerCanRespond/);
+  assert.match(code, /room\.pendingFeud\?\.viewerCanRespond/);
+  assert.match(code, /room\.pendingAssignmentChoice\?\.viewerCanRespond/);
+  assert.match(code, /room\.pendingIslandCorrection\?\.viewerCanRespond/);
+  assert.match(code, /room\.pendingFleetAdjustment\?\.viewerCanRespond/);
+  assert.match(code, /room\.pendingLegendaryReaction\?\.viewerCanRespond/);
+  assert.match(code, /room\.pendingBattle\?\.viewerInvite/);
+  assert.match(code, /room\.pendingAlliance\?\.viewerRole === 'recipient'/);
+  assert.match(code, /room\.pendingDecision\?\.waiting/);
+
+  assert.match(app, /renderCombat\(\);\s*renderDecisionLayer\(\);\s*renderMap\(\);/);
+  assert.match(styles, /UI-7 — unified mandatory Decision Layer/);
+  assert.match(styles, /body\.game-active \.decision-backdrop[\s\S]*?pointer-events: auto/);
+  assert.doesNotMatch(index, /id="decisionClose"/);
+});
