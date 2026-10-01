@@ -1150,3 +1150,119 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   .end-game-actions { display: grid; grid-template-columns: 1fr 1fr; }
   .end-game-actions > .end-game-waiting, .end-game-actions > .end-game-propose { grid-column: 1 / -1; }
 }
+
+
+/* UI-4 — mobile-first fullscreen map shell.
+   The map is now the permanent gameplay surface. Legacy controls remain as
+   temporary overlays until their dedicated migration stages replace them. */
+@media (max-width: 900px) {
+  body.game-active main {
+    padding: 0;
+  }
+
+  body.game-active .game {
+    position: relative;
+    isolation: isolate;
+    padding-bottom: 0;
+    overflow: hidden;
+    background: #071f25;
+  }
+
+  body.game-active .game-world-shell {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: block;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.game-active .game-world-shell .map-column {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    display: block;
+  }
+
+  body.game-active .game-world-shell .map-viewport {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    background: #071f25;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  body.game-active .game-world-shell .map-toolbar {
+    position: absolute;
+    z-index: 46;
+    top: calc(54px + env(safe-area-inset-top, 0px));
+    left: 8px;
+    right: 8px;
+    width: auto;
+    min-height: 0;
+    padding: 5px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(8,37,44,.88);
+    box-shadow: 0 6px 18px rgba(0,0,0,.24);
+    backdrop-filter: blur(8px);
+  }
+
+  body.game-active .game-world-shell .map-toolbar button {
+    min-height: 34px;
+  }
+
+  body.game-active .game-hud {
+    position: absolute;
+    z-index: 50;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    margin: 0;
+  }
+
+  body.game-active #gameSidePanel {
+    z-index: 80;
+  }
+
+  body.game-active .mobile-game-nav {
+    z-index: 90;
+  }
+
+  body.game-active .mobile-action-dock {
+    z-index: 70;
+  }
+
+  body.game-active .map-nav-overlay {
+    top: 104px;
+  }
+
+  body.game-active .spectator-banner {
+    position: absolute;
+    z-index: 95;
+    top: 58px;
+    left: 8px;
+    right: 8px;
+    margin: 0;
+  }
+
+  body.game-active .finished-state .game-world-shell {
+    display: none;
+  }
+
+  body.game-active .finished-state .game-hud,
+  body.game-active .finished-state .mobile-game-nav,
+  body.game-active .finished-state .mobile-action-dock {
+    display: none !important;
+  }
+}
