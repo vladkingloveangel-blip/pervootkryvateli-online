@@ -9,6 +9,7 @@ const { Server } = require('socket.io');
 const { Pool } = require('pg');
 const { RoomStore, isUnfinished } = require('./room-store');
 const { endGameConsensusView, proposeEndGameConsensus, confirmEndGameConsensus, rejectEndGameConsensus } = require('./end-game-consensus');
+const { completeRoundBoundaryAfterTurn } = require('./end-game-finalization');
 const { CURRENT_DIGITAL_MODEL_SCHEMA_VERSION } = require('./save-migrations');
 const { createAssignmentPoolState, assignmentPool } = require('./assignment-pool');
 const { createExpeditionPoolState } = require('./expedition-pool');
@@ -2714,6 +2715,7 @@ function continueTurnAfterCards(room) {
 }
 
 function endTurnInternal(room) {
+  if (room?.phase === 'finished') return;
   const n = room.order.length;
   if (!n) return;
   const ending = currentPlayer(room);
@@ -2726,12 +2728,11 @@ function endTurnInternal(room) {
   }
   room.completedTurns += 1;
   room.turnIndex = (room.turnIndex + 1) % n;
-  if (room.completedTurns % n === 0) {
-    room.circle += 1;
-    if (room.circle > BALANCE.session.circlesPerRound) {
-      advanceRound(room);
-    }
-  }
+  const boundary = completeRoundBoundaryAfterTurn(room, {
+    circlesPerRound: BALANCE.session.circlesPerRound,
+    advanceRound,
+  });
+  if (boundary.finalized) return;
   beginTurn(room);
 }
 
@@ -4419,7 +4420,7 @@ io.on('connection', socket => {
   onSocketEvent(socket, 'endTurn', (_data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
-    if (!room || room.phase === 'event' || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш личный ход.' });
+    if (!room || room.phase === 'event' || room.phase === 'finished' || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш личный ход.' });
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
     log(room, `${p.name} завершил личный ход.`);
     endTurnInternal(room);
