@@ -509,6 +509,116 @@ function consumeConsumableAbility(player, ref) {
   return null;
 }
 
+
+const STORED_BENEFIT_LEGACY_SNAPSHOT = Symbol('domain-state.stored-benefit-legacy-snapshot');
+
+function storedBenefitFromLegacy(player, legacyBenefit) {
+  if (legacyBenefit === undefined || legacyBenefit === null) return legacyBenefit;
+  if (!legacyBenefit || typeof legacyBenefit !== 'object' || Array.isArray(legacyBenefit)) {
+    throw new TypeError('StoredBenefit expects a legacy saved event record, null, or undefined.');
+  }
+  const semantic = {
+    ownerId: player?.id,
+    state: 'stored',
+    source: {},
+    payload: {},
+  };
+  if (hasOwn(legacyBenefit, 'kind')) semantic.kind = cloneDetached(legacyBenefit.kind);
+  if (hasOwn(legacyBenefit, 'id')) semantic.id = cloneDetached(legacyBenefit.id);
+  if (hasOwn(legacyBenefit, 'sourceDeck')) semantic.source.deck = cloneDetached(legacyBenefit.sourceDeck);
+  if (hasOwn(legacyBenefit, 'sourceCard')) semantic.source.occurrence = cloneDetached(legacyBenefit.sourceCard);
+  if (hasOwn(legacyBenefit, 'name')) semantic.payload.name = cloneDetached(legacyBenefit.name);
+  if (hasOwn(legacyBenefit, 'goodId')) semantic.payload.goodId = cloneDetached(legacyBenefit.goodId);
+  if (hasOwn(legacyBenefit, 'assignmentInstanceId')) {
+    semantic.payload.assignmentInstanceId = cloneDetached(legacyBenefit.assignmentInstanceId);
+  }
+  const benefit = StoredBenefit.view(semantic);
+  Object.defineProperty(benefit, STORED_BENEFIT_LEGACY_SNAPSHOT, {
+    value: cloneDetached(legacyBenefit),
+    enumerable: false,
+  });
+  return benefit;
+}
+
+function storedBenefitToLegacy(benefit) {
+  if (benefit === undefined || benefit === null) return benefit;
+  if (!StoredBenefit.is(benefit) || benefit.state !== 'stored') {
+    throw new TypeError('Stored benefit writes expect a stored StoredBenefit.');
+  }
+  const snapshot = benefit[STORED_BENEFIT_LEGACY_SNAPSHOT];
+  const hasSnapshot = Boolean(snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot));
+  const legacy = hasSnapshot ? cloneDetached(snapshot) : {};
+  const source = benefit.source && typeof benefit.source === 'object' ? benefit.source : {};
+  const payload = benefit.payload && typeof benefit.payload === 'object' ? benefit.payload : {};
+
+  if (!hasSnapshot || hasOwn(snapshot, 'id')) {
+    if (hasOwn(benefit, 'id')) legacy.id = cloneDetached(benefit.id);
+    else delete legacy.id;
+  }
+  if (!hasSnapshot || hasOwn(snapshot, 'kind')) {
+    if (hasOwn(benefit, 'kind')) legacy.kind = cloneDetached(benefit.kind);
+    else delete legacy.kind;
+  }
+  if (!hasSnapshot || hasOwn(snapshot, 'sourceDeck')) {
+    if (hasOwn(source, 'deck')) legacy.sourceDeck = cloneDetached(source.deck);
+    else delete legacy.sourceDeck;
+  }
+  if (!hasSnapshot || hasOwn(snapshot, 'sourceCard')) {
+    if (hasOwn(source, 'occurrence')) legacy.sourceCard = cloneDetached(source.occurrence);
+    else delete legacy.sourceCard;
+  }
+  for (const key of ['name', 'goodId', 'assignmentInstanceId']) {
+    if (hasSnapshot && !hasOwn(snapshot, key)) continue;
+    if (hasOwn(payload, key)) legacy[key] = cloneDetached(payload[key]);
+    else delete legacy[key];
+  }
+  return legacy;
+}
+
+function listStoredBenefits(player) {
+  if (!player || typeof player !== 'object' || !hasOwn(player, 'savedEventCards')) return undefined;
+  if (player.savedEventCards === null) return null;
+  if (!Array.isArray(player.savedEventCards)) {
+    throw new TypeError('savedEventCards backing field must be an array, null, or absent.');
+  }
+  return player.savedEventCards.map(entry => storedBenefitFromLegacy(player, entry));
+}
+
+function peekStoredBenefit(player, savedCardId) {
+  const id = String(savedCardId || '');
+  const benefits = listStoredBenefits(player);
+  if (!Array.isArray(benefits)) return null;
+  return benefits.find(benefit => benefit?.id === id) || null;
+}
+
+function storeBenefit(player, benefit) {
+  if (!player || typeof player !== 'object') throw new TypeError('storeBenefit requires a player object.');
+  if (!StoredBenefit.is(benefit) || benefit.state !== 'stored') {
+    throw new TypeError('storeBenefit expects a stored StoredBenefit.');
+  }
+  if (benefit.ownerId != null && player.id != null && String(benefit.ownerId) !== String(player.id)) {
+    throw new TypeError('StoredBenefit ownerId does not match the target player.');
+  }
+  const legacy = storedBenefitToLegacy(benefit);
+  if (player.savedEventCards == null) player.savedEventCards = [];
+  if (!Array.isArray(player.savedEventCards)) throw new TypeError('savedEventCards backing field must be an array.');
+  player.savedEventCards.push(legacy);
+  return storedBenefitFromLegacy(player, legacy);
+}
+
+function consumeStoredBenefit(player, savedCardId) {
+  if (!player || typeof player !== 'object' || !Array.isArray(player.savedEventCards)) return null;
+  const id = String(savedCardId || '');
+  const index = player.savedEventCards.findIndex(entry => entry?.id === id);
+  if (index < 0) return null;
+  const [legacy] = player.savedEventCards.splice(index, 1);
+  return storedBenefitFromLegacy(player, legacy);
+}
+
+function discardStoredBenefit(player, savedCardId) {
+  return consumeStoredBenefit(player, savedCardId);
+}
+
 function createLegacyFieldAdapter(target, key, contract, options = {}) {
   if (!target || typeof target !== 'object') throw new TypeError('Legacy field adapter requires a target object.');
   if (!contract || typeof contract.view !== 'function' || typeof contract.toLegacy !== 'function') {
@@ -578,6 +688,13 @@ module.exports = {
   grantSpecialAbility,
   peekConsumableAbility,
   consumeConsumableAbility,
+  storedBenefitFromLegacy,
+  storedBenefitToLegacy,
+  listStoredBenefits,
+  peekStoredBenefit,
+  storeBenefit,
+  consumeStoredBenefit,
+  discardStoredBenefit,
   presenceOf,
   createLegacyFieldAdapter,
 };

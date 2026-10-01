@@ -120,6 +120,12 @@ const {
   playerHasLegendaryKind,
   peekLegendaryCard,
   consumeLegendaryCard,
+  storedBenefitFromLegacy,
+  storedBenefitToLegacy,
+  listStoredBenefits,
+  peekStoredBenefit,
+  storeBenefit,
+  consumeStoredBenefit,
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,
@@ -162,7 +168,7 @@ const {
   stormCellOptions,
 } = require('./game-logic');
 const { seaEncounterSource } = require('./sea-encounter-source');
-const { sailingEventSource } = require('./sailing-event-source');
+const { sailingEventSource, releaseStoredBenefitReservation } = require('./sailing-event-source');
 const { canonicalizePoliticalEffectOccurrence, politicalEffectSource } = require('./political-effect-source');
 
 const app = express();
@@ -731,6 +737,7 @@ function publicRoom(room, viewerId = null) {
       const expeditionHistoryRecords = getExpeditionHistoryRecords(p) || [];
       const legendaryAbilities = listLegendaryAbilities(p) || [];
       const specialAbilities = listSpecialAbilities(p) || [];
+      const storedBenefits = listStoredBenefits(p) || [];
       return {
         id: p.id,
         name: p.name,
@@ -784,8 +791,13 @@ function publicRoom(room, viewerId = null) {
           seaCurseTurns: (p.legendaryEffects?.seaCurses || []).map(e => Number(e.remaining) || 0),
           seaCursePenalty: legendaryMovementPenalty(p),
         },
-        savedEventCards: p.id === viewerId ? (p.savedEventCards || []).map(c => ({ id: c.id, kind: c.kind, name: c.name, goodId: c.goodId || null })) : [],
-        savedEventCardCount: (p.savedEventCards || []).length,
+        savedEventCards: p.id === viewerId ? storedBenefits.map(benefit => ({
+          id: benefit.id,
+          kind: benefit.kind,
+          name: benefit.payload?.name,
+          goodId: benefit.payload?.goodId || null,
+        })) : [],
+        savedEventCardCount: storedBenefits.length,
         nextTurnEffects: p.id === viewerId ? { ...(p.nextTurnEffects || {}) } : {},
         activeTurnEffects: { ...(p.activeTurnEffects || {}) },
         landCompany: p.landCompany ? { ...p.landCompany } : null,
@@ -1745,7 +1757,6 @@ function handleAnchorAction(room, player) {
 
 
 function saveHeldEventCard(player, card, kind, extra = {}) {
-  player.savedEventCards ||= [];
   const saved = {
     id: crypto.randomUUID(),
     kind,
@@ -1755,8 +1766,8 @@ function saveHeldEventCard(player, card, kind, extra = {}) {
     assignmentInstanceId: kind === 'treasure-cargo' ? (getActiveAssignmentTask(player)?.id || null) : undefined,
     ...extra,
   };
-  player.savedEventCards.push(saved);
-  return saved;
+  const stored = storeBenefit(player, storedBenefitFromLegacy(player, saved));
+  return storedBenefitToLegacy(stored);
 }
 
 function applyCurrentTurnEffect(room, player, effect, value) {
@@ -2493,17 +2504,6 @@ function completePendingEvent(room, pending) {
   } else return { ok: false, error: 'Неизвестный тип решения события.' };
   finishPendingEvent(room, pending);
   return { ok: true };
-}
-
-function discardSavedCardToDeck(room, saved) {
-  if (!saved?.sourceCard || saved.sourceDeck !== 'event') return;
-  sailingEventSource(room).releaseReserved(saved.sourceCard);
-}
-
-function takeSavedCard(player, savedCardId) {
-  const index = (player.savedEventCards || []).findIndex(c => c.id === savedCardId);
-  if (index < 0) return null;
-  return { card: player.savedEventCards[index], index };
 }
 
 function determineOrder(room) {
@@ -3635,15 +3635,16 @@ io.on('connection', socket => {
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сохранённую карту можно применить только в свой личный ход.' });
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
     if (room.phase !== 'actions' || room.actionsLeft <= 0) return ackSafe(ack, { ok: false, error: 'Для применения нужен один доступный пункт действия.' });
-    const found = takeSavedCard(p, String(data?.savedCardId || ''));
-    if (!found || !['found-cargo', 'treasure-cargo'].includes(found.card.kind)) return ackSafe(ack, { ok: false, error: 'Сохранённая грузовая карта не найдена.' });
-    const result = fillCargoDirect(room, p, found.card.goodId, String(data?.holdId || 'main'));
+    const savedCardId = String(data?.savedCardId || '');
+    const benefit = peekStoredBenefit(p, savedCardId);
+    if (!benefit || !['found-cargo', 'treasure-cargo'].includes(benefit.kind)) return ackSafe(ack, { ok: false, error: 'Сохранённая грузовая карта не найдена.' });
+    const result = fillCargoDirect(room, p, benefit.payload?.goodId, String(data?.holdId || 'main'));
     if (!result.ok) return ackSafe(ack, result);
-    p.savedEventCards.splice(found.index, 1);
-    discardSavedCardToDeck(room, found.card);
+    const consumed = consumeStoredBenefit(p, savedCardId);
+    if (consumed) releaseStoredBenefitReservation(room, consumed);
     room.actionsLeft -= 1;
-    log(room, `${p.name} применяет сохранённую карту «${found.card.name}»: ${result.holdName} заполнен товаром «${result.good.name}» ×${result.quantity}. Осталось действий: ${room.actionsLeft}.`);
-    if (found.card.kind === 'treasure-cargo') trackAssignment(room, p, { type: 'treasure-resolved', assignmentInstanceId: found.card.assignmentInstanceId || null });
+    log(room, `${p.name} применяет сохранённую карту «${benefit.payload?.name}»: ${result.holdName} заполнен товаром «${result.good.name}» ×${result.quantity}. Осталось действий: ${room.actionsLeft}.`);
+    if (benefit.kind === 'treasure-cargo') trackAssignment(room, p, { type: 'treasure-resolved', assignmentInstanceId: benefit.payload?.assignmentInstanceId || null });
     ackSafe(ack, { ok: true, result });
     emitRoom(room);
   });
@@ -3655,12 +3656,13 @@ io.on('connection', socket => {
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
     if (room.phase !== 'actions' || room.actionsLeft <= 0) return ackSafe(ack, { ok: false, error: 'Для установки нужен один доступный пункт действия.' });
     if (!isCitadelCell(p.row, p.col)) return ackSafe(ack, { ok: false, error: '«Судовой мастер» устанавливает улучшение бесплатно, но только в Цитадели по общему правилу установки улучшений.' });
-    const found = takeSavedCard(p, String(data?.savedCardId || ''));
-    if (!found || found.card.kind !== 'ship-master') return ackSafe(ack, { ok: false, error: 'Карта «Судовой мастер» не найдена.' });
+    const savedCardId = String(data?.savedCardId || '');
+    const benefit = peekStoredBenefit(p, savedCardId);
+    if (!benefit || benefit.kind !== 'ship-master') return ackSafe(ack, { ok: false, error: 'Карта «Судовой мастер» не найдена.' });
     const result = installShipUpgradeFree(p, String(data?.upgradeId || ''));
     if (!result.ok) return ackSafe(ack, result);
-    p.savedEventCards.splice(found.index, 1);
-    discardSavedCardToDeck(room, found.card);
+    const consumed = consumeStoredBenefit(p, savedCardId);
+    if (consumed) releaseStoredBenefitReservation(room, consumed);
     room.actionsLeft -= 1;
     log(room, `${p.name} применяет «Судового мастера» и бесплатно устанавливает «${result.upgrade.name}». Осталось действий: ${room.actionsLeft}.`);
     trackAssignment(room, p, { type: 'ship-upgrade', branch: result.upgrade.branch });
@@ -3674,15 +3676,16 @@ io.on('connection', socket => {
     if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Чертёж можно применить только в свой личный ход.' });
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
     if (room.phase !== 'actions' || room.actionsLeft <= 0) return ackSafe(ack, { ok: false, error: 'Для строительства нужен один доступный пункт действия.' });
-    const found = takeSavedCard(p, String(data?.savedCardId || ''));
-    if (!found || !['market-blueprint', 'farm-blueprint'].includes(found.card.kind)) return ackSafe(ack, { ok: false, error: 'Подходящий чертёж не найден.' });
-    const type = found.card.kind === 'market-blueprint' ? 'market' : 'farm';
+    const savedCardId = String(data?.savedCardId || '');
+    const benefit = peekStoredBenefit(p, savedCardId);
+    if (!benefit || !['market-blueprint', 'farm-blueprint'].includes(benefit.kind)) return ackSafe(ack, { ok: false, error: 'Подходящий чертёж не найден.' });
+    const type = benefit.kind === 'market-blueprint' ? 'market' : 'farm';
     const result = buildFree(room, p, String(data?.islandId || ''), type);
     if (!result.ok) return ackSafe(ack, result);
-    p.savedEventCards.splice(found.index, 1);
-    discardSavedCardToDeck(room, found.card);
+    const consumed = consumeStoredBenefit(p, savedCardId);
+    if (consumed) releaseStoredBenefitReservation(room, consumed);
     room.actionsLeft -= 1;
-    log(room, `${p.name} применяет «${found.card.name}» и бесплатно строит ${result.building.displayName} на ${result.island.name}. Осталось действий: ${room.actionsLeft}.`);
+    log(room, `${p.name} применяет «${benefit.payload?.name}» и бесплатно строит ${result.building.displayName} на ${result.island.name}. Осталось действий: ${room.actionsLeft}.`);
     trackAssignment(room, p, assignmentBuildingEvent(result.island, result.building));
     ackSafe(ack, { ok: true, result });
     emitRoom(room);

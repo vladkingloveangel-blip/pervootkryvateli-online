@@ -24,11 +24,18 @@ const {
   grantSpecialAbility,
   peekConsumableAbility,
   consumeConsumableAbility,
+  storedBenefitFromLegacy,
+  storedBenefitToLegacy,
+  listStoredBenefits,
+  peekStoredBenefit,
+  storeBenefit,
+  consumeStoredBenefit,
+  discardStoredBenefit,
 } = domainState;
 const { BALANCE, MAP_META } = require('./game-data');
 const { selectTreasureOutcome, selectLegendaryAbility, selectTreasureCandidates } = require('./digital-random-sources');
 const { createSeaEncounterStorage, seaEncounterSource } = require('./sea-encounter-source');
-const { createSailingEventStorage, canonicalizeSailingEventOccurrence, sailingEventSource } = require('./sailing-event-source');
+const { createSailingEventStorage, canonicalizeSailingEventOccurrence, sailingEventSource, releaseStoredBenefitReservation } = require('./sailing-event-source');
 const { createPoliticalEffectStorage, politicalEffectSource } = require('./political-effect-source');
 const { createAssignmentStorage, assignmentPool } = require('./assignment-pool');
 const { createExpeditionStorage, expeditionPool } = require('./expedition-pool');
@@ -718,7 +725,7 @@ function assignmentBuildingRequirement(room, player, task) {
   const upgradeOptions = [];
   const bastionOptions = [];
   const blueprintOptions = [];
-  const saved = player.savedEventCards || [];
+  const saved = listStoredBenefits(player) || [];
 
   for (const island of islands) {
     if (card.type === 'build-branch') {
@@ -834,7 +841,7 @@ function assignmentRequiredAction(room, player, actionsLeft = 0) {
       .map(([upgradeId]) => upgradeId);
     const atCitadel = isCitadelCell(player.row, player.col);
     const shipMasterIds = atCitadel
-      ? (player.savedEventCards || []).filter(saved => saved.kind === 'ship-master').map(saved => saved.id)
+      ? (listStoredBenefits(player) || []).filter(saved => saved.kind === 'ship-master').map(saved => saved.id)
       : [];
     const freeUpgradeIds = atCitadel
       ? Object.entries(SHIP_UPGRADES)
@@ -883,8 +890,8 @@ function assignmentRequiredAction(room, player, actionsLeft = 0) {
 
   if (card.type === 'treasure-resolved') {
     if (!emptyCargoHolds(room, player).length) return null;
-    const savedCardIds = (player.savedEventCards || [])
-      .filter(saved => saved.kind === 'treasure-cargo' && saved.assignmentInstanceId === task.id)
+    const savedCardIds = (listStoredBenefits(player) || [])
+      .filter(saved => saved.kind === 'treasure-cargo' && saved.payload?.assignmentInstanceId === task.id)
       .map(saved => saved.id);
     if (!savedCardIds.length) return null;
     return { kind: 'treasure', assignmentInstanceId: task.id, text: card.text, savedCardIds };
@@ -1419,16 +1426,17 @@ function discardRandomHeldCard(room, player, rng = Math.random) {
     const card = ability.payload;
     refs.push({ source: 'legendary', index: ability.source.index, name: card.name, card });
   }
-  (player?.savedEventCards || []).forEach((card, index) => refs.push({ source: 'saved-event', index, name: card.name, card }));
+  (listStoredBenefits(player) || []).forEach((benefit, index) => {
+    const card = storedBenefitToLegacy(benefit);
+    refs.push({ source: 'saved-event', index, name: benefit.payload?.name, card });
+  });
   if (!refs.length) return { ok: true, discarded: null };
   const ref = refs[Math.floor(rng() * refs.length)];
   if (ref.source === 'special' || ref.source === 'legendary') {
     consumeConsumableAbility(player, ref);
   } else {
-    const [card] = player.savedEventCards.splice(ref.index, 1);
-    if (card?.sourceCard && card.sourceDeck === 'event') {
-      sailingEventSource(room)?.releaseReserved(card.sourceCard);
-    }
+    const consumed = discardStoredBenefit(player, ref.card?.id);
+    if (consumed) releaseStoredBenefitReservation(room, consumed);
   }
   return { ok: true, discarded: ref };
 }
@@ -3776,6 +3784,13 @@ module.exports = {
   playerHasLegendaryKind,
   peekLegendaryCard,
   consumeLegendaryCard,
+  storedBenefitFromLegacy,
+  storedBenefitToLegacy,
+  listStoredBenefits,
+  peekStoredBenefit,
+  storeBenefit,
+  consumeStoredBenefit,
+  discardStoredBenefit,
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,

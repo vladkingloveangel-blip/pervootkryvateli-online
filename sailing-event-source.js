@@ -29,6 +29,12 @@ function canonicalizeSailingEventOccurrence(rawOccurrence) {
     : rawOccurrence;
 }
 
+function releaseStoredBenefitReservation(room, benefit) {
+  const source = benefit?.source;
+  if (!room || source?.deck !== 'event' || !source.occurrence) return false;
+  return Boolean(sailingEventSource(room)?.releaseReserved(source.occurrence));
+}
+
 function sailingEventSource(room, rng = Math.random) {
   if (!room) return null;
 
@@ -92,4 +98,5 @@ module.exports = {
   createSailingEventStorage,
   canonicalizeSailingEventOccurrence,
   sailingEventSource,
+  releaseStoredBenefitReservation,
 };
