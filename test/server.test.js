@@ -79,7 +79,11 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.deepEqual(createdPlayerState.activeExpeditionTask, null);
   assert.deepEqual(createdPlayerState.expeditionCompletions, []);
   assert.deepEqual(createdPlayerState.expeditionAccessUsage, { round: null, draws: 0 });
-  for (const legacyField of ['activeExpedition', 'expeditionHistory', 'expeditionDrawRound', 'expeditionsDrawnThisRound']) {
+  assert.deepEqual(createdPlayerState.activeAssignmentTask, null);
+  assert.deepEqual(createdPlayerState.consumableAbilities, []);
+  assert.equal(createdPlayerState.consumableAbilitySequence, 0);
+  assert.deepEqual(createdPlayerState.storedBenefits, []);
+  for (const legacyField of ['activeExpedition', 'expeditionHistory', 'expeditionDrawRound', 'expeditionsDrawnThisRound', 'activeAssignment', 'legendaryCards', 'specialCards', 'savedEventCards']) {
     assert.equal(Object.hasOwn(createdPlayerState, legacyField), false, legacyField);
   }
   for (const legacySourceField of ['anchorDecks', 'eventDeck', 'feudDecks', 'assignmentDecks']) {
@@ -122,6 +126,11 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(started.players.every(p => p.activeExpeditionTask === null), true);
   assert.equal(started.players.every(p => Array.isArray(p.expeditionCompletions) && p.expeditionCompletions.length === 0), true);
   assert.equal(started.players.every(p => p.expeditionAccessUsage?.round === null && p.expeditionAccessUsage?.draws === 0), true);
+  assert.equal(started.players.every(p => p.activeAssignmentTask === null), true);
+  assert.equal(started.players.every(p => Array.isArray(p.consumableAbilities) && p.consumableAbilities.length === 0), true);
+  assert.equal(started.players.every(p => p.consumableAbilitySequence === 0), true);
+  assert.equal(started.players.every(p => Array.isArray(p.storedBenefits) && p.storedBenefits.length === 0), true);
+  assert.equal(started.players.every(p => ['activeAssignment','legendaryCards','specialCards','savedEventCards'].every(key => !Object.hasOwn(p,key))), true);
   assert.equal(started.players.find(p=>p.id===joinedSecond.playerId).shipClass,'carrack');
   assert.deepEqual(started.order,[joinedSecond.playerId,joinedFourth.playerId,created.playerId,joinedThird.playerId]);
   assert.equal(started.players.every(p=>p.ducats===canonical.session.startingDucats),true);
@@ -253,6 +262,16 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   delete legacyRoom.randomSourceState;
   delete legacyRoom.digitalModelSchemaVersion;
   delete legacyRoom.rulesDataVersion; delete legacyRoom.rulesSchemaVersion; delete legacyRoom.runtimeProfile;
+  for (const legacyPlayer of legacyRoom.players) {
+    legacyPlayer.activeAssignment = null;
+    legacyPlayer.legendaryCards = [];
+    legacyPlayer.specialCards = [];
+    legacyPlayer.savedEventCards = [];
+    delete legacyPlayer.activeAssignmentTask;
+    delete legacyPlayer.consumableAbilities;
+    delete legacyPlayer.consumableAbilitySequence;
+    delete legacyPlayer.storedBenefits;
+  }
   const oldPlayer = legacyRoom.players.find(p => p.id === created.playerId);
   Object.assign(oldPlayer,{ shipClass:'brigantine',level:7,upgrades:['foreStengha','foreMarsel'],
     escorts:[{id:'old-landin',type:'landin',special:true,cargo:{goodId:'ore',quantity:5}}],nextEscortId:1 });
@@ -371,15 +390,18 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.deepEqual(restoredAssignmentPool.lionia.permanentlyExcluded, []);
   assert.equal(afterRestart.pendingAssignmentChoice, null);
   assert.equal(Object.hasOwn(afterOldPlayer,'replacedAssignmentConditions'), false);
-  assert.match(afterOldPlayer.activeAssignment.instanceId, /^legacy:/);
-  assert.equal(afterOldPlayer.activeAssignment.progress.kind, 'mori-service');
-  assert.equal(afterOldPlayer.activeAssignment.progress.departureRequired, true);
-  assert.equal(afterOldPlayer.activeAssignment.progress.departureSatisfied, false);
+  assert.equal(Object.hasOwn(afterOldPlayer, 'activeAssignment'), false);
+  assert.match(afterOldPlayer.activeAssignmentTask.instanceId, /^legacy:/);
+  assert.equal(afterOldPlayer.activeAssignmentTask.definitionId, legacyMoriCard.id);
+  assert.equal(afterOldPlayer.activeAssignmentTask.factionId, 'mori');
+  assert.equal(afterOldPlayer.activeAssignmentTask.progress.kind, 'mori-service');
+  assert.equal(afterOldPlayer.activeAssignmentTask.progress.departureRequired, true);
+  assert.equal(afterOldPlayer.activeAssignmentTask.progress.departureSatisfied, false);
   const stripAssignmentMigration = value => {
     const copy = structuredClone(value);
     if (copy.randomSourceState) delete copy.randomSourceState.assignmentPool;
     delete copy.assignmentDecks; delete copy.pendingAssignmentChoice;
-    for (const player of copy.players) { delete player.activeAssignment; delete player.replacedAssignmentConditions; }
+    for (const player of copy.players) { delete player.activeAssignment; delete player.activeAssignmentTask; delete player.replacedAssignmentConditions; }
     return copy;
   };
   assert.deepEqual(stripAssignmentMigration(afterRestart), stripAssignmentMigration(migrateRoomState(beforeRestart).state));

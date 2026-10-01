@@ -403,7 +403,7 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
   room.pendingLegendaryReaction = null;
   room.pendingBattle = null;
   room.pendingAlliance = null;
-  active.activeAssignment = null;
+  active.activeAssignmentTask = null; delete active.activeAssignment;
   active.cargo = null;
   active.escorts = [];
   active.level = 3;
@@ -413,31 +413,30 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
   const sourceCargo = { id: 'source-cargo', masterCardId: 'source-cargo', copy: 1, marker: 'cargo' };
   const sourceShip = { id: 'source-ship', masterCardId: 'source-ship', copy: 2, marker: 'ship' };
   const sourceBlueprint = { id: 'source-blueprint', masterCardId: 'source-blueprint', copy: 3, marker: 'blueprint' };
-  active.savedEventCards = [
+  active.storedBenefits = [
     {
+      instanceId: 'benefit-cargo',
       id: 'cargo-benefit',
       kind: 'treasure-cargo',
-      name: 'Treasure cargo',
-      sourceDeck: 'event',
-      sourceCard: sourceCargo,
-      assignmentInstanceId: 'legacy-treasure-link',
-      goodId,
+      source: { deck: 'event', occurrence: sourceCargo },
+      payload: { name: 'Treasure cargo', assignmentInstanceId: 'legacy-treasure-link', goodId },
     },
     {
+      instanceId: 'benefit-ship',
       id: 'ship-benefit',
       kind: 'ship-master',
-      name: 'Ship master',
-      sourceDeck: 'event',
-      sourceCard: sourceShip,
+      source: { deck: 'event', occurrence: sourceShip },
+      payload: { name: 'Ship master' },
     },
     {
+      instanceId: 'benefit-blueprint',
       id: 'blueprint-benefit',
       kind: 'farm-blueprint',
-      name: 'Farm blueprint',
-      sourceDeck: 'event',
-      sourceCard: sourceBlueprint,
+      source: { deck: 'event', occurrence: sourceBlueprint },
+      payload: { name: 'Farm blueprint' },
     },
   ];
+  delete active.savedEventCards;
   room.randomSourceState.sailingEvent = {
     available: [{ id: 'unrelated', copy: 1 }],
     recyclable: [],
@@ -463,7 +462,7 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
   let persistedActive = persisted.players.find(player => player.id === activeId);
   assert.equal(persisted.actionsLeft, cargoBeforeActions);
   assert.equal(persisted.log.length, cargoBeforeLog);
-  assert.equal(persistedActive.savedEventCards.some(card => card.id === 'cargo-benefit'), true);
+  assert.equal(persistedActive.storedBenefits.some(benefit => benefit.id === 'cargo-benefit'), true);
   assert.equal(persisted.randomSourceState.sailingEvent.recyclable.length, 0);
 
   let changed = await change(activeSocket, 'useSavedCargo', { savedCardId: 'cargo-benefit', holdId: 'main' });
@@ -471,7 +470,7 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
   persisted = readDb().game_rooms[0].state;
   persistedActive = persisted.players.find(player => player.id === activeId);
   assert.equal(persisted.actionsLeft, cargoBeforeActions - 1);
-  assert.equal(persistedActive.savedEventCards.some(card => card.id === 'cargo-benefit'), false);
+  assert.equal(persistedActive.storedBenefits.some(benefit => benefit.id === 'cargo-benefit'), false);
   assert.equal(persisted.randomSourceState.sailingEvent.recyclable.filter(card => card.marker === 'cargo').length, 1);
   assert.deepEqual(persisted.randomSourceState.sailingEvent.recyclable.find(card => card.marker === 'cargo'), sourceCargo);
 
@@ -485,7 +484,7 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
   persistedActive = persisted.players.find(player => player.id === activeId);
   assert.equal(persisted.actionsLeft, shipBeforeActions);
   assert.equal(persisted.log.length, shipBeforeLog);
-  assert.equal(persistedActive.savedEventCards.some(card => card.id === 'ship-benefit'), true);
+  assert.equal(persistedActive.storedBenefits.some(benefit => benefit.id === 'ship-benefit'), true);
   assert.equal(persisted.randomSourceState.sailingEvent.recyclable.filter(card => card.marker === 'ship').length, 0);
 
   changed = await change(activeSocket, 'useShipMaster', { savedCardId: 'ship-benefit', upgradeId });
@@ -493,7 +492,7 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
   persisted = readDb().game_rooms[0].state;
   persistedActive = persisted.players.find(player => player.id === activeId);
   assert.equal(persisted.actionsLeft, shipBeforeActions - 1);
-  assert.equal(persistedActive.savedEventCards.some(card => card.id === 'ship-benefit'), false);
+  assert.equal(persistedActive.storedBenefits.some(benefit => benefit.id === 'ship-benefit'), false);
   assert.equal(persisted.randomSourceState.sailingEvent.recyclable.filter(card => card.marker === 'ship').length, 1);
   assert.deepEqual(persisted.randomSourceState.sailingEvent.recyclable.find(card => card.marker === 'ship'), sourceShip);
 
@@ -519,7 +518,7 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
   room.pendingLegendaryReaction = null;
   room.pendingBattle = null;
   room.pendingAlliance = null;
-  assert.equal(resumedActive.savedEventCards.some(card => card.id === 'blueprint-benefit'), true);
+  assert.equal(resumedActive.storedBenefits.some(benefit => benefit.id === 'blueprint-benefit'), true);
   assert.equal(room.randomSourceState.sailingEvent.recyclable.filter(card => card.marker === 'blueprint').length, 0);
   writeDb(db);
 
@@ -554,7 +553,7 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
   persistedActive = persisted.players.find(player => player.id === activeId);
   assert.equal(persisted.actionsLeft, blueprintBeforeActions);
   assert.equal(persisted.log.length, blueprintBeforeLog);
-  assert.equal(persistedActive.savedEventCards.some(card => card.id === 'blueprint-benefit'), true);
+  assert.equal(persistedActive.storedBenefits.some(benefit => benefit.id === 'blueprint-benefit'), true);
   assert.equal(persisted.randomSourceState.sailingEvent.recyclable.filter(card => card.marker === 'blueprint').length, 0);
 
   changed = await change(activeSocket, 'useBlueprint', { savedCardId: 'blueprint-benefit', islandId: bogamia.id });
@@ -562,7 +561,7 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
   persisted = readDb().game_rooms[0].state;
   persistedActive = persisted.players.find(player => player.id === activeId);
   assert.equal(persisted.actionsLeft, blueprintBeforeActions - 1);
-  assert.equal(persistedActive.savedEventCards.some(card => card.id === 'blueprint-benefit'), false);
+  assert.equal(persistedActive.storedBenefits.some(benefit => benefit.id === 'blueprint-benefit'), false);
   assert.equal(persisted.randomSourceState.sailingEvent.recyclable.filter(card => card.marker === 'blueprint').length, 1);
   assert.deepEqual(persisted.randomSourceState.sailingEvent.recyclable.find(card => card.marker === 'blueprint'), sourceBlueprint);
   assert.equal(persisted.randomSourceState.sailingEvent.recyclable.filter(card => ['cargo', 'ship', 'blueprint'].includes(card.marker)).length, 3);

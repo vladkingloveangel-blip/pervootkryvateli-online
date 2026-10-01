@@ -201,10 +201,31 @@ function seedPrivatePlayer(player, tag, options = {}) {
   player.ducats = tag === 'A' ? 111 : tag === 'B' ? 222 : 333;
   player.debt = tag === 'A' ? 11 : tag === 'B' ? 22 : 33;
   player.character = options.character || (tag === 'A' ? 'scout' : 'navigator');
-  player.activeAssignment = privateAssignment(tag);
-  player.specialCards = [`SECRET_${tag}_SPECIAL`];
-  player.legendaryCards = [{ id: 'mist-path', name: `SECRET_${tag}_LEGENDARY`, kind: 'mist-path' }];
-  player.savedEventCards = [{ id: `saved-${tag}`, kind: 'cargo', name: `SECRET_${tag}_SAVED`, goodId: 'wood' }];
+  const assignment = privateAssignment(tag);
+  player.activeAssignmentTask = {
+    instanceId: assignment.instanceId,
+    definitionId: assignment.card.id,
+    factionId: assignment.factionId,
+    issuedRound: assignment.issuedRound,
+    progress: assignment.progress,
+    definitionData: assignment.card,
+  };
+  delete player.activeAssignment;
+  player.consumableAbilities = [
+    { instanceId: `ability-${tag}-legendary`, abilityId: 'mist-path', origin: { kind: 'legendary' }, data: { name: `SECRET_${tag}_LEGENDARY`, kind: 'mist-path' } },
+    { instanceId: `ability-${tag}-special`, abilityId: null, origin: { kind: 'special', legacyName: `SECRET_${tag}_SPECIAL` } },
+  ];
+  player.consumableAbilitySequence = 2;
+  delete player.specialCards;
+  delete player.legendaryCards;
+  player.storedBenefits = [{
+    instanceId: `benefit-${tag}`,
+    id: `saved-${tag}`,
+    kind: 'cargo',
+    source: {},
+    payload: { name: `SECRET_${tag}_SAVED`, goodId: 'wood' },
+  }];
+  delete player.savedEventCards;
   const expeditionCard = options.expeditionCard;
   assert.ok(expeditionCard?.id && expeditionCard?.placeId, 'security fixture needs a canonical expedition card');
   player.activeExpeditionTask = { expeditionId: expeditionCard.id, placeId: expeditionCard.placeId, acceptedRound: 1, startedAtTarget: true, departedAfterIssue: false, futurePrivateField: `SECRET_${tag}_EXPEDITION` };
@@ -332,7 +353,7 @@ test('4.7 real sockets isolate owner/opponent/admin state and Scout grants acros
   let db = h.database();
   let room = db.game_rooms[0].state;
   const active = room.players.find(player => player.id === boot.a.playerId);
-  active.activeAssignment = null; // avoid assignment-priority middleware during Scout lifecycle actions.
+  active.activeAssignmentTask = null; delete active.activeAssignment; // avoid assignment-priority middleware during Scout lifecycle actions.
   active.character = 'scout';
   const selectedIsland = room.islands.find(island => island.id === seeded.bIsland.id);
   active.row = selectedIsland.cells[0][0];

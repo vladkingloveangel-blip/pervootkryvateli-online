@@ -2888,7 +2888,8 @@ function newPlayer(socket, data, color) {
     level: 1,
     row: MAP_META.startCell[0],
     col: MAP_META.startCell[1],
-    specialCards: [],
+    consumableAbilities: [],
+    consumableAbilitySequence: 0,
     namedPlaceCards: [],
     activeExpeditionTask: null,
     expeditionCompletions: [],
@@ -2918,9 +2919,8 @@ function newPlayer(socket, data, color) {
     attackCountsThisRound: {},
     brokenAlliesThisTurn: [],
     pendingLandinEscort: false,
-    legendaryCards: [],
     legendaryEffects: { seaCurses: [] },
-    savedEventCards: [],
+    storedBenefits: [],
     nextTurnEffects: {},
     activeTurnEffects: {},
     visitedAnchors: [],
@@ -2929,7 +2929,7 @@ function newPlayer(socket, data, color) {
     vassalGiftIslandId: null,
     enemyFactionIds: [],
     nextActionLimit: null,
-    activeAssignment: null,
+    activeAssignmentTask: null,
   };
 }
 
@@ -3258,8 +3258,8 @@ io.on('connection', socket => {
     room.legendaryPlacesExplored = {};
     room.factionState = {};
     room.players.forEach(p => {
-      p.row = 0; p.col = 0; p.ducats = BALANCE.session.startingDucats; p.debt = 0; p.level = 1; p.specialCards = []; p.cargo = null; p.upgrades = []; p.disabledUpgradeIds = []; p.escorts = []; p.levelInactiveEscortIds = []; p.nextEscortId = 0;
-      p.glory = 0; p.fleetPoints = 0; p.fleetPointRound = room.round; p.fleetPointOpponentIds = []; p.armyPoints = 0; p.armyPointRound = room.round; p.armyPointOpponentIds = []; p.skipTurns = 0; p.personalTurnNo = 0; p.attackLimitRound = room.round; p.attackCountsThisRound = {}; p.brokenAlliesThisTurn = []; p.pendingLandinEscort = false; p.activeExpeditionTask = null; p.expeditionCompletions = []; p.expeditionAccessUsage = { round: null, draws: 0 }; delete p.activeExpedition; delete p.expeditionHistory; delete p.expeditionDrawRound; delete p.expeditionsDrawnThisRound; p.legendaryCards = []; p.legendaryEffects = { seaCurses: [] }; p.savedEventCards = []; p.nextTurnEffects = {}; p.activeTurnEffects = {}; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignment = null; p.landCompany = null; p.bastionPriority = []; p.inactiveBastionIslandIds = []; p.character = null; p.characterReplacedRound = null; p.palaceUsed = false;
+      p.row = 0; p.col = 0; p.ducats = BALANCE.session.startingDucats; p.debt = 0; p.level = 1; p.consumableAbilities = []; p.consumableAbilitySequence = 0; delete p.specialCards; delete p.legendaryCards; p.cargo = null; p.upgrades = []; p.disabledUpgradeIds = []; p.escorts = []; p.levelInactiveEscortIds = []; p.nextEscortId = 0;
+      p.glory = 0; p.fleetPoints = 0; p.fleetPointRound = room.round; p.fleetPointOpponentIds = []; p.armyPoints = 0; p.armyPointRound = room.round; p.armyPointOpponentIds = []; p.skipTurns = 0; p.personalTurnNo = 0; p.attackLimitRound = room.round; p.attackCountsThisRound = {}; p.brokenAlliesThisTurn = []; p.pendingLandinEscort = false; p.activeExpeditionTask = null; p.expeditionCompletions = []; p.expeditionAccessUsage = { round: null, draws: 0 }; delete p.activeExpedition; delete p.expeditionHistory; delete p.expeditionDrawRound; delete p.expeditionsDrawnThisRound; p.legendaryEffects = { seaCurses: [] }; p.storedBenefits = []; delete p.savedEventCards; p.nextTurnEffects = {}; p.activeTurnEffects = {}; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignmentTask = null; delete p.activeAssignment; p.landCompany = null; p.bastionPriority = []; p.inactiveBastionIslandIds = []; p.character = null; p.characterReplacedRound = null; p.palaceUsed = false;
     });
     refreshFactionExistence(room);
     log(room, `Партия началась. Порядок: ${room.order.map(id => room.players.find(p => p.id === id)?.name).join(' → ')}.`);

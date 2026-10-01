@@ -389,7 +389,9 @@ function discardAssignmentCard(room, factionId, card) {
 
 function ensureAssignmentPlayer(player) {
   if (!player) return player;
-  player.activeAssignment ||= null;
+  if (!Object.hasOwn(player, 'activeAssignmentTask') && !Object.hasOwn(player, 'activeAssignment')) {
+    player.activeAssignment = null;
+  }
   return player;
 }
 
@@ -639,10 +641,9 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
     }
     const pendingLegendary = Math.max(0, Math.floor(Number(player.pendingLegendary) || 0));
     if (pendingLegendary > 0) {
-      player.legendaryCards ||= [];
       for (let i = 0; i < pendingLegendary; i++) {
         const card = drawLegendaryCard(room, rng);
-        if (card) player.legendaryCards.push(card);
+        if (card) grantLegendaryAbility(player, card);
       }
       delete player.pendingLegendary;
       changed = true;
@@ -650,14 +651,20 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
       delete player.pendingLegendary;
       changed = true;
     }
-    const assignment = player.activeAssignment;
-    if (!assignment?.card) continue;
-    if (!assignment.instanceId) {
-      assignment.instanceId = ['legacy', player.id || 'player', assignment.factionId || 'unknown', assignment.card.id || assignment.card.conditionKey || 'assignment', Number(assignment.issuedRound) || Number(room.round) || 1].join(':');
-      changed = true;
+    const task = getActiveAssignmentTask(player);
+    const card = task?.payload;
+    if (!task || !card) continue;
+    let taskChanged = false;
+    if (!task.id) {
+      task.id = ['legacy', player.id || 'player', task.source?.factionId || 'unknown', card.id || card.conditionKey || 'assignment', Number(task.source?.issuedRound) || Number(room.round) || 1].join(':');
+      taskChanged = true;
     }
-    if (assignment.factionId === 'mori' && ['visit-island', 'visit-route'].includes(assignment.card.type) && !assignment.progress) {
-      assignment.progress = createMoriAssignmentProgress(room, player, assignment.card);
+    if (task.source?.factionId === 'mori' && ['visit-island', 'visit-route'].includes(card.type) && !task.progress) {
+      task.progress = createMoriAssignmentProgress(room, player, card);
+      taskChanged = true;
+    }
+    if (taskChanged) {
+      assignTask(player, task);
       changed = true;
     }
   }
@@ -800,7 +807,16 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
         changed = true;
       }
     }
-    if (!Array.isArray(player.legendaryCards)) {
+    if (Object.hasOwn(player, 'consumableAbilities')) {
+      if (!Array.isArray(player.consumableAbilities)) {
+        player.consumableAbilities = [];
+        changed = true;
+      }
+      if (!Number.isFinite(Number(player.consumableAbilitySequence))) {
+        player.consumableAbilitySequence = player.consumableAbilities.length;
+        changed = true;
+      }
+    } else if (!Array.isArray(player.legendaryCards)) {
       player.legendaryCards = [];
       changed = true;
     }
@@ -811,7 +827,12 @@ function normalizeStage6Compatibility(room, rng = Math.random) {
       player.legendaryEffects.seaCurses = [];
       changed = true;
     }
-    if (!Array.isArray(player.savedEventCards)) {
+    if (Object.hasOwn(player, 'storedBenefits')) {
+      if (!Array.isArray(player.storedBenefits)) {
+        player.storedBenefits = [];
+        changed = true;
+      }
+    } else if (!Array.isArray(player.savedEventCards)) {
       player.savedEventCards = [];
       changed = true;
     }
@@ -862,8 +883,8 @@ function assignAssignmentCard(room, player, factionId, card, rng = Math.random) 
   if (factionId === 'mori' && ['visit-island', 'visit-route'].includes(card.type)) {
     semantic.progress = createMoriAssignmentProgress(room, player, card);
   }
-  assignTask(player, Task.view(semantic));
-  return { ok: true, assignment: player.activeAssignment };
+  const assignment = assignTask(player, Task.view(semantic));
+  return { ok: true, assignment };
 }
 
 function issueAssignment(room, player, factionId, rng = Math.random) {

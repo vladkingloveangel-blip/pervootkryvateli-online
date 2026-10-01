@@ -3,18 +3,19 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { newDb } = require('pg-mem');
-const { ANCHOR_CARDS, POLITICAL_FACTION_ORDER, EXPEDITION_DEFINITIONS, LEGENDARY_PLACES } = require('../game-data');
+const { ANCHOR_CARDS, POLITICAL_FACTION_ORDER, ASSIGNMENT_DEFINITIONS, CONSUMABLE_ABILITY_DEFINITIONS, EXPEDITION_DEFINITIONS, LEGENDARY_PLACES } = require('../game-data');
 const {
   CURRENT_DIGITAL_MODEL_SCHEMA_VERSION,
   SOURCE_STATE_DIGITAL_MODEL_SCHEMA_VERSION,
   ASSIGNMENT_POOL_DIGITAL_MODEL_SCHEMA_VERSION,
   EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION,
+  PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION,
   RANDOM_SOURCE_STATE_FIELD,
   migrateRoomState,
 } = require('../save-migrations');
 const { RoomStore } = require('../room-store');
 const { seaEncounterSource } = require('../sea-encounter-source');
-const { sailingEventSource } = require('../sailing-event-source');
+const { sailingEventSource, releaseStoredBenefitReservation } = require('../sailing-event-source');
 const { politicalEffectSource } = require('../political-effect-source');
 const { assignmentPool } = require('../assignment-pool');
 const { expeditionPool } = require('../expedition-pool');
@@ -23,7 +24,17 @@ const {
   expeditionCardEligibleForPlayer,
   expeditionTakenThisRound,
   getActiveExpeditionTask,
+  allLegendaryCardRefs,
+  consumeLegendaryCard,
+  discardRandomHeldCard,
 } = require('../game-logic');
+const {
+  getActiveAssignmentTask,
+  listLegendaryAbilities,
+  listSpecialAbilities,
+  listStoredBenefits,
+  consumeStoredBenefit,
+} = require('../domain-state');
 
 const logger = { log() {}, error() {} };
 const anchorColor = Object.keys(ANCHOR_CARDS)[0];
@@ -303,7 +314,85 @@ function v3ExpeditionFixture() {
   return { raw, active, available, firstHistory, secondHistory };
 }
 
-test('1 -> 2 -> 3 -> 4 chains source migrations without mutating input or using RNG', () => {
+
+function v4TaskInventoryFixture() {
+  const factionId = Object.keys(ASSIGNMENT_DEFINITIONS).find(id => ASSIGNMENT_DEFINITIONS[id]?.length);
+  const assignmentDefinition = ASSIGNMENT_DEFINITIONS[factionId][0];
+  const legendaryDefinition = CONSUMABLE_ABILITY_DEFINITIONS.find(definition => definition.id === 'sea-veil')
+    || CONSUMABLE_ABILITY_DEFINITIONS[0];
+  const sourceCard = { id: 'held-sailing-event', masterCardId: 'held-sailing-event', copy: 7, marker: 'reserved-event' };
+  const activeOccurrence = { ...structuredClone(assignmentDefinition), copy: 3, occurrenceMarker: 'active-reserved' };
+  const raw = {
+    code: 'INV45',
+    digitalModelSchemaVersion: EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION,
+    started: true,
+    round: 8,
+    players: [{
+      id: 'p-inventory',
+      shipClass: 'brigantine',
+      level: 1,
+      row: 0,
+      col: 0,
+      activeAssignment: {
+        instanceId: 'assignment-instance-45',
+        factionId,
+        card: structuredClone(activeOccurrence),
+        issuedRound: 7,
+        progress: { kind: 'continuation', step: 2, nested: { keep: true } },
+        futureTaskField: { keep: 'task' },
+      },
+      activeExpeditionTask: null,
+      expeditionCompletions: [],
+      expeditionAccessUsage: { round: null, draws: 0 },
+      legendaryCards: [
+        { ...structuredClone(legendaryDefinition), copy: 1, legacyMarker: 'first' },
+        { ...structuredClone(legendaryDefinition), copy: 2, legacyMarker: 'second' },
+      ],
+      specialCards: [legendaryDefinition.name, legendaryDefinition.name, 'UNKNOWN_LEGACY_SPECIAL'],
+      savedEventCards: [{
+        id: 'saved-benefit-45',
+        kind: 'treasure-cargo',
+        name: 'Held cargo',
+        goodId: 'wood',
+        sourceDeck: 'event',
+        sourceCard: structuredClone(sourceCard),
+        assignmentInstanceId: 'assignment-instance-45',
+        futureBenefitField: { keep: 'benefit' },
+      }],
+      namedPlaceCards: [{ id: 'named-stays', placeId: 'named-place' }],
+      legendaryEffects: { seaCurses: [{ remaining: 2 }] },
+      activeTurnEffects: { movePenalty: 1 },
+      nextTurnEffects: { moveBonus: 2 },
+      futurePlayerField: { keep: 'player' },
+    }],
+    order: ['p-inventory'],
+    randomSourceState: {
+      assignmentPool: {
+        [factionId]: {
+          available: [{ ...structuredClone(assignmentDefinition), copy: 1 }],
+          recyclable: [],
+          permanentlyExcluded: [],
+          reserved: [structuredClone(activeOccurrence)],
+        },
+      },
+      sailingEvent: {
+        available: [{ id: 'event-next', copy: 1 }],
+        recyclable: [],
+        reserved: [structuredClone(sourceCard)],
+      },
+      expeditionPool: { available: [], reserved: [] },
+      unknownSourceFamily: { keep: true },
+    },
+    legendaryPlacesExplored: { existing: 'p-inventory' },
+    pendingEvent: { id: 'pending-stays', playerId: 'p-inventory' },
+    pendingLegendaryReaction: { id: 'reaction-stays', targetPlayerId: 'p-inventory' },
+    eventPhase: { active: true, stage: 'political', playerIndex: 0 },
+    unknownRoot: { keep: 'root' },
+  };
+  return { raw, factionId, assignmentDefinition, activeOccurrence, legendaryDefinition, sourceCard };
+}
+
+test('1 -> 2 -> 3 -> 4 -> 5 chains source and player-state migrations without mutating input or using RNG', () => {
   const raw = v1Fixture();
   const before = structuredClone(raw);
   const originalRandom = Math.random;
@@ -320,7 +409,7 @@ test('1 -> 2 -> 3 -> 4 chains source migrations without mutating input or using 
   assert.equal(result.migrated, true);
   assert.equal(result.fromVersion, 1);
   assert.equal(result.toVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
-  assert.equal(result.state.digitalModelSchemaVersion, EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION);
+  assert.equal(result.state.digitalModelSchemaVersion, PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION);
   assert.deepEqual(raw, before);
 
   for (const field of ['anchorDecks', 'eventDeck', 'feudDecks', 'assignmentDecks', 'expeditionDeck']) {
@@ -348,14 +437,18 @@ test('1 -> 2 -> 3 -> 4 chains source migrations without mutating input or using 
   for (const field of ['pendingExpeditionRewards','pendingEvent','pendingFeud','pendingAssignmentChoice','pendingLegendaryReaction','eventPhase']) {
     assert.deepEqual(result.state[field], before[field], field);
   }
-  assert.deepEqual(result.state.players[0].legendaryCards, before.players[0].legendaryCards);
-  assert.deepEqual(result.state.players[0].specialCards, before.players[0].specialCards);
-  assert.deepEqual(result.state.players[0].savedEventCards, before.players[0].savedEventCards);
-  assert.deepEqual(result.state.players[0].activeAssignment, before.players[0].activeAssignment);
+  const migratedPlayer = result.state.players[0];
+  for (const legacyField of ['activeAssignment', 'legendaryCards', 'specialCards', 'savedEventCards']) {
+    assert.equal(Object.hasOwn(migratedPlayer, legacyField), false, legacyField);
+  }
+  assert.equal(migratedPlayer.activeAssignmentTask, null);
+  assert.equal(migratedPlayer.consumableAbilities.length, before.players[0].legendaryCards.length + before.players[0].specialCards.length);
+  assert.equal(migratedPlayer.consumableAbilitySequence, migratedPlayer.consumableAbilities.length);
+  assert.equal(migratedPlayer.storedBenefits.length, before.players[0].savedEventCards.length);
   assert.deepEqual(result.state.unknownLegacyRoot, before.unknownLegacyRoot);
 });
 
-test('unversioned old save dispatches 0 -> 1 -> 2 -> 3 -> 4 with zero RNG calls', () => {
+test('unversioned old save dispatches 0 -> 1 -> 2 -> 3 -> 4 -> 5 with zero RNG calls', () => {
   const raw = v1Fixture();
   delete raw.digitalModelSchemaVersion;
   const before = structuredClone(raw);
@@ -393,13 +486,16 @@ test('2 -> 3 maps available/recyclable/removed and preserves partially spent ord
   assert.deepEqual(result.state[RANDOM_SOURCE_STATE_FIELD].assignmentPool.futureAssignmentGroupField, { preserve: true });
 });
 
-test('2 -> 3 restores active assignment occurrence into reserved without migrating activeAssignment shape', () => {
+test('2 -> 3 reservation survives through 4 -> 5 active assignment target conversion', () => {
   const { raw, active } = assignmentFixture();
   const beforeActive = structuredClone(raw.players[0].activeAssignment);
   const migrated = migrateRoomState(raw).state;
   const storage = migrated[RANDOM_SOURCE_STATE_FIELD].assignmentPool[assignmentFactionId];
 
-  assert.deepEqual(migrated.players[0].activeAssignment, beforeActive);
+  assert.equal(Object.hasOwn(migrated.players[0], 'activeAssignment'), false);
+  assert.equal(migrated.players[0].activeAssignmentTask.instanceId, beforeActive.instanceId);
+  assert.equal(migrated.players[0].activeAssignmentTask.definitionId, beforeActive.card.id);
+  assert.equal(migrated.players[0].activeAssignmentTask.factionId, beforeActive.factionId);
   assert.equal(storage.available.some(item => occurrenceKey(item) === occurrenceKey(active)), false);
   assert.equal(storage.recyclable.some(item => occurrenceKey(item) === occurrenceKey(active)), false);
   assert.equal(storage.permanentlyExcluded.some(item => occurrenceKey(item) === occurrenceKey(active)), false);
@@ -527,7 +623,7 @@ test('active and Embassy reservations survive JSON restart without redraw or res
 
   assert.deepEqual(storage.reserved.map(occurrenceKey), [active, embassyB, embassyA].map(occurrenceKey));
   assert.deepEqual(restored.pendingAssignmentChoice.options.map(occurrenceKey), [embassyB, embassyA].map(occurrenceKey));
-  assert.equal(restored.players[0].activeAssignment.card.id, active.id);
+  assert.equal(restored.players[0].activeAssignmentTask.definitionId, active.id);
 
   const other = { id: 'other', activeAssignment: null };
   restored.players.push(other);
@@ -562,7 +658,7 @@ test('known next outcomes for 6.2 sources remain unchanged through the 2 -> 3 di
 });
 
 
-test('3 -> 4 migrates ExpeditionPool, active task, histories and usage with zero RNG and unknown-field preservation', () => {
+test('3 -> 4 -> 5 migrates ExpeditionPool then player task/inventory state with zero RNG and unknown-field preservation', () => {
   const { raw, active, available, firstHistory, secondHistory } = v3ExpeditionFixture();
   const before = structuredClone(raw);
   const originalRandom = Math.random;
@@ -577,8 +673,8 @@ test('3 -> 4 migrates ExpeditionPool, active task, histories and usage with zero
 
   assert.equal(calls, 0);
   assert.equal(result.fromVersion, ASSIGNMENT_POOL_DIGITAL_MODEL_SCHEMA_VERSION);
-  assert.equal(result.toVersion, EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION);
-  assert.equal(result.state.digitalModelSchemaVersion, EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION);
+  assert.equal(result.toVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
+  assert.equal(result.state.digitalModelSchemaVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
   assert.deepEqual(raw, before);
   assert.equal(Object.hasOwn(result.state, 'expeditionDeck'), false);
 
@@ -617,10 +713,13 @@ test('3 -> 4 migrates ExpeditionPool, active task, histories and usage with zero
 
   assert.deepEqual(result.state.randomSourceState.unknownSourceFamily, before.randomSourceState.unknownSourceFamily);
   assert.deepEqual(result.state.unknownRoot, before.unknownRoot);
-  assert.deepEqual(p1.activeAssignment, before.players[0].activeAssignment);
-  assert.deepEqual(p1.legendaryCards, before.players[0].legendaryCards);
-  assert.deepEqual(p1.specialCards, before.players[0].specialCards);
-  assert.deepEqual(p1.savedEventCards, before.players[0].savedEventCards);
+  assert.equal(Object.hasOwn(p1, 'activeAssignment'), false);
+  assert.equal(Object.hasOwn(p1, 'legendaryCards'), false);
+  assert.equal(Object.hasOwn(p1, 'specialCards'), false);
+  assert.equal(Object.hasOwn(p1, 'savedEventCards'), false);
+  assert.deepEqual(p1.activeAssignmentTask, { instanceId: 'assignment-stays', factionId: 'lionia' });
+  assert.equal(p1.consumableAbilities.length, 2);
+  assert.equal(p1.storedBenefits.length, 1);
   assert.deepEqual(result.state.pendingExpeditionRewards, before.pendingExpeditionRewards);
   assert.deepEqual(result.state.pendingLegendaryReaction, before.pendingLegendaryReaction);
   assert.deepEqual(result.state.eventPhase, before.eventPhase);
@@ -720,7 +819,7 @@ test('completion releases a migrated active occurrence exactly once after restar
   assert.equal(storage.available.filter(item => item.id === active.id).length, 1);
 });
 
-test('already-current schema 4 save is a content-exact no-op and second migration is idempotent', () => {
+test('already-current schema 5 save is a content-exact no-op and second migration is idempotent', () => {
   const current = migrateRoomState(assignmentFixture().raw).state;
   const direct = migrateRoomState(current);
   assert.equal(direct.migrated, false);
@@ -783,19 +882,126 @@ test('invalid saved rooms keep Invalid saved room contract and guest/no-DB mode 
   await guest.flush();
 });
 
-test('6.4 migration leaves 6.5+ assignment/inventory/discovery/effect/pending state untouched', () => {
-  const { raw } = v3ExpeditionFixture();
-  raw.players[0].namedPlaceCards = [{ id: 'named-stays' }];
-  raw.players[0].legendaryPlacesExplored = ['place-stays'];
-  raw.players[0].activeTurnEffects = { movement: [{ id: 'effect-stays' }] };
-  raw.players[0].nextTurnEffects = { moveBonus: 2 };
+test('4 -> 5 migrates active assignment, duplicate abilities and stored benefit reservation linkage with zero RNG', () => {
+  const { raw, activeOccurrence, legendaryDefinition, sourceCard } = v4TaskInventoryFixture();
+  const before = structuredClone(raw);
+  const originalRandom = Math.random;
+  let calls = 0;
+  Math.random = () => { calls += 1; throw new Error('migration must not use RNG'); };
+  let result;
+  try {
+    result = migrateRoomState(raw);
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  assert.equal(calls, 0);
+  assert.equal(result.fromVersion, EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION);
+  assert.equal(result.toVersion, PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION);
+  assert.deepEqual(raw, before);
+  const player = result.state.players[0];
+  for (const field of ['activeAssignment', 'legendaryCards', 'specialCards', 'savedEventCards']) {
+    assert.equal(Object.hasOwn(player, field), false, field);
+  }
+
+  assert.deepEqual(player.activeAssignmentTask.progress, before.players[0].activeAssignment.progress);
+  assert.equal(player.activeAssignmentTask.instanceId, 'assignment-instance-45');
+  assert.equal(player.activeAssignmentTask.definitionId, activeOccurrence.id);
+  assert.equal(player.activeAssignmentTask.factionId, before.players[0].activeAssignment.factionId);
+  assert.equal(player.activeAssignmentTask.definitionData.copy, activeOccurrence.copy);
+  assert.deepEqual(player.activeAssignmentTask.futureTaskField, { keep: 'task' });
+
+  assert.equal(player.consumableAbilities.length, 5);
+  assert.equal(new Set(player.consumableAbilities.map(item => item.instanceId)).size, 5);
+  assert.deepEqual(player.consumableAbilities.slice(0, 2).map(item => item.origin.kind), ['legendary', 'legendary']);
+  assert.deepEqual(player.consumableAbilities.slice(0, 2).map(item => item.data.copy), [1, 2]);
+  assert.deepEqual(player.consumableAbilities.slice(2).map(item => item.origin.kind), ['special', 'special', 'special']);
+  assert.equal(player.consumableAbilities[2].abilityId, legendaryDefinition.id);
+  assert.equal(player.consumableAbilities[4].abilityId, null);
+  assert.equal(player.consumableAbilities[4].origin.legacyName, 'UNKNOWN_LEGACY_SPECIAL');
+
+  assert.equal(player.storedBenefits.length, 1);
+  assert.equal(player.storedBenefits[0].kind, 'treasure-cargo');
+  assert.deepEqual(player.storedBenefits[0].source, { deck: 'event', occurrence: sourceCard });
+  assert.equal(player.storedBenefits[0].payload.assignmentInstanceId, 'assignment-instance-45');
+  assert.deepEqual(player.storedBenefits[0].futureBenefitField, { keep: 'benefit' });
+  assert.deepEqual(result.state.randomSourceState.sailingEvent.reserved, before.randomSourceState.sailingEvent.reserved);
+});
+
+test('JSON restart preserves assignment continuation, duplicate ability origins and legacy special-string behavior', () => {
+  const { raw, legendaryDefinition } = v4TaskInventoryFixture();
+  const restored = JSON.parse(JSON.stringify(migrateRoomState(raw).state));
+  const player = restored.players[0];
+  const task = getActiveAssignmentTask(player);
+  assert.equal(task.id, 'assignment-instance-45');
+  assert.equal(task.payload.id, raw.players[0].activeAssignment.card.id);
+  assert.deepEqual(task.progress, raw.players[0].activeAssignment.progress);
+
+  const legendary = listLegendaryAbilities(player);
+  const special = listSpecialAbilities(player);
+  assert.deepEqual(legendary.map(ability => ability.payload.copy), [1, 2]);
+  assert.deepEqual(special.map(ability => ability.payload.name), [legendaryDefinition.name, legendaryDefinition.name, 'UNKNOWN_LEGACY_SPECIAL']);
+  assert.equal(special[2].abilityId, undefined);
+  assert.equal(allLegendaryCardRefs(player).some(ref => ref.name === 'UNKNOWN_LEGACY_SPECIAL'), false);
+
+  const beforeCount = player.consumableAbilities.length;
+  const consumed = consumeLegendaryCard(null, player, { source: 'special', index: 0 });
+  assert.equal(consumed.kind, legendaryDefinition.id);
+  assert.equal(player.consumableAbilities.length, beforeCount - 1);
+  assert.equal(listSpecialAbilities(player).length, 2);
+  assert.equal(listLegendaryAbilities(player).length, 2);
+});
+
+test('random held candidate order and count are identical before and after 4 -> 5 migration', () => {
+  const { raw } = v4TaskInventoryFixture();
+  const migrated = migrateRoomState(raw).state;
+  const expectedCount = 2 + 3 + 1;
+  for (let candidateIndex = 0; candidateIndex < expectedCount; candidateIndex++) {
+    const legacyRoom = structuredClone(raw);
+    const targetRoom = structuredClone(migrated);
+    const legacyPlayer = legacyRoom.players[0];
+    const targetPlayer = targetRoom.players[0];
+    const value = (candidateIndex + 0.1) / expectedCount;
+    const legacy = discardRandomHeldCard(legacyRoom, legacyPlayer, () => value);
+    const target = discardRandomHeldCard(targetRoom, targetPlayer, () => value);
+    assert.equal(target.discarded.source, legacy.discarded.source);
+    assert.equal(target.discarded.index, legacy.discarded.index);
+    assert.equal(target.discarded.name, legacy.discarded.name);
+  }
+});
+
+test('stored-event reservation survives migration/restart and consume releases it exactly once', () => {
+  const { raw, sourceCard } = v4TaskInventoryFixture();
+  const restored = JSON.parse(JSON.stringify(migrateRoomState(raw).state));
+  const player = restored.players[0];
+  assert.equal(listStoredBenefits(player).length, 1);
+  assert.equal(restored.randomSourceState.sailingEvent.reserved.length, 1);
+
+  const consumed = consumeStoredBenefit(player, 'saved-benefit-45');
+  assert.ok(consumed);
+  assert.deepEqual(consumed.source.occurrence, sourceCard);
+  assert.equal(releaseStoredBenefitReservation(restored, consumed), true);
+  assert.equal(restored.randomSourceState.sailingEvent.reserved.length, 0);
+  assert.equal(restored.randomSourceState.sailingEvent.recyclable.filter(item => item.copy === sourceCard.copy).length, 1);
+
+  assert.equal(consumeStoredBenefit(player, 'saved-benefit-45'), null);
+  assert.equal(releaseStoredBenefitReservation(restored, consumed), false);
+  assert.equal(restored.randomSourceState.sailingEvent.recyclable.filter(item => item.copy === sourceCard.copy).length, 1);
+});
+
+test('4 -> 5 preserves treasure-cargo assignmentInstanceId linkage and leaves 6.6/6.7 state untouched', () => {
+  const { raw } = v4TaskInventoryFixture();
   const before = structuredClone(raw);
   const migrated = migrateRoomState(raw).state;
+  const player = migrated.players[0];
+  assert.equal(getActiveAssignmentTask(player).id, listStoredBenefits(player)[0].payload.assignmentInstanceId);
 
-  for (const field of ['activeAssignment', 'legendaryCards', 'specialCards', 'savedEventCards', 'namedPlaceCards', 'legendaryPlacesExplored', 'activeTurnEffects', 'nextTurnEffects']) {
-    assert.deepEqual(migrated.players[0][field], before.players[0][field], field);
+  for (const field of ['namedPlaceCards', 'legendaryEffects', 'activeTurnEffects', 'nextTurnEffects']) {
+    assert.deepEqual(player[field], before.players[0][field], field);
   }
-  assert.deepEqual(migrated.pendingExpeditionRewards, before.pendingExpeditionRewards);
+  assert.deepEqual(migrated.legendaryPlacesExplored, before.legendaryPlacesExplored);
+  assert.deepEqual(migrated.pendingEvent, before.pendingEvent);
   assert.deepEqual(migrated.pendingLegendaryReaction, before.pendingLegendaryReaction);
   assert.deepEqual(migrated.eventPhase, before.eventPhase);
+  assert.deepEqual(migrated.unknownRoot, before.unknownRoot);
 });

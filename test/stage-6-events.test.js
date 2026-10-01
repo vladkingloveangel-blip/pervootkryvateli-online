@@ -135,7 +135,7 @@ test('stage 6.1: Observatory resolves one sailing card before feud, Embassy assi
 
   target.enemyFactionIds = ['kadingir'];
   target.suzerainId = 'lionia';
-  target.activeAssignment = null;
+  target.activeAssignmentTask = null; delete target.activeAssignment;
   target.activeTurnEffects = {};
   target.nextTurnEffects = {};
   target.skipTurns = 0;
@@ -248,7 +248,7 @@ test('stage 6.1: Observatory resolves one sailing card before feud, Embassy assi
   keepRoom.pendingLegendaryReaction = null;
   keepTarget.enemyFactionIds = [];
   keepTarget.suzerainId = null;
-  keepTarget.activeAssignment = null;
+  keepTarget.activeAssignmentTask = null; delete keepTarget.activeAssignment;
   keepTarget.activeTurnEffects = {};
   keepTarget.nextTurnEffects = {};
   keepTarget.skipTurns = 0;

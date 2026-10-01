@@ -5,8 +5,11 @@ const INITIAL_DIGITAL_MODEL_SCHEMA_VERSION = 1;
 const SOURCE_STATE_DIGITAL_MODEL_SCHEMA_VERSION = 2;
 const ASSIGNMENT_POOL_DIGITAL_MODEL_SCHEMA_VERSION = 3;
 const EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION = 4;
-const CURRENT_DIGITAL_MODEL_SCHEMA_VERSION = EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION;
+const PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION = 5;
+const CURRENT_DIGITAL_MODEL_SCHEMA_VERSION = PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION;
 const RANDOM_SOURCE_STATE_FIELD = 'randomSourceState';
+
+const { ASSIGNMENT_DEFINITIONS, CONSUMABLE_ABILITY_DEFINITIONS } = require('./game-data');
 
 function cloneState(value) {
   return structuredClone(value);
@@ -326,6 +329,156 @@ function migrateLegacyExpeditionPool(rawStorage, players = []) {
   return migrated;
 }
 
+
+function valuesEqual(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function assignmentDefinition(factionId, definitionId) {
+  const definitions = ASSIGNMENT_DEFINITIONS?.[factionId];
+  if (!Array.isArray(definitions)) return null;
+  return definitions.find(definition =>
+    definition?.id === definitionId || definition?.conditionKey === definitionId
+  ) || null;
+}
+
+function nonCanonicalData(rawValue, canonicalValue) {
+  if (!isRecord(rawValue)) return undefined;
+  const extras = {};
+  for (const [key, value] of Object.entries(rawValue)) {
+    if (canonicalValue && Object.hasOwn(canonicalValue, key) && valuesEqual(value, canonicalValue[key])) continue;
+    extras[key] = value;
+  }
+  return Object.keys(extras).length ? extras : undefined;
+}
+
+function migrateLegacyActiveAssignment(active) {
+  if (active === undefined || active === null) return active ?? null;
+  if (!isRecord(active)) return active;
+  const card = isRecord(active.card) ? active.card : {};
+  const definitionId = card.id || card.conditionKey || active.definitionId || null;
+  const factionId = active.factionId ?? null;
+  const canonical = assignmentDefinition(factionId, definitionId);
+  const known = new Set(['instanceId', 'factionId', 'card', 'issuedRound', 'progress']);
+  const migrated = {};
+  for (const [key, value] of Object.entries(active)) {
+    if (!known.has(key)) migrated[key] = value;
+  }
+  if (Object.hasOwn(active, 'instanceId')) migrated.instanceId = active.instanceId;
+  if (definitionId != null) migrated.definitionId = definitionId;
+  if (Object.hasOwn(active, 'factionId')) migrated.factionId = active.factionId;
+  if (Object.hasOwn(active, 'issuedRound')) migrated.issuedRound = active.issuedRound;
+  if (Object.hasOwn(active, 'progress')) migrated.progress = active.progress;
+  const definitionData = nonCanonicalData(card, canonical);
+  if (definitionData) migrated.definitionData = definitionData;
+  return migrated;
+}
+
+function abilityDefinitionById(abilityId) {
+  return (CONSUMABLE_ABILITY_DEFINITIONS || []).find(definition => definition?.id === abilityId) || null;
+}
+
+function abilityDefinitionByLegacyName(name) {
+  return (CONSUMABLE_ABILITY_DEFINITIONS || []).find(definition => definition?.name === name) || null;
+}
+
+function stableLegacyAbilityInstanceId(playerId, origin, index, identity) {
+  const owner = String(playerId || 'player').replace(/:/g, '_');
+  const value = String(identity || 'unknown').replace(/:/g, '_');
+  return `legacy-ability:${owner}:${origin}:${Math.max(0, Number(index) || 0)}:${value}`;
+}
+
+function migrateLegacyConsumableAbilities(player) {
+  const abilities = [];
+  for (const [index, card] of (Array.isArray(player?.legendaryCards) ? player.legendaryCards : []).entries()) {
+    if (!isRecord(card)) continue;
+    const abilityId = card.id || null;
+    const canonical = abilityDefinitionById(abilityId);
+    const migrated = {
+      instanceId: stableLegacyAbilityInstanceId(player?.id, 'legendary', index, abilityId),
+      abilityId,
+      origin: { kind: 'legendary', legacyIndex: index },
+    };
+    const data = nonCanonicalData(card, canonical);
+    if (data) migrated.data = data;
+    abilities.push(migrated);
+  }
+  for (const [index, name] of (Array.isArray(player?.specialCards) ? player.specialCards : []).entries()) {
+    if (typeof name !== 'string') continue;
+    const canonical = abilityDefinitionByLegacyName(name);
+    abilities.push({
+      instanceId: stableLegacyAbilityInstanceId(player?.id, 'special', index, canonical?.id || name),
+      abilityId: canonical?.id || null,
+      origin: { kind: 'special', legacyIndex: index, legacyName: name },
+    });
+  }
+  return abilities;
+}
+
+function migrateLegacyStoredBenefit(player, benefit, index) {
+  if (!isRecord(benefit)) return benefit;
+  const known = new Set(['id', 'kind', 'name', 'goodId', 'sourceDeck', 'sourceCard', 'assignmentInstanceId']);
+  const migrated = {};
+  for (const [key, value] of Object.entries(benefit)) {
+    if (!known.has(key)) migrated[key] = value;
+  }
+  migrated.instanceId = `legacy-benefit:${String(player?.id || 'player').replace(/:/g, '_')}:${Math.max(0, Number(index) || 0)}:${String(benefit.id || benefit.kind || 'benefit').replace(/:/g, '_')}`;
+  if (Object.hasOwn(benefit, 'id')) migrated.id = benefit.id;
+  if (Object.hasOwn(benefit, 'kind')) migrated.kind = benefit.kind;
+  const source = {};
+  if (Object.hasOwn(benefit, 'sourceDeck')) source.deck = benefit.sourceDeck;
+  if (Object.hasOwn(benefit, 'sourceCard')) source.occurrence = benefit.sourceCard;
+  if (Object.keys(source).length) migrated.source = source;
+  const payload = {};
+  if (Object.hasOwn(benefit, 'name')) payload.name = benefit.name;
+  if (Object.hasOwn(benefit, 'goodId')) payload.goodId = benefit.goodId;
+  if (Object.hasOwn(benefit, 'assignmentInstanceId')) payload.assignmentInstanceId = benefit.assignmentInstanceId;
+  if (Object.keys(payload).length) migrated.payload = payload;
+  return migrated;
+}
+
+function migrateLegacyPlayerTaskInventory(player) {
+  if (!isRecord(player)) return player;
+  const migrated = { ...player };
+
+  if (Object.hasOwn(player, 'activeAssignment')) {
+    if (!Object.hasOwn(player, 'activeAssignmentTask')) {
+      migrated.activeAssignmentTask = migrateLegacyActiveAssignment(player.activeAssignment);
+    }
+    delete migrated.activeAssignment;
+  } else if (!Object.hasOwn(player, 'activeAssignmentTask')) {
+    migrated.activeAssignmentTask = null;
+  }
+
+  if (Object.hasOwn(player, 'legendaryCards') || Object.hasOwn(player, 'specialCards')) {
+    if (!Object.hasOwn(player, 'consumableAbilities')) {
+      migrated.consumableAbilities = migrateLegacyConsumableAbilities(player);
+    }
+    delete migrated.legendaryCards;
+    delete migrated.specialCards;
+  } else if (!Object.hasOwn(player, 'consumableAbilities')) {
+    migrated.consumableAbilities = [];
+  }
+  if (!Object.hasOwn(player, 'consumableAbilitySequence')) {
+    migrated.consumableAbilitySequence = Array.isArray(migrated.consumableAbilities)
+      ? migrated.consumableAbilities.length
+      : 0;
+  }
+
+  if (Object.hasOwn(player, 'savedEventCards')) {
+    if (!Object.hasOwn(player, 'storedBenefits')) {
+      migrated.storedBenefits = Array.isArray(player.savedEventCards)
+        ? player.savedEventCards.map((benefit, index) => migrateLegacyStoredBenefit(player, benefit, index))
+        : player.savedEventCards;
+    }
+    delete migrated.savedEventCards;
+  } else if (!Object.hasOwn(player, 'storedBenefits')) {
+    migrated.storedBenefits = [];
+  }
+
+  return migrated;
+}
+
 function migrateVersion0To1(state) {
   return {
     ...state,
@@ -421,11 +574,23 @@ function migrateVersion3To4(state) {
   return next;
 }
 
+function migrateVersion4To5(state) {
+  const next = {
+    ...state,
+    [DIGITAL_MODEL_SCHEMA_VERSION_FIELD]: PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION,
+  };
+  if (Array.isArray(state?.players)) {
+    next.players = state.players.map(migrateLegacyPlayerTaskInventory);
+  }
+  return next;
+}
+
 const MIGRATIONS = new Map([
   [0, { toVersion: INITIAL_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion0To1 }],
   [1, { toVersion: SOURCE_STATE_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion1To2 }],
   [2, { toVersion: ASSIGNMENT_POOL_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion2To3 }],
   [3, { toVersion: EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion3To4 }],
+  [4, { toVersion: PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion4To5 }],
 ]);
 
 function readDigitalModelSchemaVersion(rawRoom) {
@@ -471,6 +636,7 @@ module.exports = {
   SOURCE_STATE_DIGITAL_MODEL_SCHEMA_VERSION,
   ASSIGNMENT_POOL_DIGITAL_MODEL_SCHEMA_VERSION,
   EXPEDITION_POOL_DIGITAL_MODEL_SCHEMA_VERSION,
+  PLAYER_TASK_INVENTORY_DIGITAL_MODEL_SCHEMA_VERSION,
   RANDOM_SOURCE_STATE_FIELD,
   migrateRoomState,
 };

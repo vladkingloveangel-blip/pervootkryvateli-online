@@ -135,9 +135,9 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   target.row = 24; target.col = 6;
   source.attackLimitRound = 2;
   source.attackCountsThisRound = {};
-  source.legendaryCards = [{ ...structuredClone(rules.legends.legendary.find(card => card.id === 'sea-curse')), copy: 1 }];
+  source.consumableAbilities = [{ instanceId:'source-curse-1', abilityId:'sea-curse', origin:{ kind:'legendary' }, data:{ copy:1 } }]; source.consumableAbilitySequence = 1; delete source.legendaryCards;
   source.legendaryEffects = { seaCurses: [] };
-  target.legendaryCards = [{ ...structuredClone(rules.legends.legendary.find(card => card.id === 'sea-veil')), copy: 1 }];
+  target.consumableAbilities = [{ instanceId:'target-veil-1', abilityId:'sea-veil', origin:{ kind:'legendary' }, data:{ copy:1 } }]; target.consumableAbilitySequence = 1; delete target.legendaryCards;
   target.legendaryEffects = { seaCurses: [] };
   source.enemyFactionIds = [];
   target.enemyFactionIds = [];
@@ -216,8 +216,8 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   protectedSource.attackLimitRound = 2;
   protectedSource.attackCountsThisRound = {};
   protectedSource.brokenAlliesThisTurn = [];
-  protectedSource.legendaryCards = [{ ...structuredClone(rules.legends.legendary.find(card => card.id === 'sea-curse')), copy: 1 }];
-  protectedTarget.legendaryCards = [];
+  protectedSource.consumableAbilities = [{ instanceId:'protected-curse-1', abilityId:'sea-curse', origin:{ kind:'legendary' }, data:{ copy:1 } }]; protectedSource.consumableAbilitySequence = 1; delete protectedSource.legendaryCards;
+  protectedTarget.consumableAbilities = []; protectedTarget.consumableAbilitySequence = 0; delete protectedTarget.legendaryCards;
   protectedTarget.legendaryEffects = {
     seaCurses: [],
     shipVeil: { remaining: 3, sourcePlayerId: targetId, ignoreTurnNo: null },
@@ -278,7 +278,7 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   visitSource.row = atlantia.cells[0][0];
   visitSource.col = atlantia.cells[0][1];
   visitSource.namedPlaceCards = [];
-  visitSource.legendaryCards = [];
+  visitSource.consumableAbilities = []; visitSource.consumableAbilitySequence = 0; delete visitSource.legendaryCards;
   visitSource.activeExpedition = null;
   writeDb(visitDb);
 

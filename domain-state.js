@@ -1,6 +1,6 @@
 'use strict';
 
-const { EXPEDITION_DEFINITIONS } = require('./game-data');
+const { ASSIGNMENT_DEFINITIONS, EXPEDITION_DEFINITIONS, CONSUMABLE_ABILITY_DEFINITIONS } = require('./game-data');
 
 const DOMAIN_KIND = Symbol('domain-state.kind');
 const LEGACY_SNAPSHOT = Symbol('domain-state.legacy-snapshot');
@@ -82,14 +82,37 @@ function defineContract(name, fields) {
 }
 
 const Task = defineContract('Task', ['kind', 'id', 'ownerId', 'state', 'source', 'payload', 'progress']);
-const ConsumableAbility = defineContract('ConsumableAbility', ['kind', 'id', 'ownerId', 'source', 'payload']);
-const StoredBenefit = defineContract('StoredBenefit', ['kind', 'id', 'ownerId', 'state', 'source', 'payload']);
+const ConsumableAbility = defineContract('ConsumableAbility', ['kind', 'id', 'instanceId', 'abilityId', 'ownerId', 'source', 'payload']);
+const StoredBenefit = defineContract('StoredBenefit', ['kind', 'id', 'instanceId', 'ownerId', 'state', 'source', 'payload']);
 const Discovery = defineContract('Discovery', ['kind', 'id', 'ownerId', 'state', 'source', 'payload', 'claimedById']);
 const TemporaryEffect = defineContract('TemporaryEffect', ['kind', 'id', 'ownerId', 'targetType', 'targetId', 'state', 'source', 'payload', 'duration']);
 const PendingResolution = defineContract('PendingResolution', ['family', 'kind', 'id', 'actorId', 'actorPlayerId', 'state', 'source', 'payload', 'options']);
 const HistoryRecord = defineContract('HistoryRecord', ['kind', 'id', 'ownerId', 'state', 'source', 'payload', 'completedAt']);
 
 const ACTIVE_ASSIGNMENT_LEGACY_SNAPSHOT = Symbol('domain-state.active-assignment-legacy-snapshot');
+const ACTIVE_ASSIGNMENT_PERSISTED_SNAPSHOT = Symbol('domain-state.active-assignment-persisted-snapshot');
+
+function assignmentDefinition(factionId, definitionId) {
+  const definitions = ASSIGNMENT_DEFINITIONS?.[factionId];
+  if (!Array.isArray(definitions)) return null;
+  return definitions.find(definition =>
+    definition?.id === definitionId || definition?.conditionKey === definitionId
+  ) || null;
+}
+
+function valuesEqual(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function nonCanonicalObjectData(rawValue, canonicalValue) {
+  if (!rawValue || typeof rawValue !== 'object' || Array.isArray(rawValue)) return undefined;
+  const extras = {};
+  for (const [key, value] of Object.entries(rawValue)) {
+    if (canonicalValue && hasOwn(canonicalValue, key) && valuesEqual(value, canonicalValue[key])) continue;
+    extras[key] = cloneDetached(value);
+  }
+  return Object.keys(extras).length ? extras : undefined;
+}
 
 function activeAssignmentTaskFromLegacy(player, legacyAssignment) {
   if (legacyAssignment === undefined || legacyAssignment === null) return legacyAssignment;
@@ -115,8 +138,42 @@ function activeAssignmentTaskFromLegacy(player, legacyAssignment) {
   return task;
 }
 
+function activeAssignmentTaskFromPersisted(player, persistedTask) {
+  if (persistedTask === undefined || persistedTask === null) return persistedTask;
+  if (!persistedTask || typeof persistedTask !== 'object' || Array.isArray(persistedTask)) {
+    throw new TypeError('ActiveAssignmentTask expects a persisted assignment record, null, or undefined.');
+  }
+  const factionId = persistedTask.factionId;
+  const definitionId = persistedTask.definitionId;
+  const definition = assignmentDefinition(factionId, definitionId);
+  const payload = definition
+    ? { ...cloneDetached(definition), ...(persistedTask.definitionData ? cloneDetached(persistedTask.definitionData) : {}) }
+    : (persistedTask.definitionData ? cloneDetached(persistedTask.definitionData) : undefined);
+  const semantic = {
+    kind: 'assignment',
+    ownerId: player?.id,
+    state: 'active',
+    source: {},
+  };
+  if (hasOwn(persistedTask, 'instanceId')) semantic.id = cloneDetached(persistedTask.instanceId);
+  if (hasOwn(persistedTask, 'factionId')) semantic.source.factionId = cloneDetached(persistedTask.factionId);
+  if (hasOwn(persistedTask, 'issuedRound')) semantic.source.issuedRound = cloneDetached(persistedTask.issuedRound);
+  if (payload !== undefined) semantic.payload = payload;
+  if (hasOwn(persistedTask, 'progress')) semantic.progress = cloneDetached(persistedTask.progress);
+  const task = Task.view(semantic);
+  Object.defineProperty(task, ACTIVE_ASSIGNMENT_PERSISTED_SNAPSHOT, {
+    value: cloneDetached(persistedTask),
+    enumerable: false,
+  });
+  return task;
+}
+
 function getActiveAssignmentTask(player) {
-  if (!player || typeof player !== 'object' || !hasOwn(player, 'activeAssignment')) return undefined;
+  if (!player || typeof player !== 'object') return undefined;
+  if (hasOwn(player, 'activeAssignmentTask')) {
+    return activeAssignmentTaskFromPersisted(player, player.activeAssignmentTask);
+  }
+  if (!hasOwn(player, 'activeAssignment')) return undefined;
   return activeAssignmentTaskFromLegacy(player, player.activeAssignment);
 }
 
@@ -125,8 +182,18 @@ function activeAssignmentTaskToLegacy(task) {
   if (!Task.is(task) || task.kind !== 'assignment' || task.state !== 'active') {
     throw new TypeError('assignTask expects an active assignment Task.');
   }
-  const snapshot = task[ACTIVE_ASSIGNMENT_LEGACY_SNAPSHOT];
-  const legacy = snapshot && typeof snapshot === 'object' ? cloneDetached(snapshot) : {};
+  const legacySnapshot = task[ACTIVE_ASSIGNMENT_LEGACY_SNAPSHOT];
+  const persistedSnapshot = task[ACTIVE_ASSIGNMENT_PERSISTED_SNAPSHOT];
+  let legacy = legacySnapshot && typeof legacySnapshot === 'object'
+    ? cloneDetached(legacySnapshot)
+    : {};
+  if (!legacySnapshot && persistedSnapshot && typeof persistedSnapshot === 'object') {
+    const targetKeys = new Set(['instanceId', 'definitionId', 'factionId', 'issuedRound', 'progress', 'definitionData']);
+    legacy = {};
+    for (const [key, value] of Object.entries(persistedSnapshot)) {
+      if (!targetKeys.has(key)) legacy[key] = cloneDetached(value);
+    }
+  }
   if (hasOwn(task, 'id')) legacy.instanceId = cloneDetached(task.id);
   else delete legacy.instanceId;
   const source = task.source && typeof task.source === 'object' ? task.source : {};
@@ -141,6 +208,36 @@ function activeAssignmentTaskToLegacy(task) {
   return legacy;
 }
 
+function activeAssignmentTaskToPersisted(task) {
+  if (task === undefined || task === null) return task;
+  if (!Task.is(task) || task.kind !== 'assignment' || task.state !== 'active') {
+    throw new TypeError('assignTask expects an active assignment Task.');
+  }
+  const snapshot = task[ACTIVE_ASSIGNMENT_PERSISTED_SNAPSHOT];
+  const persisted = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)
+    ? cloneDetached(snapshot)
+    : {};
+  const source = task.source && typeof task.source === 'object' ? task.source : {};
+  const definitionId = task.payload?.id || task.payload?.conditionKey || persisted.definitionId;
+  const factionId = source.factionId ?? persisted.factionId;
+  const canonical = assignmentDefinition(factionId, definitionId);
+  if (hasOwn(task, 'id')) persisted.instanceId = cloneDetached(task.id);
+  else delete persisted.instanceId;
+  if (definitionId != null) persisted.definitionId = cloneDetached(definitionId);
+  else delete persisted.definitionId;
+  if (factionId != null) persisted.factionId = cloneDetached(factionId);
+  else delete persisted.factionId;
+  if (hasOwn(source, 'issuedRound')) persisted.issuedRound = cloneDetached(source.issuedRound);
+  else delete persisted.issuedRound;
+  if (hasOwn(task, 'progress')) persisted.progress = cloneDetached(task.progress);
+  else delete persisted.progress;
+  const definitionData = nonCanonicalObjectData(task.payload, canonical);
+  if (definitionData) persisted.definitionData = definitionData;
+  else delete persisted.definitionData;
+  delete persisted.card;
+  return persisted;
+}
+
 function assignTask(player, task) {
   if (!player || typeof player !== 'object') throw new TypeError('assignTask requires a player object.');
   if (!Task.is(task) || task.kind !== 'assignment' || task.state !== 'active') {
@@ -148,6 +245,10 @@ function assignTask(player, task) {
   }
   if (task.ownerId != null && player.id != null && String(task.ownerId) !== String(player.id)) {
     throw new TypeError('Assignment Task ownerId does not match the target player.');
+  }
+  if (hasOwn(player, 'activeAssignmentTask')) {
+    player.activeAssignmentTask = activeAssignmentTaskToPersisted(task);
+    return activeAssignmentTaskToLegacy(task);
   }
   player.activeAssignment = activeAssignmentTaskToLegacy(task);
   return player.activeAssignment;
@@ -157,7 +258,8 @@ function completeAssignmentTask(player) {
   if (!player || typeof player !== 'object') throw new TypeError('completeAssignmentTask requires a player object.');
   const task = getActiveAssignmentTask(player);
   const legacy = task === undefined || task === null ? task : activeAssignmentTaskToLegacy(task);
-  player.activeAssignment = null;
+  if (hasOwn(player, 'activeAssignmentTask')) player.activeAssignmentTask = null;
+  else player.activeAssignment = null;
   return legacy;
 }
 
@@ -584,6 +686,48 @@ function specialConsumableAbilityFromLegacy(player, legacyName, index = 0) {
   });
 }
 
+function consumableAbilityDefinition(abilityId) {
+  return (CONSUMABLE_ABILITY_DEFINITIONS || []).find(definition => definition?.id === abilityId) || null;
+}
+
+function consumableAbilityDefinitionByName(name) {
+  return (CONSUMABLE_ABILITY_DEFINITIONS || []).find(definition => definition?.name === name) || null;
+}
+
+function consumableAbilityFromPersisted(player, persisted, sourceIndex) {
+  if (!persisted || typeof persisted !== 'object' || Array.isArray(persisted)) {
+    throw new TypeError('Persisted ConsumableAbility expects an object.');
+  }
+  const originKind = persisted.origin?.kind;
+  const definition = consumableAbilityDefinition(persisted.abilityId);
+  if (originKind === 'legendary') {
+    const payload = {
+      ...(definition ? cloneDetached(definition) : {}),
+      ...(persisted.data && typeof persisted.data === 'object' ? cloneDetached(persisted.data) : {}),
+    };
+    return ConsumableAbility.view({
+      kind: 'legendary',
+      ...(persisted.abilityId != null ? { id: cloneDetached(persisted.abilityId), abilityId: cloneDetached(persisted.abilityId) } : {}),
+      ...(persisted.instanceId != null ? { instanceId: cloneDetached(persisted.instanceId) } : {}),
+      ownerId: player?.id,
+      source: { inventory: 'legendary', index: sourceIndex },
+      payload,
+    });
+  }
+  if (originKind === 'special') {
+    const name = persisted.origin?.legacyName ?? definition?.name ?? persisted.data?.name;
+    return ConsumableAbility.view({
+      kind: 'special',
+      ...(persisted.abilityId != null ? { abilityId: cloneDetached(persisted.abilityId) } : {}),
+      ...(persisted.instanceId != null ? { instanceId: cloneDetached(persisted.instanceId) } : {}),
+      ownerId: player?.id,
+      source: { inventory: 'special', index: sourceIndex },
+      payload: { name: cloneDetached(name) },
+    });
+  }
+  throw new TypeError('Persisted ConsumableAbility origin.kind must be legendary or special.');
+}
+
 function consumableAbilityToLegacy(ability) {
   if (!ConsumableAbility.is(ability)) {
     throw new TypeError('Consumable ability write expects a ConsumableAbility.');
@@ -604,15 +748,39 @@ function consumableAbilityToLegacy(ability) {
   throw new TypeError('ConsumableAbility source.inventory must be legendary or special.');
 }
 
+function listPersistedAbilities(player, originKind) {
+  if (!Array.isArray(player?.consumableAbilities)) return [];
+  let sourceIndex = 0;
+  const out = [];
+  for (const item of player.consumableAbilities) {
+    if (item?.origin?.kind !== originKind) continue;
+    out.push(consumableAbilityFromPersisted(player, item, sourceIndex));
+    sourceIndex += 1;
+  }
+  return out;
+}
+
 function listLegendaryAbilities(player) {
-  if (!player || typeof player !== 'object' || !hasOwn(player, 'legendaryCards')) return undefined;
+  if (!player || typeof player !== 'object') return undefined;
+  if (hasOwn(player, 'consumableAbilities')) {
+    if (player.consumableAbilities === null) return null;
+    if (!Array.isArray(player.consumableAbilities)) throw new TypeError('consumableAbilities backing field must be an array, null, or absent.');
+    return listPersistedAbilities(player, 'legendary');
+  }
+  if (!hasOwn(player, 'legendaryCards')) return undefined;
   if (player.legendaryCards === null) return null;
   if (!Array.isArray(player.legendaryCards)) throw new TypeError('legendaryCards backing field must be an array, null, or absent.');
   return player.legendaryCards.map((card, index) => legendaryConsumableAbilityFromLegacy(player, card, index));
 }
 
 function listSpecialAbilities(player) {
-  if (!player || typeof player !== 'object' || !hasOwn(player, 'specialCards')) return undefined;
+  if (!player || typeof player !== 'object') return undefined;
+  if (hasOwn(player, 'consumableAbilities')) {
+    if (player.consumableAbilities === null) return null;
+    if (!Array.isArray(player.consumableAbilities)) throw new TypeError('consumableAbilities backing field must be an array, null, or absent.');
+    return listPersistedAbilities(player, 'special');
+  }
+  if (!hasOwn(player, 'specialCards')) return undefined;
   if (player.specialCards === null) return null;
   if (!Array.isArray(player.specialCards)) throw new TypeError('specialCards backing field must be an array, null, or absent.');
   return player.specialCards.map((name, index) => specialConsumableAbilityFromLegacy(player, name, index));
@@ -625,6 +793,41 @@ function listConsumableAbilities(player) {
   ];
 }
 
+function nextConsumableAbilityInstanceId(player, originKind, abilityId) {
+  const current = Math.max(0, Math.floor(Number(player.consumableAbilitySequence) || 0));
+  const next = current + 1;
+  player.consumableAbilitySequence = next;
+  return `ability:${String(player.id || 'player')}:${next}:${originKind}:${String(abilityId || 'legacy')}`;
+}
+
+function persistedAbilityFromView(player, ability) {
+  const inventory = ability.source?.inventory;
+  if (inventory === 'legendary') {
+    const legacy = consumableAbilityToLegacy(ability);
+    const abilityId = legacy.id || ability.abilityId || ability.id || null;
+    const canonical = consumableAbilityDefinition(abilityId);
+    const persisted = {
+      instanceId: ability.instanceId || nextConsumableAbilityInstanceId(player, 'legendary', abilityId),
+      abilityId,
+      origin: { kind: 'legendary' },
+    };
+    const data = nonCanonicalObjectData(legacy, canonical);
+    if (data) persisted.data = data;
+    return persisted;
+  }
+  if (inventory === 'special') {
+    const legacyName = consumableAbilityToLegacy(ability);
+    const canonical = consumableAbilityDefinitionByName(legacyName);
+    const abilityId = ability.abilityId || canonical?.id || null;
+    return {
+      instanceId: ability.instanceId || nextConsumableAbilityInstanceId(player, 'special', abilityId || legacyName),
+      abilityId,
+      origin: { kind: 'special', legacyName },
+    };
+  }
+  throw new TypeError('ConsumableAbility source.inventory must be legendary or special.');
+}
+
 function grantConsumableAbility(player, ability) {
   if (!player || typeof player !== 'object') throw new TypeError('grantConsumableAbility requires a player object.');
   if (!ConsumableAbility.is(ability)) throw new TypeError('grantConsumableAbility expects a ConsumableAbility.');
@@ -632,6 +835,14 @@ function grantConsumableAbility(player, ability) {
     throw new TypeError('ConsumableAbility ownerId does not match the target player.');
   }
   const inventory = ability.source?.inventory;
+  if (hasOwn(player, 'consumableAbilities')) {
+    if (player.consumableAbilities == null) player.consumableAbilities = [];
+    if (!Array.isArray(player.consumableAbilities)) throw new TypeError('consumableAbilities backing field must be an array.');
+    const persisted = persistedAbilityFromView(player, ability);
+    player.consumableAbilities.push(persisted);
+    const list = inventory === 'legendary' ? listLegendaryAbilities(player) : listSpecialAbilities(player);
+    return list[list.length - 1];
+  }
   const legacy = consumableAbilityToLegacy(ability);
   if (inventory === 'legendary') {
     if (player.legendaryCards == null) player.legendaryCards = [];
@@ -649,12 +860,12 @@ function grantConsumableAbility(player, ability) {
 }
 
 function grantLegendaryAbility(player, card) {
-  const index = Array.isArray(player?.legendaryCards) ? player.legendaryCards.length : 0;
+  const index = (listLegendaryAbilities(player) || []).length;
   return grantConsumableAbility(player, legendaryConsumableAbilityFromLegacy(player, card, index));
 }
 
 function grantSpecialAbility(player, name) {
-  const index = Array.isArray(player?.specialCards) ? player.specialCards.length : 0;
+  const index = (listSpecialAbilities(player) || []).length;
   return grantConsumableAbility(player, specialConsumableAbilityFromLegacy(player, name, index));
 }
 
@@ -679,6 +890,19 @@ function consumeConsumableAbility(player, ref) {
   if (!ability) return null;
   const source = ability.source?.inventory;
   const index = ability.source?.index;
+  if (hasOwn(player, 'consumableAbilities')) {
+    if (!Array.isArray(player.consumableAbilities)) return null;
+    let seen = 0;
+    const backingIndex = player.consumableAbilities.findIndex(item => {
+      if (item?.origin?.kind !== source) return false;
+      const matches = seen === index;
+      seen += 1;
+      return matches;
+    });
+    if (backingIndex < 0) return null;
+    player.consumableAbilities.splice(backingIndex, 1);
+    return ability;
+  }
   if (source === 'legendary') {
     if (!Array.isArray(player.legendaryCards) || index < 0 || index >= player.legendaryCards.length) return null;
     player.legendaryCards.splice(index, 1);
@@ -694,6 +918,7 @@ function consumeConsumableAbility(player, ref) {
 
 
 const STORED_BENEFIT_LEGACY_SNAPSHOT = Symbol('domain-state.stored-benefit-legacy-snapshot');
+const STORED_BENEFIT_PERSISTED_SNAPSHOT = Symbol('domain-state.stored-benefit-persisted-snapshot');
 
 function storedBenefitFromLegacy(player, legacyBenefit) {
   if (legacyBenefit === undefined || legacyBenefit === null) return legacyBenefit;
@@ -723,43 +948,109 @@ function storedBenefitFromLegacy(player, legacyBenefit) {
   return benefit;
 }
 
+function storedBenefitFromPersisted(player, persistedBenefit) {
+  if (persistedBenefit === undefined || persistedBenefit === null) return persistedBenefit;
+  if (!persistedBenefit || typeof persistedBenefit !== 'object' || Array.isArray(persistedBenefit)) {
+    throw new TypeError('StoredBenefit expects a persisted record, null, or undefined.');
+  }
+  const semantic = {
+    ownerId: player?.id,
+    state: 'stored',
+    source: persistedBenefit.source && typeof persistedBenefit.source === 'object'
+      ? cloneDetached(persistedBenefit.source)
+      : {},
+    payload: persistedBenefit.payload && typeof persistedBenefit.payload === 'object'
+      ? cloneDetached(persistedBenefit.payload)
+      : {},
+  };
+  if (hasOwn(persistedBenefit, 'instanceId')) semantic.instanceId = cloneDetached(persistedBenefit.instanceId);
+  if (hasOwn(persistedBenefit, 'id')) semantic.id = cloneDetached(persistedBenefit.id);
+  if (hasOwn(persistedBenefit, 'kind')) semantic.kind = cloneDetached(persistedBenefit.kind);
+  const benefit = StoredBenefit.view(semantic);
+  Object.defineProperty(benefit, STORED_BENEFIT_PERSISTED_SNAPSHOT, {
+    value: cloneDetached(persistedBenefit),
+    enumerable: false,
+  });
+  return benefit;
+}
+
 function storedBenefitToLegacy(benefit) {
   if (benefit === undefined || benefit === null) return benefit;
   if (!StoredBenefit.is(benefit) || benefit.state !== 'stored') {
     throw new TypeError('Stored benefit writes expect a stored StoredBenefit.');
   }
-  const snapshot = benefit[STORED_BENEFIT_LEGACY_SNAPSHOT];
-  const hasSnapshot = Boolean(snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot));
-  const legacy = hasSnapshot ? cloneDetached(snapshot) : {};
+  const legacySnapshot = benefit[STORED_BENEFIT_LEGACY_SNAPSHOT];
+  const persistedSnapshot = benefit[STORED_BENEFIT_PERSISTED_SNAPSHOT];
+  const hasLegacySnapshot = Boolean(legacySnapshot && typeof legacySnapshot === 'object' && !Array.isArray(legacySnapshot));
+  let legacy = hasLegacySnapshot ? cloneDetached(legacySnapshot) : {};
+  if (!hasLegacySnapshot && persistedSnapshot && typeof persistedSnapshot === 'object') {
+    const targetKeys = new Set(['instanceId', 'id', 'kind', 'source', 'payload']);
+    for (const [key, value] of Object.entries(persistedSnapshot)) {
+      if (!targetKeys.has(key)) legacy[key] = cloneDetached(value);
+    }
+  }
   const source = benefit.source && typeof benefit.source === 'object' ? benefit.source : {};
   const payload = benefit.payload && typeof benefit.payload === 'object' ? benefit.payload : {};
 
-  if (!hasSnapshot || hasOwn(snapshot, 'id')) {
+  if (!hasLegacySnapshot || hasOwn(legacySnapshot, 'id')) {
     if (hasOwn(benefit, 'id')) legacy.id = cloneDetached(benefit.id);
     else delete legacy.id;
   }
-  if (!hasSnapshot || hasOwn(snapshot, 'kind')) {
+  if (!hasLegacySnapshot || hasOwn(legacySnapshot, 'kind')) {
     if (hasOwn(benefit, 'kind')) legacy.kind = cloneDetached(benefit.kind);
     else delete legacy.kind;
   }
-  if (!hasSnapshot || hasOwn(snapshot, 'sourceDeck')) {
+  if (!hasLegacySnapshot || hasOwn(legacySnapshot, 'sourceDeck')) {
     if (hasOwn(source, 'deck')) legacy.sourceDeck = cloneDetached(source.deck);
     else delete legacy.sourceDeck;
   }
-  if (!hasSnapshot || hasOwn(snapshot, 'sourceCard')) {
+  if (!hasLegacySnapshot || hasOwn(legacySnapshot, 'sourceCard')) {
     if (hasOwn(source, 'occurrence')) legacy.sourceCard = cloneDetached(source.occurrence);
     else delete legacy.sourceCard;
   }
   for (const key of ['name', 'goodId', 'assignmentInstanceId']) {
-    if (hasSnapshot && !hasOwn(snapshot, key)) continue;
+    if (hasLegacySnapshot && !hasOwn(legacySnapshot, key)) continue;
     if (hasOwn(payload, key)) legacy[key] = cloneDetached(payload[key]);
     else delete legacy[key];
   }
   return legacy;
 }
 
+function storedBenefitToPersisted(player, benefit) {
+  if (benefit === undefined || benefit === null) return benefit;
+  if (!StoredBenefit.is(benefit) || benefit.state !== 'stored') {
+    throw new TypeError('Stored benefit writes expect a stored StoredBenefit.');
+  }
+  const snapshot = benefit[STORED_BENEFIT_PERSISTED_SNAPSHOT];
+  const persisted = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)
+    ? cloneDetached(snapshot)
+    : {};
+  if (hasOwn(benefit, 'instanceId')) persisted.instanceId = cloneDetached(benefit.instanceId);
+  else if (!persisted.instanceId) persisted.instanceId = `benefit:${String(player?.id || 'player')}:${String(benefit.id || (player?.storedBenefits?.length || 0))}`;
+  if (hasOwn(benefit, 'id')) persisted.id = cloneDetached(benefit.id);
+  else delete persisted.id;
+  if (hasOwn(benefit, 'kind')) persisted.kind = cloneDetached(benefit.kind);
+  else delete persisted.kind;
+  persisted.source = benefit.source && typeof benefit.source === 'object' ? cloneDetached(benefit.source) : {};
+  persisted.payload = benefit.payload && typeof benefit.payload === 'object' ? cloneDetached(benefit.payload) : {};
+  delete persisted.sourceDeck;
+  delete persisted.sourceCard;
+  delete persisted.name;
+  delete persisted.goodId;
+  delete persisted.assignmentInstanceId;
+  return persisted;
+}
+
 function listStoredBenefits(player) {
-  if (!player || typeof player !== 'object' || !hasOwn(player, 'savedEventCards')) return undefined;
+  if (!player || typeof player !== 'object') return undefined;
+  if (hasOwn(player, 'storedBenefits')) {
+    if (player.storedBenefits === null) return null;
+    if (!Array.isArray(player.storedBenefits)) {
+      throw new TypeError('storedBenefits backing field must be an array, null, or absent.');
+    }
+    return player.storedBenefits.map(entry => storedBenefitFromPersisted(player, entry));
+  }
+  if (!hasOwn(player, 'savedEventCards')) return undefined;
   if (player.savedEventCards === null) return null;
   if (!Array.isArray(player.savedEventCards)) {
     throw new TypeError('savedEventCards backing field must be an array, null, or absent.');
@@ -771,7 +1062,7 @@ function peekStoredBenefit(player, savedCardId) {
   const id = String(savedCardId || '');
   const benefits = listStoredBenefits(player);
   if (!Array.isArray(benefits)) return null;
-  return benefits.find(benefit => benefit?.id === id) || null;
+  return benefits.find(benefit => String(benefit?.id || '') === id) || null;
 }
 
 function storeBenefit(player, benefit) {
@@ -782,6 +1073,13 @@ function storeBenefit(player, benefit) {
   if (benefit.ownerId != null && player.id != null && String(benefit.ownerId) !== String(player.id)) {
     throw new TypeError('StoredBenefit ownerId does not match the target player.');
   }
+  if (hasOwn(player, 'storedBenefits')) {
+    if (player.storedBenefits == null) player.storedBenefits = [];
+    if (!Array.isArray(player.storedBenefits)) throw new TypeError('storedBenefits backing field must be an array.');
+    const persisted = storedBenefitToPersisted(player, benefit);
+    player.storedBenefits.push(persisted);
+    return storedBenefitFromPersisted(player, persisted);
+  }
   const legacy = storedBenefitToLegacy(benefit);
   if (player.savedEventCards == null) player.savedEventCards = [];
   if (!Array.isArray(player.savedEventCards)) throw new TypeError('savedEventCards backing field must be an array.');
@@ -790,9 +1088,17 @@ function storeBenefit(player, benefit) {
 }
 
 function consumeStoredBenefit(player, savedCardId) {
-  if (!player || typeof player !== 'object' || !Array.isArray(player.savedEventCards)) return null;
+  if (!player || typeof player !== 'object') return null;
   const id = String(savedCardId || '');
-  const index = player.savedEventCards.findIndex(entry => entry?.id === id);
+  if (hasOwn(player, 'storedBenefits')) {
+    if (!Array.isArray(player.storedBenefits)) return null;
+    const index = player.storedBenefits.findIndex(entry => String(entry?.id || '') === id);
+    if (index < 0) return null;
+    const [persisted] = player.storedBenefits.splice(index, 1);
+    return storedBenefitFromPersisted(player, persisted);
+  }
+  if (!Array.isArray(player.savedEventCards)) return null;
+  const index = player.savedEventCards.findIndex(entry => String(entry?.id || '') === id);
   if (index < 0) return null;
   const [legacy] = player.savedEventCards.splice(index, 1);
   return storedBenefitFromLegacy(player, legacy);
@@ -1638,7 +1944,9 @@ module.exports = {
   PendingResolution,
   HistoryRecord,
   activeAssignmentTaskFromLegacy,
+  activeAssignmentTaskFromPersisted,
   activeAssignmentTaskToLegacy,
+  activeAssignmentTaskToPersisted,
   getActiveAssignmentTask,
   assignTask,
   completeAssignmentTask,
@@ -1669,6 +1977,7 @@ module.exports = {
   peekConsumableAbility,
   consumeConsumableAbility,
   storedBenefitFromLegacy,
+  storedBenefitFromPersisted,
   storedBenefitToLegacy,
   listStoredBenefits,
   peekStoredBenefit,
