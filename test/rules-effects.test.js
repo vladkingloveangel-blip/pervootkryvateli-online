@@ -37,7 +37,7 @@ test('appendix B: every sailing event has its source-grounded target and value',
     ['turn-effect','moveBonus',1], ['turn-effect','moveBonus',2], ['turn-effect','moveBonus',3],
     ['turn-effect','bestOfTwo',true], ['turn-effect','noNavigation',true],
     ['turn-effect','movePenalty',1], ['turn-effect','movePenalty',2], ['turn-effect','movePenalty',3],
-    ['raid'], ['boarding'], ['storm','chertonia'], ['storm','kadingir'], ['storm','landin'],
+    ['raid'], ['boarding'], ['storm','renaika'], ['storm','kadingir'], ['storm','landin'],
     ['treasury-loss',30], ['turn-effect','noIncome',true],
   ];
   const actual = rules.events.sailing.map(c => {

@@ -267,9 +267,13 @@ test('stage 6.7 finalizes stage 6 while stage 7 consumers remain pending', () =>
 });
 
 test('author decisions include the closed R29 Scout visibility rule', () => {
-  assert.equal(rules.metadata.rulesetVersion,'master-2026-09-28-author-2026-10-01-digital-block4-v1');
+  assert.equal(rules.metadata.rulesetVersion,'master-2026-09-28-author-2026-10-01-stage7-playtest-v1');
   assert.deepEqual(rules.metadata.unresolved,[]);
-  assert.deepEqual(rules.metadata.authorOverrides.resolved,['R05','R06','R07','R21','treasure-copies','R29']);
+  assert.deepEqual(rules.metadata.authorOverrides.resolved,['R05','R06','R07','R21','treasure-copies','R29','players-min-2','storm-renaika']);
+  assert.deepEqual(rules.session.players,{min:2,max:6});
+  const stormRenaika=rules.events.sailing.find(card=>card.id==='storm-chertonia');
+  assert.equal(stormRenaika.name,'Шторм: Ренаика');
+  assert.equal(stormRenaika.islandId,'renaika');
   assert.equal(rules.metadata.mapCanon.canonical,true);
   assert.equal(rules.metadata.mapCanon.source,'current-online-map');
   assert.equal(rules.legends.legendaryPool.mode,'random-with-replacement');
