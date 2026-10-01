@@ -34,6 +34,12 @@ const {
   listSeaCurseEffects,
   getIslandVeilEffect,
   removeIslandVeilEffect,
+  pendingResolutionFromLegacy,
+  pendingResolutionToLegacy,
+  getPendingResolution,
+  setPendingResolution,
+  clearPendingResolution,
+  hasPendingResolution,
   applyHellfire,
   build,
   upgradeBuilding,
@@ -111,6 +117,8 @@ const {
   createSailingEventDeck,
   drawSailingEventCard,
   drawTreasureCard,
+  treasureHunterCandidates,
+  prepareTreasureHunterChoice,
   createExpeditionDeck,
   createFeudDecks,
   drawFeudCard,
@@ -479,6 +487,17 @@ function ownerIslandCount(room, playerId) {
   return room.islands.filter(i => i.ownerId === playerId).length;
 }
 
+function pendingLegacy(room, family) {
+  const resolution = getPendingResolution(room, family);
+  return resolution == null ? resolution : pendingResolutionToLegacy(resolution);
+}
+
+function setPendingLegacy(room, family, legacy) {
+  const resolution = pendingResolutionFromLegacy(family, legacy);
+  setPendingResolution(room, family, resolution);
+  return pendingLegacy(room, family);
+}
+
 function publicRoom(room, viewerId = null) {
   const active = room.phase === 'event' ? null : currentPlayer(room);
   const viewerIsActive = active && active.id === viewerId;
@@ -488,6 +507,10 @@ function publicRoom(room, viewerId = null) {
   const mistReachable = viewerIsActive && room.phase === 'actions' && (Number(room.actionsLeft) || 0) > 0 && playerHasLegendaryKind(active, 'mist-path')
     ? mistPathReachableCells(active)
     : [];
+  const pendingEvent = pendingLegacy(room, 'event');
+  const pendingFeud = pendingLegacy(room, 'feud');
+  const pendingAssignmentChoice = pendingLegacy(room, 'assignment-choice');
+  const pendingLegendaryReaction = pendingLegacy(room, 'legendary-reaction');
 
   return {
     version: '0.33.0',
@@ -516,37 +539,37 @@ function publicRoom(room, viewerId = null) {
       replacementTotal: room.eventPhase.replacementQueue?.length || 0,
       lastCard: room.eventPhase.lastCard ? { ...room.eventPhase.lastCard } : null,
     } : null,
-    pendingEvent: room.pendingEvent ? {
-      id: room.pendingEvent.id,
-      playerId: room.pendingEvent.playerId,
-      kind: room.pendingEvent.kind,
-      cardName: room.pendingEvent.cardName,
-      viewerCanRespond: room.pendingEvent.playerId === viewerId,
-      options: room.pendingEvent.playerId === viewerId ? (room.pendingEvent.options || []).map(o => ({ ...o })) : [],
-      goodId: room.pendingEvent.playerId === viewerId ? (room.pendingEvent.goodId || null) : null,
-      islandId: room.pendingEvent.playerId === viewerId ? (room.pendingEvent.islandId || null) : null,
+    pendingEvent: pendingEvent ? {
+      id: pendingEvent.id,
+      playerId: pendingEvent.playerId,
+      kind: pendingEvent.kind,
+      cardName: pendingEvent.cardName,
+      viewerCanRespond: pendingEvent.playerId === viewerId,
+      options: pendingEvent.playerId === viewerId ? (pendingEvent.options || []).map(o => ({ ...o })) : [],
+      goodId: pendingEvent.playerId === viewerId ? (pendingEvent.goodId || null) : null,
+      islandId: pendingEvent.playerId === viewerId ? (pendingEvent.islandId || null) : null,
     } : null,
-    pendingFeud: room.pendingFeud ? {
-      id: room.pendingFeud.id,
-      playerId: room.pendingFeud.playerId,
-      factionId: room.pendingFeud.factionId,
-      factionName: FACTIONS[room.pendingFeud.factionId]?.name || room.pendingFeud.factionId,
-      cardName: room.pendingFeud.cardName,
-      kind: room.pendingFeud.kind,
-      remaining: Number(room.pendingFeud.remaining) || 0,
-      viewerCanRespond: room.pendingFeud.playerId === viewerId,
-      options: room.pendingFeud.playerId === viewerId ? (room.pendingFeud.options || []).map(o => ({ ...o })) : [],
+    pendingFeud: pendingFeud ? {
+      id: pendingFeud.id,
+      playerId: pendingFeud.playerId,
+      factionId: pendingFeud.factionId,
+      factionName: FACTIONS[pendingFeud.factionId]?.name || pendingFeud.factionId,
+      cardName: pendingFeud.cardName,
+      kind: pendingFeud.kind,
+      remaining: Number(pendingFeud.remaining) || 0,
+      viewerCanRespond: pendingFeud.playerId === viewerId,
+      options: pendingFeud.playerId === viewerId ? (pendingFeud.options || []).map(o => ({ ...o })) : [],
     } : null,
-    pendingAssignmentChoice: room.pendingAssignmentChoice?.kind === 'embassy' ? {
-      id: room.pendingAssignmentChoice.id,
+    pendingAssignmentChoice: pendingAssignmentChoice?.kind === 'embassy' ? {
+      id: pendingAssignmentChoice.id,
       kind: 'embassy',
-      playerId: room.pendingAssignmentChoice.playerId,
-      factionId: room.pendingAssignmentChoice.factionId,
-      factionName: FACTIONS[room.pendingAssignmentChoice.factionId]?.name || room.pendingAssignmentChoice.factionId,
-      options: room.pendingAssignmentChoice.playerId === viewerId ? (room.pendingAssignmentChoice.options || []).map(card => ({
+      playerId: pendingAssignmentChoice.playerId,
+      factionId: pendingAssignmentChoice.factionId,
+      factionName: FACTIONS[pendingAssignmentChoice.factionId]?.name || pendingAssignmentChoice.factionId,
+      options: pendingAssignmentChoice.playerId === viewerId ? (pendingAssignmentChoice.options || []).map(card => ({
         id: card.id, text: card.text, reward: Number(card.reward) || 0, type: card.type,
       })) : [],
-      viewerCanRespond: room.pendingAssignmentChoice.playerId === viewerId,
+      viewerCanRespond: pendingAssignmentChoice.playerId === viewerId,
     } : null,
     pendingIslandCorrection: room.pendingIslandCorrection ? {
       id: room.pendingIslandCorrection.id,
@@ -575,14 +598,14 @@ function publicRoom(room, viewerId = null) {
       viewerCanRespond: room.pendingFleetAdjustment.playerId === viewerId,
       options: room.pendingFleetAdjustment.playerId === viewerId ? (room.pendingFleetAdjustment.options || []).map(o => ({ ...o })) : [],
     } : null,
-    pendingLegendaryReaction: room.pendingLegendaryReaction ? {
-      id: room.pendingLegendaryReaction.id,
-      kind: room.pendingLegendaryReaction.kind,
-      sourcePlayerId: room.pendingLegendaryReaction.sourcePlayerId,
-      targetPlayerId: room.pendingLegendaryReaction.targetPlayerId || null,
-      islandId: room.pendingLegendaryReaction.islandId || null,
-      viewerCanRespond: room.pendingLegendaryReaction.targetPlayerId === viewerId,
-      veilOptions: room.pendingLegendaryReaction.targetPlayerId === viewerId ? legendaryCardRefs(playerById(room, viewerId), 'sea-veil') : [],
+    pendingLegendaryReaction: pendingLegendaryReaction ? {
+      id: pendingLegendaryReaction.id,
+      kind: pendingLegendaryReaction.kind,
+      sourcePlayerId: pendingLegendaryReaction.sourcePlayerId,
+      targetPlayerId: pendingLegendaryReaction.targetPlayerId || null,
+      islandId: pendingLegendaryReaction.islandId || null,
+      viewerCanRespond: pendingLegendaryReaction.targetPlayerId === viewerId,
+      veilOptions: pendingLegendaryReaction.targetPlayerId === viewerId ? legendaryCardRefs(playerById(room, viewerId), 'sea-veil') : [],
     } : null,
     eventDecks: {
       sailing: { remaining: room.eventDeck?.drawPile?.length || 0, discard: room.eventDeck?.discard?.length || 0 },
@@ -1003,7 +1026,7 @@ const ASSIGNMENT_PRIORITY_EVENTS = new Set([
   'build', 'upgradeBuilding', 'buildBastion', 'formLandCompany',
   'buyCityGuard', 'buyPermanentGarrison', 'buyShipLevel', 'buyShipUpgrade',
   'removeShipUpgrade', 'buyEscort', 'loadCargo', 'sellCargo',
-  'useSavedCargo', 'useShipMaster', 'useBlueprint', 'playLegendary', 'takeExpedition',
+  'useSavedCargo', 'useShipMaster', 'useBlueprint', 'playLegendary', 'takeExpedition', 'useTreasureHunter',
   'requestAlliance', 'enterVassalage', 'rebelVassalage',
   'attackShip', 'assaultIsland', 'endTurn',
 ]);
@@ -1135,13 +1158,19 @@ function markAttackHostilityAgainstIsland(room, attacker, island, reason = 'на
 }
 
 function hasPendingDecision(room) {
-  return Boolean(room?.pendingAlliance || room?.pendingBattle || room?.pendingEvent || room?.pendingFeud || room?.pendingAssignmentChoice || room?.pendingIslandCorrection || room?.pendingFleetAdjustment || room?.pendingLegendaryReaction);
+  return Boolean(
+    room?.pendingAlliance || room?.pendingBattle ||
+    hasPendingResolution(room, 'event') || hasPendingResolution(room, 'feud') ||
+    hasPendingResolution(room, 'assignment-choice') || hasPendingResolution(room, 'legendary-reaction') ||
+    room?.pendingIslandCorrection || room?.pendingFleetAdjustment
+  );
 }
 
 function pendingDecisionError(room) {
   if (room?.pendingAlliance) return 'Сначала завершите предложение союза.';
   if (room?.pendingBattle) return 'Сначала завершите текущий совместный бой.';
-  if (room?.pendingEvent || room?.pendingFeud || room?.pendingAssignmentChoice || room?.pendingIslandCorrection || room?.pendingFleetAdjustment || room?.pendingLegendaryReaction) {
+  if (room?.pendingEvent || room?.pendingFeud || room?.pendingAssignmentChoice ||
+      room?.pendingIslandCorrection || room?.pendingFleetAdjustment || room?.pendingLegendaryReaction) {
     return 'Ожидается обязательное решение игрока.';
   }
   return null;
@@ -1183,9 +1212,10 @@ function fleetAdjustmentOptions(room, player, stage) {
 
 function fleetDecisionActivationBlocked(room) {
   return Boolean(
-    room?.pendingAlliance || room?.pendingBattle || room?.pendingEvent || room?.pendingFeud ||
-    room?.pendingAssignmentChoice || room?.pendingIslandCorrection ||
-    room?.pendingLegendaryReaction
+    room?.pendingAlliance || room?.pendingBattle ||
+    hasPendingResolution(room, 'event') || hasPendingResolution(room, 'feud') ||
+    hasPendingResolution(room, 'assignment-choice') || room?.pendingIslandCorrection ||
+    hasPendingResolution(room, 'legendary-reaction')
   );
 }
 
@@ -1444,7 +1474,12 @@ function logSeaBattleResult(room, attacker, defender, result) {
 
 
 function otherPendingDecisionExists(room) {
-  return Boolean(room?.pendingAlliance || room?.pendingBattle || room?.pendingEvent || room?.pendingFeud || room?.pendingAssignmentChoice || room?.pendingFleetAdjustment || room?.pendingLegendaryReaction);
+  return Boolean(
+    room?.pendingAlliance || room?.pendingBattle ||
+    hasPendingResolution(room, 'event') || hasPendingResolution(room, 'feud') ||
+    hasPendingResolution(room, 'assignment-choice') || room?.pendingFleetAdjustment ||
+    hasPendingResolution(room, 'legendary-reaction')
+  );
 }
 
 function normalizeOwnedGarrisonsWithLog(room) {
@@ -1645,7 +1680,7 @@ function beginAssaultResolution(room, attacker, island, inviteAllies, combatOpti
 }
 
 function resolvePendingLegendaryReaction(room, useVeil, cardRef = null) {
-  const pending = room?.pendingLegendaryReaction;
+  const pending = pendingLegacy(room, 'legendary-reaction');
   if (!pending) return { ok: false, error: 'Реакция больше не ожидается.' };
   const target = playerById(room, pending.targetPlayerId);
   const source = playerById(room, pending.sourcePlayerId);
@@ -1673,11 +1708,11 @@ function resolvePendingLegendaryReaction(room, useVeil, cardRef = null) {
       applySeaVeilToIsland(island, target, { ignoreCurrentTurn: false });
       log(room, `${target.name} реакцией разыгрывает «Покров моря». Штурм ${source.name} отменён; ${island.name} защищён на ${BALANCE.legendaryEffects['sea-veil'].durationPersonalTurns} следующих личных хода ${target.name}.`);
     }
-    room.pendingLegendaryReaction = null;
+    clearPendingResolution(room, 'legendary-reaction');
     return { ok: true, canceled: true };
   }
 
-  room.pendingLegendaryReaction = null;
+  clearPendingResolution(room, 'legendary-reaction');
   if (pending.kind === 'sea-attack') {
     return beginSeaBattleResolution(room, source, target, pending.inviteAllies, { shipCarpenterPlayerIds: pending.shipCarpenterPlayerIds || [] });
   }
@@ -1802,7 +1837,7 @@ function applyCurrentTurnEffect(room, player, effect, value) {
 }
 
 function queueEventDecision(room, player, card, kind, options, extra = {}) {
-  room.pendingEvent = {
+  setPendingLegacy(room, 'event', {
     id: crypto.randomUUID(),
     playerId: player.id,
     cardName: card.name,
@@ -1811,7 +1846,7 @@ function queueEventDecision(room, player, card, kind, options, extra = {}) {
     eventCard: { ...card },
     origin: 'event-phase',
     ...extra,
-  };
+  });
   room.eventPhase.currentPlayerId = player.id;
   room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: card.name, pending: true };
 }
@@ -1995,10 +2030,10 @@ function buildFeudQueue(room, snapshot) {
 }
 
 function queueFeudDecision(room, player, factionId, card, kind, options, extra = {}) {
-  room.pendingFeud = {
+  setPendingLegacy(room, 'feud', {
     id: crypto.randomUUID(), playerId: player.id, factionId, cardName: card.name, kind,
     options: (options || []).map(o => ({ ...o })), feudCard: { ...card }, ...extra,
-  };
+  });
   room.eventPhase.currentPlayerId = player.id;
   room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: card.name, factionId, factionName: FACTIONS[factionId]?.name, pending: true, source: 'feud' };
 }
@@ -2192,10 +2227,10 @@ function canUseObservatoryEventReplacement(room, player) {
 }
 
 function processEventPhase(room) {
-  if (!room.eventPhase?.active || room.pendingEvent || room.pendingFeud || room.pendingAssignmentChoice || room.pendingIslandCorrection || room.pendingFleetAdjustment) return;
+  if (!room.eventPhase?.active || hasPendingResolution(room, 'event') || hasPendingResolution(room, 'feud') || hasPendingResolution(room, 'assignment-choice') || room.pendingIslandCorrection || room.pendingFleetAdjustment) return;
   if (queueEscortCapacityDecisionsIfNeeded(room)) return;
   let safety = 0;
-  while (room.eventPhase.active && !room.pendingEvent && !room.pendingFeud && !room.pendingAssignmentChoice && !room.pendingIslandCorrection && !room.pendingFleetAdjustment && safety++ < 160) {
+  while (room.eventPhase.active && !hasPendingResolution(room, 'event') && !hasPendingResolution(room, 'feud') && !hasPendingResolution(room, 'assignment-choice') && !room.pendingIslandCorrection && !room.pendingFleetAdjustment && safety++ < 160) {
     if (queueEscortCapacityDecisionsIfNeeded(room)) return;
     if (room.eventPhase.stage === 'sailing') {
       const index = Number(room.eventPhase.playerIndex) || 0;
@@ -2216,11 +2251,11 @@ function processEventPhase(room) {
       room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: card.name, pending: false, source: 'sailing' };
       log(room, `Фаза событий: ${player.name} открывает «${card.name}».`);
       if (canUseObservatoryEventReplacement(room, player)) {
-        room.pendingEvent = {
+        setPendingLegacy(room, 'event', {
           id: crypto.randomUUID(), playerId: player.id, kind: 'observatory', cardName: card.name,
           eventCard: { ...card }, origin: 'event-phase',
           options: [{ id: 'keep', name: 'Оставить карту' }, { id: 'replace', name: 'Сбросить и взять вторую' }],
-        };
+        });
         room.eventPhase.lastCard.pending = true;
         log(room, `${player.name}: Обсерватория позволяет оставить первую карту или сбросить её без применения и взять обязательную вторую.`);
         return;
@@ -2284,10 +2319,10 @@ function processEventPhase(room) {
           log(room, `${player.name}: Посольство нашло только одно допустимое поручение ${FACTIONS[item.factionId]?.name}: «${issued.assignment.card.text}».`);
           continue;
         }
-        room.pendingAssignmentChoice = {
+        setPendingLegacy(room, 'assignment-choice', {
           id: crypto.randomUUID(), kind: 'embassy', playerId: player.id, factionId: item.factionId,
           options: offered.cards.map(card => ({ ...card })), canReplace: false, replaceError: null,
-        };
+        });
         room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: 'Выбор поручения Посольством', factionId: item.factionId, factionName: FACTIONS[item.factionId]?.name, pending: true, source: 'assignment' };
         log(room, `${player.name}: Посольство даёт выбор из двух допустимых поручений ${FACTIONS[item.factionId]?.name}.`);
         return;
@@ -2316,12 +2351,12 @@ function startEventPhase(room) {
   room.actionsLeft = 0;
   room.pendingAlliance = null;
   room.pendingBattle = null;
-  room.pendingEvent = null;
-  room.pendingFeud = null;
-  room.pendingAssignmentChoice = null;
+  clearPendingResolution(room, 'event');
+  clearPendingResolution(room, 'feud');
+  clearPendingResolution(room, 'assignment-choice');
   room.pendingFleetAdjustment = null;
   room.fleetAdjustmentQueue = [];
-  room.pendingLegendaryReaction = null;
+  clearPendingResolution(room, 'legendary-reaction');
   const snapshot = { [player.id]: eventPoliticalSnapshot(room)[player.id] };
   room.eventPhase = {
     active: true, personalTurn: true, turnPlayerId: player.id, stage: 'sailing', playerIndex: 0, currentPlayerId: player.id, lastCard: null,
@@ -2340,16 +2375,16 @@ function finishEventPhase(room) {
   if (room.eventPhase?.personalTurn) {
     room.eventPhase.active = false;
     room.eventPhase = null;
-    room.pendingEvent = null;
-    room.pendingFeud = null;
-    room.pendingAssignmentChoice = null;
+    clearPendingResolution(room, 'event');
+    clearPendingResolution(room, 'feud');
+    clearPendingResolution(room, 'assignment-choice');
     continueTurnAfterCards(room);
     return;
   }
   if (room.eventPhase) room.eventPhase.active = false;
-  room.pendingEvent = null;
-  room.pendingFeud = null;
-  room.pendingAssignmentChoice = null;
+  clearPendingResolution(room, 'event');
+  clearPendingResolution(room, 'feud');
+  clearPendingResolution(room, 'assignment-choice');
   advanceRound(room);
   beginTurn(room);
 }
@@ -2377,7 +2412,7 @@ function finishPendingFeudCard(room, pending) {
   politicalEffectSource(room, pending.factionId).markUsed(pending.feudCard);
   const player = playerById(room, pending.playerId);
   room.eventPhase.lastCard = { playerId: pending.playerId, playerName: player?.name || 'Игрок', cardName: pending.cardName, factionId: pending.factionId, factionName: FACTIONS[pending.factionId]?.name, pending: false, source: 'feud' };
-  room.pendingFeud = null;
+  clearPendingResolution(room, 'feud');
   room.eventPhase.feudIndex += 1;
   const reason = `карта вражды ${FACTIONS[pending.factionId]?.name || pending.factionId}: «${pending.cardName}»`;
   if (player && queueFleetAdjustment(room, player, reason)) return;
@@ -2401,6 +2436,7 @@ function completePendingFeud(room, pending, choice) {
     if (remaining > 0 && options.length) {
       pending.remaining = Math.min(remaining, options.length);
       pending.options = options;
+      setPendingLegacy(room, 'feud', pending);
       return { ok: true, pending: true };
     }
   } else if (pending.kind === 'remove-building') {
@@ -2440,6 +2476,7 @@ function completePendingFeud(room, pending, choice) {
     if (remaining > 0 && options.length) {
       pending.remaining = Math.min(remaining, options.length);
       pending.options = options;
+      setPendingLegacy(room, 'feud', pending);
       return { ok: true, pending: true };
     }
   } else if (pending.kind === 'remove-upgrade') {
@@ -2461,7 +2498,7 @@ function completePendingFeud(room, pending, choice) {
 
 function continueAfterObservedSailingCard(room, player, card) {
   if (!card) {
-    room.pendingEvent = null;
+    clearPendingResolution(room, 'event');
     room.eventPhase.playerIndex += 1;
     processEventPhase(room);
     return { ok: true, empty: true };
@@ -2470,7 +2507,7 @@ function continueAfterObservedSailingCard(room, player, card) {
   const resolved = resolveSailingEventCard(room, player, card);
   if (resolved.pending) return { ok: true, pending: true };
   if (!resolved.holdEventCard) sailingEventSource(room).markUsed(card);
-  room.pendingEvent = null;
+  clearPendingResolution(room, 'event');
   room.eventPhase.playerIndex += 1;
   processEventPhase(room);
   return { ok: true, pending: false };
@@ -2480,16 +2517,73 @@ function finishPendingEvent(room, pending) {
   const origin = pending.origin || 'event-phase';
   if (origin === 'event-phase') {
     if (pending.eventCard) sailingEventSource(room).markUsed(pending.eventCard);
-    room.pendingEvent = null;
+    clearPendingResolution(room, 'event');
     if (room.eventPhase?.active) {
       room.eventPhase.lastCard = { playerId: pending.playerId, playerName: playerById(room, pending.playerId)?.name || 'Игрок', cardName: pending.cardName, pending: false, source: 'sailing' };
       room.eventPhase.playerIndex += 1;
       if (!queueIslandCorrectionIfNeeded(room, null, `событие плавания «${pending.cardName}»`)) processEventPhase(room);
     }
-  } else {
-    room.pendingEvent = null;
-    drainExpeditionTreasureRewards(room);
+    return;
   }
+  clearPendingResolution(room, 'event');
+  if (origin !== 'treasure-hunter') drainExpeditionTreasureRewards(room);
+}
+
+
+function resolveTreasureHunterChoice(room, pending, choiceId) {
+  const player = playerById(room, pending?.playerId);
+  if (!player) return { ok: false, error: 'Игрок выбора сокровища не найден.' };
+  const optionId = String(choiceId ?? '');
+  const option = (pending.options || []).find(item => String(item.id) === optionId);
+  if (!option) return { ok: false, error: 'Выберите один из двух сохранённых результатов сокровища.' };
+  const index = Number(optionId);
+  if (!Number.isInteger(index) || index < 0 || index >= (pending.treasureCandidates || []).length) {
+    return { ok: false, error: 'Сохранённый результат сокровища недоступен.' };
+  }
+  const treasure = pending.treasureCandidates[index];
+  if (!treasure || typeof treasure !== 'object') return { ok: false, error: 'Сохранённый результат сокровища недоступен.' };
+  const assignmentInstanceId = pending.treasureAssignmentInstanceId || null;
+
+  if (treasure.multiplier) {
+    const result = resolveMoneyTreasure(room, player, treasure);
+    if (!result.ok) return result;
+    trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId });
+    const debtText = result.credit?.debtPaid ? `; ${result.credit.debtPaid} ушло в погашение долга` : '';
+    log(room, `${player.name}: Искатель сокровищ выбирает «${treasure.name}». Доход рынков/банков ${result.income}; получено ${result.amount} дукатов${debtText}.`);
+    finishPendingEvent(room, pending);
+    return { ok: true, resolved: true };
+  }
+
+  if (!treasure.cargoGoodId) return { ok: false, error: 'Неизвестный результат сокровища.' };
+  const holds = emptyCargoHolds(room, player);
+  if (!holds.length) {
+    trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId });
+    log(room, `${player.name}: Искатель сокровищ выбирает «${treasure.name}». Все трюмы заняты; сокровище не даёт эффекта.`);
+    finishPendingEvent(room, pending);
+    return { ok: true, resolved: true };
+  }
+  if (holds.length === 1) {
+    const loaded = fillCargoDirect(room, player, treasure.cargoGoodId, holds[0].id);
+    if (!loaded.ok) return loaded;
+    trackAssignment(room, player, { type: 'treasure-resolved', assignmentInstanceId });
+    log(room, `${player.name}: Искатель сокровищ выбирает «${treasure.name}». ${loaded.holdName} заполнен товаром «${loaded.good.name}» ×${loaded.quantity}.`);
+    finishPendingEvent(room, pending);
+    return { ok: true, resolved: true };
+  }
+
+  setPendingLegacy(room, 'event', {
+    id: pending.id,
+    playerId: player.id,
+    kind: 'cargo',
+    cardName: `Искатель сокровищ: ${treasure.name}`,
+    origin: 'treasure-hunter',
+    options: holds.map(hold => ({ ...hold })),
+    goodId: treasure.cargoGoodId,
+    treasureCard: { ...treasure },
+    treasureAssignmentInstanceId: assignmentInstanceId,
+  });
+  log(room, `${player.name}: Искатель сокровищ выбирает «${treasure.name}». Нужно выбрать один пустой трюм.`);
+  return { ok: true, pending: true };
 }
 
 function completePendingEvent(room, pending) {
@@ -2688,7 +2782,7 @@ function resolveExpeditionTreasureReward(room, player, reward) {
     return { pending: false, treasure };
   }
 
-  room.pendingEvent = {
+  setPendingLegacy(room, 'event', {
     id: crypto.randomUUID(),
     playerId: player.id,
     kind: 'cargo',
@@ -2698,13 +2792,13 @@ function resolveExpeditionTreasureReward(room, player, reward) {
     treasureCard: { ...treasure },
     treasureAssignmentInstanceId,
     origin: 'expedition',
-  };
+  });
   log(room, `${player.name}: экспедиция «${label}» даёт «${treasure.name}». Нужно выбрать пустой трюм.`);
   return { pending: true, treasure };
 }
 
 function drainExpeditionTreasureRewards(room) {
-  if (room.pendingEvent) return true;
+  if (hasPendingResolution(room, 'event')) return true;
   room.pendingExpeditionRewards ||= [];
   while (room.pendingExpeditionRewards.length) {
     const queued = room.pendingExpeditionRewards.shift();
@@ -2727,7 +2821,7 @@ function handleExpeditionArrival(room, player) {
     expeditionName: name,
     treasureAssignmentInstanceId: getActiveAssignmentTask(player)?.id || null,
   });
-  if (!room.pendingEvent) drainExpeditionTreasureRewards(room);
+  if (!hasPendingResolution(room, 'event')) drainExpeditionTreasureRewards(room);
   return completion;
 }
 
@@ -3123,13 +3217,13 @@ io.on('connection', socket => {
     room.alliances = [];
     room.pendingAlliance = null;
     room.pendingBattle = null;
-    room.pendingEvent = null;
-    room.pendingFeud = null;
-    room.pendingAssignmentChoice = null;
+    clearPendingResolution(room, 'event');
+    clearPendingResolution(room, 'feud');
+    clearPendingResolution(room, 'assignment-choice');
     room.pendingIslandCorrection = null;
     room.pendingFleetAdjustment = null;
     room.fleetAdjustmentQueue = [];
-    room.pendingLegendaryReaction = null;
+    clearPendingResolution(room, 'legendary-reaction');
     room.eventPhase = null;
     room.anchorDecks = createAnchorDecks();
     room.eventDeck = createSailingEventDeck();
@@ -3349,6 +3443,38 @@ io.on('connection', socket => {
     const p = room.players.find(player => player.id === socket.data.playerId);
     log(room, `${p.name} использует Разведчика в режиме «${result.mode === 'garrison' ? 'гарнизон' : 'деньги'}». Осталось действий: ${result.actionsLeft}.`);
     ackSafe(ack, { ok: true, mode: result.mode, actionCost: result.actionCost, actionsLeft: result.actionsLeft });
+    emitRoom(room);
+  });
+
+
+  onSocketEvent(socket, 'useTreasureHunter', (_data, ack) => {
+    const room = getRoom(socket.data.roomCode);
+    const p = currentPlayer(room);
+    if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Искатель сокровищ применяется только в свой личный ход.' });
+    if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
+    if (room.phase !== 'actions') return ackSafe(ack, { ok: false, error: 'Искатель сокровищ применяется в фазе действий.' });
+    const character = CHARACTERS.treasureHunter;
+    const actionCost = Math.max(0, Number(character?.useActionCost) || 0);
+    if ((Number(room.actionsLeft) || 0) < actionCost) return ackSafe(ack, { ok: false, error: 'Для Искателя сокровищ нужен один доступный пункт действия.' });
+    if ((typeof p.character === 'string' ? p.character : p.character?.id) !== 'treasureHunter') return ackSafe(ack, { ok: false, error: 'На корабле нет Искателя сокровищ.' });
+
+    const prepared = prepareTreasureHunterChoice(p);
+    if (!prepared.ok || prepared.candidates.length !== 2 || prepared.options.length !== 2) return ackSafe(ack, prepared.ok ? { ok: false, error: 'Не удалось получить два результата сокровища.' } : prepared);
+    const consumed = consumeCharacter(p, 'treasureHunter');
+    if (!consumed.ok) return ackSafe(ack, consumed);
+    room.actionsLeft -= actionCost;
+    setPendingLegacy(room, 'event', {
+      id: crypto.randomUUID(),
+      playerId: p.id,
+      kind: 'treasure-choice',
+      cardName: 'Искатель сокровищ',
+      origin: 'treasure-hunter',
+      options: prepared.options.map(option => ({ ...option })),
+      treasureCandidates: prepared.candidates.map(candidate => JSON.parse(JSON.stringify(candidate))),
+      treasureAssignmentInstanceId: prepared.assignmentInstanceId,
+    });
+    log(room, `${p.name} использует Искателя сокровищ и выбирает один из двух уже определённых результатов. Осталось действий: ${room.actionsLeft}.`);
+    ackSafe(ack, { ok: true, pending: true, actionCost, actionsLeft: room.actionsLeft });
     emitRoom(room);
   });
 
@@ -3601,9 +3727,16 @@ io.on('connection', socket => {
 
   onSocketEvent(socket, 'respondEvent', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
-    const pending = room?.pendingEvent;
+    const pending = pendingLegacy(room, 'event');
     if (!room || !pending || pending.id !== String(data?.eventId || '')) return ackSafe(ack, { ok: false, error: 'Эта карта события уже не ожидает решения.' });
     if (pending.playerId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Решение должен принять игрок, получивший карту.' });
+
+    if (pending.kind === 'treasure-choice') {
+      const result = resolveTreasureHunterChoice(room, pending, data?.choice);
+      ackSafe(ack, result);
+      emitRoom(room);
+      return;
+    }
 
     if (pending.kind === 'observatory') {
       const choice = String(data?.choice || '');
@@ -3612,7 +3745,7 @@ io.on('connection', socket => {
       if (!player) return ackSafe(ack, { ok: false, error: 'Игрок не найден.' });
       const first = pending.eventCard ? { ...pending.eventCard } : null;
       room.eventPhase.observatoryReplacementsUsed = Math.max(0, Number(room.eventPhase.observatoryReplacementsUsed) || 0) + 1;
-      room.pendingEvent = null;
+      clearPendingResolution(room, 'event');
       let card = first;
       if (choice === 'replace') {
         card = sailingEventSource(room).replaceObserved(first);
@@ -3646,7 +3779,8 @@ io.on('connection', socket => {
       pending.choice = { row, col };
     } else return ackSafe(ack, { ok: false, error: 'Неизвестный тип решения события.' });
 
-    const result = completePendingEvent(room, pending);
+    setPendingLegacy(room, 'event', pending);
+    const result = completePendingEvent(room, pendingLegacy(room, 'event'));
     ackSafe(ack, result);
     emitRoom(room);
   });
@@ -3785,9 +3919,9 @@ io.on('connection', socket => {
         return;
       }
       if (target.connected && playerHasLegendaryKind(target, 'sea-veil')) {
-        room.pendingLegendaryReaction = {
+        setPendingLegacy(room, 'legendary-reaction', {
           id: crypto.randomUUID(), kind: 'sea-curse', sourcePlayerId: p.id, targetPlayerId: target.id,
-        };
+        });
         log(room, `${p.name} разыгрывает «Морское проклятие» против ${target.name} и тратит действие. ${target.name} может бесплатно ответить «Покровом моря».`);
         ackSafe(ack, { ok: true, pending: true });
         emitRoom(room);
@@ -3830,9 +3964,9 @@ io.on('connection', socket => {
         return;
       }
       if (owner?.connected && playerHasLegendaryKind(owner, 'sea-veil')) {
-        room.pendingLegendaryReaction = {
+        setPendingLegacy(room, 'legendary-reaction', {
           id: crypto.randomUUID(), kind: 'hellfire', sourcePlayerId: p.id, targetPlayerId: owner.id, islandId: island.id,
-        };
+        });
         log(room, `${p.name} объявляет «Пламя Ада» против ${island.name} и тратит действие. ${owner.name} может ответить «Покровом моря».`);
         ackSafe(ack, { ok: true, pending: true });
         emitRoom(room);
@@ -3854,7 +3988,7 @@ io.on('connection', socket => {
 
   onSocketEvent(socket, 'respondLegendaryReaction', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
-    const pending = room?.pendingLegendaryReaction;
+    const pending = pendingLegacy(room, 'legendary-reaction');
     if (!room || !pending || pending.id !== String(data?.reactionId || '')) return ackSafe(ack, { ok: false, error: 'Эта реакция больше не ожидается.' });
     if (pending.targetPlayerId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Реакция адресована другому игроку.' });
     const useVeil = Boolean(data?.useVeil);
@@ -4060,7 +4194,7 @@ io.on('connection', socket => {
 
   onSocketEvent(socket, 'respondFeud', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
-    const pending = room?.pendingFeud;
+    const pending = pendingLegacy(room, 'feud');
     if (!room || !pending || pending.id !== String(data?.feudId || '')) return ackSafe(ack, { ok: false, error: 'Эта карта вражды больше не ожидает решения.' });
     if (pending.playerId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Эту карту должен разрешить другой игрок.' });
     const result = completePendingFeud(room, pending, data || {});
@@ -4071,7 +4205,7 @@ io.on('connection', socket => {
 
   onSocketEvent(socket, 'respondAssignmentChoice', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
-    const pending = room?.pendingAssignmentChoice;
+    const pending = pendingLegacy(room, 'assignment-choice');
     if (!room || !pending || pending.id !== String(data?.choiceId || '')) return ackSafe(ack, { ok: false, error: 'Это решение по поручению больше не ожидается.' });
     if (pending.playerId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Решение адресовано другому игроку.' });
     if (pending.kind !== 'embassy') return ackSafe(ack, { ok: false, error: 'Платная замена поручения удалена действующими правилами.' });
@@ -4083,7 +4217,7 @@ io.on('connection', socket => {
     if (!result.ok) return ackSafe(ack, result);
     log(room, player.name + ' выбирает через Посольство поручение ' + (FACTIONS[pending.factionId]?.name || pending.factionId) + ': «' + result.assignment.card.text + '».');
     room.eventPhase.lastCard = { playerId: player.id, playerName: player.name, cardName: result.assignment.card.text, factionId: pending.factionId, factionName: FACTIONS[pending.factionId]?.name, pending: false, source: 'assignment' };
-    room.pendingAssignmentChoice = null;
+    clearPendingResolution(room, 'assignment-choice');
     processEventPhase(room);
     ackSafe(ack, { ok: true });
     emitRoom(room);
@@ -4112,11 +4246,11 @@ io.on('connection', socket => {
     markAttackHostilityAgainstPlayer(room, p, target);
     room.actionsLeft -= 1;
     if (target.connected && playerHasLegendaryKind(target, 'sea-veil')) {
-      room.pendingLegendaryReaction = {
+      setPendingLegacy(room, 'legendary-reaction', {
         id: crypto.randomUUID(), kind: 'sea-attack', sourcePlayerId: p.id, targetPlayerId: target.id,
         inviteAllies: Boolean(data?.inviteAllies),
         shipCarpenterPlayerIds: carpenter.playerIds,
-      };
+      });
       log(room, `${p.name} объявляет морскую атаку на ${target.name} и тратит действие. ${target.name} может ответить «Покровом моря».`);
       ackSafe(ack, { ok: true, pending: true });
       emitRoom(room);
@@ -4159,11 +4293,11 @@ io.on('connection', socket => {
     room.actionsLeft -= 1;
     if (owner) trackAssignment(room, p, { type: 'attack-player-island', islandId: island.id, ownerId: owner.id });
     if (owner?.connected && playerHasLegendaryKind(owner, 'sea-veil')) {
-      room.pendingLegendaryReaction = {
+      setPendingLegacy(room, 'legendary-reaction', {
         id: crypto.randomUUID(), kind: 'assault', sourcePlayerId: p.id, targetPlayerId: owner.id,
         islandId: island.id, inviteAllies: Boolean(data?.inviteAllies),
         shipCarpenterPlayerIds: carpenter.playerIds,
-      };
+      });
       log(room, `${p.name} объявляет штурм ${island.name} и тратит действие. ${owner.name} может ответить «Покровом моря».`);
       ackSafe(ack, { ok: true, pending: true });
       emitRoom(room);
@@ -4236,7 +4370,8 @@ io.on('connection', socket => {
       room.pendingAlliance = null;
       log(room, `Незавершённое предложение союза отменено из-за отключения ${p.name}.`);
     }
-    if (room.pendingLegendaryReaction && room.pendingLegendaryReaction.targetPlayerId === p.id) {
+    const disconnectLegendaryReaction = pendingLegacy(room, 'legendary-reaction');
+    if (disconnectLegendaryReaction && disconnectLegendaryReaction.targetPlayerId === p.id) {
       log(room, `${p.name} не использует «Покров моря» из-за отключения.`);
       resolvePendingLegendaryReaction(room, false, null);
     }

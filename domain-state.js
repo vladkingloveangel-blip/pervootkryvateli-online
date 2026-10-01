@@ -84,7 +84,7 @@ const ConsumableAbility = defineContract('ConsumableAbility', ['kind', 'id', 'ow
 const StoredBenefit = defineContract('StoredBenefit', ['kind', 'id', 'ownerId', 'state', 'source', 'payload']);
 const Discovery = defineContract('Discovery', ['kind', 'id', 'ownerId', 'state', 'source', 'payload', 'claimedById']);
 const TemporaryEffect = defineContract('TemporaryEffect', ['kind', 'id', 'ownerId', 'targetType', 'targetId', 'state', 'source', 'payload', 'duration']);
-const PendingResolution = defineContract('PendingResolution', ['kind', 'id', 'actorId', 'state', 'source', 'payload', 'options']);
+const PendingResolution = defineContract('PendingResolution', ['family', 'kind', 'id', 'actorId', 'actorPlayerId', 'state', 'source', 'payload', 'options']);
 const HistoryRecord = defineContract('HistoryRecord', ['kind', 'id', 'ownerId', 'state', 'source', 'payload', 'completedAt']);
 
 const ACTIVE_ASSIGNMENT_LEGACY_SNAPSHOT = Symbol('domain-state.active-assignment-legacy-snapshot');
@@ -1067,6 +1067,127 @@ function listIslandLegendaryEffects(island) {
   return [getIslandVeilEffect(island), getIslandVeilReaction(island)].filter(Boolean);
 }
 
+
+const PENDING_RESOLUTION_LEGACY_SNAPSHOT = Symbol('domain-state.pending-resolution-legacy-snapshot');
+const PENDING_RESOLUTION_FAMILIES = Object.freeze({
+  event: Object.freeze({ field: 'pendingEvent', actorField: 'playerId' }),
+  feud: Object.freeze({ field: 'pendingFeud', actorField: 'playerId' }),
+  'assignment-choice': Object.freeze({ field: 'pendingAssignmentChoice', actorField: 'playerId' }),
+  'legendary-reaction': Object.freeze({ field: 'pendingLegendaryReaction', actorField: 'targetPlayerId' }),
+});
+
+function pendingResolutionFamilyConfig(family) {
+  const key = String(family || '');
+  const config = PENDING_RESOLUTION_FAMILIES[key];
+  if (!config) throw new TypeError(`Unknown PendingResolution family: ${key || '(empty)'}`);
+  return { family: key, ...config };
+}
+
+function pendingResolutionFromLegacy(family, legacy) {
+  if (legacy === undefined || legacy === null) return legacy;
+  if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) {
+    throw new TypeError('PendingResolution expects a legacy pending object, null, or undefined.');
+  }
+  const config = pendingResolutionFamilyConfig(family);
+  const actorPlayerId = hasOwn(legacy, config.actorField) ? cloneDetached(legacy[config.actorField]) : undefined;
+  const payload = {};
+  for (const [key, value] of Object.entries(legacy)) {
+    if (key === 'id' || key === 'kind' || key === config.actorField || key === 'options') continue;
+    payload[key] = cloneDetached(value);
+  }
+  const semantic = {
+    family: config.family,
+    state: 'pending',
+    source: { backing: config.field },
+    payload,
+  };
+  if (hasOwn(legacy, 'id')) semantic.id = cloneDetached(legacy.id);
+  if (hasOwn(legacy, 'kind')) semantic.kind = cloneDetached(legacy.kind);
+  if (actorPlayerId !== undefined) {
+    semantic.actorPlayerId = actorPlayerId;
+    semantic.actorId = cloneDetached(actorPlayerId);
+  }
+  if (hasOwn(legacy, 'options')) semantic.options = cloneDetached(legacy.options);
+  const resolution = PendingResolution.view(semantic);
+  Object.defineProperty(resolution, PENDING_RESOLUTION_LEGACY_SNAPSHOT, {
+    value: cloneDetached(legacy),
+    enumerable: false,
+  });
+  return resolution;
+}
+
+function pendingResolutionToLegacy(resolution) {
+  if (resolution === undefined || resolution === null) return resolution;
+  if (!PendingResolution.is(resolution) || resolution.state !== 'pending') {
+    throw new TypeError('Pending resolution writes expect a pending PendingResolution.');
+  }
+  const config = pendingResolutionFamilyConfig(resolution.family);
+  const snapshot = resolution[PENDING_RESOLUTION_LEGACY_SNAPSHOT];
+  const legacy = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) ? cloneDetached(snapshot) : {};
+  if (hasOwn(resolution, 'id')) legacy.id = cloneDetached(resolution.id);
+  if (hasOwn(resolution, 'kind')) legacy.kind = cloneDetached(resolution.kind);
+  if (hasOwn(resolution, 'actorPlayerId')) legacy[config.actorField] = cloneDetached(resolution.actorPlayerId);
+  else if (hasOwn(resolution, 'actorId')) legacy[config.actorField] = cloneDetached(resolution.actorId);
+  if (hasOwn(resolution, 'options')) legacy.options = cloneDetached(resolution.options);
+  if (resolution.payload && typeof resolution.payload === 'object' && !Array.isArray(resolution.payload)) {
+    for (const [key, value] of Object.entries(resolution.payload)) {
+      if (key === 'id' || key === 'kind' || key === config.actorField || key === 'options') continue;
+      legacy[key] = cloneDetached(value);
+    }
+  }
+  return legacy;
+}
+
+function getPendingResolution(room, family) {
+  if (!room || typeof room !== 'object') return undefined;
+  const config = pendingResolutionFamilyConfig(family);
+  if (!hasOwn(room, config.field)) return undefined;
+  return pendingResolutionFromLegacy(config.family, room[config.field]);
+}
+
+function setPendingResolution(room, family, resolution) {
+  if (!room || typeof room !== 'object') throw new TypeError('setPendingResolution requires a room object.');
+  const config = pendingResolutionFamilyConfig(family);
+  if (resolution === undefined) {
+    delete room[config.field];
+    return undefined;
+  }
+  if (resolution === null) {
+    room[config.field] = null;
+    return null;
+  }
+  if (!PendingResolution.is(resolution) || resolution.family !== config.family) {
+    throw new TypeError(`setPendingResolution expects a ${config.family} PendingResolution.`);
+  }
+  room[config.field] = pendingResolutionToLegacy(resolution);
+  return getPendingResolution(room, config.family);
+}
+
+function clearPendingResolution(room, family) {
+  if (!room || typeof room !== 'object') throw new TypeError('clearPendingResolution requires a room object.');
+  const config = pendingResolutionFamilyConfig(family);
+  room[config.field] = null;
+  return null;
+}
+
+function hasPendingResolution(room, family) {
+  const resolution = getPendingResolution(room, family);
+  return Boolean(resolution && typeof resolution === 'object');
+}
+
+function getPendingEventResolution(room) {
+  return getPendingResolution(room, 'event');
+}
+function getPendingFeudResolution(room) {
+  return getPendingResolution(room, 'feud');
+}
+function getPendingAssignmentChoiceResolution(room) {
+  return getPendingResolution(room, 'assignment-choice');
+}
+function getPendingLegendaryReactionResolution(room) {
+  return getPendingResolution(room, 'legendary-reaction');
+}
+
 function createLegacyFieldAdapter(target, key, contract, options = {}) {
   if (!target || typeof target !== 'object') throw new TypeError('Legacy field adapter requires a target object.');
   if (!contract || typeof contract.view !== 'function' || typeof contract.toLegacy !== 'function') {
@@ -1181,6 +1302,17 @@ module.exports = {
   addIslandVeilReaction,
   removeIslandVeilReaction,
   listIslandLegendaryEffects,
+  PENDING_RESOLUTION_FAMILIES,
+  pendingResolutionFromLegacy,
+  pendingResolutionToLegacy,
+  getPendingResolution,
+  setPendingResolution,
+  clearPendingResolution,
+  hasPendingResolution,
+  getPendingEventResolution,
+  getPendingFeudResolution,
+  getPendingAssignmentChoiceResolution,
+  getPendingLegendaryReactionResolution,
   presenceOf,
   createLegacyFieldAdapter,
 };

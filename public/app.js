@@ -1321,7 +1321,15 @@
       label.className = 'action-group-label';
       label.textContent = `Решение: «${pending.cardName}»`;
       actions.appendChild(label);
-      if (pending.kind === 'observatory') {
+      if (pending.kind === 'treasure-choice') {
+        for (const option of pending.options || []) {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = 'build-btn primary';
+          b.textContent = `Вариант ${Number(option.id) + 1}: ${option.name}`;
+          b.addEventListener('click', () => socket.emit('respondEvent', { eventId: pending.id, choice: option.id }, handleGameAck));
+          actions.appendChild(b);
+        }
+      } else if (pending.kind === 'observatory') {
         for (const option of pending.options || []) {
           const b = document.createElement('button');
           b.type = 'button'; b.className = option.id === 'replace' ? 'build-btn primary' : 'build-btn';
@@ -2022,7 +2030,7 @@
       effectNote.className = 'cargo-meta';
       const deferred = {
         scout: 'Разведчик готов раскрыть один гарнизон или точные дукаты одного другого игрока в радиусе 4 до конца текущего личного хода.',
-        treasureHunter: 'Искатель сокровищ сохранён на корабле; его выбор из двух сокровищ будет подключён вместе с синхронизацией колоды сокровищ.',
+        treasureHunter: 'Искатель сокровищ тратит одно действие, сразу определяет два независимых результата сокровища и позволяет выбрать один из них.',
         shipCarpenter: 'Корабельный плотник может предотвратить одну потерю уровня в бою. При объявлении своей атаки заранее отметьте его применение; дополнительное действие списывается только если уровень действительно сохранён.',
       };
       effectNote.textContent = deferred[character.id] || `«${character.name}» готов к одноразовому применению.`;
@@ -2090,6 +2098,12 @@
         if (!moneyTargets.length) {
           const note = document.createElement('div'); note.className = 'cargo-meta'; note.textContent = 'Других кораблей в радиусе разведки нет.'; actions.appendChild(note);
         }
+      } else if (character.id === 'treasureHunter') {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
+        b.textContent = 'Искатель сокровищ: выбрать 1 из 2 · 1 действие';
+        b.disabled = !canAct;
+        b.addEventListener('click', () => socket.emit('useTreasureHunter', {}, handleGameAck));
+        actions.appendChild(b);
       } else if (character.id === 'firstMate') {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
         b.textContent = 'Первый помощник: +1 дополнительное действие · бесплатно';

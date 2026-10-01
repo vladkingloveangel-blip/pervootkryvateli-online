@@ -62,6 +62,16 @@ const {
   addIslandVeilReaction,
   removeIslandVeilReaction,
   listIslandLegendaryEffects,
+  pendingResolutionFromLegacy,
+  pendingResolutionToLegacy,
+  getPendingResolution,
+  setPendingResolution,
+  clearPendingResolution,
+  hasPendingResolution,
+  getPendingEventResolution,
+  getPendingFeudResolution,
+  getPendingAssignmentChoiceResolution,
+  getPendingLegendaryReactionResolution,
 } = domainState;
 const { BALANCE, MAP_META } = require('./game-data');
 const { selectTreasureOutcome, selectLegendaryAbility, selectTreasureCandidates } = require('./digital-random-sources');
@@ -232,6 +242,20 @@ function drawTreasureCard(_room, rng = Math.random) {
 function treasureHunterCandidates(rng = Math.random) {
   const count = CHARACTERS.treasureHunter?.effect?.draw;
   return selectTreasureCandidates(count, rng);
+}
+
+function prepareTreasureHunterChoice(player, rng = Math.random) {
+  const candidates = treasureHunterCandidates(rng);
+  if (!Array.isArray(candidates) || candidates.length !== 2 || candidates.some(candidate => !candidate || typeof candidate !== 'object' || !candidate.id || !candidate.name)) {
+    return { ok: false, error: 'Не удалось получить два результата сокровища.' };
+  }
+  const detached = candidates.map(candidate => JSON.parse(JSON.stringify(candidate)));
+  return {
+    ok: true,
+    candidates: detached,
+    options: detached.map((candidate, index) => ({ id: String(index), name: candidate.name })),
+    assignmentInstanceId: getActiveAssignmentTask(player)?.id || null,
+  };
 }
 
 function drawLegendaryCard(_room, rng = Math.random) {
@@ -3797,6 +3821,7 @@ module.exports = {
   drawSailingEventCard,
   drawTreasureCard,
   treasureHunterCandidates,
+  prepareTreasureHunterChoice,
   createExpeditionDeck,
   createFeudDecks,
   drawFeudCard,
@@ -3870,6 +3895,16 @@ module.exports = {
   addIslandVeilReaction,
   removeIslandVeilReaction,
   listIslandLegendaryEffects,
+  pendingResolutionFromLegacy,
+  pendingResolutionToLegacy,
+  getPendingResolution,
+  setPendingResolution,
+  clearPendingResolution,
+  hasPendingResolution,
+  getPendingEventResolution,
+  getPendingFeudResolution,
+  getPendingAssignmentChoiceResolution,
+  getPendingLegendaryReactionResolution,
   issueAssignment,
   offerAssignmentCards,
   chooseAssignmentOffer,
