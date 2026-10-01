@@ -3446,9 +3446,166 @@
     return 'ОБЪЕКТ КАРТЫ';
   }
 
+  function ownIslandCompactHtml(island) {
+    const resources = island.resources?.length ? island.resources.join(', ') : 'нет';
+    const buildings = island.buildings?.length
+      ? island.buildings.map(building => building.name).join(', ')
+      : 'нет';
+    const defense = Object.hasOwn(island, 'defenseArmy') ? island.defenseArmy : island.army;
+    const garrison = Object.hasOwn(island, 'garrisonName')
+      ? (island.garrisonName ? `${island.garrisonName} (+${island.garrisonDefense || 0})` : 'нет')
+      : null;
+    return `
+      <div class="own-island-summary">
+        <div class="own-island-stat"><span>Статус</span><strong>${escapeHtml(island.status || '—')}</strong></div>
+        <div class="own-island-stat"><span>Защита</span><strong>${defense ?? '—'}</strong></div>
+        <div class="own-island-stat"><span>Площадь</span><strong>${island.usedArea ?? 0}/${island.effectiveArea ?? island.area ?? 0}</strong></div>
+        <div class="own-island-stat"><span>Ресурсы</span><strong>${escapeHtml(resources)}</strong></div>
+      </div>
+      ${garrison !== null ? `<div class="own-island-line"><span>Гарнизон</span><strong>${escapeHtml(garrison)}</strong></div>` : ''}
+      <div class="own-island-line"><span>Постройки</span><strong>${escapeHtml(buildings)}</strong></div>
+    `;
+  }
+
+  function ownIslandQuickActions(island) {
+    const mine = me();
+    if (!mine) return [];
+    const here = currentIslands().some(item => item.id === island.id);
+    const myTurn = state.room?.activePlayerId === state.myId;
+    const canAct = here && myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending();
+    if (!canAct) return [];
+
+    const quick = [];
+    const loadedThisRound = island.loadedRound === state.room.round;
+    if ((island.availableGoods || []).length && !loadedThisRound) quick.push('Погрузить');
+    if ((island.buildings || []).some(building => building.nextUpgrade)) quick.push('Улучшить');
+    quick.push('Построить');
+    return quick;
+  }
+
+  function renderOwnIslandObjectSheet(island) {
+    const sheet = $('objectSheet');
+    const body = $('objectSheetBody');
+    const actions = $('objectSheetActions');
+    $('objectSheetKind').textContent = 'ВАШ ОСТРОВ';
+    $('objectSheetTitle').textContent = island.name;
+    body.innerHTML = ownIslandCompactHtml(island);
+    actions.innerHTML = '';
+
+    const quick = ownIslandQuickActions(island);
+    if (quick.length) {
+      const row = document.createElement('div');
+      row.className = 'own-island-quick-actions';
+      for (const label of quick) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'small';
+        button.textContent = label;
+        button.addEventListener('click', () => expandOwnIslandManagement(island.id));
+        row.appendChild(button);
+      }
+      actions.appendChild(row);
+    }
+
+    const manage = document.createElement('button');
+    manage.type = 'button';
+    manage.className = 'primary';
+    manage.textContent = 'Управлять островом';
+    manage.addEventListener('click', () => expandOwnIslandManagement(island.id));
+    actions.appendChild(manage);
+
+    const here = currentIslands().some(item => item.id === island.id);
+    if (!here) {
+      const note = document.createElement('div');
+      note.className = 'own-island-away-note';
+      note.textContent = 'Корабль не находится у этого острова. Управление доступно для просмотра; действия появятся, когда они будут разрешены правилами.';
+      actions.appendChild(note);
+    }
+
+    sheet.classList.remove('hidden');
+    sheet.classList.remove('expanded');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function expandOwnIslandManagement(islandId) {
+    const island = state.room?.islands?.find(item => item.id === islandId && item.ownerId === state.myId);
+    if (!island) return;
+    state.selectedIslandId = island.id;
+    const sheet = $('objectSheet');
+    sheet.classList.add('expanded');
+    $('objectSheetExpand').textContent = '⌄';
+    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
+
+    const body = $('objectSheetBody');
+    body.innerHTML = ownIslandCompactHtml(island);
+
+    const details = document.createElement('div');
+    details.className = 'own-island-management-details';
+    const defense = island.defenseBreakdown || {};
+    details.innerHTML = `
+      <div class="own-island-section-title">Подробности владения</div>
+      <div class="own-island-line"><span>Исходная защита</span><strong>${island.army ?? 0}</strong></div>
+      ${Object.hasOwn(island, 'defenseBreakdown') ? `
+        <div class="own-island-line"><span>Гарнизон</span><strong>${defense.garrison || 0}</strong></div>
+        <div class="own-island-line"><span>Нанятый гарнизон</span><strong>${defense.hiredGarrison || 0}</strong></div>
+        <div class="own-island-line"><span>Укрепления</span><strong>${defense.fortifications || 0}</strong></div>
+        <div class="own-island-line"><span>Бастионы</span><strong>${defense.bastions || 0}</strong></div>
+        <div class="own-island-line"><span>Корабль владельца</span><strong>${defense.ownerShip || 0}</strong></div>
+      ` : ''}
+      <div class="own-island-line"><span>Погрузка в раунде ${state.room.round}</span><strong>${island.loadedRound === state.room.round ? 'уже выполнена' : 'доступна'}</strong></div>
+    `;
+    body.appendChild(details);
+
+    const buildingList = document.createElement('div');
+    buildingList.className = 'own-island-building-list';
+    const title = document.createElement('div');
+    title.className = 'own-island-section-title';
+    title.textContent = 'Постройки';
+    buildingList.appendChild(title);
+    for (const building of island.buildings || []) {
+      const row = document.createElement('div');
+      row.className = 'own-island-building';
+      const next = building.nextUpgrade ? ` → ${building.nextUpgrade.name} · ${building.nextUpgrade.price} дук.` : '';
+      const support = building.type === 'bastion' ? (building.supported ? ' · поддерживается' : ' · без поддержки') : '';
+      row.innerHTML = `<span>${escapeHtml(building.name)}${escapeHtml(support)}</span><strong>${escapeHtml(next || 'макс./без улучшения')}</strong>`;
+      buildingList.appendChild(row);
+    }
+    if (!(island.buildings || []).length) {
+      const empty = document.createElement('div');
+      empty.className = 'muted';
+      empty.textContent = 'Построек пока нет.';
+      buildingList.appendChild(empty);
+    }
+    body.appendChild(buildingList);
+
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    const here = currentIslands().some(item => item.id === island.id);
+    if (here) {
+      // Reuse canonical legacy renderer. It owns legality, costs and socket payloads.
+      renderIsland();
+      const sourceActions = $('islandActions');
+      while (sourceActions.firstChild) actions.appendChild(sourceActions.firstChild);
+    }
+
+    if (!actions.children.length) {
+      const note = document.createElement('div');
+      note.className = 'own-island-away-note';
+      note.textContent = here
+        ? 'Сейчас на этом острове нет доступных действий.'
+        : 'Чтобы строить, улучшать и грузиться, основной корабль должен находиться у острова в допустимый момент хода.';
+      actions.appendChild(note);
+    }
+  }
+
   function renderObjectSheetFromMapInfo(kind, data) {
     const sheet = $('objectSheet');
     if (!sheet) return;
+    if (kind === 'island' && data.ownerId === state.myId) {
+      renderOwnIslandObjectSheet(data);
+      return;
+    }
+
     $('objectSheetKind').textContent = mapObjectKindLabel(kind, data);
     $('objectSheetTitle').textContent = $('mapInfoTitle').textContent || data.name || 'Объект';
     $('objectSheetBody').innerHTML = $('mapInfoMeta').innerHTML;
@@ -3472,9 +3629,17 @@
   function toggleObjectSheetExpanded() {
     const sheet = $('objectSheet');
     if (!sheet || sheet.classList.contains('hidden')) return;
+    const selectedOwnIsland = state.mapSelection?.kind === 'island'
+      ? state.room?.islands?.find(item => item.id === state.mapSelection.id && item.ownerId === state.myId)
+      : null;
+    if (selectedOwnIsland && !sheet.classList.contains('expanded')) {
+      expandOwnIslandManagement(selectedOwnIsland.id);
+      return;
+    }
     const expanded = sheet.classList.toggle('expanded');
     $('objectSheetExpand').textContent = expanded ? '⌄' : '⌃';
     $('objectSheetExpand').setAttribute('aria-label', expanded ? 'Свернуть карточку' : 'Развернуть карточку');
+    if (!expanded && selectedOwnIsland) renderOwnIslandObjectSheet(selectedOwnIsland);
   }
 
   function showPlayerMapInfo(player) {
@@ -3537,7 +3702,7 @@
       const here = currentIslands().some(i => i.id === data.id);
       if (here) {
         state.selectedIslandId = data.id;
-        action.textContent = 'Действия на острове';
+        action.textContent = data.ownerId === state.myId ? 'Управлять островом' : 'Действия на острове';
         action.classList.remove('hidden');
         action.onclick = () => { closeMapInfo(); openMobileTab('actions'); };
       }

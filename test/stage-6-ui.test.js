@@ -437,3 +437,40 @@ test('UI-9 mandatory decisions close voluntary object selection', () => {
   const code = app.slice(start, end);
   assert.match(code, /if \(descriptor && state\.mapSelection\) closeMapInfo\(\)/);
 });
+
+
+test('UI-10 own islands use compact map sheet plus expanded canonical management actions', () => {
+  const start = app.indexOf('  function ownIslandCompactHtml(');
+  const end = app.indexOf('\n  function showPlayerMapInfo(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /ownIslandCompactHtml/);
+  assert.match(code, /ownIslandQuickActions/);
+  assert.match(code, /renderOwnIslandObjectSheet/);
+  assert.match(code, /expandOwnIslandManagement/);
+  assert.match(code, /ВАШ ОСТРОВ/);
+  assert.match(code, /Управлять островом/);
+  assert.match(code, /Погрузить/);
+  assert.match(code, /Улучшить/);
+  assert.match(code, /Построить/);
+
+  // Expanded mobile management reuses the existing canonical renderer instead
+  // of rebuilding legality/cost/socket payload rules in a second path.
+  assert.match(code, /renderIsland\(\);/);
+  assert.match(code, /while \(sourceActions\.firstChild\) actions\.appendChild\(sourceActions\.firstChild\);/);
+  assert.doesNotMatch(code, /socket\.emit\('build'/);
+  assert.doesNotMatch(code, /socket\.emit\('upgradeBuilding'/);
+  assert.doesNotMatch(code, /socket\.emit\('loadCargo'/);
+
+  assert.match(code, /defenseBreakdown/);
+  assert.match(code, /building\.nextUpgrade/);
+  assert.match(code, /loadedRound === state\.room\.round/);
+  assert.match(styles, /UI-10 — own island compact and expanded management/);
+});
+
+test('UI-10 does not remove legacy island renderer before parity cleanup', () => {
+  assert.match(app, /function renderIsland\(\)/);
+  assert.match(index, /id="islandContent"/);
+  assert.match(index, /id="islandActions"/);
+});

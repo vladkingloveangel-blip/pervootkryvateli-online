@@ -1816,3 +1816,97 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     outline-offset: 2px;
   }
 }
+
+
+/* UI-10 — own island compact and expanded management */
+@media (max-width: 900px) {
+  body.game-active .own-island-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  body.game-active .own-island-stat {
+    display: grid;
+    gap: 2px;
+    padding: 8px 9px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(255,255,255,.035);
+  }
+
+  body.game-active .own-island-stat span,
+  body.game-active .own-island-line span {
+    color: var(--muted);
+    font-size: 10px;
+  }
+
+  body.game-active .own-island-stat strong {
+    font-size: 13px;
+  }
+
+  body.game-active .own-island-line,
+  body.game-active .own-island-building {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 2px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+  }
+
+  body.game-active .own-island-line strong,
+  body.game-active .own-island-building strong {
+    text-align: right;
+    font-size: 11px;
+  }
+
+  body.game-active .own-island-quick-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  body.game-active .own-island-quick-actions button {
+    min-width: 0;
+    min-height: 38px;
+  }
+
+  body.game-active .own-island-away-note {
+    padding: 8px 9px;
+    border: 1px dashed var(--line);
+    border-radius: 10px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  body.game-active .own-island-management-details,
+  body.game-active .own-island-building-list {
+    display: grid;
+    gap: 2px;
+    margin-top: 8px;
+  }
+
+  body.game-active .own-island-section-title {
+    margin-top: 4px;
+    padding-bottom: 5px;
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .07em;
+    border-bottom: 1px solid rgba(240,196,91,.2);
+  }
+
+  body.game-active .object-sheet.expanded .object-sheet-actions {
+    overflow-y: auto;
+    padding-bottom: 4px;
+  }
+
+  body.game-active .object-sheet.expanded .object-sheet-actions .action-group-label {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 7px 3px 5px;
+    background: rgba(8,37,44,.98);
+  }
+}
