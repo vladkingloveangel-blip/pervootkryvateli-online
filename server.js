@@ -10,6 +10,7 @@ const { Pool } = require('pg');
 const { RoomStore, isUnfinished } = require('./room-store');
 const { endGameConsensusView, proposeEndGameConsensus, confirmEndGameConsensus, rejectEndGameConsensus } = require('./end-game-consensus');
 const { completeRoundBoundaryAfterTurn } = require('./end-game-finalization');
+const { isFinishedRoom, finishedGameEventError } = require('./finished-game-lock');
 const { CURRENT_DIGITAL_MODEL_SCHEMA_VERSION } = require('./save-migrations');
 const { createAssignmentPoolState, assignmentPool } = require('./assignment-pool');
 const { createExpeditionPoolState } = require('./expedition-pool');
@@ -464,6 +465,9 @@ function onSocketEvent(socket, event, handler) {
     if (event !== 'disconnect' && (shuttingDown || roomStore.lastError)) {
       return ackSafe(ack, { ok: false, error: 'Сохранение игры временно недоступно. Повторите позже.' });
     }
+    const eventRoom = getRoom(socket.data.roomCode) || getRoom(args[0]?.code);
+    const finishedError = finishedGameEventError(eventRoom, event, args[0]);
+    if (finishedError) return ackSafe(ack, { ok: false, error: finishedError });
     const priorityError = assignmentPriorityError(socket, event, args[0]);
     if (priorityError) return ackSafe(ack, { ok: false, error: priorityError });
     const writes = [];
@@ -968,8 +972,10 @@ function broadcastRoom(room) {
 }
 
 function emitRoom(room) {
-  queueIslandCorrectionIfNeeded(room);
-  queueEscortCapacityDecisionsIfNeeded(room);
+  if (!isFinishedRoom(room)) {
+    queueIslandCorrectionIfNeeded(room);
+    queueEscortCapacityDecisionsIfNeeded(room);
+  }
   persistRoom(roomStore.save(room));
   broadcastRoom(room);
 }
@@ -2259,6 +2265,7 @@ function canUseObservatoryEventReplacement(room, player) {
 }
 
 function processEventPhase(room) {
+  if (isFinishedRoom(room)) return;
   let flow = getPreTurnResolutionFlow(room);
   if (!flow?.active || hasPendingResolution(room, 'event') || hasPendingResolution(room, 'feud') || hasPendingResolution(room, 'assignment-choice') || room.pendingIslandCorrection || room.pendingFleetAdjustment) return;
   if (queueEscortCapacityDecisionsIfNeeded(room)) return;
@@ -2365,6 +2372,7 @@ function processEventPhase(room) {
 }
 
 function startEventPhase(room) {
+  if (isFinishedRoom(room)) return;
   const player = currentPlayer(room);
   if (!player) return;
   room.phase = 'event';
@@ -2395,6 +2403,7 @@ function startEventPhase(room) {
 }
 
 function finishEventPhase(room) {
+  if (isFinishedRoom(room)) return;
   const flow = getPreTurnResolutionFlow(room);
   if (flow?.personalTurn) {
     setPreTurnActive(room, false);
@@ -2413,6 +2422,7 @@ function finishEventPhase(room) {
   beginTurn(room);
 }
 function advanceRound(room) {
+  if (isFinishedRoom(room)) return;
   room.round += 1;
   room.circle = 1;
   for (const island of room.islands) island.loadedRound = null;
@@ -2649,6 +2659,7 @@ function determineOrder(room) {
 }
 
 function beginTurn(room) {
+  if (isFinishedRoom(room)) return;
   room.phase = 'navigation';
   room.roll = null;
   room.movePoints = null;
@@ -2667,6 +2678,7 @@ function beginTurn(room) {
 }
 
 function continueTurnAfterCards(room) {
+  if (isFinishedRoom(room)) return;
   const p = currentPlayer(room);
   if (!p) return;
   room.phase = 'navigation';
@@ -4420,7 +4432,7 @@ io.on('connection', socket => {
   onSocketEvent(socket, 'endTurn', (_data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const p = currentPlayer(room);
-    if (!room || room.phase === 'event' || room.phase === 'finished' || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш личный ход.' });
+    if (!room || room.phase === 'event' || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш личный ход.' });
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
     log(room, `${p.name} завершил личный ход.`);
     endTurnInternal(room);

@@ -19,7 +19,7 @@ function shouldFinalizeAtRoundBoundary(room, circlesPerRound) {
 
 function finalizeGameAtRoundBoundary(room, circlesPerRound) {
   if (!room || typeof room !== 'object') return { finalized: false, changed: false };
-  if (room.phase === 'finished' && room.finalResult) {
+  if ((room.finished === true || room.phase === 'finished') && room.finalResult) {
     return { finalized: true, changed: false, finalResult: room.finalResult };
   }
   if (!shouldFinalizeAtRoundBoundary(room, circlesPerRound)) {
