@@ -72,7 +72,8 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   const code = created.code;
   assert.equal(rows()[0].state.digitalModelSchemaVersion, CURRENT_DIGITAL_MODEL_SCHEMA_VERSION);
   assert.ok(rows()[0].state.randomSourceState);
-  for (const legacySourceField of ['anchorDecks', 'eventDeck', 'feudDecks']) {
+  assert.ok(rows()[0].state.randomSourceState.assignmentPool);
+  for (const legacySourceField of ['anchorDecks', 'eventDeck', 'feudDecks', 'assignmentDecks']) {
     assert.equal(Object.hasOwn(rows()[0].state, legacySourceField), false, legacySourceField);
   }
   const joinedSecond = await emit(second, 'joinRoom', { code, accountToken: b.token, name: 'Two' });
@@ -105,6 +106,8 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   }
   const started = rows()[0].state;
   assert.equal(started.started, true);
+  assert.ok(started.randomSourceState.assignmentPool);
+  assert.equal(Object.hasOwn(started, 'assignmentDecks'), false);
   assert.equal(started.players.find(p=>p.id===joinedSecond.playerId).shipClass,'carrack');
   assert.deepEqual(started.order,[joinedSecond.playerId,joinedFourth.playerId,created.playerId,joinedThird.playerId]);
   assert.equal(started.players.every(p=>p.ducats===canonical.session.startingDucats),true);
@@ -225,6 +228,11 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
     drawPile: structuredClone(source.available),
     discard: structuredClone(source.recyclable),
   }]));
+  legacyRoom.assignmentDecks = Object.fromEntries(Object.entries(migratedSources.assignmentPool).map(([id, source]) => [id, {
+    drawPile: structuredClone(source.available),
+    discard: structuredClone(source.recyclable),
+    removed: structuredClone(source.permanentlyExcluded),
+  }]));
   delete legacyRoom.randomSourceState;
   delete legacyRoom.digitalModelSchemaVersion;
   delete legacyRoom.rulesDataVersion; delete legacyRoom.rulesSchemaVersion; delete legacyRoom.runtimeProfile;
@@ -338,9 +346,12 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(restoredPoliticalSource.reserved.some(card =>
     `${card.masterCardId || card.id}:${card.copy ?? 'legacy'}` === restartPendingFeudKey
   ), true);
-  assert.deepEqual(Object.keys(afterRestart.assignmentDecks), ['lionia','kadingir','suniksiya','pirates','mori']);
-  assert.equal(afterRestart.assignmentDecks.mori.drawPile.length, 9); // активная карта не возвращается в восстановленную колоду
-  assert.deepEqual(afterRestart.assignmentDecks.lionia.removed, []);
+  const restoredAssignmentPool = afterRestart.randomSourceState.assignmentPool;
+  assert.deepEqual(Object.keys(restoredAssignmentPool), ['lionia','kadingir','suniksiya','pirates','mori']);
+  assert.equal(restoredAssignmentPool.mori.available.length, 9); // активная карта не возвращается в восстановленный pool
+  assert.equal(restoredAssignmentPool.mori.reserved.length, 1);
+  assert.equal(restoredAssignmentPool.mori.reserved[0].id, legacyMoriCard.id);
+  assert.deepEqual(restoredAssignmentPool.lionia.permanentlyExcluded, []);
   assert.equal(afterRestart.pendingAssignmentChoice, null);
   assert.equal(Object.hasOwn(afterOldPlayer,'replacedAssignmentConditions'), false);
   assert.match(afterOldPlayer.activeAssignment.instanceId, /^legacy:/);
@@ -349,6 +360,7 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(afterOldPlayer.activeAssignment.progress.departureSatisfied, false);
   const stripAssignmentMigration = value => {
     const copy = structuredClone(value);
+    if (copy.randomSourceState) delete copy.randomSourceState.assignmentPool;
     delete copy.assignmentDecks; delete copy.pendingAssignmentChoice;
     for (const player of copy.players) { delete player.activeAssignment; delete player.replacedAssignmentConditions; }
     return copy;

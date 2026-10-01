@@ -3,7 +3,8 @@
 const DIGITAL_MODEL_SCHEMA_VERSION_FIELD = 'digitalModelSchemaVersion';
 const INITIAL_DIGITAL_MODEL_SCHEMA_VERSION = 1;
 const SOURCE_STATE_DIGITAL_MODEL_SCHEMA_VERSION = 2;
-const CURRENT_DIGITAL_MODEL_SCHEMA_VERSION = SOURCE_STATE_DIGITAL_MODEL_SCHEMA_VERSION;
+const ASSIGNMENT_POOL_DIGITAL_MODEL_SCHEMA_VERSION = 3;
+const CURRENT_DIGITAL_MODEL_SCHEMA_VERSION = ASSIGNMENT_POOL_DIGITAL_MODEL_SCHEMA_VERSION;
 const RANDOM_SOURCE_STATE_FIELD = 'randomSourceState';
 
 function cloneState(value) {
@@ -98,6 +99,108 @@ function politicalReservations(state) {
   return { [pending.factionId]: [pending.feudCard] };
 }
 
+function assignmentOccurrenceId(occurrence) {
+  return occurrence?.id || occurrence?.conditionKey || null;
+}
+
+function sameAssignmentOccurrence(left, right) {
+  const leftId = assignmentOccurrenceId(left);
+  const rightId = assignmentOccurrenceId(right);
+  if (!leftId || !rightId || leftId !== rightId) return false;
+  if (left?.copy == null || right?.copy == null) return true;
+  return Number(left.copy) === Number(right.copy);
+}
+
+function containsAssignmentOccurrence(items, occurrence) {
+  return Array.isArray(items) && items.some(item => sameAssignmentOccurrence(item, occurrence));
+}
+
+function takeAssignmentOccurrence(items, occurrence) {
+  if (!Array.isArray(items) || !occurrence) return null;
+  const index = items.findIndex(item => sameAssignmentOccurrence(item, occurrence));
+  if (index < 0) return null;
+  return items.splice(index, 1)[0] || null;
+}
+
+function assignmentReservations(state) {
+  const reservedByFaction = {};
+  const add = (factionId, occurrence) => {
+    if (!factionId || !occurrence) return;
+    (reservedByFaction[factionId] ||= []).push(occurrence);
+  };
+
+  for (const player of state?.players || []) {
+    const active = player?.activeAssignment;
+    add(active?.factionId, active?.card);
+  }
+
+  const pending = state?.pendingAssignmentChoice;
+  if (pending?.kind === 'embassy' && pending.factionId) {
+    for (const occurrence of pending.options || []) add(pending.factionId, occurrence);
+  }
+  return reservedByFaction;
+}
+
+function reserveAssignmentOccurrence(storage, occurrence) {
+  if (!isRecord(storage) || !occurrence) return false;
+  storage.available ||= [];
+  storage.recyclable ||= [];
+  storage.permanentlyExcluded ||= [];
+  storage.reserved ||= [];
+  if (containsAssignmentOccurrence(storage.permanentlyExcluded, occurrence)) {
+    takeAssignmentOccurrence(storage.available, occurrence);
+    takeAssignmentOccurrence(storage.recyclable, occurrence);
+    takeAssignmentOccurrence(storage.reserved, occurrence);
+    return false;
+  }
+  if (containsAssignmentOccurrence(storage.reserved, occurrence)) {
+    const duplicateAvailable = takeAssignmentOccurrence(storage.available, occurrence);
+    const duplicateRecyclable = takeAssignmentOccurrence(storage.recyclable, occurrence);
+    return Boolean(duplicateAvailable || duplicateRecyclable);
+  }
+  const stored = takeAssignmentOccurrence(storage.available, occurrence)
+    || takeAssignmentOccurrence(storage.recyclable, occurrence)
+    || occurrence;
+  storage.reserved.push(stored);
+  return true;
+}
+
+function migrateLegacyAssignmentStorage(rawStorage, reserved = []) {
+  if (!isRecord(rawStorage)) return rawStorage;
+  const migrated = {
+    ...rawStorage,
+    available: Array.isArray(rawStorage.drawPile) ? rawStorage.drawPile : [],
+    recyclable: Array.isArray(rawStorage.discard) ? rawStorage.discard : [],
+    permanentlyExcluded: Array.isArray(rawStorage.removed) ? rawStorage.removed : [],
+    reserved: Array.isArray(rawStorage.reserved) ? rawStorage.reserved : [],
+  };
+  delete migrated.drawPile;
+  delete migrated.discard;
+  delete migrated.removed;
+  for (const occurrence of reserved) reserveAssignmentOccurrence(migrated, occurrence);
+  return migrated;
+}
+
+function migrateLegacyAssignmentPool(rawGroup, reservationsByFaction) {
+  if (!isRecord(rawGroup)) return rawGroup;
+  const migrated = {};
+  for (const [factionId, rawStorage] of Object.entries(rawGroup)) {
+    if (isRecord(rawStorage) && (
+      Object.hasOwn(rawStorage, 'drawPile')
+      || Object.hasOwn(rawStorage, 'discard')
+      || Object.hasOwn(rawStorage, 'removed')
+    )) {
+      migrated[factionId] = migrateLegacyAssignmentStorage(
+        rawStorage,
+        reservationsByFaction?.[factionId] || []
+      );
+    } else {
+      migrated[factionId] = rawStorage;
+    }
+  }
+  return migrated;
+}
+
 function migrateVersion0To1(state) {
   return {
     ...state,
@@ -144,9 +247,34 @@ function migrateVersion1To2(state) {
   return next;
 }
 
+function migrateVersion2To3(state) {
+  const next = {
+    ...state,
+    [DIGITAL_MODEL_SCHEMA_VERSION_FIELD]: ASSIGNMENT_POOL_DIGITAL_MODEL_SCHEMA_VERSION,
+  };
+  const existingSources = isRecord(state?.[RANDOM_SOURCE_STATE_FIELD])
+    ? state[RANDOM_SOURCE_STATE_FIELD]
+    : {};
+  const sourceState = { ...existingSources };
+  let ownsSourceState = Object.hasOwn(state || {}, RANDOM_SOURCE_STATE_FIELD);
+
+  if (Object.hasOwn(state || {}, 'assignmentDecks')) {
+    sourceState.assignmentPool = migrateLegacyAssignmentPool(
+      state.assignmentDecks,
+      assignmentReservations(state)
+    );
+    delete next.assignmentDecks;
+    ownsSourceState = true;
+  }
+
+  if (ownsSourceState) next[RANDOM_SOURCE_STATE_FIELD] = sourceState;
+  return next;
+}
+
 const MIGRATIONS = new Map([
   [0, { toVersion: INITIAL_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion0To1 }],
   [1, { toVersion: SOURCE_STATE_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion1To2 }],
+  [2, { toVersion: ASSIGNMENT_POOL_DIGITAL_MODEL_SCHEMA_VERSION, migrate: migrateVersion2To3 }],
 ]);
 
 function readDigitalModelSchemaVersion(rawRoom) {
@@ -190,6 +318,7 @@ function migrateRoomState(rawRoom) {
 module.exports = {
   CURRENT_DIGITAL_MODEL_SCHEMA_VERSION,
   SOURCE_STATE_DIGITAL_MODEL_SCHEMA_VERSION,
+  ASSIGNMENT_POOL_DIGITAL_MODEL_SCHEMA_VERSION,
   RANDOM_SOURCE_STATE_FIELD,
   migrateRoomState,
 };

@@ -9,6 +9,7 @@ const { Server } = require('socket.io');
 const { Pool } = require('pg');
 const { RoomStore, isUnfinished } = require('./room-store');
 const { CURRENT_DIGITAL_MODEL_SCHEMA_VERSION } = require('./save-migrations');
+const { createAssignmentPoolState, assignmentPool } = require('./assignment-pool');
 const { MAP_META, CITADEL, HAZARDS, SHIPS, SHIP_LEVELS, SHIP_UPGRADES, ESCORTS, COLORS, BUILDINGS, CHARACTERS, GOODS, CITADEL_CELLS, ANCHORS, FACTIONS, POLITICAL_FACTION_ORDER, ASSIGNMENT_DEFINITIONS, LEGENDARY_PLACES, LEGENDARY_PLACE_RULES, PLACE_DISCOVERY_DEFINITIONS } = require('./game-data');
 const {
   cloneIslands,
@@ -120,7 +121,6 @@ const {
   prepareTreasureHunterChoice,
   createExpeditionDeck,
   drawFeudCard,
-  createAssignmentDecks,
   normalizeStage6Compatibility,
   getActiveAssignmentTask,
   getActiveExpeditionTask,
@@ -662,7 +662,7 @@ function publicRoom(room, viewerId = null) {
       };
     }),
     feudDecks: Object.fromEntries(POLITICAL_FACTION_ORDER.map(id => { const counts = politicalEffectSource(room, id)?.availabilityCounts() || {}; return [id, { remaining: counts.available || 0, discard: counts.recyclable || 0 }]; })),
-    assignmentDecks: Object.fromEntries(Object.keys(ASSIGNMENT_DEFINITIONS).map(id => [id, { remaining: room.assignmentDecks?.[id]?.drawPile?.length || 0, discard: room.assignmentDecks?.[id]?.discard?.length || 0, removed: room.assignmentDecks?.[id]?.removed?.length || 0 }])),
+    assignmentDecks: Object.fromEntries(Object.keys(ASSIGNMENT_DEFINITIONS).map(id => { const counts = assignmentPool(room, id)?.availabilityCounts() || {}; return [id, { remaining: counts.available || 0, discard: counts.recyclable || 0, removed: counts.removed || 0 }]; })),
     legendaryPlaces: LEGENDARY_PLACE_RULES.map(place => ({
       id: place.id,
       name: place.name,
@@ -3005,7 +3005,7 @@ io.on('connection', socket => {
     const sailingEventState = createSailingEventSourceState();
     const expeditionDeck = createExpeditionDeck();
     const politicalEffectState = createPoliticalEffectSourceState();
-    const assignmentDecks = createAssignmentDecks();
+    const assignmentPoolState = createAssignmentPoolState();
     const room = {
       code,
       digitalModelSchemaVersion: CURRENT_DIGITAL_MODEL_SCHEMA_VERSION,
@@ -3043,10 +3043,10 @@ io.on('connection', socket => {
         seaEncounter: seaEncounterState,
         sailingEvent: sailingEventState,
         politicalEffect: politicalEffectState,
+        assignmentPool: assignmentPoolState,
       },
       expeditionDeck,
       pendingExpeditionRewards: [],
-      assignmentDecks,
       legendaryPlacesExplored: {},
       factionState: {},
       log: [],
@@ -3246,15 +3246,15 @@ io.on('connection', socket => {
     const sailingEventState = createSailingEventSourceState();
     const expeditionDeck = createExpeditionDeck();
     const politicalEffectState = createPoliticalEffectSourceState();
-    const assignmentDecks = createAssignmentDecks();
+    const assignmentPoolState = createAssignmentPoolState();
     room.randomSourceState = {
       seaEncounter: seaEncounterState,
       sailingEvent: sailingEventState,
       politicalEffect: politicalEffectState,
+      assignmentPool: assignmentPoolState,
     };
     room.expeditionDeck = expeditionDeck;
     room.pendingExpeditionRewards = [];
-    room.assignmentDecks = assignmentDecks;
     room.legendaryPlacesExplored = {};
     room.factionState = {};
     room.players.forEach(p => {

@@ -83,7 +83,7 @@ const { selectTreasureOutcome, selectLegendaryAbility, selectTreasureCandidates 
 const { createSeaEncounterStorage, seaEncounterSource } = require('./sea-encounter-source');
 const { createSailingEventStorage, canonicalizeSailingEventOccurrence, sailingEventSource, releaseStoredBenefitReservation } = require('./sailing-event-source');
 const { createPoliticalEffectStorage, politicalEffectSource } = require('./political-effect-source');
-const { createAssignmentStorage, assignmentPool } = require('./assignment-pool');
+const { createAssignmentStorage, createAssignmentPoolState, usesDigitalAssignmentPool, assignmentPool } = require('./assignment-pool');
 const { createExpeditionStorage, expeditionPool } = require('./expedition-pool');
 const {
   SHIPS,
@@ -522,8 +522,57 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
   if (!room || !Array.isArray(room.players)) return { changed: false, resumeEventPhase: false };
   let changed = false;
   let resumeEventPhase = false;
-  const canonicalDecks = createAssignmentDecks(rng);
-  room.assignmentDecks ||= {};
+  const digitalPool = usesDigitalAssignmentPool(room);
+  const canonicalStorage = digitalPool ? createAssignmentPoolState(rng) : createAssignmentDecks(rng);
+
+  const occurrenceId = occurrence => occurrence?.id || occurrence?.conditionKey || null;
+  const sameOccurrence = (left, right) => {
+    const leftId = occurrenceId(left);
+    const rightId = occurrenceId(right);
+    if (!leftId || !rightId || leftId !== rightId) return false;
+    if (left?.copy == null || right?.copy == null) return true;
+    return Number(left.copy) === Number(right.copy);
+  };
+  const containsOccurrence = (items, occurrence) =>
+    Array.isArray(items) && items.some(item => sameOccurrence(item, occurrence));
+  const takeOccurrence = (items, occurrence) => {
+    if (!Array.isArray(items)) return null;
+    const index = items.findIndex(item => sameOccurrence(item, occurrence));
+    if (index < 0) return null;
+    return items.splice(index, 1)[0] || null;
+  };
+  const reservedForFaction = factionId => {
+    const reserved = [];
+    for (const player of room.players) {
+      const task = getActiveAssignmentTask(player);
+      if (task?.source?.factionId === factionId && task.payload) reserved.push(task.payload);
+    }
+    const pending = getPendingAssignmentChoiceResolution(room);
+    if (pending?.kind === 'embassy' && pending.payload?.factionId === factionId) {
+      for (const occurrence of pending.options || []) if (occurrence) reserved.push(occurrence);
+    }
+    return reserved;
+  };
+  const reserveIntoPool = (storage, occurrence) => {
+    if (!storage || !occurrence || containsOccurrence(storage.permanentlyExcluded, occurrence)) return false;
+    if (containsOccurrence(storage.reserved, occurrence)) {
+      const duplicateAvailable = takeOccurrence(storage.available, occurrence);
+      const duplicateRecyclable = takeOccurrence(storage.recyclable, occurrence);
+      return Boolean(duplicateAvailable || duplicateRecyclable);
+    }
+    const stored = takeOccurrence(storage.available, occurrence)
+      || takeOccurrence(storage.recyclable, occurrence)
+      || occurrence;
+    storage.reserved.push(stored);
+    return true;
+  };
+
+  if (digitalPool) {
+    room.randomSourceState ||= {};
+    room.randomSourceState.assignmentPool ||= {};
+  } else {
+    room.assignmentDecks ||= {};
+  }
 
   // Retire obsolete prize-building/capture-mode state from restored rooms.
   if (Object.hasOwn(room, 'pendingStatePrize')) {
@@ -544,6 +593,25 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
   }
 
   for (const factionId of Object.keys(ASSIGNMENT_DEFINITIONS)) {
+    if (digitalPool) {
+      const pools = room.randomSourceState.assignmentPool;
+      if (!pools[factionId]) {
+        const restoredPool = canonicalStorage[factionId];
+        for (const occurrence of reservedForFaction(factionId)) reserveIntoPool(restoredPool, occurrence);
+        pools[factionId] = restoredPool;
+        changed = true;
+        continue;
+      }
+      const storage = pools[factionId];
+      for (const key of ['available', 'recyclable', 'permanentlyExcluded', 'reserved']) {
+        if (!Array.isArray(storage[key])) { storage[key] = []; changed = true; }
+      }
+      for (const occurrence of reservedForFaction(factionId)) {
+        if (reserveIntoPool(storage, occurrence)) changed = true;
+      }
+      continue;
+    }
+
     if (!room.assignmentDecks[factionId]) {
       const reservedIds = new Set(room.players
         .map(player => getActiveAssignmentTask(player))
@@ -552,7 +620,7 @@ function normalizeAssignmentCompatibility(room, rng = Math.random) {
       if (room.pendingAssignmentChoice?.kind === 'embassy' && room.pendingAssignmentChoice.factionId === factionId) {
         for (const card of room.pendingAssignmentChoice.options || []) if (card?.id) reservedIds.add(card.id);
       }
-      const restoredDeck = canonicalDecks[factionId];
+      const restoredDeck = canonicalStorage[factionId];
       restoredDeck.drawPile = restoredDeck.drawPile.filter(card => !reservedIds.has(card.id));
       room.assignmentDecks[factionId] = restoredDeck;
       changed = true;

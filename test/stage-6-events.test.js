@@ -162,10 +162,11 @@ test('stage 6.1: Observatory resolves one sailing card before feud, Embassy assi
     reserved: [],
   };
   const assignmentIds = ['lionia-ship-level', 'lionia-yellow-a'];
-  room.assignmentDecks.lionia = {
-    drawPile: assignmentIds.map(id => structuredClone(rules.politics.assignments.lionia.find(card => card.id === id))),
-    discard: [],
-    removed: [],
+  room.randomSourceState.assignmentPool.lionia = {
+    available: assignmentIds.map(id => structuredClone(rules.politics.assignments.lionia.find(card => card.id === id))),
+    recyclable: [],
+    permanentlyExcluded: [],
+    reserved: [],
   };
   saveRows(db);
 
@@ -197,6 +198,8 @@ test('stage 6.1: Observatory resolves one sailing card before feud, Embassy assi
   assert.equal(persistedAfterEvent.randomSourceState.sailingEvent.reserved.length, 0);
   assert.equal(persistedAfterEvent.randomSourceState.politicalEffect.kadingir.recyclable.length, 1);
   assert.equal(persistedAfterEvent.randomSourceState.politicalEffect.kadingir.reserved.length, 0);
+  assert.equal(persistedAfterEvent.randomSourceState.assignmentPool.lionia.available.length, 0);
+  assert.equal(persistedAfterEvent.randomSourceState.assignmentPool.lionia.reserved.length, 2);
   assert.equal(state.pendingAssignmentChoice.kind, 'embassy');
   assert.equal(state.pendingAssignmentChoice.options.length, 2);
 

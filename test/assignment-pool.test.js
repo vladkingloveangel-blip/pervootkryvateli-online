@@ -14,8 +14,10 @@ const {
 const {
   expandAssignmentDefinitions,
   createAssignmentStorage,
+  createAssignmentPoolState,
   assignmentPool,
 } = require('../assignment-pool');
+const { CURRENT_DIGITAL_MODEL_SCHEMA_VERSION } = require('../save-migrations');
 
 function occurrenceKey(card) {
   return `${card.id || card.conditionKey}:${card.copy ?? 'legacy'}`;
@@ -314,4 +316,136 @@ test('AssignmentPool reserve/return/recycle/exclude operations use only legacy b
   assert.equal(pool.recycleCompleted(a), true);
   assert.deepEqual(pool.availabilityCounts(), { available: 0, recyclable: 1, removed: 1 });
   assert.deepEqual(Object.keys(room.assignmentDecks.lionia).sort(), ['discard', 'drawPile', 'removed']);
+});
+
+
+test('schema 3 AssignmentPool persists only available/recyclable/permanentlyExcluded/reserved', () => {
+  const state = createAssignmentPoolState(() => 0.5);
+  const room = {
+    digitalModelSchemaVersion: CURRENT_DIGITAL_MODEL_SCHEMA_VERSION,
+    round: 1,
+    islands: [],
+    players: [],
+    randomSourceState: { assignmentPool: state },
+  };
+  const factionId = Object.keys(state)[0];
+  const pool = assignmentPool(room, factionId, () => 0, { classify: () => 'eligible' });
+  const before = state[factionId].available.length;
+  const [offered] = pool.offerEligible(player(), 1);
+
+  assert.ok(offered);
+  assert.equal(state[factionId].available.length, before - 1);
+  assert.equal(state[factionId].reserved.length, 1);
+  assert.equal(state[factionId].recyclable.length, 0);
+  assert.equal(state[factionId].permanentlyExcluded.length, 0);
+  assert.equal(Object.hasOwn(room, 'assignmentDecks'), false);
+  assert.deepEqual(
+    Object.keys(state[factionId]).sort(),
+    ['available', 'permanentlyExcluded', 'recyclable', 'reserved']
+  );
+});
+
+test('schema 3 Embassy offer reserves in option order and choosing keeps chosen reserved while returning only unchosen', () => {
+  const factionId = 'lionia';
+  const first = canonical(factionId, 'lionia-ship-level', 1);
+  const second = canonical(factionId, 'lionia-yellow-a', 1);
+  const room = {
+    digitalModelSchemaVersion: CURRENT_DIGITAL_MODEL_SCHEMA_VERSION,
+    round: 1,
+    islands: [],
+    players: [],
+    randomSourceState: {
+      assignmentPool: {
+        [factionId]: {
+          available: [structuredClone(first), structuredClone(second)],
+          recyclable: [],
+          permanentlyExcluded: [],
+          reserved: [],
+        },
+      },
+    },
+  };
+  const owner = player('owner');
+  room.players.push(owner);
+  const pool = assignmentPool(room, factionId, () => 0, { classify: () => 'eligible' });
+  const offered = pool.offerEligible(owner, 2);
+
+  assert.deepEqual(offered.map(occurrenceKey), [first, second].map(occurrenceKey));
+  assert.deepEqual(room.randomSourceState.assignmentPool[factionId].reserved.map(occurrenceKey), offered.map(occurrenceKey));
+  const choice = pool.chooseOffered(offered, offered[0].id);
+  assert.equal(choice.chosen.id, offered[0].id);
+  assert.equal(choice.returned, 1);
+  assert.deepEqual(room.randomSourceState.assignmentPool[factionId].reserved.map(occurrenceKey), [occurrenceKey(offered[0])]);
+  assert.deepEqual(room.randomSourceState.assignmentPool[factionId].available.map(occurrenceKey), [occurrenceKey(offered[1])]);
+});
+
+test('schema 3 recycle/exclude never duplicates an occurrence and permanentlyExcluded wins', () => {
+  const factionId = 'lionia';
+  const recyclableCard = { id: 'recycle-me', copy: 2 };
+  const removedCard = { id: 'never-return', copy: 3 };
+  const room = {
+    digitalModelSchemaVersion: CURRENT_DIGITAL_MODEL_SCHEMA_VERSION,
+    players: [],
+    randomSourceState: {
+      assignmentPool: {
+        [factionId]: {
+          available: [structuredClone(recyclableCard), structuredClone(removedCard)],
+          recyclable: [],
+          permanentlyExcluded: [],
+          reserved: [],
+        },
+      },
+    },
+  };
+  const pool = assignmentPool(room, factionId, () => 0, { classify: () => 'eligible' });
+
+  assert.equal(pool.reserve(recyclableCard).id, recyclableCard.id);
+  assert.equal(pool.recycleCompleted(recyclableCard), true);
+  assert.equal(pool.recycleCompleted(recyclableCard), true);
+  assert.deepEqual(room.randomSourceState.assignmentPool[factionId].recyclable.map(occurrenceKey), [occurrenceKey(recyclableCard)]);
+
+  assert.equal(pool.excludePermanently(removedCard), true);
+  assert.equal(pool.excludePermanently(removedCard), false);
+  assert.equal(pool.returnUnchosen(removedCard), 0);
+  assert.deepEqual(room.randomSourceState.assignmentPool[factionId].permanentlyExcluded.map(occurrenceKey), [occurrenceKey(removedCard)]);
+  assert.equal(room.randomSourceState.assignmentPool[factionId].available.some(card => occurrenceKey(card) === occurrenceKey(removedCard)), false);
+  assert.equal(room.randomSourceState.assignmentPool[factionId].recyclable.some(card => occurrenceKey(card) === occurrenceKey(removedCard)), false);
+});
+
+test('schema 3 JSON restart preserves reserved active occurrence outside future offers', () => {
+  const factionId = 'lionia';
+  const activeCard = canonical(factionId, 'lionia-ship-level', 1);
+  const nextCard = canonical(factionId, 'lionia-yellow-a', 1);
+  const owner = player('owner');
+  owner.activeAssignment = {
+    instanceId: 'active',
+    factionId,
+    card: structuredClone(activeCard),
+    issuedRound: 1,
+  };
+  const room = {
+    digitalModelSchemaVersion: CURRENT_DIGITAL_MODEL_SCHEMA_VERSION,
+    round: 1,
+    islands: [],
+    players: [owner],
+    randomSourceState: {
+      assignmentPool: {
+        [factionId]: {
+          available: [structuredClone(nextCard)],
+          recyclable: [],
+          permanentlyExcluded: [],
+          reserved: [structuredClone(activeCard)],
+        },
+      },
+    },
+  };
+  const restored = JSON.parse(JSON.stringify(room));
+  const other = player('other');
+  restored.players.push(other);
+  const offered = assignmentPool(restored, factionId, () => 0, { classify: () => 'eligible' })
+    .offerEligible(other, 2);
+
+  assert.deepEqual(offered.map(occurrenceKey), [occurrenceKey(nextCard)]);
+  assert.deepEqual(restored.randomSourceState.assignmentPool[factionId].reserved.map(occurrenceKey).sort(), [activeCard, nextCard].map(occurrenceKey).sort());
+  assert.equal(restored.players[0].activeAssignment.card.id, activeCard.id);
 });

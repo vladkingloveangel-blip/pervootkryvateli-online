@@ -185,13 +185,12 @@ test('gameplay consumers no longer read random-source storage buckets directly',
   const directAnchor = server.split('\n').filter(line => /room\.anchorDecks.*drawPile/.test(line));
   const directEvent = server.split('\n').filter(line => /room\.eventDeck.*(?:drawPile|discard)/.test(line));
   const directFeud = server.split('\n').filter(line => /room\.feudDecks.*(?:drawPile|discard)/.test(line));
-  const directAssignment = server.split('\n').filter(line => /assignmentDecks.*(?:drawPile|discard|removed)/.test(line));
+  const directAssignment = server.split('\n').filter(line => /room\.assignmentDecks.*(?:drawPile|discard|removed)/.test(line));
 
   assert.equal(directAnchor.length, 0);
   assert.equal(directEvent.length, 0);
   assert.equal(directFeud.length, 0);
-  assert.equal(directAssignment.length, 1);
-  assert.match(directAssignment[0], /assignmentDecks: Object\.fromEntries/);
+  assert.equal(directAssignment.length, 0);
 });
 
 test('Cartographer range/action/payload remain data-driven through the existing consumer contract', () => {
