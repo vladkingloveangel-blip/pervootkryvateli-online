@@ -419,7 +419,8 @@ test('UI-9 replaces the mobile map info popup with one reusable object bottom sh
   const showStart = app.indexOf('  function showMapInfo(');
   const showEnd = app.indexOf('\n  function ', showStart + 1);
   const showCode = app.slice(showStart, showEnd);
-  assert.match(showCode, /matchMedia\('\(max-width: 900px\)'\)/);
+  assert.doesNotMatch(showCode, /matchMedia\('\(max-width: 900px\)'\)/);
+  assert.match(showCode, /renderObjectSheetFromMapInfo\(kind, data\)/);
   assert.match(showCode, /renderObjectSheetFromMapInfo\(kind, data\)/);
   assert.match(showCode, /positionMapInfoAt\(resolvedAnchor\.row, resolvedAnchor\.col\)/);
 
