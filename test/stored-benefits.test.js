@@ -375,7 +375,7 @@ test('socket use handlers keep failed uses atomic, release successful reservatio
   const created = await emit(initial[0], 'createRoom', { accountToken: accounts[0].token, name: 'One' });
   const ids = [created.playerId];
   for (let i = 1; i < 4; i++) ids.push((await emit(initial[i], 'joinRoom', { code: created.code, accountToken: accounts[i].token, name: `Player ${i + 1}` })).playerId);
-  await emit(initial[0], 'setLeader', { playerId: ids[0] });
+  for (let i = 0; i < 4; i++) await emit(initial[i], 'changeShip', { shipClass: 'brigantine' });
   for (let i = 0; i < 4; i++) await emit(initial[i], 'setReady', { ready: true });
   assert.equal((await emit(initial[0], 'startGame')).ok, true);
   await stop();

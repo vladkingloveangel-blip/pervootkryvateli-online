@@ -98,7 +98,7 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   const created = await emit(initial[0], 'createRoom', { accountToken: accounts[0].token, name: 'One' });
   const ids = [created.playerId];
   for (let i = 1; i < 4; i++) ids.push((await emit(initial[i], 'joinRoom', { code: created.code, accountToken: accounts[i].token, name: `Player ${i + 1}` })).playerId);
-  await emit(initial[0], 'setLeader', { playerId: ids[0] });
+  for (let i = 0; i < 4; i++) await emit(initial[i], 'changeShip', { shipClass: 'brigantine' });
   for (let i = 0; i < 4; i++) await emit(initial[i], 'setReady', { ready: true });
   assert.equal((await emit(initial[0], 'startGame')).ok, true);
   await stop();
@@ -148,20 +148,13 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   assert.equal((await emit(targetSocket, 'resumeRoom', { code: created.code, accountToken: targetAccount.token })).ok, true);
 
   let changed = await change(sourceSocket, 'playLegendary', { source: 'legendary', index: 0, targetPlayerId: targetId }, targetSocket);
-  assert.equal(changed.result.pending, true);
+  assert.equal(changed.result.canceled, true);
+  assert.equal(changed.result.protected, true);
   let state = changed.state;
-  assert.equal(state.pendingLegendaryReaction.kind, 'sea-curse');
-  assert.equal(state.pendingLegendaryReaction.targetPlayerId, targetId);
+  assert.equal(Object.hasOwn(state,'pendingLegendaryReaction'), false);
+  assert.equal(Object.hasOwn(state,'pendingDecision'), false);
   assert.equal(Object.hasOwn(state,'eventDecks'), false);
   assert.equal(Object.hasOwn(state.players.find(player => player.id === sourceId),'legendaryCardCount'), false);
-
-  changed = await change(targetSocket, 'respondLegendaryReaction', {
-    reactionId: state.pendingLegendaryReaction.id,
-    useVeil: true,
-    source: 'legendary',
-    index: 0,
-  }, sourceSocket);
-  state = changed.state;
   const targetView = state.players.find(player => player.id === targetId);
   assert.equal(Object.hasOwn(state,'pendingLegendaryReaction'), false);
   assert.equal(Object.hasOwn(state,'pendingDecision'), false);

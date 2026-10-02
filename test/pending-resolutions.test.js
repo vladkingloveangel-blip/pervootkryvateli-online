@@ -225,7 +225,7 @@ test('Treasure Hunter server flow uses persisted candidates only after activatio
   assert.match(activation, /room\.phase !== 'actions'/);
   assert.match(activation, /character\?\.useActionCost/);
   assert.match(activation, /prepareTreasureHunterChoice\(p\)/);
-  assert.match(activation, /consumeCharacter\(p, 'treasureHunter'\)/);
+  assert.match(activation, /consumeCharacter\(p, 'treasureHunter', room\.round\)/);
   assert.match(activation, /room\.actionsLeft -= actionCost/);
   assert.match(activation, /kind: 'treasure-choice'/);
   assert.match(activation, /treasureCandidates: prepared\.candidates/);
@@ -263,7 +263,7 @@ test('Treasure Hunter UI exposes activation and two positional choice buttons wi
   assert.doesNotMatch(app, /будет подключён вместе с синхронизацией колоды сокровищ/);
 });
 
-test('Treasure Hunter activation/restart/choice persists exact pending while character and action stay spent', { timeout: 45000 }, async t => {
+test('Treasure Hunter activation/restart/choice persists exact pending while character stays aboard and is marked used for the round', { timeout: 45000 }, async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pervo-pending-58-'));
   const file = path.join(dir, 'database.json');
   const listener = net.createServer();
@@ -332,7 +332,7 @@ test('Treasure Hunter activation/restart/choice persists exact pending while cha
   const created = await emit(initial[0], 'createRoom', { accountToken: accounts[0].token, name: 'One' });
   const ids = [created.playerId];
   for (let i = 1; i < 4; i++) ids.push((await emit(initial[i], 'joinRoom', { code: created.code, accountToken: accounts[i].token, name: `Player ${i + 1}` })).playerId);
-  await emit(initial[0], 'setLeader', { playerId: ids[0] });
+  for (let i = 0; i < 4; i++) await emit(initial[i], 'changeShip', { shipClass: 'brigantine' });
   for (let i = 0; i < 4; i++) await emit(initial[i], 'setReady', { ready: true });
   assert.equal((await emit(initial[0], 'startGame')).ok, true);
   await stop();
@@ -392,7 +392,8 @@ test('Treasure Hunter activation/restart/choice persists exact pending while cha
   assert.equal(persisted.treasureCandidates.length, 2);
   assert.deepEqual(persisted.options.map(option => option.id), ['0', '1']);
   assert.equal(room.actionsLeft, 1);
-  assert.equal(room.players.find(player => player.id === activeId).character, null);
+  assert.equal(room.players.find(player => player.id === activeId).character.id, 'treasureHunter');
+  assert.equal(room.players.find(player => player.id === activeId).characterUsedRound, room.round);
   assert.equal(Object.hasOwn(room, 'treasureDeck'), false);
 
   const invalid = await emit(actorSocket, 'respondEvent', { eventId: persisted.id, choice: '9' });
@@ -432,7 +433,8 @@ test('Treasure Hunter activation/restart/choice persists exact pending while cha
   room = db.game_rooms[0].state;
   assert.equal(getPendingResolution(room, 'event'), null);
   assert.equal(room.actionsLeft, 1);
-  assert.equal(room.players.find(player => player.id === activeId).character, null);
+  assert.equal(room.players.find(player => player.id === activeId).character.id, 'treasureHunter');
+  assert.equal(room.players.find(player => player.id === activeId).characterUsedRound, room.round);
   assert.deepEqual(listResolutionQueue(room), [{ playerId: 'missing-player', expeditionName: 'must-not-drain' }]);
 });
 
@@ -492,7 +494,7 @@ test('Treasure Hunter full-diamonds choice transitions to zero-cost persisted ca
   const created = await emit(initial[0], 'createRoom', { accountToken: accounts[0].token, name: 'One' });
   const ids = [created.playerId];
   for (let i = 1; i < 4; i++) ids.push((await emit(initial[i], 'joinRoom', { code: created.code, accountToken: accounts[i].token, name: `P${i + 1}` })).playerId);
-  await emit(initial[0], 'setLeader', { playerId: ids[0] });
+  for (let i = 0; i < 4; i++) await emit(initial[i], 'changeShip', { shipClass: 'brigantine' });
   for (let i = 0; i < 4; i++) await emit(initial[i], 'setReady', { ready: true });
   assert.equal((await emit(initial[0], 'startGame')).ok, true);
   await stop();
