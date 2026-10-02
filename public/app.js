@@ -5517,10 +5517,6 @@
       target.appendChild(mainSell);
     }
 
-    const escortSource = $('escortCargoActions');
-    if (escortSource) {
-      while (escortSource.firstChild) target.appendChild(escortSource.firstChild);
-    }
   }
 
   function renderCitadelObjectSheet(data = {}) {
