@@ -1,12 +1,12 @@
 (() => {
-  const vertexSource = \`
+  const vertexSource = `
     attribute vec2 a_position;
     void main() {
       gl_Position = vec4(a_position, 0.0, 1.0);
     }
-  \`;
+  `;
 
-  const fragmentSource = \`
+  const fragmentSource = `
     precision mediump float;
 
     uniform vec2 u_resolution;
@@ -77,7 +77,7 @@
 
       gl_FragColor = vec4(color, edgeMask * density);
     }
-  \`;
+  `;
 
   const FRAME_INTERVAL = 1000 / 24;
 
