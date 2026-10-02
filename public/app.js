@@ -1741,8 +1741,8 @@
     const cellW = board.clientWidth / cols;
     const cellH = board.clientHeight / rows;
     vp.scrollTo({
-      left: mine.col * cellW - vp.clientWidth / 2 + cellW / 2,
-      top: mine.row * cellH - vp.clientHeight / 2 + cellH / 2,
+      left: board.offsetLeft + mine.col * cellW - vp.clientWidth / 2 + cellW / 2,
+      top: board.offsetTop + mine.row * cellH - vp.clientHeight / 2 + cellH / 2,
       behavior,
     });
   }
@@ -6488,11 +6488,19 @@
   }
   function escapeAttr(s) { return escapeHtml(s); }
 
+  const oceanController = window.PervoOcean?.init($('mapOceanCanvas'));
+
   function applyZoom() {
     state.zoom = Math.max(.65, Math.min(1.8, state.zoom));
     const px = Math.round(980 * state.zoom);
+    const { rows, cols } = mapSize();
+    const gutterX = Math.round(Math.max((px / cols) * 2, 56));
+    const gutterY = Math.round(Math.max((px / rows) * 2, 80));
     $('mapBoard').style.width = `${px}px`;
+    $('mapPanSurface').style.setProperty('--map-pan-gutter-x', `${gutterX}px`);
+    $('mapPanSurface').style.setProperty('--map-pan-gutter-y', `${gutterY}px`);
     $('zoomLabel').textContent = `${Math.round(state.zoom * 100)}%`;
+    requestAnimationFrame(() => oceanController?.resize?.());
   }
   $('mapInfoClose').addEventListener('click', closeMapInfo);
   $('mapBoard').addEventListener('click', ev => {

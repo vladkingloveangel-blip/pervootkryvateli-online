@@ -11,6 +11,7 @@
   <link rel="icon" href="/assets/icon-192.png" />
   <title>Первооткрыватели Online</title>
   <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/fog.css" />
 </head>
 <body>
   <header class="topbar">
@@ -269,7 +270,11 @@
                 <div id="mapContextActions" class="map-context-actions"></div>
               </div>
             </div>
-            <div id="mapBoard" class="map-board canonical-map-art">
+            <div id="mapPanSurface" class="map-pan-surface">
+              <canvas id="mapOceanCanvas" class="map-ocean-canvas" aria-hidden="true"></canvas>
+              <canvas id="mapFogCanvas" class="map-fog-canvas" aria-hidden="true"></canvas>
+              <div id="mapFogFallback" class="map-fog-fallback" aria-hidden="true"></div>
+              <div id="mapBoard" class="map-board canonical-map-art">
               <div id="mapArtLayer" class="map-art-layer" aria-hidden="true">
                 <img id="mapBaseArt" class="map-base-art" src="/assets/map-base-4096.webp" alt="" draggable="false" />
               </div>
@@ -285,6 +290,7 @@
                 <div id="mapInfoMeta" class="map-info-meta"></div>
                 <button id="mapInfoAction" class="primary small hidden" type="button">Открыть действия</button>
               </div>
+            </div>
             </div>
           </div>
         </div>
@@ -573,6 +579,8 @@
   </main>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/ocean.js"></script>
   <script src="/app.js"></script>
+  <script src="/fog.js"></script>
 </body>
 </html>

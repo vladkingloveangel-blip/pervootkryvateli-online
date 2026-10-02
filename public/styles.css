@@ -58,7 +58,35 @@ main { width: min(1480px, 100%); margin: 0 auto; padding: 14px; }
 .side-column { display: grid; gap: 12px; }
 .map-toolbar { border-bottom-left-radius: 0; border-bottom-right-radius: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .map-viewport { overflow: auto; width: 100%; max-height: 72vh; background: #071f25; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 14px 14px; touch-action: pan-x pan-y pinch-zoom; }
-.map-board { position: relative; width: 980px; aspect-ratio: 1 / 1; transform-origin: top left; }
+.map-pan-surface {
+  --map-pan-gutter-x: 70px;
+  --map-pan-gutter-y: 80px;
+  position: relative;
+  isolation: isolate;
+  display: inline-block;
+  width: max-content;
+  padding: var(--map-pan-gutter-y) var(--map-pan-gutter-x);
+  box-sizing: content-box;
+  vertical-align: top;
+  background:
+    radial-gradient(circle at 28% 24%, rgba(130,220,226,.16), transparent 34%),
+    linear-gradient(155deg, #087384 0%, #075e73 46%, #064d63 100%);
+}
+.map-ocean-canvas {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+.map-ocean-canvas.ocean-fallback {
+  background:
+    radial-gradient(circle at 65% 36%, rgba(155,230,232,.12), transparent 24%),
+    linear-gradient(145deg, #087d8c, #075e73 52%, #06495e);
+}
+.map-board { position: relative; z-index: 1; width: 980px; aspect-ratio: 1 / 1; transform-origin: top left; }
 .map-art-layer { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
 .map-art-layer > img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; pointer-events: none; }
 .grid-layer, .ownership-layer, .map-object-layer, .map-label-layer, .highlight-layer, .token-layer { position: absolute; inset: 0; }
