@@ -1960,8 +1960,7 @@
     if (mine.phase === 'actions') {
       bar.dataset.mode = 'actions';
       const left = Math.max(0, Number(mine.actionsLeft) || 0);
-      const actionLabel = left === 1 ? '1 действие' : left > 1 ? `${left} действия` : 'Нет действий';
-      setCopy('', actionLabel,
+      setCopy('ДЕЙСТВИЯ', '',
         left > 0 ? 'Выберите объект или действие.' : 'Завершите ход.');
       progress.classList.remove('hidden');
       const total = Number(r.balanceCatalog?.session?.actionsPerTurn) || 3;
