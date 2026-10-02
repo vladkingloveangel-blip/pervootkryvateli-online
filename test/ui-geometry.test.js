@@ -147,5 +147,6 @@ test('HUD metrics use canonical scoring concepts and compact explanations', () =
   assert.match(server, /const ownerLiveMetrics = p\.id === viewerId \? calculatePlayerFinalMetrics\(room, p\) : null/);
   assert.match(server, /prestige:\s*ownerLiveMetrics\?\.prestige/);
   assert.match(projection, /ducats:S, debt:S, prestige:S/);
-  assert.doesNotMatch(projection, /publicPlayer = o\(\{[\s\S]*?prestige/);
+  const publicPlayerBlock = projection.slice(projection.indexOf('const publicPlayer'), projection.indexOf('const ownerPlayer'));
+  assert.doesNotMatch(publicPlayerBlock, /prestige/);
 });
