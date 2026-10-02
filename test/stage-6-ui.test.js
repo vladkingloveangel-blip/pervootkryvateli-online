@@ -261,31 +261,31 @@ test('UI-4 mobile shell makes the map the permanent gameplay surface without del
 });
 
 
-test('UI-5 HUD separates live combat stats from scoring metrics and exposes phase navigation', () => {
-  assert.doesNotMatch(index, /id="hudArmyPointsBtn"|id="hudFleetPointsBtn"|id="hudDebtBtn"/);
-  assert.match(index, /id="hudArmyBtn"[^>]*aria-label="Войско"/);
-  assert.match(index, /id="hudArtilleryBtn"[^>]*aria-label="Артиллерия"/);
-  assert.match(index, /id="hudCargoBtn"/);
-  assert.match(index, /id="hudPhase"/);
+
+test('UI-5 HUD keeps live combat stats separate from canonical scoring metrics', () => {
+  assert.doesNotMatch(index, /id="hudArmyPointsBtn"|id="hudFleetPointsBtn"|id="hudDebtBtn"|id="hudPhase"/);
+  assert.match(index, /id="hudArmyBtn"[^>]*data-hud-metric="army"[^>]*aria-label="Войско"/);
+  assert.match(index, /id="hudArtilleryBtn"[^>]*data-hud-metric="artillery"[^>]*aria-label="Артиллерия"/);
+  assert.match(index, /id="hudArmyGloryBtn"[^>]*data-hud-metric="army-glory"/);
+  assert.match(index, /id="hudFleetGloryBtn"[^>]*data-hud-metric="fleet-glory"/);
+  assert.match(index, /id="hudPrestigeBtn"[^>]*data-hud-metric="prestige"/);
+  assert.match(index, /id="hudTurnStatus"/);
   assert.match(index, /id="hudMenuBtn"/);
 
-  const start = app.indexOf('  function hudPhaseLabel(');
-  const end = app.indexOf('\n\n  function updateContextualActionPanels()', start);
+  const start = app.indexOf('  function hudMetricInfo(');
+  const end = app.indexOf('\n  function toggleHudMetricPopover', start);
   assert.ok(start >= 0 && end > start);
   const hudCode = app.slice(start, end);
   assert.match(hudCode, /mine\.assaultArmy \?\? mine\.stats\?\.army/);
   assert.match(hudCode, /mine\.fleetArtillery \?\? mine\.stats\?\.artillery/);
-  assert.doesNotMatch(hudCode, /mine\.armyPoints|mine\.fleetPoints|mine\.debt/);
-  assert.match(hudCode, /НАВИГАЦИЯ/);
-  assert.match(hudCode, /ДЕЙСТВИЯ/);
-  assert.match(hudCode, /СОБЫТИЯ/);
+  assert.match(hudCode, /mine\.armyPoints/);
+  assert.match(hudCode, /mine\.fleetPoints/);
+  assert.match(hudCode, /mine\.prestige/);
 
   assert.match(app, /\$\('hudPlayerBtn'\)\.addEventListener\('click',[\s\S]*?renderFleetOverviewObjectSheet/);
-  assert.match(app, /\$\('hudCargoBtn'\)\.addEventListener\('click', renderFleetOverviewObjectSheet\)/);
+  assert.match(app, /document\.querySelectorAll\('\[data-hud-metric\]'\)/);
   assert.match(app, /\$\('hudMenuBtn'\)\.addEventListener\('click', toggleGameMenu\)/);
-  assert.match(styles, /UI-5 — canonical mobile gameplay HUD/);
 });
-
 
 test('UI-6 provides one state-driven mobile action bar over the map', () => {
   assert.match(index, /id="gameActionBar" class="game-action-bar hidden"/);
@@ -962,7 +962,8 @@ test('UI-19 client converts joint battleResolved event into the existing Result 
 });
 
 
-test('UI-20 turns foreign island assault into preview plus canonical combat actions', () => {
+
+test('UI-20 foreign island assault uses preview plus canonical combat actions', () => {
   const start = app.indexOf('  function assaultDefenseLabel(');
   const end = app.indexOf('\n  function seaBattlePreviewHtml(', start);
   assert.ok(start >= 0 && end > start);
@@ -979,10 +980,12 @@ test('UI-20 turns foreign island assault into preview plus canonical combat acti
   assert.match(code, /actions\.appendChild\(canonical\)/);
   assert.doesNotMatch(code, /socket\.emit\('assaultIsland'/);
 
-  assert.match(app, /attackable \? 'Штурм острова' : 'Действия на острове'/);
-  assert.match(app, /if \(attackable\) renderAssaultFlowSheet\(island\.id\)/);
+  const sheetStart = app.indexOf('  function renderForeignIslandObjectSheet(');
+  const sheetEnd = app.indexOf('\n  function citadelSheetHtml(', sheetStart);
+  const sheet = app.slice(sheetStart, sheetEnd);
+  assert.match(sheet, /action\.textContent = 'Штурм острова'/);
+  assert.match(sheet, /renderAssaultFlowSheet\(island\.id\)/);
   assert.match(app, /refreshOpenSeaBattleFlow\(\);\s*refreshOpenAssaultFlow\(\);\s*renderEventFlowOverlay\(\);\s*renderDecisionLayer\(\);/);
-  assert.match(styles, /UI-20 — island assault orchestration flow/);
 });
 
 test('UI-20 assault preview respects foreign-island privacy before battle', () => {
@@ -1188,7 +1191,8 @@ test('UI-23 state islands open human-readable faction diplomacy in the shared ob
   assert.doesNotMatch(code, /socket\.emit\(/);
 });
 
-test('UI-23 reuses canonical renderPolitics buttons for vassalage and rebellion legality', () => {
+
+test('UI-23 diplomacy reuses canonical renderPolitics buttons for vassalage and rebellion legality', () => {
   const start = app.indexOf('  function appendCanonicalPoliticsActions(');
   const end = app.indexOf('\n  function renderPolitics()', start);
   const code = app.slice(start, end);
@@ -1196,7 +1200,11 @@ test('UI-23 reuses canonical renderPolitics buttons for vassalage and rebellion 
   assert.match(code, /\$\('politicsActions'\)/);
   assert.match(code, /target\.appendChild\(button\)/);
   assert.doesNotMatch(code, /socket\.emit\(/);
-  assert.match(app, /appendCanonicalPoliticsActions\(actions, politicalFaction\.id\)/);
+
+  const diplomacyStart = app.indexOf('  function renderDiplomacyObjectSheet(');
+  const diplomacyEnd = app.indexOf('\n  function renderPolitics()', diplomacyStart);
+  const diplomacy = app.slice(diplomacyStart, diplomacyEnd);
+  assert.match(diplomacy, /appendCanonicalPoliticsActions\(actions, selectedFaction\?\.id \|\| null\)/);
 });
 
 test('UI-23 keeps the legacy politics renderer as canonical fallback until UI-32', () => {
@@ -1295,6 +1303,7 @@ test('UI-26 provides a dedicated party metrics overlay', () => {
   assert.match(styles, /UI-26 — party metrics overlay/);
 });
 
+
 test('UI-26 pre-finish metrics use only projected player fields and never derive hidden scoring', () => {
   const start = app.indexOf('  function metricValue(');
   const end = app.indexOf('\n  function openMenuInfoSheet(', start);
@@ -1303,8 +1312,9 @@ test('UI-26 pre-finish metrics use only projected player fields and never derive
   assert.match(code, /player\.islandCount/);
   assert.match(code, /player\.armyPoints/);
   assert.match(code, /player\.fleetPoints/);
+  assert.match(code, /player\.prestige/);
   assert.match(code, /Object\.hasOwn\(player, 'ducats'\)/);
-  assert.match(code, /Престиж<\/span><strong>скрыто/);
+  assert.match(code, /metricValue\(player\.prestige\)/);
   assert.match(code, /Легендарные места<\/span><strong>скрыто/);
   assert.doesNotMatch(code, /calculateFinalScoring|islandPrestige|legendaryPlaceCount/);
 });
@@ -1405,15 +1415,20 @@ test('UI-28 proposed consensus automatically presents all player vote states', (
   assert.match(code, /overlay\.classList\.remove\('hidden'\)/);
 });
 
-test('UI-28 accepted consensus marks the HUD as the last round and leaves finalization server-authoritative', () => {
-  assert.match(app, /const lastRound = r\.endGameConsensus\?\.status === 'accepted'/);
-  assert.match(app, /Последний раунд/);
-  const start = app.indexOf('  function renderEndGameVoteOverlay(');
-  const end = app.indexOf('\n  function renderEndGame()', start);
-  const code = app.slice(start, end);
-  assert.match(code, /accepted/);
-  assert.match(code, /overlay\.classList\.add\('hidden'\)/);
-  assert.doesNotMatch(code, /room\.finished\s*=|room\.phase\s*=\s*['"]finished/);
+
+test('UI-28 accepted consensus closes voting and leaves finalization server-authoritative', () => {
+  const voteStart = app.indexOf('  function renderEndGameVoteOverlay(');
+  const voteEnd = app.indexOf('\n  function renderEndGame()', voteStart);
+  const vote = app.slice(voteStart, voteEnd);
+  assert.match(vote, /const accepted = consensus\?\.status === 'accepted'/);
+  assert.match(vote, /overlay\.classList\.add\('hidden'\)/);
+
+  const panelStart = app.indexOf('  function renderEndGame()');
+  const panelEnd = app.indexOf('\n  function render()', panelStart);
+  const panel = app.slice(panelStart, panelEnd);
+  assert.match(panel, /consensus\.status === 'accepted'/);
+  assert.match(panel, /finishAfterRound/);
+  assert.doesNotMatch(vote + panel, /room\.finished\s*=|room\.phase\s*=\s*['"]finished/);
 });
 
 test('UI-28 menu end-game entry opens the consensus card instead of hiding the action in Players', () => {
@@ -1581,10 +1596,12 @@ test('UI-32 removes the obsolete mobile tab and duplicate action-dock architectu
   assert.doesNotMatch(styles, /\.mobile-game-nav|\.mobile-action-dock|#gameSidePanel\.mobile-open|data-mobile-tab=/);
 });
 
+
 test('UI-32 routes HUD and map context into map-first object sheets instead of mechanic tabs', () => {
   assert.match(app, /function renderFleetOverviewObjectSheet\(\)/);
   assert.match(app, /hudPlayerBtn'[\s\S]*?renderFleetOverviewObjectSheet/);
-  assert.match(app, /hudCargoBtn'\)\.addEventListener\('click', renderFleetOverviewObjectSheet\)/);
+  assert.match(app, /document\.querySelectorAll\('\[data-hud-metric\]'\)/);
+  assert.doesNotMatch(app, /hudCargoBtn'\)\.addEventListener\('click', renderFleetOverviewObjectSheet\)/);
   const start = app.indexOf('  function renderMapContext() {');
   const end = app.indexOf('\n  function actionBarDecisionLabel', start);
   const code = app.slice(start, end);
@@ -1644,14 +1661,16 @@ test('UI-33 scenario: action phase routes island, Citadel and combat through map
   assert.doesNotMatch(code, /openMobileTab|mobileGameNav|mobileActionDock/);
 });
 
+
 test('UI-33 scenario: trade and island management keep canonical action owners', () => {
-  const islandStart = app.indexOf('  function expandOwnIslandManagement(');
-  const islandEnd = app.indexOf('\n  function ', islandStart + 1);
+  const islandStart = app.indexOf('  function renderOwnIslandActionView(');
+  const islandEnd = app.indexOf('\n  function handleObjectSheetBack', islandStart);
   const island = app.slice(islandStart, islandEnd);
   assert.match(island, /renderIsland\(\)/);
-  assert.match(island, /renderIsland\(\)/);
-  assert.match(island, /const sourceActions = \$\('islandActions'\)/);
-  assert.match(island, /actions\.appendChild\(sourceActions\.firstChild\)/);
+  assert.match(island, /moveCanonicalActionGroup\(\$\('islandActions'\), labels\[view\], primaryActions\)/);
+  assert.match(island, /renderFleet\(\)/);
+  assert.match(island, /moveCanonicalActionGroup\(\$\('fleetActions'\)/);
+  assert.doesNotMatch(island, /socket\.emit\(/);
 
   const citadelStart = app.indexOf('  function renderCitadelObjectSheet(');
   const citadelEnd = app.indexOf('\n  function refreshOpenCitadelSheet', citadelStart);
