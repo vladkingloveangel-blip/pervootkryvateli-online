@@ -834,10 +834,6 @@
     else renderDiplomacyObjectSheet(me()?.suzerainId || null);
   });
   $('hudCargoBtn').addEventListener('click', renderFleetOverviewObjectSheet);
-  $('hudTurnBtn').addEventListener('click', () => {
-    if (isDecisionPending()) renderDecisionLayer();
-    else if (!state.spectating) renderFleetOverviewObjectSheet();
-  });
   $('hudMenuBtn').addEventListener('click', toggleGameMenu);
   $('gameMenuCloseBtn').addEventListener('click', closeGameMenu);
   $('gameMenuBackdrop').addEventListener('click', closeGameMenu);
@@ -1082,21 +1078,10 @@
     return { quantity, capacity };
   }
 
-  function hudPhaseLabel(room, activePlayer) {
-    if (!room?.started) return 'ЛОББИ';
-    if (room.finished || room.phase === 'finished') return 'ЗАВЕРШЕНО';
-    if (room.eventPhase?.active || room.phase === 'event') return 'СОБЫТИЯ';
-    const phase = activePlayer?.phase || room.phase;
-    if (phase === 'navigation') return 'НАВИГАЦИЯ';
-    if (phase === 'actions') return 'ДЕЙСТВИЯ';
-    return String(phase || 'ОЖИДАНИЕ').toUpperCase();
-  }
-
   function renderMobileHud() {
     const r = state.room;
     if (!r) return;
     const mine = me();
-    const activePlayer = active();
     $('hudResources').classList.toggle('hidden', !mine);
 
     if (mine) {
@@ -1127,20 +1112,8 @@
       $('hudPoliticsBtn').title = 'Дипломатия';
     }
 
-    const lastRound = r.endGameConsensus?.status === 'accepted';
-    $('hudRound').textContent = !r.started
-      ? `Лобби · ${r.players.length}/${r.balanceCatalog.session.players.max}`
-      : lastRound
-        ? `Последний раунд · ${r.round} · круг ${r.circle}/${r.balanceCatalog.session.circlesPerRound}`
-        : `Раунд ${r.round} · круг ${r.circle}/${r.balanceCatalog.session.circlesPerRound}`;
-    $('hudTurn').textContent = !r.started
-      ? 'Ожидание старта'
-      : r.eventPhase?.active
-        ? (r.eventPhase.currentPlayerId ? `События · ${playerName(r.eventPhase.currentPlayerId)}` : 'Фаза событий')
-        : activePlayer
-          ? (activePlayer.id === state.myId ? 'Ваш ход' : `Ход: ${activePlayer.name}`)
-          : 'Ожидание';
-    $('hudPhase').textContent = hudPhaseLabel(r, activePlayer);
+    $('hudRound').textContent = r.started ? `Раунд ${r.round}` : 'Лобби';
+    $('hudCircle').textContent = r.started ? `Круг ${r.circle}` : '—';
   }
 
 
