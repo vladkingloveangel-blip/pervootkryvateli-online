@@ -5,6 +5,8 @@ const fs = require('node:fs');
 const css = fs.readFileSync('public/styles.css', 'utf8');
 const app = fs.readFileSync('public/app.js', 'utf8');
 const ocean = fs.readFileSync('public/ocean.js', 'utf8');
+const fog = fs.readFileSync('public/fog.js', 'utf8');
+const fogCss = fs.readFileSync('public/fog.css', 'utf8');
 const index = fs.readFileSync('public/index.html', 'utf8');
 const server = fs.readFileSync('server.js', 'utf8');
 const projection = fs.readFileSync('state-projection.js', 'utf8');
@@ -244,4 +246,21 @@ test('animated ocean is a visual pan buffer outside the authoritative board', ()
   assert.match(app, /const gutterY = Math\.round\(Math\.max\(\(px \/ rows\) \* 2, 80\)\)/);
   assert.match(app, /left:\s*board\.offsetLeft \+ mine\.col \* cellW/);
   assert.match(app, /top:\s*board\.offsetTop \+ mine\.row \* cellH/);
+});
+
+
+test('animated fog is a decorative border outside the authoritative board', () => {
+  assert.doesNotThrow(() => new Function(fog));
+  assert.match(fog, /window\.PervoFog = \{ init \}/);
+  assert.match(fog, /uniform vec4 u_board/);
+  assert.match(fog, /prefers-reduced-motion:\s*reduce/);
+  assert.match(fog, /FRAME_INTERVAL = 1000 \/ 24/);
+  assert.match(fog, /fog-fallback-active/);
+  assert.doesNotMatch(fog, /socket\.emit|MAP_META|reachableCells|moveToMapCell/);
+  assert.match(index, /id="mapOceanCanvas"[\s\S]*id="mapFogCanvas"[\s\S]*id="mapFogFallback"[\s\S]*id="mapBoard"/);
+  assert.match(index, /<link rel="stylesheet" href="\/fog\.css" \/>/);
+  assert.match(index, /<script src="\/ocean\.js"><\/script>\s*<script src="\/fog\.js"><\/script>\s*<script src="\/app\.js"><\/script>/);
+  assert.match(fogCss, /\.map-fog-canvas \{[\s\S]*pointer-events:\s*none/);
+  assert.match(fogCss, /\.map-fog-fallback \{[\s\S]*pointer-events:\s*none/);
+  assert.match(fogCss, /\.map-pan-surface > \.map-board \{\s*z-index:\s*2/);
 });
