@@ -349,7 +349,7 @@ test('UI-7 unifies authoritative pending choices in one mobile Decision Layer', 
   assert.match(code, /room\.pendingAlliance\?\.viewerRole === 'recipient'/);
   assert.match(code, /room\.pendingDecision\?\.waiting/);
 
-  assert.match(app, /renderCombat\(\);\s*refreshOpenSeaBattleFlow\(\);\s*renderDecisionLayer\(\);\s*renderResultLayer\(\);\s*renderToastStack\(\);\s*renderTargetingBar\(\);\s*renderMap\(\);/);
+  assert.match(app, /renderCombat\(\);\s*refreshOpenSeaBattleFlow\(\);\s*refreshOpenAssaultFlow\(\);\s*renderDecisionLayer\(\);\s*renderResultLayer\(\);\s*renderToastStack\(\);\s*renderTargetingBar\(\);\s*renderMap\(\);/);
   assert.match(styles, /UI-7 — unified mandatory Decision Layer/);
   assert.match(styles, /body\.game-active \.decision-backdrop[\s\S]*?pointer-events: auto/);
   assert.doesNotMatch(index, /id="decisionClose"/);
@@ -920,7 +920,7 @@ test('UI-19 turns sea combat into target preview plus canonical battle actions',
   assert.doesNotMatch(code, /socket\.emit\('attackShip'/);
 
   assert.match(app, /combat\.addEventListener\('click', \(\) => renderSeaBattleFlowSheet\(player\.id\)\)/);
-  assert.match(app, /renderCombat\(\);\s*refreshOpenSeaBattleFlow\(\);\s*renderDecisionLayer\(\);/);
+  assert.match(app, /renderCombat\(\);\s*refreshOpenSeaBattleFlow\(\);\s*refreshOpenAssaultFlow\(\);\s*renderDecisionLayer\(\);/);
   assert.match(styles, /UI-19 — player-vs-player sea battle flow/);
 });
 
@@ -941,7 +941,7 @@ test('UI-19 pending joint battle uses Decision Layer as the authoritative waitin
 });
 
 test('UI-19 server emits a sanitized authoritative result event for resolved joint sea battles', () => {
-  assert.match(server, /function battlePresentationResult\(result\)/);
+  assert.match(server, /function battlePresentationResult\(result, kind\)/);
   assert.match(server, /function emitResolvedBattlePresentation\(room, pending, result\)/);
   assert.match(server, /io\.to\(player\.socketId\)\.emit\('battleResolved', payload\)/);
   assert.match(server, /if \(result\?\.ok\) emitResolvedBattlePresentation\(room, pending, result\);\s*room\.pendingBattle = null;/);
@@ -960,7 +960,7 @@ test('UI-19 server emits a sanitized authoritative result event for resolved joi
 
 test('UI-19 client converts joint battleResolved event into the existing Result Card contract', () => {
   assert.match(app, /socket\.on\('battleResolved', data =>/);
-  assert.match(app, /data\.kind !== 'sea'/);
+  assert.match(app, /if \(data\.kind === 'sea'\)/);
   assert.match(app, /seaBattleResultCard\(\{ ok: true, result: data\.result \}/);
   assert.match(app, /enqueueResultCard\(card\)/);
 });
