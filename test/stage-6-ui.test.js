@@ -7,6 +7,7 @@ const root = path.join(__dirname, '..');
 const index = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
 const styles = fs.readFileSync(path.join(root, 'public', 'styles.css'), 'utf8');
+const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 
 test('stage 6.7 UI exposes events, discoveries, expeditions and legendary reactions', () => {
   assert.match(index, /id="legendaryPlacesBadge"/);
@@ -348,7 +349,7 @@ test('UI-7 unifies authoritative pending choices in one mobile Decision Layer', 
   assert.match(code, /room\.pendingAlliance\?\.viewerRole === 'recipient'/);
   assert.match(code, /room\.pendingDecision\?\.waiting/);
 
-  assert.match(app, /renderCombat\(\);\s*renderDecisionLayer\(\);\s*renderResultLayer\(\);\s*renderToastStack\(\);\s*renderTargetingBar\(\);\s*renderMap\(\);/);
+  assert.match(app, /renderCombat\(\);\s*refreshOpenSeaBattleFlow\(\);\s*renderDecisionLayer\(\);\s*renderResultLayer\(\);\s*renderToastStack\(\);\s*renderTargetingBar\(\);\s*renderMap\(\);/);
   assert.match(styles, /UI-7 — unified mandatory Decision Layer/);
   assert.match(styles, /body\.game-active \.decision-backdrop[\s\S]*?pointer-events: auto/);
   assert.doesNotMatch(index, /id="decisionClose"/);
@@ -552,7 +553,7 @@ test('UI-12 player sheet only exposes direct alliance commands and delegates com
 
   assert.match(code, /socket\.emit\('requestAlliance'/);
   assert.match(code, /socket\.emit\('breakAlliance'/);
-  assert.match(code, /openMobileTab\('actions'\)/);
+  assert.match(code, /renderSeaBattleFlowSheet\(player\.id\)/);
   assert.doesNotMatch(code, /socket\.emit\('attackShip'/);
   assert.match(code, /sameCell/);
   assert.match(code, /mine\.phase === 'navigation' && mine\.roll === null/);
