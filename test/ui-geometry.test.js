@@ -256,8 +256,8 @@ test('animated ocean is a visual pan buffer outside the authoritative board', ()
   assert.match(css, /\.map-pan-surface \{[\s\S]*padding:\s*var\(--map-pan-gutter-y\) var\(--map-pan-gutter-x\)/);
   assert.match(css, /\.map-ocean-canvas \{[\s\S]*pointer-events:\s*none/);
   assert.match(css, /\.map-board \{[^}]*z-index:\s*1/);
-  assert.match(app, /const gutterX = Math\.round\(Math\.max\(\(px \/ cols\) \* 2, 56\)\)/);
-  assert.match(app, /const gutterY = Math\.round\(Math\.max\(\(px \/ rows\) \* 2, 80\)\)/);
+  assert.match(app, /const gutterX = Math\.round\(Math\.max\(\(px \/ cols\) \* 5, 150\)\)/);
+  assert.match(app, /const gutterY = Math\.round\(Math\.max\(\(px \/ rows\) \* 5, 150\)\)/);
   assert.match(app, /left:\s*board\.offsetLeft \+ mine\.col \* cellW/);
   assert.match(app, /top:\s*board\.offsetTop \+ mine\.row \* cellH/);
 });
