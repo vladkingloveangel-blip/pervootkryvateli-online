@@ -2029,3 +2029,13 @@ test('UI-40 map tool micro-patch forces circular controls below the HUD', () => 
   assert.match(code, /height: 30px !important/);
   assert.match(code, /aspect-ratio: 1 \/ 1/);
 });
+
+
+test('UI-40 anchor markers render without a translucent backing plate', () => {
+  const start = styles.indexOf('/* UI-40 staging micro-patch — anchor glyphs');
+  assert.ok(start >= 0);
+  const code = styles.slice(start);
+  assert.match(code, /\.canonical-map-art \.anchor-marker[\s\S]*?background: transparent/);
+  assert.match(code, /box-shadow: none/);
+  assert.match(code, /backdrop-filter: none/);
+});

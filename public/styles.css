@@ -4653,3 +4653,11 @@ body.game-active .final-results-art {
     line-height: 1;
   }
 }
+
+
+/* UI-40 staging micro-patch — anchor glyphs have no translucent backing plate */
+.canonical-map-art .anchor-marker {
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
