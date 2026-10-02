@@ -10,6 +10,7 @@ const { Pool } = require('pg');
 const { RoomStore, isUnfinished } = require('./room-store');
 const { endGameConsensusView, proposeEndGameConsensus, confirmEndGameConsensus, rejectEndGameConsensus } = require('./end-game-consensus');
 const { completeRoundBoundaryAfterTurn } = require('./end-game-finalization');
+const { calculatePlayerFinalMetrics } = require('./final-scoring');
 const { isFinishedRoom, finishedGameEventError } = require('./finished-game-lock');
 const { CURRENT_DIGITAL_MODEL_SCHEMA_VERSION } = require('./save-migrations');
 const { createAssignmentPoolState, assignmentPool } = require('./assignment-pool');
@@ -805,6 +806,7 @@ function publicRoom(room, viewerId = null) {
       const specialAbilities = listSpecialAbilities(p) || [];
       const storedBenefits = listStoredBenefits(p) || [];
       const playerDiscoveries = listPlayerDiscoveries(room, p.id, LEGENDARY_PLACE_RULES);
+      const ownerLiveMetrics = p.id === viewerId ? calculatePlayerFinalMetrics(room, p) : null;
       const shipVeilEffect = getShipVeilEffect(p);
       const seaCurseEffects = listSeaCurseEffects(p);
       return {
@@ -817,6 +819,7 @@ function publicRoom(room, viewerId = null) {
         glory: Number(p.glory) || 0,
         fleetPoints: Number(p.fleetPoints) || 0,
         armyPoints: Number(p.armyPoints) || 0,
+        prestige: ownerLiveMetrics?.prestige,
         level,
         row: p.row,
         col: p.col,
