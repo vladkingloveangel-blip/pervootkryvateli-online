@@ -4,6 +4,7 @@ const fs = require('node:fs');
 
 const css = fs.readFileSync('public/styles.css', 'utf8');
 const app = fs.readFileSync('public/app.js', 'utf8');
+const index = fs.readFileSync('public/index.html', 'utf8');
 
 test('UI-40 uses one canonical normalization block', () => {
   assert.equal((css.match(/UI-40 — staging visual normalization/g) || []).length, 1);
@@ -85,4 +86,29 @@ test('mobile turn controller is compact and keeps canonical turn commands', () =
   assert.match(css, /text-overflow:\s*clip;\s*\n\s*transform:\s*translateY\(3px\)/);
   assert.match(css, /\.game-action-bar\[data-mode="actions"\] \.game-action-progress \{\s*\n\s*order:\s*0/);
   assert.match(css, /\.game-action-bar\[data-mode="actions"\] \.game-action-kicker \{\s*\n\s*order:\s*1/);
+});
+
+
+test('mobile HUD uses one square tile system', () => {
+  assert.match(index, /id="hudPlayerBtn" class="hud-player"/);
+  assert.match(index, /<div id="hudTurnStatus" class="hud-turn hud-turn-status"/);
+  assert.doesNotMatch(index, /id="hudTurnBtn"/);
+  assert.match(index, /id="hudCircle"/);
+
+  assert.match(css, /--hud-tile:\s*44px/);
+  assert.match(css, /grid-template-columns:\s*calc\(var\(--hud-tile\) \* 2\) minmax\(0,1fr\) var\(--hud-tile\) var\(--hud-tile\)/);
+  assert.match(css, /\.hud-player \{[\s\S]*?width:\s*calc\(var\(--hud-tile\) \* 2\);[\s\S]*?height:\s*var\(--hud-tile\)/);
+  assert.match(css, /\.hud-chip \{[\s\S]*?width:\s*var\(--hud-tile\);[\s\S]*?height:\s*var\(--hud-tile\)/);
+  assert.match(css, /\.hud-turn-status \{[\s\S]*?width:\s*var\(--hud-tile\);[\s\S]*?height:\s*var\(--hud-tile\);[\s\S]*?pointer-events:\s*none/);
+  assert.match(css, /\.hud-menu-btn \{[\s\S]*?width:\s*var\(--hud-tile\) !important;[\s\S]*?height:\s*var\(--hud-tile\) !important/);
+  assert.match(css, /\.quick-access-btn \{[\s\S]*?width:\s*44px;[\s\S]*?height:\s*44px/);
+  assert.match(css, /\.quick-access-btn \.quick-access-label \{\s*\n\s*display:\s*none !important/);
+  assert.match(css, /\.quick-access-btn > strong \{\s*\n\s*display:\s*block !important/);
+  assert.doesNotMatch(css, /--hud-row-size:\s*40px/);
+  assert.doesNotMatch(css, /--quick-access-size:\s*40px/);
+
+  assert.doesNotMatch(app, /hudTurnBtn/);
+  assert.doesNotMatch(app, /hudPhaseLabel/);
+  assert.match(app, /\$\('hudRound'\)\.textContent = r\.started \? `Раунд \$\{r\.round\}` : 'Лобби'/);
+  assert.match(app, /\$\('hudCircle'\)\.textContent = r\.started \? `Круг \$\{r\.circle\}` : '—'/);
 });
