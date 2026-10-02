@@ -4770,43 +4770,75 @@ body.game-active .final-results-art {
     display: none;
   }
 
-  body.game-active .game-action-bar[data-mode="actions"] {
-    width: min(270px, calc(100% - 20px));
+  body.game-active .game-action-bar[data-mode="actions"],
+  body.game-active .game-action-bar[data-mode="navigation-result"] {
+    width: min(188px, calc(100% - 20px));
   }
-  body.game-active .game-action-bar[data-mode="actions"] .game-action-copy {
-    display: grid;
-    grid-template-columns: auto 1fr;
+
+  body.game-active .game-action-bar[data-mode="actions"] {
+    grid-template-columns: auto auto;
     grid-template-areas:
       "progress title"
+      "buttons buttons"
       "detail detail";
-    column-gap: 10px;
-    row-gap: 3px;
-    align-items: center;
-    max-width: none;
-    text-align: left;
+    justify-content: center;
+    column-gap: 7px;
+    row-gap: 4px;
+  }
+  body.game-active .game-action-bar[data-mode="actions"] .game-action-copy {
+    display: contents;
   }
   body.game-active .game-action-bar[data-mode="actions"] .game-action-kicker {
     display: none;
   }
   body.game-active .game-action-bar[data-mode="actions"] .game-action-copy > strong {
     grid-area: title;
-    justify-self: end;
-    text-align: right;
+    justify-self: start;
+    text-align: left;
   }
   body.game-active .game-action-bar[data-mode="actions"] .game-action-progress {
     grid-area: progress;
-    justify-self: start;
+    justify-self: end;
     margin: 0;
+  }
+  body.game-active .game-action-bar[data-mode="actions"] .game-action-buttons {
+    grid-area: buttons;
+    justify-self: center;
   }
   body.game-active .game-action-bar[data-mode="actions"] .game-action-detail {
     grid-area: detail;
     justify-self: center;
+    max-width: 170px;
     text-align: center;
-  }
-  body.game-active .game-action-bar[data-mode="actions"] .game-action-buttons {
-    width: 100%;
+    text-wrap: balance;
   }
   body.game-active .game-action-bar[data-mode="actions"] .game-action-buttons .game-action-button {
+    min-width: 126px;
+  }
+
+  body.game-active .game-action-bar[data-mode="navigation-result"] {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "copy"
+      "buttons";
+    row-gap: 4px;
+  }
+  body.game-active .game-action-bar[data-mode="navigation-result"] .game-action-copy {
+    display: grid;
+    justify-items: center;
+    max-width: 174px;
+    gap: 2px;
+  }
+  body.game-active .game-action-bar[data-mode="navigation-result"] .game-action-copy > strong {
+    font-size: 10px;
+    text-align: center;
+  }
+  body.game-active .game-action-bar[data-mode="navigation-result"] .game-action-detail {
+    max-width: 170px;
+    text-align: center;
+    text-wrap: balance;
+  }
+  body.game-active .game-action-bar[data-mode="navigation-result"] .game-action-buttons .game-action-button {
     min-width: 126px;
   }
 
