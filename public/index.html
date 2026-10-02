@@ -154,9 +154,11 @@
 
       <section id="gameHud" class="game-hud" aria-label="Параметры игрока">
         <button id="hudPlayerBtn" class="hud-player" type="button" aria-label="Открыть корабль и флотилию">
-          <span class="hud-ship-icon"><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#ship"></use></svg></span>
-          <span class="hud-player-copy"><strong id="hudPlayerName">Игрок</strong><small class="hud-player-meta"><span id="hudShipLevel">ур. I</span><span id="hudConnection" class="hud-connection" aria-live="polite"></span></small></span>
-          <span class="hud-menu-chevron">⌄</span>
+          <span class="hud-player-copy">
+            <span id="hudConnection" class="hud-connection" aria-live="polite">● онлайн</span>
+            <strong id="hudPlayerName">Игрок</strong>
+            <small id="hudShipLevel">ур. I</small>
+          </span>
         </button>
         <div id="hudResources" class="hud-resources">
           <button class="hud-chip" id="hudDucatsBtn" type="button" aria-label="Дукаты"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#coin"></use></svg></span><strong id="hudDucats">0</strong></button>
@@ -165,11 +167,10 @@
           <button class="hud-chip" id="hudArtilleryBtn" type="button" aria-label="Артиллерия"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#cannon"></use></svg></span><strong id="hudArtillery">0</strong></button>
           <button class="hud-chip" id="hudCargoBtn" type="button" aria-label="Трюм"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#cargo"></use></svg></span><strong id="hudCargo">0/0</strong></button>
         </div>
-        <button id="hudTurnBtn" class="hud-turn" type="button" aria-label="Текущее состояние хода">
+        <div id="hudTurnStatus" class="hud-turn hud-turn-status" aria-label="Раунд и круг партии">
           <small id="hudRound">Лобби</small>
-          <strong id="hudTurn">Ожидание</strong>
-          <span id="hudPhase" class="hud-phase">—</span>
-        </button>
+          <strong id="hudCircle">—</strong>
+        </div>
         <button id="hudMenuBtn" class="hud-menu-btn" type="button" aria-label="Меню"><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#menu"></use></svg></button>
       </section>
 
