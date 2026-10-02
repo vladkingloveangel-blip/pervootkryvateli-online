@@ -421,8 +421,7 @@ test('UI-9 replaces the mobile map info popup with one reusable object bottom sh
   const showCode = app.slice(showStart, showEnd);
   assert.doesNotMatch(showCode, /matchMedia\('\(max-width: 900px\)'\)/);
   assert.match(showCode, /renderObjectSheetFromMapInfo\(kind, data\)/);
-  assert.match(showCode, /renderObjectSheetFromMapInfo\(kind, data\)/);
-  assert.match(showCode, /positionMapInfoAt\(resolvedAnchor\.row, resolvedAnchor\.col\)/);
+  assert.doesNotMatch(showCode, /positionMapInfoAt\(resolvedAnchor\.row, resolvedAnchor\.col\)/);
 
   assert.match(app, /document\.createElement\('button'\);[\s\S]*?showPlayerMapInfo\(p\)/);
   assert.match(app, /\$\('objectSheetClose'\)\.addEventListener\('click', closeMapInfo\)/);
