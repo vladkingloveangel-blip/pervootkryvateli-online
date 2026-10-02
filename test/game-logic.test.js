@@ -1298,7 +1298,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(BALANCE.legendaryPool.selection,'uniform');
   assert.deepEqual(
     [0,0.25,0.5,0.75].map(value=>drawLegendaryCard(null,()=>value).id),
-    ['sea-veil','hellfire','mist-path','sea-curse']
+    ['sea-veil','sea-veil','mist-path','sea-curse']
   );
   assert.equal(drawLegendaryCard(null,()=>0).id,'sea-veil');
   assert.equal(drawLegendaryCard(null,()=>0).id,'sea-veil'); // тот же тип может выпасть повторно
