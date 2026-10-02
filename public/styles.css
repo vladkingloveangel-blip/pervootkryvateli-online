@@ -5269,7 +5269,7 @@ body.game-active .token {
     radial-gradient(ellipse at 39% 61%, transparent 0 40%, rgba(225,252,243,.18) 44%, transparent 52%);
   background-size: 7px 5px, 11px 8px, 17px 13px;
   background-position: 0 0, 5px 3px, 11px 7px;
-  animation: ocean-caustics-drift-a 17s linear infinite;
+  animation: ocean-caustics-drift-a 7s linear infinite;
 }
 .map-pan-surface::after {
   background-image:
@@ -5278,19 +5278,19 @@ body.game-active .token {
   background-size: 23px 17px, 31px 23px;
   background-position: 13px 9px, 3px 19px;
   opacity: .46;
-  animation: ocean-caustics-drift-b 29s linear infinite;
+  animation: ocean-caustics-drift-b 11s linear infinite;
 }
 .map-pan-surface:has(.ocean-webgl-active)::before,
 .map-pan-surface:has(.ocean-webgl-active)::after {
   display: none;
 }
 @keyframes ocean-caustics-drift-a {
-  from { background-position: 0 0, 5px 3px, 11px 7px; transform: rotate(.01deg) scale(1); }
-  to { background-position: 137px 83px, -191px 127px, 263px -149px; transform: rotate(.65deg) scale(1.018); }
+  from { background-position: 0 0, 5px 3px, 11px 7px; }
+  to { background-position: 137px 83px, -191px 127px, 263px -149px; }
 }
 @keyframes ocean-caustics-drift-b {
-  from { background-position: 13px 9px, 3px 19px; transform: translate3d(0,0,0) rotate(.01deg); }
-  to { background-position: -211px 173px, 307px -131px; transform: translate3d(7px,-5px,0) rotate(-.5deg); }
+  from { background-position: 13px 9px, 3px 19px; }
+  to { background-position: -211px 173px, 307px -131px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .map-pan-surface::before,
