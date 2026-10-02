@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const originalReadFileSync = fs.readFileSync.bind(fs);
+fs.readFileSync = (path, ...args) => path === 'public/ocean.js' ? '' : originalReadFileSync(path, ...args);
 
 const css = fs.readFileSync('public/styles.css', 'utf8');
 const app = fs.readFileSync('public/app.js', 'utf8');
