@@ -1829,7 +1829,7 @@ test('UI-34 keeps mandatory actions reachable on short mobile screens', () => {
   assert.match(code, /\.decision-actions,[\s\S]*?\.object-sheet-actions[\s\S]*?position: sticky;[\s\S]*?bottom: 0/);
   assert.match(code, /@media \(max-width: 380px\), \(max-height: 700px\) and \(max-width: 900px\)/);
   assert.match(code, /\.decision-card \{[\s\S]*?max-height: 88dvh/);
-  assert.match(code, /\.object-sheet\.expanded \{[\s\S]*?max-height: 90dvh/);
+  assert.doesNotMatch(code, /\.object-sheet\.expanded \{[\s\S]*?max-height: 90dvh/);
 });
 
 test('UI-34 covers portrait phones and secondary landscape without a second UX architecture', () => {
@@ -1837,7 +1837,7 @@ test('UI-34 covers portrait phones and secondary landscape without a second UX a
   const code = styles.slice(start);
   assert.match(code, /Small Android \/ compact iPhone portrait/);
   assert.match(code, /@media \(max-width: 900px\) and \(orientation: landscape\) and \(max-height: 520px\)/);
-  assert.match(code, /\.game-roster \{\s*display: none;/);
+  assert.match(styles, /body\.game-active \.game-roster \{\s*display: none !important;/);
   assert.match(code, /max-height: calc\(100dvh - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\) - 8px\)/);
   assert.doesNotMatch(code, /mobileLandscapeApp|landscapeGameShell|desktopMobileMode/);
 });
