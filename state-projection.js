@@ -54,7 +54,7 @@ const publicPlayer = o({
   nextLevel:o(f('level price')), allyIds:a(S),
 });
 const ownerPlayer = o({
-  ducats:S, debt:S, character, activeAssignment:assignment, hasActiveAssignment:S, assignmentPriority:o(f('kind text')),
+  ducats:S, debt:S, prestige:S, character, activeAssignment:assignment, hasActiveAssignment:S, assignmentPriority:o(f('kind text')),
   specialCards:a(S), specialCardCount:S, legendaryCards:a(legendaryCard), legendaryCardCount:S,
   playableLegendaryCards:a(legendaryRef), savedEventCards:a(savedEvent), savedEventCardCount:S,
   activeExpedition:expedition, hasActiveExpedition:S,
