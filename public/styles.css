@@ -5224,10 +5224,7 @@ body.game-active .token {
   body.game-active .game-roster {
     display: none !important;
   }
-}
 
-
-@media (max-width: 900px) and (orientation: landscape) and (max-height: 520px) {
   body.game-active .object-sheet,
   body.game-active .object-sheet.expanded {
     max-height: calc(100dvh - 154px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
