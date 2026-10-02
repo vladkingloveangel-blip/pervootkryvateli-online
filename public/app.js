@@ -1243,12 +1243,12 @@
 
     if (finished) {
       panel.classList.add('hidden');
-      closeGameMenu();
-      closeGameAccountMenu();
-      closeScoreOverlay();
-      closeJournalOverlay();
-      closeEndGameVoteOverlay();
-      closeMapInfo();
+      if (typeof closeGameMenu === 'function') closeGameMenu();
+      if (typeof closeGameAccountMenu === 'function') closeGameAccountMenu();
+      if (typeof closeScoreOverlay === 'function') closeScoreOverlay();
+      if (typeof closeJournalOverlay === 'function') closeJournalOverlay();
+      if (typeof closeEndGameVoteOverlay === 'function') closeEndGameVoteOverlay();
+      if (typeof closeMapInfo === 'function') closeMapInfo();
       state.targeting = null;
       state.activeResult = null;
       state.resultQueue = [];
