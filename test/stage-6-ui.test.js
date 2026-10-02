@@ -710,3 +710,70 @@ test('UI-15 remote Citadel inspection never enables commerce away from Citadel',
   assert.match(code, /else if \(!mine\.atCitadel\)/);
   assert.match(code, /Приплывите в Цитадель/);
 });
+
+
+test('UI-16 exposes private digital cards from the HUD without recreating a deck model', () => {
+  assert.match(index, /id="hudCardsBtn"/);
+  assert.match(index, /id="hudCards"/);
+
+  const start = app.indexOf('  function digitalCardEntries(');
+  const end = app.indexOf('\n  const CHARACTER_UX = {', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /savedEventCards/);
+  assert.match(code, /playableLegendaryCards/);
+  assert.match(code, /source === 'special'/);
+  assert.match(code, /cardsSheetHtml/);
+  assert.match(code, /renderCardsObjectSheet/);
+  assert.match(code, /refreshOpenCardsSheet/);
+  assert.match(code, /Это цифровые игровые эффекты/);
+  assert.doesNotMatch(code, /deckIndex|drawPile|discardPile|shuffle|physicalDeck/);
+
+  assert.match(app, /\$\('hudCardsBtn'\)\.addEventListener\('click'/);
+  assert.match(app, /renderLegendary\(\);\s*refreshOpenCardsSheet\(\);\s*renderFleet\(\);/);
+  assert.match(styles, /UI-16 — digital Cards UX without restoring a physical deck model/);
+});
+
+test('UI-16 reuses canonical saved-event and legendary action handlers', () => {
+  const start = app.indexOf('  function moveSavedEventActions(');
+  const end = app.indexOf('\n  const CHARACTER_UX = {', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /eventActions/);
+  assert.match(code, /saved-event-card/);
+  assert.match(code, /legendaryActions/);
+  assert.match(code, /legendary-card/);
+  assert.match(code, /renderEvents\(\);/);
+  assert.match(code, /renderLegendary\(\);/);
+
+  for (const command of ['useSavedCargo','useShipMaster','useBlueprint','playLegendary','respondLegendaryReaction']) {
+    assert.doesNotMatch(code, new RegExp("socket\\.emit\\('" + command));
+  }
+});
+
+test('UI-16 cards stay private and cannot replace mandatory Decision Layer', () => {
+  const start = app.indexOf('  function renderCardsObjectSheet()');
+  const end = app.indexOf('\n  function refreshOpenCardsSheet()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /const mine = me\(\)/);
+  assert.match(code, /state\.spectating/);
+  assert.match(code, /isDecisionPending\(\)/);
+
+  const playerStart = app.indexOf('  function playerPublicSheetHtml(');
+  const playerEnd = app.indexOf('\n  function renderPlayerObjectSheet(', playerStart);
+  const publicCode = app.slice(playerStart, playerEnd);
+  assert.doesNotMatch(publicCode, /savedEventCards|legendaryCards|playableLegendaryCards|specialCards/);
+});
+
+test('UI-16 restores legacy action panels after closing the digital cards sheet', () => {
+  const start = app.indexOf('  function closeMapInfo()');
+  const end = app.indexOf('\n  function ', start + 1);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /closingCards/);
+  assert.match(code, /renderEvents\(\)/);
+  assert.match(code, /renderLegendary\(\)/);
+});

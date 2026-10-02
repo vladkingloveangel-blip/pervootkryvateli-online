@@ -704,6 +704,11 @@
     if (isMobileGameplayUi()) renderCharacterObjectSheet();
     else openMobileTab('ship');
   });
+  $('hudCardsBtn').addEventListener('click', () => {
+    if (state.spectating) return;
+    if (isMobileGameplayUi()) renderCardsObjectSheet();
+    else openMobileTab('actions');
+  });
   $('hudCargoBtn').addEventListener('click', () => openMobileTab('ship'));
   $('hudTurnBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : openMobileTab('actions'));
   $('hudMenuBtn').addEventListener('click', () => toggleGameAccountMenu());
@@ -855,10 +860,12 @@
       $('hudCargo').textContent = `${cargo.quantity}/${cargo.capacity}`;
       $('hudCharacter').textContent = mine.character?.name ? mine.character.name.slice(0, 3) : '—';
       $('hudCharacterBtn').title = mine.character?.name || 'Персонаж не нанят';
+      $('hudCards').textContent = String(digitalCardEntries(mine).length);
     } else {
       $('hudPlayerName').textContent = state.spectating ? 'Наблюдение' : 'Игрок';
       $('hudShipLevel').textContent = state.spectating ? `Комната ${r.code}` : '—';
       $('hudCharacter').textContent = '—';
+      $('hudCards').textContent = '0';
     }
 
     $('hudRound').textContent = !r.started
@@ -1079,6 +1086,7 @@
     renderAssignments();
     renderLegendaryPlaces();
     renderLegendary();
+    refreshOpenCardsSheet();
     renderFleet();
     refreshOpenCharacterSheet();
     renderTrade();
@@ -2564,6 +2572,126 @@
     }
   }
 
+  function digitalCardEntries(mine) {
+    if (!mine) return [];
+    const entries = [];
+    for (const card of mine.savedEventCards || []) {
+      entries.push({ group: 'saved', id: card.id, name: card.name, kind: card.kind, label: 'СОХРАНЁННОЕ СОБЫТИЕ' });
+    }
+    for (const ref of mine.playableLegendaryCards || []) {
+      entries.push({
+        group: ref.source === 'special' ? 'special' : 'legendary',
+        id: `${ref.source}:${ref.index}`,
+        name: ref.name,
+        kind: ref.kind,
+        label: ref.source === 'special' ? 'ОСОБЫЙ ЭФФЕКТ' : 'ЛЕГЕНДАРНЫЙ ЭФФЕКТ',
+      });
+    }
+    return entries;
+  }
+
+  function digitalCardKindText(entry) {
+    const descriptions = {
+      'found-cargo': 'Сохранённый груз можно поместить в свободный активный трюм.',
+      'treasure-cargo': 'Сохранённый результат сокровища можно поместить в свободный активный трюм.',
+      'ship-master': 'Бесплатное улучшение корабля применяется в Цитадели.',
+      'market-blueprint': 'Бесплатное строительство рынка на своём острове.',
+      'farm-blueprint': 'Бесплатное строительство фермы на своём острове.',
+      'sea-veil': 'Защита флотилии или своего острова на ограниченное число личных ходов.',
+      hellfire: 'Воздействие на постройки чужого острова на текущей клетке.',
+      'mist-path': 'Одноразовое перемещение к допустимой клетке карты.',
+      'sea-curse': 'Временный штраф к движению чужого корабля на текущей клетке.',
+    };
+    return descriptions[entry.kind] || 'Цифровой игровой эффект. Условия применения определяет текущее состояние партии.';
+  }
+
+  function cardsSheetHtml(mine) {
+    const entries = digitalCardEntries(mine);
+    if (!entries.length) {
+      return `
+        <div class="cards-empty">
+          <span>НЕТ СОХРАНЁННЫХ ЭФФЕКТОВ</span>
+          <strong>Сейчас у вас нет цифровых карт для ручного применения.</strong>
+          <small>События, сокровища и легендарные награды появляются только через игровую механику; отдельной физической колоды в интерфейсе нет.</small>
+        </div>
+      `;
+    }
+    return `
+      <div class="cards-ux-note">Это цифровые игровые эффекты, а не отдельная симуляция физической колоды.</div>
+      <div class="cards-hand">
+        ${entries.map(entry => `
+          <article class="digital-card digital-card-${escapeAttr(entry.group)}">
+            <span>${escapeHtml(entry.label)}</span>
+            <strong>${escapeHtml(entry.name)}</strong>
+            <small>${escapeHtml(digitalCardKindText(entry))}</small>
+          </article>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function moveSavedEventActions(target) {
+    const source = $('eventActions');
+    if (!source || !target) return;
+    let currentCard = null;
+    for (const node of Array.from(source.children)) {
+      if (node.classList?.contains('saved-event-card')) {
+        currentCard = document.createElement('section');
+        currentCard.className = 'cards-action-group cards-action-saved';
+        currentCard.appendChild(node);
+        target.appendChild(currentCard);
+        continue;
+      }
+      if (currentCard) currentCard.appendChild(node);
+    }
+  }
+
+  function moveLegendaryCardActions(target) {
+    const source = $('legendaryActions');
+    if (!source || !target) return;
+    for (const node of Array.from(source.children)) {
+      if (node.classList?.contains('legendary-card') || node.classList?.contains('legendary-map-hint')) {
+        target.appendChild(node);
+      }
+    }
+  }
+
+  function renderCardsObjectSheet() {
+    const mine = me();
+    if (!mine || state.spectating || isDecisionPending()) return;
+    closeMapInfo();
+    state.mapSelection = { kind: 'cards', id: 'digital-cards' };
+    $('objectSheetKind').textContent = 'ВАШИ ЭФФЕКТЫ';
+    $('objectSheetTitle').textContent = 'Карты';
+    $('objectSheetBody').innerHTML = cardsSheetHtml(mine);
+
+    // Existing event/legendary renderers remain authoritative for all legality and payloads.
+    renderEvents();
+    renderLegendary();
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    moveSavedEventActions(actions);
+    moveLegendaryCardActions(actions);
+
+    if (!actions.children.length && digitalCardEntries(mine).length) {
+      const note = document.createElement('div');
+      note.className = 'cards-no-actions';
+      note.textContent = 'Эффекты есть, но сейчас ни один из них нельзя применить.';
+      actions.appendChild(note);
+    }
+
+    $('objectSheet').classList.remove('hidden');
+    $('objectSheet').classList.add('expanded');
+    $('objectSheetExpand').textContent = '⌄';
+    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function refreshOpenCardsSheet() {
+    if (state.mapSelection?.kind !== 'cards' || !isMobileGameplayUi()) return;
+    renderCardsObjectSheet();
+  }
+
   const CHARACTER_UX = {
     navigator: {
       role: 'НАВИГАЦИЯ',
@@ -3766,6 +3894,7 @@
   }
 
   function closeMapInfo() {
+    const closingCards = state.mapSelection?.kind === 'cards';
     state.mapSelection = null;
     const card = $('mapInfoCard');
     card.classList.add('hidden');
@@ -3776,6 +3905,10 @@
       sheet.classList.add('hidden');
       sheet.classList.remove('expanded');
       document.body.classList.remove('object-sheet-open');
+    }
+    if (closingCards && state.room && me()) {
+      renderEvents();
+      renderLegendary();
     }
   }
 
