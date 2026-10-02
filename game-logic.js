@@ -3881,7 +3881,7 @@ function jointAssaultIsland(room, attacker, island, attackerAllyIds = [], defend
     treasuryLosses: {},
   };
 
-  if (attackerPower > defense.total) {
+  if (options.forcedAttackerVictory || attackerPower > defense.total) {
     result.outcome = 'attacker';
     result.previousOwnerId = island.ownerId || null;
     // §8.4 halves infrastructure only when an island is captured from another player.
