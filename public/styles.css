@@ -4086,3 +4086,74 @@ body.game-active :where(.warning-text, [data-tone="warning"] .result-kicker) {
     border-radius: var(--radius-sm);
   }
 }
+
+
+/* UI-37 — final local visual assets */
+.ui-icon {
+  width: 1.15em;
+  height: 1.15em;
+  display: block;
+  fill: none;
+  color: currentColor;
+  pointer-events: none;
+}
+.hud-chip .ui-icon { width: 15px; height: 15px; color: var(--gold-soft); }
+.hud-ship-icon .ui-icon { width: 24px; height: 24px; color: var(--gold-soft); }
+.hud-menu-btn .ui-icon { width: 21px; height: 21px; }
+
+body.game-active .event-flow-art {
+  height: 54px;
+  margin: -8px -9px 7px;
+  border-radius: 11px 11px 6px 6px;
+  background: url('/assets/event-scene.svg') center 48% / cover no-repeat;
+  border-bottom: 1px solid rgba(240,196,91,.24);
+  opacity: .92;
+}
+
+body.game-active .sea-battle-preview::before,
+body.game-active .assault-preview::before {
+  content: '';
+  display: block;
+  height: 72px;
+  margin: -8px -8px 8px;
+  border-radius: 9px 9px 5px 5px;
+  background: url('/assets/battle-scene.svg') center / cover no-repeat;
+  border-bottom: 1px solid rgba(239,119,119,.3);
+}
+
+body.game-active .legendary-journey-summary::before,
+body.game-active .active-expedition::before {
+  content: '';
+  display: block;
+  height: 54px;
+  margin: -8px -8px 8px;
+  border-radius: 8px 8px 4px 4px;
+  background: url('/assets/legendary-scene.svg') center / cover no-repeat;
+  border-bottom: 1px solid rgba(240,196,91,.22);
+}
+
+body.game-active .anchor-encounter-preview::before {
+  content: '';
+  display: block;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 6px;
+  background: url('/assets/ui-icons.svg#anchor') center / contain no-repeat;
+}
+
+body.game-active .final-results-art {
+  width: min(520px, 100%);
+  height: 128px;
+  margin: 0 auto 12px;
+  border-radius: var(--radius-lg);
+  background: url('/assets/final-scene.svg') center / cover no-repeat;
+  border: 1px solid rgba(240,196,91,.28);
+  box-shadow: var(--shadow-float);
+}
+
+@media (max-width: 420px) {
+  body.game-active .event-flow-art { height: 44px; }
+  body.game-active .sea-battle-preview::before,
+  body.game-active .assault-preview::before { height: 58px; }
+  body.game-active .final-results-art { height: 104px; }
+}

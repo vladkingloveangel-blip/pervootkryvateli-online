@@ -1891,3 +1891,27 @@ test('UI-36 gives decisions, battle warnings, targeting and result tones distinc
   assert.match(code, /body\.game-active\.targeting-open \.targeting-bar/);
   assert.doesNotMatch(code, /url\([^)]*final|asset\/final|illustration-final/);
 });
+
+
+test('UI-37 replaces HUD emoji with the local SVG icon sprite', () => {
+  assert.match(index, /\/assets\/ui-icons\.svg#ship/);
+  for (const icon of ['coin','glory','army','cannon','character','cards','goal','politics','cargo','menu']) {
+    assert.match(index, new RegExp('/assets/ui-icons\\.svg#' + icon));
+  }
+  const hudStart = index.indexOf('id="gameHud"');
+  const hudEnd = index.indexOf('</section>', hudStart);
+  const hud = index.slice(hudStart, hudEnd);
+  assert.doesNotMatch(hud, /🪙|💥|♟|☰/);
+});
+
+test('UI-37 wires final scene assets into events, combat, legendary goals and final results', () => {
+  const start = styles.indexOf('/* UI-37 — final local visual assets */');
+  assert.ok(start >= 0);
+  const code = styles.slice(start);
+  assert.match(code, /url\('\/assets\/event-scene\.svg'\)/);
+  assert.match(code, /url\('\/assets\/battle-scene\.svg'\)/);
+  assert.match(code, /url\('\/assets\/legendary-scene\.svg'\)/);
+  assert.match(code, /url\('\/assets\/final-scene\.svg'\)/);
+  assert.match(index, /class="event-flow-art"/);
+  assert.match(index, /class="final-results-art"/);
+});
