@@ -946,7 +946,7 @@ test('UI-19 server emits a sanitized authoritative result event for resolved joi
   assert.match(server, /io\.to\(player\.socketId\)\.emit\('battleResolved', payload\)/);
   assert.match(server, /if \(result\?\.ok\) emitResolvedBattlePresentation\(room, pending, result\);\s*room\.pendingBattle = null;/);
 
-  const start = server.indexOf('function battlePresentationResult(result)');
+  const start = server.indexOf('function battlePresentationResult(result, kind)');
   const end = server.indexOf('\nfunction resolvePendingBattle(', start);
   assert.ok(start >= 0 && end > start);
   const code = server.slice(start, end);
