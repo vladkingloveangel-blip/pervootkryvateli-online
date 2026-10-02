@@ -3369,6 +3369,7 @@
     const current = currentIslands();
     const foreignHere = current.filter(i => i.ownerId !== state.myId);
     const shipsHere = (r.players || []).filter(p => p.id !== state.myId && p.row === mine.row && p.col === mine.col && !areAlliesClient(state.myId, p.id));
+    const curseTargets = (r.players || []).filter(p => p.id !== state.myId && !areAlliesClient(state.myId, p.id));
 
     if (state.mistCardRef && !cards.some(c => c.source === state.mistCardRef.source && c.index === state.mistCardRef.index && c.kind === 'mist-path')) state.mistCardRef = null;
 
@@ -3376,7 +3377,7 @@
       'sea-veil': `Защитить свою флотилию или один свой остров на ${r.balanceCatalog.legendaryEffects['sea-veil'].durationPersonalTurns} следующих личных хода.`,
       hellfire: 'На клетке чужого острова понизить каждую постройку на одну строительную ступень; исходная I удаляется.',
       'mist-path': 'Перенести флотилию на любую клетку, достижимую без запрещённых препятствий.',
-      'sea-curse': `На одной клетке с чужим кораблём дать −${r.balanceCatalog.legendaryEffects['sea-curse'].amount} к обычному движению на ${r.balanceCatalog.legendaryEffects['sea-curse'].durationPersonalTurns} следующих личных хода.`,
+      'sea-curse': `Выбрать любого другого игрока и дать −${r.balanceCatalog.legendaryEffects['sea-curse'].amount} к обычному движению на ${r.balanceCatalog.legendaryEffects['sea-curse'].durationPersonalTurns} следующих личных хода.`,
     };
 
     for (const ref of cards) {
@@ -3417,15 +3418,15 @@
           const note = document.createElement('span'); note.className = 'cargo-meta'; note.textContent = 'На текущей клетке нет чужого острова.'; row.appendChild(note);
         }
       } else if (ref.kind === 'sea-curse') {
-        for (const target of shipsHere) {
+        for (const target of curseTargets) {
           const b = document.createElement('button');
           b.type = 'button'; b.className = 'danger-soft'; b.textContent = `Проклясть ${target.name}${target.legendaryStatus?.shipVeilTurns ? ' · Покров отменит карту' : ''}`;
-          b.disabled = !canUse || r.round === 1 || mine.inPeaceZone;
+          b.disabled = !canUse || r.round === 1;
           b.addEventListener('click', () => socket.emit('playLegendary', { source: ref.source, index: ref.index, targetPlayerId: target.id }, handleGameAck));
           row.appendChild(b);
         }
-        if (!shipsHere.length) {
-          const note = document.createElement('span'); note.className = 'cargo-meta'; note.textContent = 'На текущей клетке нет допустимой цели.'; row.appendChild(note);
+        if (!curseTargets.length) {
+          const note = document.createElement('span'); note.className = 'cargo-meta'; note.textContent = 'Нет допустимой цели.'; row.appendChild(note);
         }
       }
       wrap.appendChild(row);
@@ -4863,6 +4864,15 @@
         together.disabled = solo.disabled || attackAllies.length === 0;
         together.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, res => handleSeaBattleResultAck(res, target.name)));
         row.appendChild(solo); row.appendChild(together);
+        const hellfireRef = (mine.playableLegendaryCards || []).find(ref => ref.kind === 'hellfire');
+        if (hellfireRef && !island.ownerId && ['state', 'independent'].includes(island.kind)) {
+          const fire = document.createElement('button');
+          fire.type = 'button'; fire.className = 'danger-soft'; fire.textContent = 'Захватить 🔥';
+          fire.disabled = !canAct || mine.inPeaceZone;
+          fire.title = 'Захватить остров «Пламенем Ада» независимо от силы обороны.';
+          fire.addEventListener('click', () => socket.emit('hellfireCapture', { islandId: island.id }, res => handleAssaultResultAck(res, island.name)));
+          row.appendChild(fire);
+        }
         card.appendChild(row);
         actions.appendChild(card);
       }
