@@ -1882,7 +1882,8 @@ test('UI-36 applies shared surface and typography grammar across HUD, sheets, de
 
 test('UI-36 gives decisions, battle warnings, targeting and result tones distinct visual grammar', () => {
   const start = styles.indexOf('/* UI-36 — canonical visual kit.');
-  const code = styles.slice(start);
+  const end = styles.indexOf('/* UI-37 — final local visual assets */', start);
+  const code = styles.slice(start, end >= 0 ? end : undefined);
   assert.match(code, /\.decision-card \{[\s\S]*?border-top-color: var\(--gold\)/);
   assert.match(code, /result-layer\[data-tone="success"\]/);
   assert.match(code, /result-layer\[data-tone="danger"\]/);
