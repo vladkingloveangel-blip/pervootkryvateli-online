@@ -21,7 +21,9 @@ function selectTreasureOutcome(rng = Math.random) {
 }
 
 function selectLegendaryAbility(rng = Math.random) {
-  return cloneDefinition(selectIndependent(canonicalLegendaryCandidates(), rng));
+  const candidates = canonicalLegendaryCandidates();
+  const weighted = candidates.flatMap(card => Array(card.id === 'hellfire' ? 1 : 2).fill(card));
+  return cloneDefinition(selectIndependent(weighted, rng));
 }
 
 function selectTreasureCandidates(count, rng = Math.random) {
