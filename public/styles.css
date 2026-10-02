@@ -5226,3 +5226,15 @@ body.game-active .token {
     white-space: nowrap;
   }
 }
+
+
+/* UI-40 quick access lifecycle — gameplay map only; captions carry no status badges. */
+@media (max-width: 900px) {
+  body.game-active .game.lobby-state ~ .game-quick-access { display: none !important; }
+  body.game-active .game.lobby-state .game-quick-access { display: none !important; }
+  body.game-active .quick-access-btn > strong { display: none !important; }
+}
+
+@media (max-width: 900px) {
+  body.game-active.game-lobby-active .game-quick-access { display: none !important; }
+}

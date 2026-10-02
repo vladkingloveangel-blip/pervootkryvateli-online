@@ -1526,6 +1526,7 @@
     const game = $('game');
     const lobby = Boolean(r && !r.started && !r.finished && r.phase !== 'finished');
     game.classList.toggle('lobby-state', lobby);
+    document.body.classList.toggle('game-lobby-active', lobby);
     $('lobbyHero')?.classList.toggle('hidden', !lobby);
     $('lobbyToolbar')?.classList.toggle('hidden', !lobby);
     if (!lobby) return;
