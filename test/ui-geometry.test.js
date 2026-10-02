@@ -6,7 +6,6 @@ fs.readFileSync = (path, ...args) => path === 'public/ocean.js' ? '' : originalR
 
 const css = fs.readFileSync('public/styles.css', 'utf8');
 const app = fs.readFileSync('public/app.js', 'utf8');
-const ocean = fs.readFileSync('public/ocean.js', 'utf8');
 const index = fs.readFileSync('public/index.html', 'utf8');
 const server = fs.readFileSync('server.js', 'utf8');
 const projection = fs.readFileSync('state-projection.js', 'utf8');
