@@ -1,7 +1,7 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mapMovePending: false, lastAutoCenterSignature: '', resultQueue: [], activeResult: null, toastQueue: [], journalEntries: [], ambientSnapshot: null, targeting: null, rehydrateOnNextRoomState: false };
+  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mapMovePending: false, lastAutoCenterSignature: '', resultQueue: [], activeResult: null, toastQueue: [], journalEntries: [], ambientSnapshot: null, targeting: null, rehydrateOnNextRoomState: false, islandSheetView: null };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
   const shipName = id => state.room?.shipCatalog?.[id]?.name || state.shipCatalog?.[id]?.name || $('shipSelect').querySelector(`option[value="${id}"]`)?.textContent || 'Корабль';
   fetch('/api/rules').then(response => response.ok ? response.json() : null).then(rules => {
@@ -807,6 +807,7 @@
 
   $('resultContinueBtn').addEventListener('click', dismissResultCard);
   $('objectSheetClose').addEventListener('click', closeMapInfo);
+  $('objectSheetBack').addEventListener('click', handleObjectSheetBack);
   $('objectSheetExpand').addEventListener('click', toggleObjectSheetExpanded);
   $('targetingCancelBtn').addEventListener('click', cancelTargeting);
   $('hudPlayerBtn').addEventListener('click', () => { if (!state.spectating) renderFleetOverviewObjectSheet(); });
@@ -1452,6 +1453,7 @@
     renderAnchors();
     refreshOpenAnchorSheet();
     renderIsland();
+    refreshOpenIslandSheet();
     renderAlliances();
     renderCombat();
     refreshOpenSeaBattleFlow();
@@ -4895,6 +4897,7 @@
     const closingCards = state.mapSelection?.kind === 'cards';
     const closingGoals = state.mapSelection?.kind === 'goals';
     state.mapSelection = null;
+    resetIslandSheetChrome();
     const card = $('mapInfoCard');
     card.classList.add('hidden');
     card.style.visibility = '';
@@ -4975,156 +4978,366 @@
     return 'ОБЪЕКТ КАРТЫ';
   }
 
+
+  function resetIslandSheetChrome() {
+    state.islandSheetView = null;
+    const sheet = $('objectSheet');
+    sheet?.classList.remove('island-card-sheet');
+    $('objectSheetHero')?.classList.add('hidden');
+    const heroImage = $('objectSheetHeroImage');
+    if (heroImage) {
+      heroImage.style.backgroundPosition = '';
+      heroImage.style.backgroundSize = '';
+    }
+    $('objectSheetBack')?.classList.add('hidden');
+  }
+
+  function islandSheetCategory(island) {
+    if (island.ownerId === state.myId) return 'ВАШ ОСТРОВ';
+    if (island.ownerId) return 'ОСТРОВ ИГРОКА';
+    if (island.kind === 'state') return 'ГОСУДАРСТВЕННЫЙ ОСТРОВ';
+    if (island.kind === 'independent') return 'НЕЗАВИСИМЫЙ ОСТРОВ';
+    if (island.kind === 'free') return 'СВОБОДНЫЙ ОСТРОВ';
+    return 'ОСТРОВ';
+  }
+
+  function showIslandSheetHero(island) {
+    const hero = $('objectSheetHero');
+    const image = $('objectSheetHeroImage');
+    if (!hero || !image || !island) return;
+    const { rows, cols } = mapSize();
+    const center = centroid(island.cells || []);
+    const x = cols > 1 ? Math.max(0, Math.min(100, (Number(center.col) / (cols - 1)) * 100)) : 50;
+    const y = rows > 1 ? Math.max(0, Math.min(100, (Number(center.row) / (rows - 1)) * 100)) : 50;
+    image.style.backgroundPosition = `${x.toFixed(2)}% ${y.toFixed(2)}%`;
+    image.style.backgroundSize = '560% 560%';
+    hero.classList.remove('hidden');
+  }
+
+  function setIslandSheetHeader(island, kind, { back = false } = {}) {
+    const sheet = $('objectSheet');
+    sheet.classList.add('island-card-sheet', 'expanded');
+    $('objectSheetKind').textContent = kind;
+    $('objectSheetTitle').textContent = island.name;
+    const backButton = $('objectSheetBack');
+    backButton.classList.toggle('hidden', !back);
+    backButton.setAttribute('aria-label', back ? `Назад: ${island.name}` : 'Назад');
+    $('objectSheetExpand').textContent = '⌄';
+    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
+    showIslandSheetHero(island);
+    sheet.classList.remove('hidden');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function islandIsHere(island) {
+    return Boolean(island && currentIslands().some(item => item.id === island.id));
+  }
+
+  function islandBuildingNames(island) {
+    return island.buildings?.length
+      ? island.buildings.map(building => {
+          const support = building.type === 'bastion' ? (building.supported ? ' · поддерживается' : ' · без поддержки') : '';
+          return `${building.name}${support}`;
+        }).join(', ')
+      : 'нет';
+  }
+
   function ownIslandCompactHtml(island) {
     const resources = island.resources?.length ? island.resources.join(', ') : 'нет';
-    const buildings = island.buildings?.length
-      ? island.buildings.map(building => building.name).join(', ')
-      : 'нет';
+    const buildings = islandBuildingNames(island);
     const defense = Object.hasOwn(island, 'defenseArmy') ? island.defenseArmy : island.army;
     const garrison = Object.hasOwn(island, 'garrisonName')
       ? (island.garrisonName ? `${island.garrisonName} (+${island.garrisonDefense || 0})` : 'нет')
       : null;
     return `
-      <div class="own-island-summary">
-        <div class="own-island-stat"><span>Статус</span><strong>${escapeHtml(island.status || '—')}</strong></div>
-        <div class="own-island-stat"><span>Защита</span><strong>${defense ?? '—'}</strong></div>
-        <div class="own-island-stat"><span>Площадь</span><strong>${island.usedArea ?? 0}/${island.effectiveArea ?? island.area ?? 0}</strong></div>
-        <div class="own-island-stat"><span>Ресурсы</span><strong>${escapeHtml(resources)}</strong></div>
+      <div class="island-card-summary">
+        <div class="island-card-row"><span>Статус</span><strong>${escapeHtml(island.status || '—')}</strong></div>
+        <div class="island-card-row"><span>Защита</span><strong>${defense ?? '—'}</strong></div>
+        <div class="island-card-row"><span>Площадь</span><strong>${island.usedArea ?? 0}/${island.effectiveArea ?? island.area ?? 0}</strong></div>
+        <div class="island-card-row"><span>Ресурсы</span><strong>${escapeHtml(resources)}</strong></div>
+        ${garrison !== null ? `<div class="island-card-row"><span>Гарнизон</span><strong>${escapeHtml(garrison)}</strong></div>` : ''}
+        <div class="island-card-row island-card-buildings"><span>Постройки</span><strong>${escapeHtml(buildings)}</strong></div>
       </div>
-      ${garrison !== null ? `<div class="own-island-line"><span>Гарнизон</span><strong>${escapeHtml(garrison)}</strong></div>` : ''}
-      <div class="own-island-line"><span>Постройки</span><strong>${escapeHtml(buildings)}</strong></div>
     `;
   }
 
-  function ownIslandQuickActions(island) {
+  function islandManagementSummaryHtml(island) {
     const mine = me();
-    if (!mine) return [];
-    const here = currentIslands().some(item => item.id === island.id);
-    const myTurn = state.room?.activePlayerId === state.myId;
-    const canAct = here && myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending();
-    if (!canAct) return [];
+    return `
+      <div class="island-management-status">
+        <div><span>Казна</span><strong>${mine?.ducats ?? 0} дук.</strong></div>
+        <div><span>Действия</span><strong>${mine?.actionsLeft ?? 0}</strong></div>
+        <div><span>Площадь</span><strong>${island.usedArea ?? 0}/${island.effectiveArea ?? island.area ?? 0}</strong></div>
+      </div>
+    `;
+  }
 
-    const quick = [];
-    const loadedThisRound = island.loadedRound === state.room.round;
-    if ((island.availableGoods || []).length && !loadedThisRound) quick.push('Погрузить');
-    if ((island.buildings || []).some(building => building.nextUpgrade)) quick.push('Улучшить');
-    quick.push('Построить');
-    return quick;
+  function islandAwayNote() {
+    const note = document.createElement('div');
+    note.className = 'island-action-note';
+    note.textContent = 'Для этого действия основной корабль должен находиться на клетке данного острова в допустимый момент хода.';
+    return note;
+  }
+
+  function islandNoActionNote(text) {
+    const note = document.createElement('div');
+    note.className = 'island-action-note';
+    note.textContent = text;
+    return note;
+  }
+
+  function moveCanonicalActionGroup(source, label, target) {
+    const children = Array.from(source?.children || []);
+    const start = children.findIndex(node =>
+      node.classList?.contains('action-group-label') && node.textContent.trim() === label
+    );
+    if (start < 0) return 0;
+    let moved = 0;
+    for (let i = start + 1; i < children.length; i += 1) {
+      const node = children[i];
+      if (node.classList?.contains('action-group-label')) break;
+      target.appendChild(node);
+      moved += 1;
+    }
+    return moved;
+  }
+
+  function appendIslandManagementButton(target, view, title, meta, tone = '') {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `island-management-button${tone ? ` ${tone}` : ''}`;
+    button.dataset.islandView = view;
+    const copy = document.createElement('span');
+    const strong = document.createElement('strong');
+    strong.textContent = title;
+    const small = document.createElement('small');
+    small.textContent = meta;
+    copy.append(strong, small);
+    const arrow = document.createElement('b');
+    arrow.textContent = '›';
+    button.append(copy, arrow);
+    button.addEventListener('click', () => renderOwnIslandActionView(state.islandSheetView?.islandId, view));
+    target.appendChild(button);
   }
 
   function renderOwnIslandObjectSheet(island) {
-    const sheet = $('objectSheet');
-    const body = $('objectSheetBody');
-    const actions = $('objectSheetActions');
-    $('objectSheetKind').textContent = 'ВАШ ОСТРОВ';
-    $('objectSheetTitle').textContent = island.name;
-    body.innerHTML = ownIslandCompactHtml(island);
-    actions.innerHTML = '';
+    if (!island) return;
+    state.mapSelection = { kind: 'island', id: island.id, anchor: state.mapSelection?.anchor || null };
+    state.islandSheetView = { islandId: island.id, view: 'overview' };
+    setIslandSheetHeader(island, 'ВАШ ОСТРОВ');
 
-    const quick = ownIslandQuickActions(island);
-    if (quick.length) {
-      const row = document.createElement('div');
-      row.className = 'own-island-quick-actions';
-      for (const label of quick) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'small';
-        button.textContent = label;
-        button.addEventListener('click', () => expandOwnIslandManagement(island.id));
-        row.appendChild(button);
-      }
-      actions.appendChild(row);
-    }
+    $('objectSheetBody').innerHTML = ownIslandCompactHtml(island);
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
 
     const manage = document.createElement('button');
     manage.type = 'button';
-    manage.className = 'primary';
+    manage.className = 'primary island-manage-primary';
     manage.textContent = 'Управлять островом';
-    manage.addEventListener('click', () => expandOwnIslandManagement(island.id));
+    manage.addEventListener('click', () => renderOwnIslandManagement(island.id));
     actions.appendChild(manage);
 
-    const here = currentIslands().some(item => item.id === island.id);
-    if (!here) {
+    if (!islandIsHere(island)) {
       const note = document.createElement('div');
-      note.className = 'own-island-away-note';
-      note.textContent = 'Корабль не находится у этого острова. Управление доступно для просмотра; действия появятся, когда они будут разрешены правилами.';
+      note.className = 'island-action-note compact';
+      note.textContent = 'Остров можно просматривать из любой точки карты. Действия станут доступны у его береговой клетки.';
       actions.appendChild(note);
     }
+  }
 
-    sheet.classList.remove('hidden');
-    sheet.classList.remove('expanded');
-    document.body.classList.add('object-sheet-open');
+  function renderOwnIslandManagement(islandId) {
+    const island = state.room?.islands?.find(item => item.id === islandId && item.ownerId === state.myId);
+    const mine = me();
+    if (!island || !mine) return;
+    state.mapSelection = { kind: 'island', id: island.id, anchor: state.mapSelection?.anchor || null };
+    state.islandSheetView = { islandId: island.id, view: 'manage' };
+    state.selectedIslandId = island.id;
+    setIslandSheetHeader(island, 'УПРАВЛЕНИЕ ОСТРОВОМ', { back: true });
+
+    const body = $('objectSheetBody');
+    body.innerHTML = islandManagementSummaryHtml(island);
+    const menu = document.createElement('div');
+    menu.className = 'island-management-menu';
+
+    appendIslandManagementButton(menu, 'build', 'Построить', 'Новые здания и промыслы');
+
+    const upgradeable = (island.buildings || []).filter(building => building.nextUpgrade);
+    appendIslandManagementButton(
+      menu, 'upgrade', 'Улучшить постройки',
+      upgradeable.length ? `Доступно улучшений: ${upgradeable.length}` : 'Сейчас улучшать нечего'
+    );
+
+    if ((island.availableGoods || []).length) {
+      const cargoMeta = island.loadedRound === state.room.round
+        ? 'Погрузка в этом раунде уже выполнена'
+        : `Товары: ${island.availableGoods.map(id => state.room.goodsCatalog?.[id]?.name || id).join(', ')}`;
+      appendIslandManagementButton(menu, 'cargo', 'Погрузить трюм', cargoMeta);
+    }
+
+    const hasArsenal = (island.buildings || []).some(building => building.type === 'arsenal');
+    const hasFortressThree = (island.buildings || []).some(building => building.type === 'fortress' && Number(building.level) === 3);
+    const hasBastion = (island.buildings || []).some(building => building.type === 'bastion');
+    if (hasArsenal || hasFortressThree || hasBastion) {
+      const military = [];
+      if (hasArsenal) military.push('Арсенал');
+      if (hasFortressThree) military.push('Крепость III');
+      if (hasBastion) military.push('Бастион');
+      appendIslandManagementButton(menu, 'military', 'Военная инфраструктура', military.join(' · '), 'military');
+    }
+
+    if ((island.buildings || []).some(building => building.type === 'palace')) {
+      appendIslandManagementButton(menu, 'palace', 'Дворец', mine.palaceUsed ? 'Уже использован в этой партии' : 'Политическое действие');
+    }
+
+    if ((island.buildings || []).some(building => building.type === 'cartography')) {
+      const expeditionMeta = mine.activeExpedition
+        ? `Активна: ${mine.activeExpedition.name || 'экспедиция'}`
+        : mine.expeditionTakenThisRound ? 'Новая экспедиция уже получена в этом раунде' : 'Получение экспедиции';
+      appendIslandManagementButton(menu, 'expedition', 'Экспедиция', expeditionMeta);
+    }
+
+    const admiralty = (island.buildings || []).filter(building => building.type === 'admiralty').sort((a, b) => Number(b.level) - Number(a.level))[0];
+    if (admiralty) {
+      appendIslandManagementButton(menu, 'admiralty', 'Адмиралтейство', `Уровень ${ROMAN[admiralty.level] || admiralty.level} · персонажи`);
+    }
+
+    body.appendChild(menu);
+    $('objectSheetActions').innerHTML = '';
   }
 
   function expandOwnIslandManagement(islandId) {
+    renderOwnIslandManagement(islandId);
+  }
+
+  function islandActionIntroHtml(island, title, detail) {
+    const mine = me();
+    return `
+      <section class="island-action-intro">
+        <span>${escapeHtml(title)}</span>
+        <strong>${escapeHtml(island.name)}</strong>
+        <small>${escapeHtml(detail)}</small>
+      </section>
+      <div class="island-action-context">
+        <span>Казна <strong>${mine?.ducats ?? 0}</strong></span>
+        <span>Действия <strong>${mine?.actionsLeft ?? 0}</strong></span>
+        <span>Площадь <strong>${island.usedArea ?? 0}/${island.effectiveArea ?? island.area ?? 0}</strong></span>
+      </div>
+    `;
+  }
+
+  function renderOwnIslandActionView(islandId, view) {
     const island = state.room?.islands?.find(item => item.id === islandId && item.ownerId === state.myId);
-    if (!island) return;
+    const mine = me();
+    if (!island || !mine) return;
+
+    const definitions = {
+      build: ['ПОСТРОИТЬ', 'Выберите новую постройку. Улучшения существующих зданий находятся в отдельном разделе.'],
+      upgrade: ['УЛУЧШИТЬ ПОСТРОЙКИ', 'Здесь показаны только существующие здания, у которых есть следующая ступень.'],
+      cargo: ['ПОГРУЗИТЬ ТРЮМ', 'Выберите производимый товар и свободный активный трюм.'],
+      military: ['ВОЕННАЯ ИНФРАСТРУКТУРА', 'Арсенал, рота ландскнехтов и превращение Крепости III в Бастион.'],
+      palace: ['ДВОРЕЦ', 'Дворец позволяет один раз за партию прекратить действующую вражду с государством.'],
+      expedition: ['ЭКСПЕДИЦИЯ', 'Картографическая палата даёт доступ к получению случайной экспедиции.'],
+      admiralty: ['АДМИРАЛТЕЙСТВО', 'Персонажи доступны в соответствии с уровнем Адмиралтейства и текущим состоянием партии.'],
+    };
+    const definition = definitions[view];
+    if (!definition) return renderOwnIslandManagement(island.id);
+
+    state.mapSelection = { kind: 'island', id: island.id, anchor: state.mapSelection?.anchor || null };
+    state.islandSheetView = { islandId: island.id, view };
     state.selectedIslandId = island.id;
-    const sheet = $('objectSheet');
-    sheet.classList.add('expanded');
-    $('objectSheetExpand').textContent = '⌄';
-    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
+    setIslandSheetHeader(island, definition[0], { back: true });
 
     const body = $('objectSheetBody');
-    body.innerHTML = ownIslandCompactHtml(island);
-
-    const details = document.createElement('div');
-    details.className = 'own-island-management-details';
-    const defense = island.defenseBreakdown || {};
-    details.innerHTML = `
-      <div class="own-island-section-title">Подробности владения</div>
-      <div class="own-island-line"><span>Исходная защита</span><strong>${island.army ?? 0}</strong></div>
-      ${Object.hasOwn(island, 'defenseBreakdown') ? `
-        <div class="own-island-line"><span>Гарнизон</span><strong>${defense.garrison || 0}</strong></div>
-        <div class="own-island-line"><span>Нанятый гарнизон</span><strong>${defense.hiredGarrison || 0}</strong></div>
-        <div class="own-island-line"><span>Укрепления</span><strong>${defense.fortifications || 0}</strong></div>
-        <div class="own-island-line"><span>Бастионы</span><strong>${defense.bastions || 0}</strong></div>
-        <div class="own-island-line"><span>Корабль владельца</span><strong>${defense.ownerShip || 0}</strong></div>
-      ` : ''}
-      <div class="own-island-line"><span>Погрузка в раунде ${state.room.round}</span><strong>${island.loadedRound === state.room.round ? 'уже выполнена' : 'доступна'}</strong></div>
-    `;
-    body.appendChild(details);
-
-    const buildingList = document.createElement('div');
-    buildingList.className = 'own-island-building-list';
-    const title = document.createElement('div');
-    title.className = 'own-island-section-title';
-    title.textContent = 'Постройки';
-    buildingList.appendChild(title);
-    for (const building of island.buildings || []) {
-      const row = document.createElement('div');
-      row.className = 'own-island-building';
-      const next = building.nextUpgrade ? ` → ${building.nextUpgrade.name} · ${building.nextUpgrade.price} дук.` : '';
-      const support = building.type === 'bastion' ? (building.supported ? ' · поддерживается' : ' · без поддержки') : '';
-      row.innerHTML = `<span>${escapeHtml(building.name)}${escapeHtml(support)}</span><strong>${escapeHtml(next || 'макс./без улучшения')}</strong>`;
-      buildingList.appendChild(row);
-    }
-    if (!(island.buildings || []).length) {
-      const empty = document.createElement('div');
-      empty.className = 'muted';
-      empty.textContent = 'Построек пока нет.';
-      buildingList.appendChild(empty);
-    }
-    body.appendChild(buildingList);
-
+    body.innerHTML = islandActionIntroHtml(island, definition[0], definition[1]);
     const actions = $('objectSheetActions');
     actions.innerHTML = '';
-    const here = currentIslands().some(item => item.id === island.id);
-    if (here) {
-      // Reuse canonical legacy renderer. It owns legality, costs and socket payloads.
-      renderIsland();
-      const sourceActions = $('islandActions');
-      while (sourceActions.firstChild) actions.appendChild(sourceActions.firstChild);
+
+    const here = islandIsHere(island);
+    if (!here) {
+      actions.appendChild(islandAwayNote());
+      return;
     }
 
-    if (!actions.children.length) {
-      const note = document.createElement('div');
-      note.className = 'own-island-away-note';
-      note.textContent = here
-        ? 'Сейчас на этом острове нет доступных действий.'
-        : 'Чтобы строить, улучшать и грузиться, основной корабль должен находиться у острова в допустимый момент хода.';
-      actions.appendChild(note);
+    let moved = 0;
+    if (view === 'build' || view === 'upgrade' || view === 'cargo' || view === 'military' || view === 'palace') {
+      renderIsland();
+      const labels = {
+        build: 'Строительство',
+        upgrade: 'Улучшение построек',
+        cargo: 'Погрузка',
+        military: 'Военная инфраструктура',
+        palace: 'Дворец',
+      };
+      moved += moveCanonicalActionGroup($('islandActions'), labels[view], actions);
     }
+
+    if (view === 'military' && mine.landCompany) {
+      renderFleet();
+      moved += moveCanonicalActionGroup($('fleetActions'), 'Рота ландскнехтов', actions);
+    }
+
+    if (view === 'expedition') {
+      const status = document.createElement('div');
+      status.className = 'island-action-state';
+      if (mine.activeExpedition) {
+        status.textContent = `Активная экспедиция: ${mine.activeExpedition.name || mine.activeExpedition.placeId || 'цель назначена'}. Сначала завершите её.`;
+      } else if (mine.expeditionTakenThisRound) {
+        status.textContent = 'В этом общем раунде новая экспедиция уже получалась.';
+      } else if (mine.canTakeExpedition) {
+        status.textContent = 'Условия выполнены: можно получить новую экспедицию.';
+      } else {
+        status.textContent = 'Сейчас новая экспедиция недоступна по действующим условиям.';
+      }
+      body.appendChild(status);
+      renderLegendaryPlaces();
+      const source = $('legendaryPlacesActions');
+      for (const node of Array.from(source?.children || [])) {
+        actions.appendChild(node);
+        moved += 1;
+      }
+    }
+
+    if (view === 'admiralty') {
+      renderFleet();
+      moved += moveCanonicalActionGroup($('fleetActions'), 'Персонаж Адмиралтейства', actions);
+    }
+
+    if (!moved) {
+      const messages = {
+        upgrade: 'На этом острове сейчас нет построек, которые можно улучшить.',
+        cargo: island.loadedRound === state.room.round ? 'Погрузка с этого острова в текущем раунде уже выполнена.' : 'Сейчас нет доступного варианта погрузки.',
+        military: 'Сейчас военная инфраструктура не даёт отдельного доступного действия.',
+        palace: mine.palaceUsed ? 'Дворец уже использован в этой партии.' : 'Сейчас нет действующей вражды, которую можно прекратить Дворцом.',
+        expedition: 'Отдельного действия по экспедиции сейчас нет.',
+        admiralty: 'Сейчас через это Адмиралтейство нет доступного действия с персонажем.',
+        build: 'Сейчас строительство на этом острове недоступно.',
+      };
+      actions.appendChild(islandNoActionNote(messages[view] || 'Сейчас здесь нет доступного действия.'));
+    }
+  }
+
+  function handleObjectSheetBack() {
+    const nav = state.islandSheetView;
+    if (!nav?.islandId) return;
+    const island = state.room?.islands?.find(item => item.id === nav.islandId);
+    if (!island) return closeMapInfo();
+    if (nav.view === 'manage') return renderOwnIslandObjectSheet(island);
+    if (nav.view && nav.view !== 'overview') return renderOwnIslandManagement(island.id);
+  }
+
+  function refreshOpenIslandSheet() {
+    const nav = state.islandSheetView;
+    if (!nav?.islandId || state.mapSelection?.kind !== 'island' || !isMobileGameplayUi()) return;
+    const island = state.room?.islands?.find(item => item.id === nav.islandId);
+    if (!island) return closeMapInfo();
+
+    if (island.ownerId === state.myId) {
+      if (nav.view === 'overview') renderOwnIslandObjectSheet(island);
+      else if (nav.view === 'manage') renderOwnIslandManagement(island.id);
+      else renderOwnIslandActionView(island.id, nav.view);
+      return;
+    }
+    renderForeignIslandObjectSheet(island);
   }
 
   function foreignIslandHasPrivateReveal(island) {
@@ -5136,45 +5349,47 @@
   }
 
   function foreignIslandCompactHtml(island) {
+    const faction = !island.ownerId ? factionForIsland(island) : null;
     const owner = island.ownerId
       ? playerName(island.ownerId)
-      : (island.faction || (island.kind === 'free' ? 'Свободный остров' : island.kind === 'independent' ? 'Независимый остров' : 'Нет владельца'));
+      : faction?.name || (island.kind === 'free' ? 'Свободный остров' : island.kind === 'independent' ? 'Независимый остров' : 'Нет владельца');
     const resources = island.resources?.length ? island.resources.join(', ') : 'нет';
-    const buildings = island.buildings?.length
-      ? island.buildings.map(building => building.name).join(', ')
-      : 'нет';
+    const buildings = islandBuildingNames(island);
     const revealed = foreignIslandHasPrivateReveal(island);
 
-    let hiddenBlock = '<div class="foreign-island-hidden"><span>Гарнизон</span><strong>неизвестно</strong></div>';
+    let garrison = '<div class="island-card-row"><span>Гарнизон</span><strong>неизвестно</strong></div>';
     if (revealed) {
-      const garrison = island.garrisonName
+      const name = island.garrisonName
         ? `${island.garrisonName} (+${island.garrisonDefense || 0})`
         : 'нет отдельного гарнизона';
-      hiddenBlock = `
+      garrison = `
         <div class="foreign-island-scout-badge">РАЗВЕДАНО · до конца вашего хода</div>
-        <div class="foreign-island-line"><span>Гарнизон</span><strong>${escapeHtml(garrison)}</strong></div>
-        ${Object.hasOwn(island, 'defenseArmy') ? `<div class="foreign-island-line"><span>Точная защита</span><strong>${island.defenseArmy}</strong></div>` : ''}
+        <div class="island-card-row"><span>Гарнизон</span><strong>${escapeHtml(name)}</strong></div>
+        ${Object.hasOwn(island, 'defenseArmy') ? `<div class="island-card-row"><span>Точная защита</span><strong>${island.defenseArmy}</strong></div>` : ''}
       `;
     }
 
     return `
-      <div class="foreign-island-summary">
-        <div class="foreign-island-stat"><span>Владелец</span><strong>${escapeHtml(owner)}</strong></div>
-        <div class="foreign-island-stat"><span>Статус</span><strong>${escapeHtml(island.status || '—')}</strong></div>
-        <div class="foreign-island-stat"><span>Площадь</span><strong>${island.usedArea ?? 0}/${island.effectiveArea ?? island.area ?? 0}</strong></div>
-        <div class="foreign-island-stat"><span>Ресурсы</span><strong>${escapeHtml(resources)}</strong></div>
+      <div class="island-card-summary">
+        <div class="island-card-row"><span>Владелец</span><strong>${escapeHtml(owner)}</strong></div>
+        <div class="island-card-row"><span>Статус</span><strong>${escapeHtml(island.status || '—')}</strong></div>
+        <div class="island-card-row"><span>Базовая защита</span><strong>${island.army ?? '—'}</strong></div>
+        <div class="island-card-row"><span>Площадь</span><strong>${island.usedArea ?? 0}/${island.effectiveArea ?? island.area ?? 0}</strong></div>
+        <div class="island-card-row"><span>Ресурсы</span><strong>${escapeHtml(resources)}</strong></div>
+        ${garrison}
+        <div class="island-card-row island-card-buildings"><span>Постройки</span><strong>${escapeHtml(buildings)}</strong></div>
       </div>
-      ${hiddenBlock}
-      <div class="foreign-island-line"><span>Постройки</span><strong>${escapeHtml(buildings)}</strong></div>
     `;
   }
 
   function renderForeignIslandObjectSheet(island) {
-    const sheet = $('objectSheet');
-    $('objectSheetKind').textContent = island.ownerId ? 'ЧУЖОЙ ОСТРОВ' : (island.kind === 'state' ? 'ГОСУДАРСТВЕННЫЙ ОСТРОВ' : 'ОСТРОВ');
-    $('objectSheetTitle').textContent = island.name;
+    if (!island) return;
+    state.mapSelection = { kind: 'island', id: island.id, anchor: state.mapSelection?.anchor || null };
+    state.islandSheetView = { islandId: island.id, view: 'overview' };
+    setIslandSheetHeader(island, islandSheetCategory(island));
     $('objectSheetBody').innerHTML = foreignIslandCompactHtml(island);
-    const politicalFaction = factionForIsland(island);
+
+    const politicalFaction = !island.ownerId ? factionForIsland(island) : null;
     if (politicalFaction) {
       $('objectSheetBody').insertAdjacentHTML('beforeend', `
         <section class="state-island-politics">
@@ -5187,39 +5402,45 @@
 
     const actions = $('objectSheetActions');
     actions.innerHTML = '';
+
     if (politicalFaction) {
       const diplomacy = document.createElement('button');
       diplomacy.type = 'button';
       diplomacy.className = 'primary';
       diplomacy.textContent = `Государство: ${politicalFaction.name}`;
-      diplomacy.addEventListener('click', () => renderDiplomacyObjectSheet(politicalFaction.id));
+      diplomacy.addEventListener('click', () => {
+        resetIslandSheetChrome();
+        renderDiplomacyObjectSheet(politicalFaction.id);
+      });
       actions.appendChild(diplomacy);
-      appendCanonicalPoliticsActions(actions, politicalFaction.id);
     }
-    const here = currentIslands().some(item => item.id === island.id);
+
+    const here = islandIsHere(island);
     const mine = me();
     const myTurn = state.room?.activePlayerId === state.myId;
-    const canContextAct = Boolean(here && mine && myTurn && mine.phase === 'actions' && !isDecisionPending());
+    const canContextAct = Boolean(here && mine && myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending());
+    const attackable = island.ownerId !== state.myId
+      && !(island.kind === 'free' && !island.ownerId)
+      && (!island.ownerId || !areAlliesClient(state.myId, island.ownerId));
 
-    if (canContextAct) {
+    if (canContextAct && attackable) {
       state.selectedIslandId = island.id;
-      const attackable = island.ownerId !== state.myId
-        && !(island.kind === 'free' && !island.ownerId)
-        && (!island.ownerId || !areAlliesClient(state.myId, island.ownerId));
       const action = document.createElement('button');
       action.type = 'button';
-      action.className = attackable ? 'danger-soft' : 'primary';
-      action.textContent = attackable ? 'Штурм острова' : 'Действия на острове';
+      action.className = 'danger-soft';
+      action.textContent = 'Штурм острова';
       action.addEventListener('click', () => {
-        if (attackable) renderAssaultFlowSheet(island.id);
-        else { closeMapInfo(); }
+        resetIslandSheetChrome();
+        renderAssaultFlowSheet(island.id);
       });
       actions.appendChild(action);
     }
 
-    sheet.classList.remove('hidden');
-    sheet.classList.remove('expanded');
-    document.body.classList.add('object-sheet-open');
+    if (island.kind === 'free' && !island.ownerId) {
+      actions.appendChild(islandNoActionNote('Свободный остров переходит под контроль автоматически при допустимом прибытии корабля.'));
+    } else if (island.ownerId && areAlliesClient(state.myId, island.ownerId)) {
+      actions.appendChild(islandNoActionNote('Остров принадлежит вашему союзнику. Штурм союзного владения недоступен.'));
+    }
   }
 
   function citadelSheetHtml(mine) {
@@ -5455,6 +5676,7 @@
 
   function renderObjectSheetFromMapInfo(kind, data) {
     const sheet = $('objectSheet');
+    if (kind !== 'island') resetIslandSheetChrome();
     if (!sheet) return;
     if (kind === 'island' && data.ownerId === state.myId) {
       renderOwnIslandObjectSheet(data);
