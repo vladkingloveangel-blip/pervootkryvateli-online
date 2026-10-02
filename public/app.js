@@ -5209,22 +5209,6 @@
     renderOwnIslandManagement(islandId);
   }
 
-  function islandActionIntroHtml(island, title, detail) {
-    const mine = me();
-    return `
-      <section class="island-action-intro">
-        <span>${escapeHtml(title)}</span>
-        <strong>${escapeHtml(island.name)}</strong>
-        <small>${escapeHtml(detail)}</small>
-      </section>
-      <div class="island-action-context">
-        <span>Казна <strong>${mine?.ducats ?? 0}</strong></span>
-        <span>Действия <strong>${mine?.actionsLeft ?? 0}</strong></span>
-        <span>Площадь <strong>${island.usedArea ?? 0}/${island.effectiveArea ?? island.area ?? 0}</strong></span>
-      </div>
-    `;
-  }
-
   function renderOwnIslandActionView(islandId, view) {
     const island = state.room?.islands?.find(item => item.id === islandId && item.ownerId === state.myId);
     const mine = me();
@@ -5248,26 +5232,23 @@
     setIslandSheetHeader(island, definition[0], { back: true });
 
     const body = $('objectSheetBody');
+    body.innerHTML = `
+      <div class="island-action-hint">${escapeHtml(definition[1])}</div>
+      <div id="islandPrimaryActions" class="island-primary-actions"></div>
+      <div class="island-action-context">
+        <span>Казна <strong>${mine?.ducats ?? 0}</strong></span>
+        <span>Действия <strong>${mine?.actionsLeft ?? 0}</strong></span>
+        <span>Площадь <strong>${island.usedArea ?? 0}/${island.effectiveArea ?? island.area ?? 0}</strong></span>
+      </div>
+    `;
+
     const actions = $('objectSheetActions');
     actions.innerHTML = '';
-
-    if (view === 'cargo') {
-      body.innerHTML = `
-        <div class="island-action-hint">${escapeHtml(definition[1])}</div>
-        <div id="islandCargoPrimaryActions" class="island-cargo-primary-actions"></div>
-        <div class="island-action-context">
-          <span>Казна <strong>${mine?.ducats ?? 0}</strong></span>
-          <span>Действия <strong>${mine?.actionsLeft ?? 0}</strong></span>
-          <span>Площадь <strong>${island.usedArea ?? 0}/${island.effectiveArea ?? island.area ?? 0}</strong></span>
-        </div>
-      `;
-    } else {
-      body.innerHTML = islandActionIntroHtml(island, definition[0], definition[1]);
-    }
+    const primaryActions = $('islandPrimaryActions');
 
     const here = islandIsHere(island);
     if (!here) {
-      actions.appendChild(islandAwayNote());
+      primaryActions.appendChild(islandAwayNote());
       return;
     }
 
@@ -5281,13 +5262,12 @@
         military: 'Военная инфраструктура',
         palace: 'Дворец',
       };
-      const canonicalTarget = view === 'cargo' ? $('islandCargoPrimaryActions') : actions;
-      moved += moveCanonicalActionGroup($('islandActions'), labels[view], canonicalTarget);
+      moved += moveCanonicalActionGroup($('islandActions'), labels[view], primaryActions);
     }
 
     if (view === 'military' && mine.landCompany) {
       renderFleet();
-      moved += moveCanonicalActionGroup($('fleetActions'), 'Рота ландскнехтов', actions);
+      moved += moveCanonicalActionGroup($('fleetActions'), 'Рота ландскнехтов', primaryActions);
     }
 
     if (view === 'expedition') {
@@ -5302,18 +5282,18 @@
       } else {
         status.textContent = 'Сейчас новая экспедиция недоступна по действующим условиям.';
       }
-      body.appendChild(status);
+      primaryActions.appendChild(status);
       renderLegendaryPlaces();
       const source = $('legendaryPlacesActions');
       for (const node of Array.from(source?.children || [])) {
-        actions.appendChild(node);
+        primaryActions.appendChild(node);
         moved += 1;
       }
     }
 
     if (view === 'admiralty') {
       renderFleet();
-      moved += moveCanonicalActionGroup($('fleetActions'), 'Персонаж Адмиралтейства', actions);
+      moved += moveCanonicalActionGroup($('fleetActions'), 'Персонаж Адмиралтейства', primaryActions);
     }
 
     if (!moved) {
@@ -5326,8 +5306,7 @@
         admiralty: 'Сейчас через это Адмиралтейство нет доступного действия с персонажем.',
         build: 'Сейчас строительство на этом острове недоступно.',
       };
-      const target = view === 'cargo' ? $('islandCargoPrimaryActions') : actions;
-      target.appendChild(islandNoActionNote(messages[view] || 'Сейчас здесь нет доступного действия.'));
+      primaryActions.appendChild(islandNoActionNote(messages[view] || 'Сейчас здесь нет доступного действия.'));
     }
   }
 
