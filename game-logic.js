@@ -3449,17 +3449,19 @@ function battleLevelLoss(room, player, options = {}) {
   const useShipCarpenter = Boolean(options.useShipCarpenter);
   const preventLevels = Math.max(0, Number(CHARACTERS.shipCarpenter?.effect?.levels) || 0);
   if (useShipCarpenter && preventLevels >= 1 && heldCharacterId(player) === 'shipCarpenter') {
-    consumeCharacter(player, 'shipCarpenter');
-    return {
-      before,
-      after: before,
-      returnedToStart: false,
-      cargoDiscarded: 0,
-      adjustment: fleetAdjustmentNeeds(player),
-      prevented: true,
-      preventedLevels: Math.min(1, preventLevels),
-      preventedByCharacter: 'shipCarpenter',
-    };
+    const consumed = consumeCharacter(player, 'shipCarpenter', room?.round);
+    if (consumed.ok) {
+      return {
+        before,
+        after: before,
+        returnedToStart: false,
+        cargoDiscarded: 0,
+        adjustment: fleetAdjustmentNeeds(player),
+        prevented: true,
+        preventedLevels: Math.min(1, preventLevels),
+        preventedByCharacter: 'shipCarpenter',
+      };
+    }
   }
   return { ...loseShipLevel(room, player), prevented: false, preventedByCharacter: null };
 }

@@ -1121,8 +1121,7 @@ function assignmentPriorityAllows(requirement, event, data = {}) {
   if (requirement.kind === 'anchor') return event === 'fightAnchor';
 
   if (requirement.kind === 'delivery') {
-    const holdId = String(data?.holdId || 'main');
-    return event === 'sellCargo' && (requirement.holdIds || []).includes(holdId);
+    return event === 'sellCargo' && (requirement.holdIds || []).length > 0;
   }
 
   if (requirement.kind === 'assault') {
@@ -3644,6 +3643,8 @@ io.on('connection', socket => {
     const character = CHARACTERS.navigator;
     if ((Number(room.actionsLeft) || 0) < character.useActionCost) return ackSafe(ack, { ok: false, error: 'Для Штурмана нужен один доступный пункт действия.' });
     if ((typeof p.character === 'string' ? p.character : p.character?.id) !== 'navigator') return ackSafe(ack, { ok: false, error: 'На корабле нет Штурмана.' });
+    const consumed = consumeCharacter(p, 'navigator', room.round);
+    if (!consumed.ok) return ackSafe(ack, consumed);
     const first = room.roll;
     const second = rollD6();
     room.roll = second;
@@ -3653,8 +3654,6 @@ io.on('connection', socket => {
     const penalty = (Number(getActiveTurnEffectValue(p, 'movePenalty')) || 0) + legendaryMovementPenalty(p);
     room.movePoints = Math.max(0, second + stats.moveMod + bonus + lighthouseBonus - penalty);
     room.actionsLeft -= character.useActionCost;
-    const consumed = consumeCharacter(p, 'navigator', room.round);
-    if (!consumed.ok) return ackSafe(ack, consumed);
     log(room, `${p.name} использует Штурмана: d6 ${first} переброшен на ${second}; второй результат обязателен. Осталось действий: ${room.actionsLeft}.`);
     ackSafe(ack, { ok: true, roll: second, movePoints: room.movePoints });
     emitRoom(room);
@@ -3674,9 +3673,9 @@ io.on('connection', socket => {
     if (!option) return ackSafe(ack, { ok: false, error: 'Эта колода якоря находится дальше четырёх клеток.' });
     const card = seaEncounterSource(room, color)?.peekNext() || null;
     if (!card) return ackSafe(ack, { ok: false, error: 'В выбранной колоде якоря сейчас нет верхней карты.' });
-    room.actionsLeft -= character.useActionCost;
     const consumed = consumeCharacter(p, 'cartographer', room.round);
     if (!consumed.ok) return ackSafe(ack, consumed);
+    room.actionsLeft -= character.useActionCost;
     log(room, `${p.name} использует Картографа и смотрит верхнюю карту колоды «${option.name}», не меняя порядок.`);
     ackSafe(ack, { ok: true, anchorName: option.name, card: { name: card.name, artillery: card.artillery, reward: card.reward, quiet: Boolean(card.quiet) } });
     emitRoom(room);
@@ -3738,9 +3737,9 @@ io.on('connection', socket => {
     if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
     if (room.phase !== 'actions') return ackSafe(ack, { ok: false, error: 'Первый помощник применяется в фазе действий.' });
     if ((typeof p.character === 'string' ? p.character : p.character?.id) !== 'firstMate') return ackSafe(ack, { ok: false, error: 'На корабле нет Первого помощника.' });
-    room.actionsLeft = Math.max(0, Number(room.actionsLeft) || 0) + Math.max(1, Number(CHARACTERS.firstMate.effect?.count) || 1);
     const consumed = consumeCharacter(p, 'firstMate', room.round);
     if (!consumed.ok) return ackSafe(ack, consumed);
+    room.actionsLeft = Math.max(0, Number(room.actionsLeft) || 0) + Math.max(1, Number(CHARACTERS.firstMate.effect?.count) || 1);
     log(room, `${p.name} использует Первого помощника и получает одно дополнительное действие сверх обычного лимита.`);
     ackSafe(ack, { ok: true, actionsLeft: room.actionsLeft });
     emitRoom(room);

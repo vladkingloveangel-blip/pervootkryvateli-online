@@ -4493,6 +4493,7 @@
   }
 
   function renderIsland() {
+    const r = state.room;
     const box = $('islandContent');
     const actions = $('islandActions');
     const badge = $('islandAreaBadge');
