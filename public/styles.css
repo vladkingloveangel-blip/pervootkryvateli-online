@@ -4891,3 +4891,10 @@ body.game-active .final-results-art {
   body.game-active .hud-connection { font-size: 6px; }
   body.game-active .hud-turn strong { font-size: 9px; }
 }
+
+
+/* UI-40 micro-patch — reduce top HUD icon artwork by exactly 10% without shrinking hit targets */
+body.game-active .game-hud .hud-chip .ui-icon { width: 13.5px; height: 13.5px; }
+body.game-active .game-hud .hud-ship-icon .ui-icon { width: 21.6px; height: 21.6px; }
+body.game-active .game-hud .hud-menu-btn .ui-icon { width: 18.9px; height: 18.9px; }
+body.game-active .game-hud .hud-politics-chip > span:first-child { font-size: 90%; }
