@@ -50,3 +50,24 @@ test('mobile information surfaces use the floating-window architecture', () => {
   assert.match(canonical, /body\.game-active \.object-sheet\.expanded ~ \.game-action-bar:not\(\.hidden\)/);
   assert.match(canonical, /body\.game-active \.score-overlay-card,\s*\n\s*body\.game-active \.journal-overlay-card,\s*\n\s*body\.game-active\.game-menu-open \.game-menu-panel/);
 });
+
+
+test('mobile turn controller is compact and keeps canonical turn commands', () => {
+  const start = app.indexOf('function renderGameActionBar');
+  const end = app.indexOf('function recordJournal', start);
+  const block = app.slice(start, end);
+
+  assert.match(block, /socket\.emit\('rollMove'/);
+  assert.match(block, /socket\.emit\('skipNavigation'/);
+  assert.match(block, /socket\.emit\('endTurn'/);
+  assert.doesNotMatch(block, /addButton\('Действия'/);
+  assert.match(block, /bar\.dataset\.mode = 'actions'/);
+  assert.match(block, /left === 1 \? '1 действие' : left > 1 \? `\$\{left\} действия` : 'Нет действий'/);
+  assert.match(block, /addButton\('Остаться'.*skipNavigation/);
+  assert.match(block, /addButton\('🎲 Бросить'.*rollMove/);
+
+  assert.match(css, /button:not\(\.map-object-hit\):not\(\.navigation-hit\):not\(\.targeting-hit\):not\(\.targeting-marker\):not\(\.cell-hit\):not\(\.token\):not\(\.game-action-button\)/);
+  assert.match(css, /\.game-action-buttons \.game-action-button \{[\s\S]*?min-height:\s*36px;[\s\S]*?height:\s*36px/);
+  assert.match(css, /\.game-action-bar\[data-mode="actions"\][\s\S]*?width:\s*min\(270px, calc\(100% - 20px\)\)/);
+  assert.match(css, /grid-template-areas:\s*\n\s*"progress title"\s*\n\s*"detail detail"/);
+});
