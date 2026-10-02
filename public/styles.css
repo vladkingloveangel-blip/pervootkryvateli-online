@@ -1060,24 +1060,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 .game-action-bar { display: none; }
 
 @media (max-width: 900px) {
-  body.game-active .game-action-bar {
-    position: absolute;
-    z-index: 68;
-    left: 8px;
-    right: 8px;
-    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 9px;
-    align-items: end;
-    padding: 9px 10px;
-    border: 1px solid rgba(240,196,91,.38);
-    border-radius: 14px;
-    background: rgba(7,31,37,.93);
-    box-shadow: 0 10px 28px rgba(0,0,0,.38);
-    backdrop-filter: blur(10px);
-  }
-
   body.game-active .game-action-bar.hidden,
   body.game-active .finished-state .game-action-bar {
     display: none !important;
@@ -1105,19 +1087,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     color: var(--muted);
     font-size: 10px;
     line-height: 1.3;
-  }
-
-  body.game-active .game-action-buttons {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-  }
-
-  body.game-active .game-action-buttons button {
-    min-height: 40px;
-    padding: 7px 10px;
-    white-space: nowrap;
-    font-size: 11px;
   }
 
   body.game-active .game-action-progress {
@@ -1148,20 +1117,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     display: none !important;
   }
 }
-
-@media (max-width: 430px) {
-  body.game-active .game-action-bar {
-    grid-template-columns: 1fr;
-    gap: 7px;
-  }
-  body.game-active .game-action-buttons {
-    width: 100%;
-  }
-  body.game-active .game-action-buttons button {
-    flex: 1 1 0;
-  }
-}
-
 
 /* UI-7 — unified mandatory Decision Layer */
 .decision-layer { display: none; }
@@ -3640,7 +3595,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     height: calc(100dvh - 48px - env(safe-area-inset-top, 0px));
   }
 
-  body.game-active .game-action-bar,
   body.game-active .targeting-bar {
     left: max(8px, env(safe-area-inset-left, 0px));
     right: max(8px, env(safe-area-inset-right, 0px));
@@ -3687,11 +3641,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 @media (max-width: 380px), (max-height: 700px) and (max-width: 900px) {
   body.game-active .game-roster {
     top: calc(52px + env(safe-area-inset-top, 0px));
-  }
-
-  body.game-active .game-action-bar {
-    gap: 6px;
-    padding: 7px 8px;
   }
 
   body.game-active .decision-card {
@@ -4702,8 +4651,12 @@ body.game-active .final-results-art {
   body.game-active .roster-turn-dot-waiting { background: #aab5b8; }
 
   body.game-active .game-action-bar {
+    position: absolute;
+    z-index: 68;
     left: 50%;
     right: auto;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    display: grid;
     width: max-content;
     max-width: calc(100% - 20px);
     transform: translateX(-50%);
@@ -4759,8 +4712,10 @@ body.game-active .final-results-art {
   }
 
   body.game-active .game-action-buttons {
+    display: flex;
     width: auto;
     max-width: 100%;
+    align-items: center;
     justify-content: center;
     gap: 5px;
   }
@@ -4774,6 +4729,7 @@ body.game-active .final-results-art {
     height: 33px;
     padding: 4px 7px;
     font-size: 10px;
+    white-space: nowrap;
     border-radius: 8px;
   }
 
@@ -5065,14 +5021,6 @@ body.game-active .final-results-art {
   body.game-active .game.lobby-state ~ .game-quick-access {
     display: none !important;
   }
-}
-
-@media (max-width: 430px) {
-  body.game-active .game-action-bar {
-    max-width: calc(100% - 16px);
-    gap: 5px;
-  }
-  body.game-active .game-action-buttons button { min-width: 82px; }
 }
 
 @media (max-width: 420px) {

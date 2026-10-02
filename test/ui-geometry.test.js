@@ -100,6 +100,10 @@ test('mobile turn controller is compact and keeps canonical turn commands', () =
   const actionDetailCss = css.match(/body\.game-active \.game-action-bar\[data-mode="navigation"\] \.game-action-detail,[\s\S]*?body\.game-active \.game-action-bar\[data-mode="actions"\] \.game-action-detail \{[\s\S]*?\n  \}/)?.[0] || '';
   assert.doesNotMatch(actionDetailCss, /transform:/);
   assert.match(css, /\.game-action-bar\[data-mode="navigation-result"\] \.game-action-buttons \.game-action-button,[\s\S]*?width:\s*132px;[\s\S]*?min-width:\s*132px;[\s\S]*?max-width:\s*132px/);
+  assert.doesNotMatch(css, /body\.game-active \.game-action-buttons button\s*\{[^}]*min-height:\s*40px/s);
+  assert.doesNotMatch(css, /body\.game-active \.game-action-buttons button\s*\{[^}]*flex:\s*1 1 0/s);
+  assert.doesNotMatch(css, /body\.game-active \.game-action-buttons button\s*\{[^}]*min-width:\s*82px/s);
+  assert.doesNotMatch(css, /body\.game-active \.game-action-bar\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto/s);
   assert.match(css, /gap:\s*0;\s*\n\s*padding:\s*0 6px;/);
   assert.match(css, /\.game-action-bar\[data-mode="actions"\] \.game-action-progress \{\s*\n\s*order:\s*0/);
   assert.match(css, /\.game-action-bar\[data-mode="actions"\] \.game-action-kicker \{\s*\n\s*order:\s*1/);
@@ -180,6 +184,8 @@ test('quick access buttons flank the action bar horizontally', () => {
   assert.match(css, /#hudGoalsBtn \{ left:\s*calc\(50% \+ 85\.5px\); \}/);
   assert.match(css, /#hudCardsBtn \{ left:\s*calc\(50% \+ 132\.5px\); \}/);
   assert.doesNotMatch(css, /\.game-quick-access \{\s*\n\s*bottom:\s*calc\(64px/);
+  assert.equal((css.match(/body\.game-active \.game-quick-access \{/g) || []).length, 1);
+  assert.doesNotMatch(css, /body\.game-active \.game-quick-access\s*\{[^}]*(?:display:\s*grid|display:\s*flex)/s);
 });
 
 
