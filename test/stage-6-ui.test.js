@@ -840,3 +840,62 @@ test('UI-17 restores legacy goal panels when Goals sheet closes', () => {
   assert.match(code, /renderAssignments\(\)/);
   assert.match(code, /renderLegendaryPlaces\(\)/);
 });
+
+
+test('UI-18 turns marine anchors into a mobile encounter sheet without revealing the card early', () => {
+  const start = app.indexOf('  function anchorColorLabel(');
+  const end = app.indexOf('\n  function renderObjectSheetFromMapInfo(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /anchorEncounterSheetHtml/);
+  assert.match(code, /renderAnchorEncounterSheet/);
+  assert.match(code, /refreshOpenAnchorSheet/);
+  assert.match(code, /Карта встречи остаётся скрытой до объявления столкновения/);
+  assert.match(code, /Ваша артиллерия/);
+  assert.match(code, /anchor\.fleetPoints/);
+  assert.match(code, /visitedAnchors/);
+  assert.match(code, /lastAnchorEncounter/);
+
+  assert.match(app, /if \(kind === 'anchor'\) \{\s*renderAnchorEncounterSheet\(data\);/);
+  assert.match(app, /renderAnchors\(\);\s*refreshOpenAnchorSheet\(\);\s*renderIsland\(\);/);
+  assert.match(styles, /UI-18 — marine anchor encounter flow/);
+});
+
+test('UI-18 reuses canonical anchor fight action instead of duplicating fightAnchor', () => {
+  const start = app.indexOf('  function moveCanonicalAnchorActions(');
+  const end = app.indexOf('\n  function renderObjectSheetFromMapInfo(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /anchorActions/);
+  assert.match(code, /renderAnchors\(\);/);
+  assert.match(code, /while \(source\.firstChild\) target\.appendChild\(source\.firstChild\);/);
+  assert.doesNotMatch(code, /socket\.emit\('fightAnchor'/);
+});
+
+test('UI-18 keeps hidden encounter contents out of pre-fight anchor presentation', () => {
+  const start = app.indexOf('  function anchorEncounterSheetHtml(');
+  const end = app.indexOf('\n  function moveCanonicalAnchorActions(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  // Encounter card fields are used only for the already-resolved last encounter.
+  assert.match(code, /anchorEncounterForCell/);
+  assert.match(code, /encounter\.cardName/);
+  assert.doesNotMatch(code, /anchor\.cardName|anchor\.cardArtillery|anchor\.reward/);
+  assert.doesNotMatch(code, /anchorDecks/);
+});
+
+test('UI-18 existing Result Card remains the authoritative post-encounter feedback', () => {
+  assert.match(app, /function anchorResultCard\(res\)/);
+  assert.match(app, /function handleAnchorResultAck\(res\)/);
+  assert.match(app, /fightAnchor', \{\}, handleAnchorResultAck/);
+
+  const start = app.indexOf('  function dismissResultCard()');
+  const end = app.indexOf('\n\n  function renderResultLayer()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /state\.mapSelection\?\.kind === 'anchor'/);
+  assert.match(code, /refreshOpenAnchorSheet\(\)/);
+});

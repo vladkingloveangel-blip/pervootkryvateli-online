@@ -1100,6 +1100,7 @@
     renderTrade();
     refreshOpenCitadelSheet();
     renderAnchors();
+    refreshOpenAnchorSheet();
     renderIsland();
     renderAlliances();
     renderCombat();
@@ -1605,6 +1606,7 @@
   function dismissResultCard() {
     state.activeResult = null;
     renderResultLayer();
+    if (state.mapSelection?.kind === 'anchor') refreshOpenAnchorSheet();
   }
 
   function renderResultLayer() {
@@ -4503,6 +4505,126 @@
     renderCitadelObjectSheet(citadel);
   }
 
+  function anchorColorLabel(color) {
+    return color === 'blue' ? 'Синий якорь'
+      : color === 'yellow' ? 'Жёлтый якорь'
+      : color === 'red' ? 'Красный якорь'
+      : 'Морской якорь';
+  }
+
+  function anchorEncounterForCell(mine, anchor) {
+    const encounter = mine?.lastAnchorEncounter;
+    if (!encounter || !anchor) return null;
+    return Number(encounter.round) === Number(state.room?.round)
+      && Number(encounter.row) === Number(anchor.row)
+      && Number(encounter.col) === Number(anchor.col)
+      ? encounter
+      : null;
+  }
+
+  function anchorEncounterSheetHtml(anchor, mine) {
+    const atAnchor = Boolean(mine
+      && Number(mine.row) === Number(anchor.row)
+      && Number(mine.col) === Number(anchor.col));
+    const visited = Boolean(mine && (mine.visitedAnchors || []).includes(`${anchor.row},${anchor.col}`));
+    const encounter = anchorEncounterForCell(mine, anchor);
+    const ownArtillery = mine?.fleetArtillery ?? '—';
+    const location = atAnchor ? 'Вы находитесь на этом якоре.' : 'Чтобы вступить в столкновение, остановитесь на этой клетке.';
+    const availability = visited
+      ? 'Этот якорь уже разыгран вами в текущем раунде.'
+      : 'Столкновение добровольное и объявляется в фазе действий. Союзник не участвует.';
+
+    let last = '';
+    if (encounter) {
+      const outcome = encounter.outcome === 'win' ? 'Победа'
+        : encounter.outcome === 'loss' ? 'Поражение'
+        : encounter.outcome === 'tie' ? 'Ничья'
+        : 'На море тихо';
+      const card = encounter.cardName ? `«${escapeHtml(encounter.cardName)}»` : '—';
+      last = `
+        <section class="anchor-last-encounter">
+          <span>ПОСЛЕДНЕЕ СТОЛКНОВЕНИЕ</span>
+          <strong>${escapeHtml(outcome)}</strong>
+          <small>${card} · артиллерия противника ${encounter.cardArtillery ?? '—'} · ваша сила ${encounter.fleetPower ?? ownArtillery}</small>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="anchor-encounter-hero anchor-${escapeAttr(anchor.color || 'unknown')}">
+        <span>${escapeHtml(anchorColorLabel(anchor.color))}</span>
+        <strong>${escapeHtml(anchor.name || 'Морской якорь')}</strong>
+        <small>Карта встречи остаётся скрытой до объявления столкновения.</small>
+      </section>
+      <section class="anchor-encounter-stats">
+        <div><span>Ваша артиллерия</span><strong>${ownArtillery}</strong></div>
+        <div><span>За победу</span><strong>+${anchor.fleetPoints || 0} очк. флота</strong></div>
+      </section>
+      <div class="anchor-encounter-location">${escapeHtml(location)}</div>
+      <div class="anchor-encounter-rule">${escapeHtml(availability)}</div>
+      ${last}
+    `;
+  }
+
+  function moveCanonicalAnchorActions(target) {
+    const source = $('anchorActions');
+    if (!source || !target) return;
+    while (source.firstChild) target.appendChild(source.firstChild);
+  }
+
+  function renderAnchorEncounterSheet(anchor) {
+    const mine = me();
+    const sheet = $('objectSheet');
+    state.mapSelection = {
+      kind: 'anchor',
+      id: anchor.id || anchor.name || `${anchor.row},${anchor.col}`,
+      anchor: { row: Number(anchor.row), col: Number(anchor.col) },
+    };
+    $('objectSheetKind').textContent = 'МОРСКОЕ СТОЛКНОВЕНИЕ';
+    $('objectSheetTitle').textContent = anchor.name || 'Морской якорь';
+    $('objectSheetBody').innerHTML = anchorEncounterSheetHtml(anchor, mine);
+
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    if (!mine || state.spectating) {
+      const note = document.createElement('div');
+      note.className = 'anchor-encounter-note';
+      note.textContent = 'Наблюдатель может осмотреть якорь, но не объявлять столкновение.';
+      actions.appendChild(note);
+    } else {
+      const atAnchor = Number(mine.row) === Number(anchor.row) && Number(mine.col) === Number(anchor.col);
+      if (atAnchor) {
+        // The legacy renderer remains authoritative for visited state, phase,
+        // actionsLeft, pending decisions and the fightAnchor socket command.
+        renderAnchors();
+        moveCanonicalAnchorActions(actions);
+      }
+      if (!actions.children.length) {
+        const note = document.createElement('div');
+        note.className = 'anchor-encounter-note';
+        note.textContent = atAnchor
+          ? 'Сейчас столкновение на этом якоре недоступно.'
+          : 'Сначала завершите навигацию на клетке этого якоря.';
+        actions.appendChild(note);
+      }
+    }
+
+    sheet.classList.remove('hidden');
+    sheet.classList.remove('expanded');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function refreshOpenAnchorSheet() {
+    if (state.mapSelection?.kind !== 'anchor' || !isMobileGameplayUi()) return;
+    const selection = state.mapSelection;
+    const anchor = (state.room?.anchorCells || []).find(item =>
+      (selection.id && (item.id === selection.id || item.name === selection.id))
+      || (selection.anchor && Number(item.row) === Number(selection.anchor.row) && Number(item.col) === Number(selection.anchor.col))
+    );
+    if (anchor) renderAnchorEncounterSheet(anchor);
+    else closeMapInfo();
+  }
+
   function renderObjectSheetFromMapInfo(kind, data) {
     const sheet = $('objectSheet');
     if (!sheet) return;
@@ -4520,6 +4642,10 @@
     }
     if (kind === 'citadel') {
       renderCitadelObjectSheet(data);
+      return;
+    }
+    if (kind === 'anchor') {
+      renderAnchorEncounterSheet(data);
       return;
     }
 
@@ -4742,7 +4868,18 @@
         };
       }
     } else if (kind === 'anchor') {
-      meta.innerHTML = `<span>Морской якорь</span><span>Бой добровольный в фазе действий</span><span>Победа: <strong>+${data.fleetPoints || 0} очк. флота</strong></span>`;
+      const mine = me();
+      const atAnchor = Boolean(mine && Number(mine.row) === Number(data.row) && Number(mine.col) === Number(data.col));
+      const visited = Boolean(mine && (mine.visitedAnchors || []).includes(`${data.row},${data.col}`));
+      meta.innerHTML = `<span>${escapeHtml(anchorColorLabel(data.color))}</span><span>Карта встречи скрыта до объявления столкновения</span><span>Победа: <strong>+${data.fleetPoints || 0} очк. флота</strong></span><span>${visited ? 'Уже разыгран вами в этом раунде' : atAnchor ? 'Вы находитесь на якоре' : 'Остановитесь на клетке якоря'}</span>`;
+      if (atAnchor && !visited) {
+        action.textContent = 'Открыть столкновение';
+        action.classList.remove('hidden');
+        action.onclick = () => {
+          if (isMobileGameplayUi()) renderAnchorEncounterSheet(data);
+          else { closeMapInfo(); openMobileTab('actions'); }
+        };
+      }
     } else if (kind === 'legendary') {
       const reward = data.reward === 'legendary' ? 'случайная легендарная карта' : data.reward === 'treasure' ? 'случайная карта сокровища' : 'награда пока не определена';
       const here = me() && Number(me().row) === Number(data.row) && Number(me().col) === Number(data.col);
