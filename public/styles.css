@@ -4435,76 +4435,162 @@ body.game-active .final-results-art {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  body.game-active .hud-menu-chevron { flex: 0 0 auto; }
-
   body.game-active .game-hud {
-    --hud-row-size: 44px;
+    --hud-tile: 44px;
     flex-basis: 54px;
     min-height: 54px;
     align-items: center;
-    grid-template-columns: minmax(88px,112px) minmax(0,1fr) minmax(84px,96px) var(--hud-row-size);
+    grid-template-columns: calc(var(--hud-tile) * 2) minmax(0,1fr) var(--hud-tile) var(--hud-tile);
+    gap: 5px;
     background: none !important;
     border-bottom: 0 !important;
     box-shadow: none !important;
     backdrop-filter: none !important;
   }
-  body.game-active .game-hud > .hud-player,
-  body.game-active .game-hud > .hud-turn,
-  body.game-active .game-hud > .hud-menu-btn {
+
+  body.game-active .hud-player,
+  body.game-active .hud-chip,
+  body.game-active .hud-turn-status,
+  body.game-active .hud-menu-btn,
+  body.game-active .quick-access-btn {
     box-sizing: border-box;
-    height: var(--hud-row-size) !important;
-    min-height: var(--hud-row-size) !important;
-    max-height: var(--hud-row-size);
-  }
-  body.game-active .hud-chip {
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 12px;
     background: rgba(8,37,44,.92) !important;
-    border-color: rgba(255,255,255,.14) !important;
+    color: var(--text);
     box-shadow: 0 3px 10px rgba(0,0,0,.24);
     backdrop-filter: none;
   }
+
   body.game-active .hud-player {
-    padding-top: 4px;
-    padding-bottom: 4px;
-  }
-  body.game-active .hud-player-meta {
-    display: flex;
+    width: calc(var(--hud-tile) * 2);
+    min-width: calc(var(--hud-tile) * 2);
+    max-width: calc(var(--hud-tile) * 2);
+    height: var(--hud-tile) !important;
+    min-height: var(--hud-tile) !important;
+    max-height: var(--hud-tile);
+    display: grid;
     align-items: center;
-    gap: 4px;
-    min-width: 0;
-    line-height: 1.05;
+    padding: 3px 6px;
+    text-align: left;
+    overflow: hidden;
   }
+  body.game-active .hud-player-copy {
+    min-width: 0;
+    display: grid;
+    grid-template-rows: 7px 13px 9px;
+    align-content: center;
+    gap: 1px;
+  }
+  body.game-active .hud-player-copy strong,
+  body.game-active .hud-player-copy small,
   body.game-active .hud-connection {
-    flex: 0 0 auto;
-    color: #79dfa0;
-    font-size: 7px;
-    font-weight: 800;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
-  body.game-active .hud-connection.offline { color: #ef7777; }
-  body.game-active .hud-turn {
-    display: grid;
-    align-content: center;
-    gap: 0;
-    padding: 3px 6px;
-    line-height: 1;
-  }
-  body.game-active .hud-turn small {
-    font-size: 7px;
-    line-height: 1.05;
-  }
-  body.game-active .hud-turn strong {
+  body.game-active .hud-player-copy strong {
+    color: var(--text);
     font-size: 10px;
-    line-height: 1.05;
+    line-height: 13px;
   }
-  body.game-active .hud-phase {
+  body.game-active .hud-player-copy small {
+    color: var(--muted);
     font-size: 7px;
-    line-height: 1.05;
+    line-height: 9px;
   }
+  body.game-active .hud-connection {
+    color: #79dfa0;
+    font-size: 6px;
+    font-weight: 900;
+    line-height: 7px;
+  }
+  body.game-active .hud-connection.offline { color: #ef7777; }
+
+  body.game-active .hud-resources {
+    gap: 5px;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  body.game-active .hud-resources::-webkit-scrollbar { display: none; }
+
+  body.game-active .hud-chip {
+    flex: 0 0 var(--hud-tile);
+    width: var(--hud-tile);
+    min-width: var(--hud-tile);
+    max-width: var(--hud-tile);
+    height: var(--hud-tile);
+    min-height: var(--hud-tile);
+    max-height: var(--hud-tile);
+    display: grid;
+    grid-template-rows: 22px 11px;
+    place-items: center;
+    gap: 1px;
+    padding: 4px 2px 3px;
+    border-radius: 12px;
+  }
+  body.game-active .hud-chip > span {
+    display: grid;
+    place-items: center;
+    min-width: 0;
+  }
+  body.game-active .hud-chip strong {
+    max-width: 38px;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 9px;
+    line-height: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  body.game-active .hud-chip .ui-icon {
+    width: 17px;
+    height: 17px;
+    color: var(--gold-soft);
+  }
+
+  body.game-active .hud-turn-status {
+    width: var(--hud-tile);
+    min-width: var(--hud-tile);
+    max-width: var(--hud-tile);
+    height: var(--hud-tile);
+    min-height: var(--hud-tile);
+    max-height: var(--hud-tile);
+    display: grid;
+    place-content: center;
+    gap: 3px;
+    padding: 3px;
+    text-align: center;
+    line-height: 1;
+    pointer-events: none;
+    user-select: none;
+  }
+  body.game-active .hud-turn-status small {
+    color: var(--muted);
+    font-size: 6px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  body.game-active .hud-turn-status strong {
+    color: var(--gold-soft);
+    font-size: 8px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
   body.game-active .hud-menu-btn {
-    width: var(--hud-row-size) !important;
-    min-width: var(--hud-row-size) !important;
-    max-width: var(--hud-row-size);
+    width: var(--hud-tile) !important;
+    min-width: var(--hud-tile) !important;
+    max-width: var(--hud-tile);
+    height: var(--hud-tile) !important;
+    min-height: var(--hud-tile) !important;
+    max-height: var(--hud-tile);
     padding: 0 !important;
+    display: grid;
+    place-items: center;
     aspect-ratio: 1 / 1;
     align-self: center;
   }
@@ -4993,22 +5079,17 @@ body.game-active .final-results-art {
   }
   body.game-active .quick-access-btn {
     position: relative;
-    box-sizing: border-box;
-    width: var(--quick-access-size, 42px);
-    min-width: var(--quick-access-size, 42px);
-    height: var(--quick-access-size, 42px);
-    min-height: var(--quick-access-size, 42px);
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    max-height: 44px;
     display: grid;
-    grid-template-rows: minmax(0, 1fr) 10px;
-    grid-template-columns: 1fr;
-    align-items: stretch;
-    justify-items: stretch;
-    padding: 3px 3px 2px;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    background: var(--panel-2);
-    color: var(--text);
-    box-shadow: 0 5px 16px rgba(0,0,0,.3);
+    grid-template-rows: 24px 10px;
+    place-items: center;
+    gap: 1px;
+    padding: 4px 2px 3px;
     overflow: hidden;
   }
   body.game-active .quick-access-btn > span:first-child {
@@ -5017,39 +5098,32 @@ body.game-active .final-results-art {
     height: auto;
     display: grid;
     place-items: center;
-    align-self: stretch;
-    justify-self: stretch;
     transform: none;
     color: var(--gold-soft);
     font-size: 18px;
     line-height: 1;
   }
   body.game-active .quick-access-btn .ui-icon {
-    width: 20px;
-    height: 20px;
+    width: 19px;
+    height: 19px;
     color: var(--gold-soft);
   }
   body.game-active .quick-access-btn .quick-access-label {
-    position: static;
-    display: block;
-    align-self: center;
-    justify-self: stretch;
-    min-width: 0;
-    max-width: 100%;
-    padding: 0;
+    display: none !important;
+  }
+  body.game-active .quick-access-btn > strong {
+    display: block !important;
+    max-width: 38px;
     overflow: hidden;
-    transform: none;
-    background: transparent;
     color: var(--text);
-    font-size: 6px;
-    font-weight: 800;
+    font-size: 7px;
+    font-weight: 900;
     line-height: 10px;
     text-align: center;
-    text-overflow: clip;
+    text-overflow: ellipsis;
     white-space: nowrap;
     pointer-events: none;
   }
-  body.game-active .quick-access-btn > strong { display: none !important; }
 
   body.game-active.decision-layer-open .game-quick-access,
   body.game-active.result-layer-open .game-quick-access,
@@ -5072,13 +5146,7 @@ body.game-active .final-results-art {
 }
 
 @media (max-width: 420px) {
-  body.game-active .game-hud {
-    --hud-row-size: 40px;
-    grid-template-columns: 82px minmax(0,1fr) 78px var(--hud-row-size);
-  }
-  body.game-active .hud-connection { font-size: 6px; }
-  body.game-active .hud-turn strong { font-size: 9px; }
-  body.game-active .game-quick-access { --quick-access-size: 40px; }
+  body.game-active .game-hud { gap: 4px; }
 }
 
 @media (max-width: 380px), (max-height: 700px) and (max-width: 900px) {
