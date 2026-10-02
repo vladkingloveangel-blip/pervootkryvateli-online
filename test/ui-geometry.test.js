@@ -184,7 +184,7 @@ test('quick access buttons flank the action bar horizontally', () => {
   assert.match(css, /#hudGoalsBtn \{ left:\s*calc\(50% \+ 85\.5px\); \}/);
   assert.match(css, /#hudCardsBtn \{ left:\s*calc\(50% \+ 132\.5px\); \}/);
   assert.doesNotMatch(css, /\.game-quick-access \{\s*\n\s*bottom:\s*calc\(64px/);
-  assert.equal((css.match(/body\.game-active \.game-quick-access \{/g) || []).length, 1);
+  assert.equal((css.match(/body\.game-active \.game-quick-access \{\s*\n\s*position:\s*absolute/g) || []).length, 1);
   assert.doesNotMatch(css, /body\.game-active \.game-quick-access\s*\{[^}]*(?:display:\s*grid|display:\s*flex)/s);
 });
 
