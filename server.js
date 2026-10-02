@@ -4174,8 +4174,8 @@ io.on('connection', socket => {
         return;
       }
       if (playerHasLegendaryKind(target, 'sea-veil')) {
-        const veilRef = (target.legendaryCards || []).map((card, index) => ({ card, index })).find(item => item.card?.kind === 'sea-veil');
-        if (veilRef) consumeLegendaryCard(room, target, { source: 'legendaryCards', index: veilRef.index });
+        const veilRef = legendaryCardRefs(target, 'sea-veil')[0];
+        if (veilRef) consumeLegendaryCard(room, target, veilRef);
         applySeaVeilHostileReactionToShip(target, p.id);
         log(room, `${target.name} автоматически разыгрывает «Покров моря» против «Морского проклятия» ${p.name}. Обе карты расходованы.`);
         ackSafe(ack, { ok: true, canceled: true, protected: true });
@@ -4219,8 +4219,8 @@ io.on('connection', socket => {
         return;
       }
       if (owner && playerHasLegendaryKind(owner, 'sea-veil')) {
-        const veilRef = (owner.legendaryCards || []).map((card, index) => ({ card, index })).find(item => item.card?.kind === 'sea-veil');
-        if (veilRef) consumeLegendaryCard(room, owner, { source: 'legendaryCards', index: veilRef.index });
+        const veilRef = legendaryCardRefs(owner, 'sea-veil')[0];
+        if (veilRef) consumeLegendaryCard(room, owner, veilRef);
         applySeaVeilHostileReactionToIsland(island, owner, p.id);
         log(room, `${owner.name} автоматически разыгрывает «Покров моря» против «Пламени Ада» ${p.name}. Обе карты расходованы.`);
         ackSafe(ack, { ok: true, canceled: true, protected: true });
@@ -4501,8 +4501,8 @@ io.on('connection', socket => {
     markAttackHostilityAgainstPlayer(room, p, target);
     room.actionsLeft -= 1;
     if (playerHasLegendaryKind(target, 'sea-veil')) {
-      const veilRef = (target.legendaryCards || []).map((card, index) => ({ card, index })).find(item => item.card?.kind === 'sea-veil');
-      if (veilRef) consumeLegendaryCard(room, target, { source: 'legendaryCards', index: veilRef.index });
+      const veilRef = legendaryCardRefs(target, 'sea-veil')[0];
+      if (veilRef) consumeLegendaryCard(room, target, veilRef);
       applySeaVeilToShip(target, { sourcePlayerId: target.id, ignoreCurrentTurn: false });
       log(room, `${target.name} автоматически разыгрывает «Покров моря». Морская атака ${p.name} отменена.`);
       ackSafe(ack, { ok: true, canceled: true, protected: true });
