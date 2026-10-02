@@ -2059,14 +2059,15 @@
       reward: 'reward',
       confirm: 'confirm',
     };
-    playUiCue(map[kind] || 'confirm', soundState.volume);
+    playUiCue(map[kind] || 'confirm');
   }
 
   function motionReduced() {
     return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
   }
 
-  function playUiCue(kind = 'confirm', masterVolume = 1) {
+  function playUiCue(kind = 'confirm') {
+    const masterVolume = soundState.muted ? 0 : soundState.volume;
     if (document.visibilityState === 'hidden' || state.spectating) return;
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return;
