@@ -4896,11 +4896,13 @@ body.game-active .final-results-art {
   }
 
   body.game-active .game-action-buttons .game-action-button {
-    flex: 0 1 auto;
-    min-width: 82px;
-    min-height: 36px;
-    height: 36px;
-    padding: 4px 9px;
+    flex: 0 0 66px;
+    width: 66px;
+    min-width: 66px;
+    max-width: 66px;
+    min-height: 33px;
+    height: 33px;
+    padding: 4px 7px;
     font-size: 10px;
     border-radius: 8px;
   }
@@ -4921,19 +4923,19 @@ body.game-active .final-results-art {
   body.game-active .game-action-bar[data-mode="navigation"],
   body.game-active .game-action-bar[data-mode="navigation-result"],
   body.game-active .game-action-bar[data-mode="actions"] {
-    width: min(185px, calc(100% - 20px));
-    height: 77px;
-    min-height: 77px;
+    width: min(165px, calc(100% - 20px));
+    height: 66px;
+    min-height: 66px;
     grid-template-columns: 1fr;
-    grid-template-rows: 16px 36px 11px;
+    grid-template-rows: 1fr 33px 1fr;
     grid-template-areas:
       "status"
       "buttons"
       "detail";
     justify-items: center;
     align-items: center;
-    gap: 2px;
-    padding: 3px 6px;
+    gap: 0;
+    padding: 0 6px;
   }
 
   body.game-active .game-action-bar[data-mode="navigation"] .game-action-copy,
@@ -4947,7 +4949,7 @@ body.game-active .final-results-art {
   body.game-active .game-action-bar[data-mode="actions"] .game-action-status {
     grid-area: status;
     width: 100%;
-    height: 16px;
+    height: 100%;
     justify-self: center;
   }
 
@@ -4956,14 +4958,17 @@ body.game-active .final-results-art {
   body.game-active .game-action-bar[data-mode="actions"] .game-action-buttons {
     grid-area: buttons;
     width: 100%;
-    height: 36px;
+    height: 33px;
     justify-self: center;
     align-items: center;
   }
 
   body.game-active .game-action-bar[data-mode="navigation-result"] .game-action-buttons .game-action-button,
   body.game-active .game-action-bar[data-mode="actions"] .game-action-buttons .game-action-button {
-    min-width: 126px;
+    flex-basis: 132px;
+    width: 132px;
+    min-width: 132px;
+    max-width: 132px;
   }
 
   body.game-active .game-action-bar[data-mode="navigation"] .game-action-detail,
@@ -4971,16 +4976,15 @@ body.game-active .final-results-art {
   body.game-active .game-action-bar[data-mode="actions"] .game-action-detail {
     grid-area: detail;
     width: 100%;
-    max-width: 188px;
-    min-height: 14px;
-    max-height: 14px;
+    max-width: 153px;
+    min-height: 0;
+    max-height: none;
     align-self: center;
     justify-self: center;
     overflow: hidden;
     text-align: center;
     white-space: nowrap;
     text-overflow: clip;
-    transform: translateY(3px);
   }
 
   body.game-active .game-action-bar[data-mode="actions"] .game-action-progress {
