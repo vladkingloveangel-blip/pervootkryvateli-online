@@ -4977,3 +4977,67 @@ body.game-active .token {
     min-width: 82px;
   }
 }
+
+
+/* UI-40 quick access — move navigational HUD buttons to a clear lower-left dock without changing the top HUD. */
+.game-quick-access { display: none; }
+@media (max-width: 900px) {
+  body.game-active .game-quick-access {
+    position: absolute;
+    z-index: 67;
+    left: 8px;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    display: grid;
+    gap: 5px;
+    width: 122px;
+    pointer-events: auto;
+  }
+  body.game-active .quick-access-btn {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 38px;
+    padding: 5px 8px;
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    gap: 6px;
+    align-items: center;
+    border: 1px solid rgba(240,196,91,.42);
+    border-radius: 10px;
+    background: rgba(8,48,78,.94);
+    color: var(--text);
+    box-shadow: 0 5px 16px rgba(0,0,0,.3);
+    backdrop-filter: blur(8px);
+    text-align: left;
+  }
+  body.game-active .quick-access-btn > span:first-child {
+    display: grid;
+    place-items: center;
+    color: var(--gold-soft);
+    font-size: 15px;
+  }
+  body.game-active .quick-access-btn .ui-icon { width: 16px; height: 16px; color: var(--gold-soft); }
+  body.game-active .quick-access-label { font-size: 10px; font-weight: 800; white-space: nowrap; }
+  body.game-active .quick-access-btn > strong {
+    min-width: 12px;
+    max-width: 24px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--gold-soft);
+    font-size: 9px;
+    text-align: right;
+    white-space: nowrap;
+  }
+  body.game-active.decision-layer-open .game-quick-access,
+  body.game-active.result-layer-open .game-quick-access,
+  body.game-active.object-sheet-open .game-quick-access,
+  body.game-active.targeting-open .game-quick-access,
+  body.game-active.game-menu-open .game-quick-access { display: none; }
+}
+@media (max-width: 380px), (max-height: 700px) and (max-width: 900px) {
+  body.game-active .game-quick-access { width: 112px; bottom: calc(64px + env(safe-area-inset-bottom, 0px)); gap: 4px; }
+  body.game-active .quick-access-btn { min-height: 34px; padding: 4px 7px; }
+  body.game-active .quick-access-label { font-size: 9px; }
+}
+@media (min-width: 901px) {
+  body.game-active .game-quick-access { display: none; }
+}

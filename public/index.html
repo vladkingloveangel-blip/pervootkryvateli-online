@@ -163,10 +163,6 @@
           <button class="hud-chip" id="hudGloryBtn" type="button" aria-label="Слава"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#glory"></use></svg></span><strong id="hudGlory">0</strong></button>
           <button class="hud-chip" id="hudArmyBtn" type="button" aria-label="Войско"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#army"></use></svg></span><strong id="hudArmy">0</strong></button>
           <button class="hud-chip" id="hudArtilleryBtn" type="button" aria-label="Артиллерия"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#cannon"></use></svg></span><strong id="hudArtillery">0</strong></button>
-          <button class="hud-chip hud-character-chip" id="hudCharacterBtn" type="button" aria-label="Персонаж"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#character"></use></svg></span><strong id="hudCharacter">—</strong></button>
-          <button class="hud-chip hud-cards-chip" id="hudCardsBtn" type="button" aria-label="Карты и сохранённые эффекты"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#cards"></use></svg></span><strong id="hudCards">0</strong></button>
-          <button class="hud-chip hud-goals-chip" id="hudGoalsBtn" type="button" aria-label="Цели и экспедиции"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#goal"></use></svg></span><strong id="hudGoals">0</strong></button>
-          <button class="hud-chip hud-politics-chip" id="hudPoliticsBtn" type="button" aria-label="Дипломатия и сюзерен"><span>⚜</span><strong id="hudPolitics">—</strong></button>
           <button class="hud-chip" id="hudCargoBtn" type="button" aria-label="Трюм"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#cargo"></use></svg></span><strong id="hudCargo">0/0</strong></button>
         </div>
         <button id="hudTurnBtn" class="hud-turn" type="button" aria-label="Текущее состояние хода">
@@ -218,6 +214,13 @@
           <div id="finalPlayerMetrics" class="final-player-grid"></div>
         </div>
       </section>
+
+      <nav id="gameQuickAccess" class="game-quick-access" aria-label="Быстрый доступ">
+          <button class="quick-access-btn hud-character-chip" id="hudCharacterBtn" type="button" aria-label="Персонаж"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#character"></use></svg></span><span class="quick-access-label">Персонаж</span><strong id="hudCharacter">—</strong></button>
+          <button class="quick-access-btn hud-politics-chip" id="hudPoliticsBtn" type="button" aria-label="Дипломатия и сюзерен"><span>⚜</span><span class="quick-access-label">Дипломатия</span><strong id="hudPolitics">—</strong></button>
+          <button class="quick-access-btn hud-goals-chip" id="hudGoalsBtn" type="button" aria-label="Цели и экспедиции"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#goal"></use></svg></span><span class="quick-access-label">Цели</span><strong id="hudGoals">0</strong></button>
+          <button class="quick-access-btn hud-cards-chip" id="hudCardsBtn" type="button" aria-label="Карты и сохранённые эффекты"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#cards"></use></svg></span><span class="quick-access-label">Карты</span><strong id="hudCards">0</strong></button>
+      </nav>
 
       <section id="gameWorldShell" class="layout game-world-shell">
         <div class="map-column">
