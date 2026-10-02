@@ -2067,7 +2067,7 @@ test('UI-40 roster uses authoritative turn order for active next and waiting sta
 
 
 test('UI-40 mobile HUD integrates connection status and aligns turn/menu controls', () => {
-  assert.match(html, /id="hudConnection" class="hud-connection"/);
+  assert.match(index, /id="hudConnection" class="hud-connection"/);
   assert.match(app, /hudConnection\.textContent = yes \? '● онлайн' : '○ нет связи'/);
   assert.match(styles, /body\.game-active \.topbar \.connection \{\s*display: none;/);
   assert.match(styles, /--hud-row-size: 44px/);
