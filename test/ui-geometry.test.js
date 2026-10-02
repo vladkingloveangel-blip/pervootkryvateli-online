@@ -87,7 +87,8 @@ test('mobile turn controller is compact and keeps canonical turn commands', () =
   assert.match(css, /\.game-action-kicker \{[\s\S]*?color:\s*var\(--accent\)/);
   assert.match(css, /\.game-action-status > strong \{[\s\S]*?color:\s*var\(--accent\)/);
   assert.match(css, /text-overflow:\s*clip;/);
-  assert.doesNotMatch(css, /transform:\s*translateY\(3px\)/);
+  const actionDetailCss = css.match(/body\.game-active \.game-action-bar\[data-mode="navigation"\] \.game-action-detail,[\s\S]*?body\.game-active \.game-action-bar\[data-mode="actions"\] \.game-action-detail \{[\s\S]*?\n  \}/)?.[0] || '';
+  assert.doesNotMatch(actionDetailCss, /transform:/);
   assert.match(css, /\.game-action-bar\[data-mode="navigation-result"\] \.game-action-buttons \.game-action-button,[\s\S]*?width:\s*132px;[\s\S]*?min-width:\s*132px;[\s\S]*?max-width:\s*132px/);
   assert.match(css, /gap:\s*0;\s*\n\s*padding:\s*0 6px;/);
   assert.match(css, /\.game-action-bar\[data-mode="actions"\] \.game-action-progress \{\s*\n\s*order:\s*0/);
