@@ -1409,6 +1409,14 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(shipStats(p).artillery, 6); // кулеврины без фальконов не действуют
 }
 
+// Уровень корабля увеличивает число действий на II, IV и VI уровнях.
+{
+  const expected = [3, 4, 4, 5, 5, 6];
+  for (let level = 1; level <= 6; level += 1) {
+    assert.equal(shipStats({ shipClass: 'brigantine', level, upgrades: [] }).actionsPerTurn, expected[level - 1]);
+  }
+}
+
 // Шторм предлагает допустимые береговые клетки целевого острова.
 // В.21 сохраняет старый id для save-compatibility, но staging-канон переносит к Ренаике.
 {
@@ -1418,10 +1426,9 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.ok(storm);
   assert.equal(storm.name, 'Шторм: Ренаика');
   assert.equal(storm.islandId, 'renaika');
-  const options = stormCellOptions(room, p, storm.islandId);
-  assert.ok(options.length > 0);
-  const island = room.islands.find(i => i.id === 'renaika');
-  assert.equal(options.every(o => island.cells.some(([r,c]) => r === o.row && c === o.col)), true);
+  assert.deepEqual(stormCellOptions(room, p, storm.islandId), [{ row: 4, col: 5 }]);
+  assert.deepEqual(stormCellOptions(room, p, 'kadingir'), [{ row: 0, col: 24 }]);
+  assert.deepEqual(stormCellOptions(room, p, 'landin'), [{ row: 9, col: 17 }]);
 }
 
 // Колода событий плавания содержит ровно 26 физических карт и использует канонический
