@@ -58,7 +58,7 @@ const ownerPlayer = o({
   specialCards:a(S), specialCardCount:S, legendaryCards:a(legendaryCard), legendaryCardCount:S,
   playableLegendaryCards:a(legendaryRef), savedEventCards:a(savedEvent), savedEventCardCount:S,
   activeExpedition:expedition, hasActiveExpedition:S,
-  ...f('nextActionLimit expeditionTakenThisRound canTakeExpedition canDismissLandCompanyHere characterReplacedThisRound admiraltyLevelHere palaceUsed pendingLandinEscort'),
+  ...f('nextActionLimit expeditionTakenThisRound canTakeExpedition canDismissLandCompanyHere characterReplacedThisRound characterUsedThisRound admiraltyLevelHere palaceUsed pendingLandinEscort'),
   attackedPlayerIdsThisRound:a(S), nextTurnEffects:turnEffects, lastAnchorEncounter:ownerAnchorEncounter,
   characterAcquisitionOptions:a(characterOption), characterReplacementOptions:a(characterOption),
   cartographerAnchorOptions:a(o(f('id color name distance'))),
