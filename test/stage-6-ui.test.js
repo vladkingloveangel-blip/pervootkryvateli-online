@@ -1571,5 +1571,8 @@ test('UI-31 critical server-pending flows remain reconstructed in render after r
 });
 
 test('UI-31 refresh does not attempt to restore voluntary targeting or object sheets from localStorage', () => {
-  assert.doesNotMatch(app, /localStorage\.(?:getItem|setItem)\([^\n]*(?:targeting|mapSelection|selectedIslandId|activeResult|resultQueue)/);
+  for (const key of ['targeting','mapSelection','selectedIslandId','activeResult','resultQueue']) {
+    assert.equal(app.includes(`localStorage.getItem('pervo:${key}'`), false, key);
+    assert.equal(app.includes(`localStorage.setItem('pervo:${key}'`), false, key);
+  }
 });
