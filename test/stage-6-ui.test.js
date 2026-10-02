@@ -609,3 +609,58 @@ test('UI-13 local target mode never survives a mandatory server decision', () =>
   const code = app.slice(start, end);
   assert.match(code, /if \(descriptor && state\.targeting\) state\.targeting = null/);
 });
+
+
+test('UI-14 gives the owner a dedicated private character sheet from the HUD', () => {
+  assert.match(index, /id="hudCharacterBtn"/);
+  assert.match(index, /id="hudCharacter"/);
+
+  const start = app.indexOf('  const CHARACTER_UX = {');
+  const end = app.indexOf('\n  function isMobileGameplayUi()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  for (const id of ['navigator','cartographer','scout','treasureHunter','firstMate','shipCarpenter']) {
+    assert.match(code, new RegExp(id));
+  }
+  assert.match(code, /characterSheetHtml/);
+  assert.match(code, /renderCharacterObjectSheet/);
+  assert.match(code, /refreshOpenCharacterSheet/);
+  assert.match(code, /state\.mapSelection = \{ kind: 'character'/);
+  assert.match(code, /renderFleet\(\);/);
+  assert.match(code, /moveCanonicalCharacterActions\(actions\)/);
+
+  assert.match(app, /\$\('hudCharacterBtn'\)\.addEventListener\('click'/);
+  assert.match(app, /renderFleet\(\);\s*refreshOpenCharacterSheet\(\);\s*renderTrade\(\);/);
+  assert.match(styles, /UI-14 — dedicated private character UX/);
+});
+
+test('UI-14 character sheet reuses canonical character actions instead of duplicating commands', () => {
+  const start = app.indexOf('  function moveCanonicalCharacterActions(');
+  const end = app.indexOf('\n  function isMobileGameplayUi()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /fleetActions/);
+  assert.match(code, /Персонаж Адмиралтейства/);
+  assert.match(code, /target\.appendChild\(node\)/);
+  assert.doesNotMatch(code, /socket\.emit\('useNavigator'/);
+  assert.doesNotMatch(code, /socket\.emit\('useTreasureHunter'/);
+  assert.doesNotMatch(code, /socket\.emit\('useFirstMate'/);
+  assert.doesNotMatch(code, /socket\.emit\('takeCharacter'/);
+  assert.doesNotMatch(code, /socket\.emit\('replaceCharacter'/);
+});
+
+test('UI-14 character information remains owner-only in the new path', () => {
+  const start = app.indexOf('  function renderCharacterObjectSheet()');
+  const end = app.indexOf('\n  function refreshOpenCharacterSheet()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /const mine = me\(\)/);
+  assert.match(code, /if \(!mine \|\| state\.spectating\) return/);
+
+  const playerStart = app.indexOf('  function playerPublicSheetHtml(');
+  const playerEnd = app.indexOf('\n  function renderPlayerObjectSheet(', playerStart);
+  const publicCode = app.slice(playerStart, playerEnd);
+  assert.doesNotMatch(publicCode, /character|characterAcquisitionOptions|characterReplacementOptions/);
+});

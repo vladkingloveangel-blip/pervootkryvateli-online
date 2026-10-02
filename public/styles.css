@@ -2212,3 +2212,113 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     to { opacity: 1; }
   }
 }
+
+
+/* UI-14 — dedicated private character UX */
+@media (max-width: 900px) {
+  body.game-active .hud-character-chip strong {
+    max-width: 28px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.game-active .character-hero {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid rgba(240,196,91,.28);
+    border-radius: 12px;
+    background: rgba(240,196,91,.055);
+  }
+
+  body.game-active .character-emblem {
+    width: 52px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(240,196,91,.48);
+    border-radius: 50%;
+    color: var(--accent);
+    background: rgba(7,31,37,.7);
+    font-size: 25px;
+  }
+
+  body.game-active .character-hero-copy {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  body.game-active .character-hero-copy > span {
+    color: var(--accent);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .07em;
+  }
+
+  body.game-active .character-hero-copy > strong {
+    overflow: hidden;
+    font-size: 19px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.game-active .character-hero-copy > small,
+  body.game-active .character-hint {
+    color: var(--muted);
+    font-size: 10px;
+  }
+
+  body.game-active .character-description {
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  body.game-active .character-hint {
+    padding: 0 2px;
+    line-height: 1.4;
+  }
+
+  body.game-active .character-availability {
+    padding: 8px 9px;
+    border-radius: 9px;
+    background: rgba(255,255,255,.045);
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  body.game-active .character-empty {
+    display: grid;
+    gap: 6px;
+    padding: 12px;
+    border: 1px dashed var(--line);
+    border-radius: 12px;
+  }
+
+  body.game-active .character-empty > span {
+    color: var(--accent);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .08em;
+  }
+
+  body.game-active .character-empty > small,
+  body.game-active .character-no-actions {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  body.game-active .object-sheet-actions .character-no-actions {
+    padding: 9px;
+    border: 1px dashed var(--line);
+    border-radius: 9px;
+  }
+}

@@ -699,6 +699,11 @@
   $('hudGloryBtn').addEventListener('click', () => openMobileTab('players'));
   $('hudArmyBtn').addEventListener('click', () => openMobileTab('ship'));
   $('hudArtilleryBtn').addEventListener('click', () => openMobileTab('ship'));
+  $('hudCharacterBtn').addEventListener('click', () => {
+    if (state.spectating) return;
+    if (isMobileGameplayUi()) renderCharacterObjectSheet();
+    else openMobileTab('ship');
+  });
   $('hudCargoBtn').addEventListener('click', () => openMobileTab('ship'));
   $('hudTurnBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : openMobileTab('actions'));
   $('hudMenuBtn').addEventListener('click', () => toggleGameAccountMenu());
@@ -848,9 +853,12 @@
       $('hudArmy').textContent = mine.assaultArmy ?? mine.stats?.army ?? 0;
       $('hudArtillery').textContent = mine.fleetArtillery ?? mine.stats?.artillery ?? 0;
       $('hudCargo').textContent = `${cargo.quantity}/${cargo.capacity}`;
+      $('hudCharacter').textContent = mine.character?.name ? mine.character.name.slice(0, 3) : '—';
+      $('hudCharacterBtn').title = mine.character?.name || 'Персонаж не нанят';
     } else {
       $('hudPlayerName').textContent = state.spectating ? 'Наблюдение' : 'Игрок';
       $('hudShipLevel').textContent = state.spectating ? `Комната ${r.code}` : '—';
+      $('hudCharacter').textContent = '—';
     }
 
     $('hudRound').textContent = !r.started
@@ -1072,6 +1080,7 @@
     renderLegendaryPlaces();
     renderLegendary();
     renderFleet();
+    refreshOpenCharacterSheet();
     renderTrade();
     renderAnchors();
     renderIsland();
@@ -2552,6 +2561,139 @@
       hint.textContent = '«Путь сквозь туман»: выберите подсвеченную клетку прямо на карте.';
       actions.appendChild(hint);
     }
+  }
+
+  const CHARACTER_UX = {
+    navigator: {
+      role: 'НАВИГАЦИЯ',
+      summary: 'После обычного броска позволяет один раз перебросить навигацию. Второй результат обязателен.',
+      hint: 'Доступен только после броска навигации и требует 1 действие.',
+    },
+    cartographer: {
+      role: 'РАЗВЕДКА МОРЯ',
+      summary: 'До броска навигации позволяет тайно посмотреть верхнюю карту одного доступного морского якоря.',
+      hint: 'На мобильном цель выбирается прямо на карте.',
+    },
+    scout: {
+      role: 'РАЗВЕДКА',
+      summary: 'Раскрывает гарнизон одного чужого острова или точную казну одного другого игрока в радиусе 4.',
+      hint: 'Полученные данные видны только вам и действуют до конца текущего личного хода.',
+    },
+    treasureHunter: {
+      role: 'СОКРОВИЩА',
+      summary: 'Определяет два независимых результата сокровища и позволяет выбрать один.',
+      hint: 'Использование требует 1 действие; выбор результата приходит как обязательное решение.',
+    },
+    firstMate: {
+      role: 'КОМАНДА',
+      summary: 'Даёт одно дополнительное действие в текущем ходу.',
+      hint: 'Применяется в фазе действий и не требует отдельной оплаты.',
+    },
+    shipCarpenter: {
+      role: 'БОЙ',
+      summary: 'Может предотвратить одну потерю уровня корабля при поражении.',
+      hint: 'Применение отмечается при объявлении своей атаки; дополнительное действие списывается только если потеря уровня действительно предотвращена.',
+    },
+  };
+
+  function characterUxInfo(character) {
+    if (!character) return null;
+    return CHARACTER_UX[character.id] || {
+      role: 'ПЕРСОНАЖ',
+      summary: character.name || 'Персонаж Адмиралтейства',
+      hint: 'Способность применяется по действующим правилам персонажа.',
+    };
+  }
+
+  function characterAvailabilityText(mine) {
+    if (!mine?.character) {
+      if ((mine?.characterAcquisitionOptions || []).length) return 'Можно получить персонажа Адмиралтейства.';
+      if (mine?.admiraltyLevelHere) return 'Доступных персонажей этого уровня сейчас нет.';
+      return 'Персонаж не нанят.';
+    }
+    if (isDecisionPending()) return 'Сначала завершите обязательное решение.';
+    const myTurn = state.room?.activePlayerId === state.myId;
+    if (!myTurn) return 'Способность будет доступна в подходящий момент вашего хода.';
+    const id = mine.character.id;
+    if (id === 'navigator') return mine.phase === 'navigation' && mine.roll !== null && (mine.actionsLeft ?? 0) > 0 ? 'Можно использовать сейчас.' : 'Доступен после броска навигации.';
+    if (id === 'cartographer') return mine.phase === 'navigation' && mine.roll === null && (mine.actionsLeft ?? 0) > 0 ? 'Можно использовать сейчас.' : 'Доступен до броска навигации.';
+    if (id === 'scout') return mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 ? 'Можно использовать сейчас.' : 'Доступен в фазе действий.';
+    if (id === 'treasureHunter') return mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 ? 'Можно использовать сейчас.' : 'Доступен в фазе действий.';
+    if (id === 'firstMate') return mine.phase === 'actions' ? 'Можно использовать сейчас.' : 'Доступен в фазе действий.';
+    if (id === 'shipCarpenter') return 'Срабатывает через интерфейс объявления морского боя или штурма.';
+    return 'Способность готова по правилам персонажа.';
+  }
+
+  function characterSheetHtml(mine) {
+    if (!mine?.character) {
+      return `
+        <div class="character-empty">
+          <span>ПЕРСОНАЖ НЕ НАНЯТ</span>
+          <strong>${characterAvailabilityText(mine)}</strong>
+          <small>Персонажи получаются через Адмиралтейство и остаются приватной информацией владельца.</small>
+        </div>
+      `;
+    }
+    const character = mine.character;
+    const info = characterUxInfo(character);
+    return `
+      <div class="character-hero">
+        <div class="character-emblem" aria-hidden="true">♟</div>
+        <div class="character-hero-copy">
+          <span>${escapeHtml(info.role)}</span>
+          <strong>${escapeHtml(character.name)}</strong>
+          <small>Адмиралтейство ${character.admiraltyLevel ?? '—'} ур.</small>
+        </div>
+      </div>
+      <div class="character-description">${escapeHtml(info.summary)}</div>
+      <div class="character-hint">${escapeHtml(info.hint)}</div>
+      <div class="character-availability">${escapeHtml(characterAvailabilityText(mine))}</div>
+    `;
+  }
+
+  function moveCanonicalCharacterActions(target) {
+    const source = $('fleetActions');
+    if (!source || !target) return;
+    const children = Array.from(source.children);
+    const start = children.findIndex(node => node.classList?.contains('action-group-label') && node.textContent === 'Персонаж Адмиралтейства');
+    if (start < 0) return;
+    for (let i = start + 1; i < children.length; i += 1) {
+      const node = children[i];
+      if (node.classList?.contains('action-group-label')) break;
+      target.appendChild(node);
+    }
+  }
+
+  function renderCharacterObjectSheet() {
+    const mine = me();
+    if (!mine || state.spectating) return;
+    closeMapInfo();
+    state.mapSelection = { kind: 'character', id: mine.character?.id || 'none' };
+    $('objectSheetKind').textContent = mine.character ? 'ВАШ ПЕРСОНАЖ' : 'АДМИРАЛТЕЙСТВО';
+    $('objectSheetTitle').textContent = mine.character?.name || 'Персонаж';
+    $('objectSheetBody').innerHTML = characterSheetHtml(mine);
+
+    // renderFleet remains the canonical owner of character legality and socket payloads.
+    renderFleet();
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    moveCanonicalCharacterActions(actions);
+
+    if (!actions.children.length) {
+      const note = document.createElement('div');
+      note.className = 'character-no-actions';
+      note.textContent = 'Сейчас для персонажа нет доступных действий.';
+      actions.appendChild(note);
+    }
+
+    $('objectSheet').classList.remove('hidden');
+    $('objectSheet').classList.remove('expanded');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function refreshOpenCharacterSheet() {
+    if (state.mapSelection?.kind !== 'character' || !isMobileGameplayUi()) return;
+    renderCharacterObjectSheet();
   }
 
   function isMobileGameplayUi() {
