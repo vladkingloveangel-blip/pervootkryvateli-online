@@ -669,27 +669,28 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(island.loadedRound, 1);
 }
 
-// Грузовой эскорт имеет отдельный трюм 5 и может продать его в Цитадели.
+// Одна погрузка заполняет основной и все активные свободные грузовые трюмы,
+// а одна продажа в Цитадели продаёт весь груз флотилии.
 {
   const room = { islands: cloneIslands(), round: 2 };
   const source = room.islands.find(i => i.id === 'bogamia');
   source.ownerId = 'p1';
   source.buildings.push({ type: 'farm', level: 1 });
-  const yard = room.islands.find(i => i.id === 'kisalinia');
-  yard.ownerId = 'p1';
-  yard.buildings.push({ type: 'shipyard', level: 1 });
   const p = {
     id: 'p1', row: 5, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], cargo: null, ducats: 0,
     escorts: [{ id: 'escort-1', type: 'cargo', special: false, cargo: null }],
   };
-  const loaded = loadCargo(room, p, 'bogamia', 'provisions', 'escort-1');
+  const loaded = loadCargo(room, p, 'bogamia', 'provisions');
   assert.equal(loaded.ok, true);
+  assert.equal(loaded.quantity, 7);
+  assert.equal(p.cargo.quantity, 2);
   assert.equal(p.escorts[0].cargo.quantity, 5);
   p.row = 13; p.col = 13;
-  const sold = sellCargo(room, p, 'escort-1');
+  const sold = sellCargo(room, p);
   assert.equal(sold.ok, true);
-  assert.equal(sold.revenue, 5);
-  assert.equal(p.ducats, 5);
+  assert.equal(sold.revenue, 7);
+  assert.equal(p.ducats, 7);
+  assert.equal(p.cargo, null);
   assert.equal(p.escorts[0].cargo, null);
 }
 
