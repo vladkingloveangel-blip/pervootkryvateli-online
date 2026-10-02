@@ -5105,3 +5105,39 @@ body.game-active .token {
 @media (max-width: 420px) {
   body.game-active .game-quick-access { --hud-row-size: 40px; }
 }
+
+
+/* UI-40 quick access refinement — center icons and keep labels inside the menu-sized buttons. */
+@media (max-width: 900px) {
+  body.game-active .quick-access-btn {
+    grid-template-rows: 1fr auto;
+    align-content: center;
+    justify-items: center;
+    gap: 1px;
+    padding: 4px 3px 3px;
+    overflow: hidden;
+  }
+  body.game-active .quick-access-btn > span:first-child {
+    align-self: end;
+    justify-self: center;
+    line-height: 1;
+  }
+  body.game-active .quick-access-label {
+    position: static;
+    align-self: start;
+    justify-self: stretch;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0;
+    transform: none;
+    overflow: hidden;
+    text-overflow: clip;
+    background: transparent;
+    color: var(--text);
+    font-size: 6px;
+    font-weight: 800;
+    line-height: 1.05;
+    text-align: center;
+    white-space: nowrap;
+  }
+}
