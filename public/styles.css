@@ -4829,7 +4829,7 @@ body.game-active .final-results-art {
   body.game-active.object-sheet-open .game-action-bar {
     bottom: calc(8px + env(safe-area-inset-bottom, 0px));
   }
-  body.game-active .object-sheet.expanded ~ .game-action-bar {
+  body.game-active .object-sheet.expanded ~ .game-action-bar:not(.hidden) {
     display: grid !important;
   }
 
