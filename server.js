@@ -4241,6 +4241,34 @@ io.on('connection', socket => {
     ackSafe(ack, { ok: false, error: 'Этот вид легендарной карты пока не распознан.' });
   });
 
+  onSocketEvent(socket, 'hellfireCapture', (data, ack) => {
+    const room = getRoom(socket.data.roomCode);
+    const p = currentPlayer(room);
+    if (!room || !p || p.id !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Сейчас не ваш ход.' });
+    if (hasPendingDecision(room)) return ackSafe(ack, { ok: false, error: pendingDecisionError(room) });
+    if (room.phase !== 'actions' || room.actionsLeft <= 0) return ackSafe(ack, { ok: false, error: 'Для захвата нужен один доступный пункт действия.' });
+    const island = room.islands.find(i => i.id === String(data?.islandId || ''));
+    if (!island || !playerOnIsland(p, island)) return ackSafe(ack, { ok: false, error: 'Выберите заселённый остров на текущей клетке.' });
+    if (island.ownerId) return ackSafe(ack, { ok: false, error: 'Остров другого игрока нельзя мгновенно захватить «Пламенем Ада».' });
+    if (!['state', 'independent'].includes(island.kind)) return ackSafe(ack, { ok: false, error: 'Так можно захватывать только изначально заселённые независимые и государственные острова.' });
+    const ref = legendaryCardRefs(p, 'hellfire')[0];
+    if (!ref) return ackSafe(ack, { ok: false, error: 'У вас нет карты «Пламя Ада».' });
+    autoRebelBeforeStateAttack(room, p, island);
+    markAttackHostilityAgainstIsland(room, p, island, 'захват «Пламенем Ада»');
+    consumeLegendaryCard(room, p, ref);
+    room.actionsLeft -= 1;
+    const result = jointAssaultIsland(room, p, island, [], [], { forcedAttackerVictory: true });
+    if (!result.ok || result.outcome !== 'attacker') return ackSafe(ack, result.ok ? { ok: false, error: 'Не удалось завершить захват острова.' } : result);
+    logAssaultResult(room, p, island, result);
+    const capturePending = queueCaptureRetentionFromAssault(room, p, island, result);
+    if (!capturePending) queueStatePrizeFromAssault(room, p, result);
+    refreshPoliticsWithLog(room);
+    queueIslandCorrectionIfNeeded(room, null, 'последствия захвата «Пламенем Ада» ' + island.name);
+    log(room, p.name + ' захватывает ' + island.name + ' «Пламенем Ада», игнорируя силу обороны. Осталось действий: ' + room.actionsLeft + '.');
+    ackSafe(ack, { ok: true, result });
+    emitRoom(room);
+  });
+
   onSocketEvent(socket, 'respondLegendaryReaction', (data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const pending = pendingLegacy(room, 'legendary-reaction');
