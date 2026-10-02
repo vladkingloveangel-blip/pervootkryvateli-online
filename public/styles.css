@@ -4401,8 +4401,30 @@ body.game-active .final-results-art {
 }
 
 
-/* UI-40 staging playtest — compact mobile map controls and overflow hardening */
+/* UI-40 — staging visual normalization.
+   One canonical late-cascade block for the current mobile composition.
+   Do not append screenshot/micro patches below this section: edit this block instead. */
 @media (max-width: 900px) {
+  body.game-active .topbar {
+    height: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    overflow: visible;
+    background: transparent;
+    box-shadow: none;
+  }
+  body.game-active .topbar > div:first-child,
+  body.game-active .topbar .connection {
+    display: none;
+  }
+
+  body.game-active main {
+    height: 100vh;
+    height: 100dvh;
+    padding-top: 0;
+  }
+
   body.game-active .hud-player-copy {
     min-width: 0;
     max-width: 100%;
@@ -4419,75 +4441,147 @@ body.game-active .final-results-art {
   }
   body.game-active .hud-menu-chevron { flex: 0 0 auto; }
 
-  body.game-active .game-roster {
+  body.game-active .game-hud {
+    --hud-row-size: 44px;
+    flex-basis: 54px;
+    min-height: 54px;
+    align-items: center;
+    grid-template-columns: minmax(88px,112px) minmax(0,1fr) minmax(84px,96px) var(--hud-row-size);
+    background: none !important;
+    border-bottom: 0 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+  body.game-active .game-hud > .hud-player,
+  body.game-active .game-hud > .hud-turn,
+  body.game-active .game-hud > .hud-menu-btn {
+    box-sizing: border-box;
+    height: var(--hud-row-size) !important;
+    min-height: var(--hud-row-size) !important;
+    max-height: var(--hud-row-size);
+  }
+  body.game-active .hud-chip {
+    background: rgba(8,37,44,.92) !important;
+    border-color: rgba(255,255,255,.14) !important;
+    box-shadow: 0 3px 10px rgba(0,0,0,.24);
+    backdrop-filter: none;
+  }
+  body.game-active .hud-player {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+  body.game-active .hud-player-meta {
+    display: flex;
+    align-items: center;
     gap: 4px;
-    padding-top: 2px;
-    padding-bottom: 3px;
+    min-width: 0;
+    line-height: 1.05;
   }
-  body.game-active .roster-player {
-    min-width: 50px;
-    min-height: 42px;
-    grid-template-columns: 22px auto;
-    column-gap: 4px;
-    padding: 3px 5px;
-    border-radius: 10px;
+  body.game-active .hud-connection {
+    flex: 0 0 auto;
+    color: #79dfa0;
+    font-size: 7px;
+    font-weight: 800;
+    white-space: nowrap;
   }
-  body.game-active .roster-token {
-    width: 22px;
-    height: 22px;
-    font-size: 9px;
+  body.game-active .hud-connection.offline { color: #ef7777; }
+  body.game-active .hud-turn {
+    display: grid;
+    align-content: center;
+    gap: 0;
+    padding: 3px 6px;
+    line-height: 1;
   }
-  body.game-active .roster-name { max-width: 62px; font-size: 9px; }
-  body.game-active .roster-status { min-height: 9px; font-size: 7px; }
+  body.game-active .hud-turn small {
+    font-size: 7px;
+    line-height: 1.05;
+  }
+  body.game-active .hud-turn strong {
+    font-size: 10px;
+    line-height: 1.05;
+  }
+  body.game-active .hud-phase {
+    font-size: 7px;
+    line-height: 1.05;
+  }
+  body.game-active .hud-menu-btn {
+    width: var(--hud-row-size) !important;
+    min-width: var(--hud-row-size) !important;
+    max-width: var(--hud-row-size);
+    padding: 0 !important;
+    aspect-ratio: 1 / 1;
+    align-self: center;
+  }
 
   body.game-active .game-world-shell .map-toolbar {
-    top: calc(104px + env(safe-area-inset-top, 0px));
+    top: calc(72px + env(safe-area-inset-top, 0px));
+    left: auto;
+    right: 8px;
+    width: 30px;
+    min-width: 30px;
     min-height: 0;
-    padding: 5px 6px;
-    gap: 5px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 0;
     border: 0;
+    border-radius: 0;
     background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
     pointer-events: none;
   }
   body.game-active .map-toolbar > * { pointer-events: auto; }
   body.game-active .map-toolbar .map-tool-icon {
-    width: 38px;
-    min-width: 38px;
-    height: 38px;
-    min-height: 38px;
+    box-sizing: border-box;
+    flex: 0 0 30px;
+    width: 30px;
+    min-width: 30px;
+    max-width: 30px;
+    height: 30px;
+    min-height: 30px;
+    max-height: 30px;
     padding: 0;
     display: grid;
     place-items: center;
     border-radius: 50%;
-    background: rgba(8,37,44,.92);
-    box-shadow: 0 4px 12px rgba(0,0,0,.28);
-    backdrop-filter: blur(7px);
+    aspect-ratio: 1 / 1;
+    line-height: 1;
+    background: rgba(8,37,44,.94);
+    box-shadow: 0 3px 9px rgba(0,0,0,.24);
+    backdrop-filter: none;
   }
-  body.game-active .map-center-me { margin-left: 0 !important; }
-  body.game-active .map-center-me .ui-icon { width: 19px; height: 19px; color: var(--gold-soft); }
+  body.game-active .map-center-me { margin: 0 !important; }
+  body.game-active .map-center-me .ui-icon {
+    width: 15px;
+    height: 15px;
+    color: var(--gold-soft);
+  }
   body.game-active .map-zoom-control { position: relative; }
   body.game-active .map-zoom-toggle::before {
     content: '';
-    width: 13px;
-    height: 13px;
-    border: 2px solid currentColor;
+    width: 11px;
+    height: 11px;
+    border: 1.5px solid currentColor;
     border-radius: 50%;
     box-sizing: border-box;
   }
   body.game-active .map-zoom-toggle::after {
     content: '';
     position: absolute;
-    width: 7px;
-    height: 2px;
+    width: 5px;
+    height: 1.5px;
     background: currentColor;
-    transform: translate(8px, 8px) rotate(45deg);
+    transform: translate(6px, 6px) rotate(45deg);
     border-radius: 2px;
   }
   body.game-active .map-zoom-popover {
     position: absolute;
     z-index: 2;
-    top: 43px;
-    left: 0;
+    top: 0;
+    left: auto;
+    right: 36px;
     display: flex;
     align-items: center;
     gap: 4px;
@@ -4511,136 +4605,7 @@ body.game-active .final-results-art {
     text-align: center;
     font-size: 11px;
   }
-}
 
-
-/* UI-40 staging patch — remove old map-control plate, stack compact controls under menu, hide game title bar */
-@media (max-width: 900px) {
-  body.game-active .topbar {
-    height: 0;
-    min-height: 0;
-    padding: 0;
-    border: 0;
-    overflow: visible;
-    background: transparent;
-    box-shadow: none;
-  }
-  body.game-active .topbar > div:first-child { display: none; }
-  body.game-active .topbar .connection {
-    position: fixed;
-    z-index: 60;
-    top: max(8px, env(safe-area-inset-top, 0px));
-    right: 8px;
-    padding: 3px 7px;
-    border: 1px solid rgba(255,255,255,.12);
-    border-radius: 999px;
-    background: rgba(7,31,37,.82);
-    font-size: 9px;
-    backdrop-filter: blur(7px);
-  }
-  body.game-active main {
-    height: 100dvh;
-    padding-top: 0;
-  }
-
-  body.game-active .game-world-shell .map-toolbar {
-    top: calc(58px + env(safe-area-inset-top, 0px));
-    left: auto;
-    right: 8px;
-    width: 30px;
-    min-width: 30px;
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-    backdrop-filter: none;
-    pointer-events: none;
-  }
-  body.game-active .map-toolbar > * { pointer-events: auto; }
-  body.game-active .map-toolbar .map-tool-icon {
-    width: 30px;
-    min-width: 30px;
-    height: 30px;
-    min-height: 30px;
-    padding: 0;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: rgba(8,37,44,.94);
-    box-shadow: 0 3px 9px rgba(0,0,0,.24);
-    backdrop-filter: none;
-  }
-  body.game-active .map-center-me {
-    margin: 0 !important;
-  }
-  body.game-active .map-center-me .ui-icon {
-    width: 15px;
-    height: 15px;
-    color: var(--gold-soft);
-  }
-  body.game-active .map-zoom-control {
-    position: relative;
-  }
-  body.game-active .map-zoom-toggle::before {
-    content: '';
-    width: 11px;
-    height: 11px;
-    border: 1.5px solid currentColor;
-    border-radius: 50%;
-    box-sizing: border-box;
-  }
-  body.game-active .map-zoom-toggle::after {
-    content: '';
-    position: absolute;
-    width: 5px;
-    height: 1.5px;
-    background: currentColor;
-    transform: translate(6px, 6px) rotate(45deg);
-    border-radius: 2px;
-  }
-  body.game-active .map-zoom-popover {
-    top: 0;
-    left: auto;
-    right: 36px;
-  }
-}
-
-
-/* UI-40 staging micro-patch — keep map tool buttons circular and below HUD */
-@media (max-width: 900px) {
-  body.game-active .game-world-shell .map-toolbar {
-    top: calc(72px + env(safe-area-inset-top, 0px));
-  }
-  body.game-active .map-toolbar .map-tool-icon {
-    box-sizing: border-box;
-    flex: 0 0 30px;
-    width: 30px !important;
-    min-width: 30px !important;
-    max-width: 30px;
-    height: 30px !important;
-    min-height: 30px !important;
-    max-height: 30px;
-    aspect-ratio: 1 / 1;
-    line-height: 1;
-  }
-}
-
-
-/* UI-40 staging micro-patch — anchor glyphs have no translucent backing plate */
-.canonical-map-art .anchor-marker {
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-}
-
-
-/* UI-40 staging roster pass — portrait + compact copy, authoritative turn-order dots */
-@media (max-width: 900px) {
   body.game-active .game-roster {
     left: 8px;
     right: auto;
@@ -4650,7 +4615,6 @@ body.game-active .final-results-art {
     overflow: visible;
     padding: 2px 0 3px;
   }
-
   body.game-active .roster-player {
     width: max-content;
     max-width: 100%;
@@ -4669,13 +4633,11 @@ body.game-active .final-results-art {
     backdrop-filter: none;
     overflow: visible;
   }
-
   body.game-active .roster-player.active,
   body.game-active .roster-player.ally {
     border: 0;
     box-shadow: none;
   }
-
   body.game-active .roster-token {
     position: relative;
     z-index: 2;
@@ -4689,12 +4651,10 @@ body.game-active .final-results-art {
     font-size: 10px;
     box-shadow: 0 2px 7px rgba(0,0,0,.3);
   }
-
   body.game-active .roster-player.turn-active .roster-token {
     border-color: rgba(240,196,91,.9);
     box-shadow: 0 0 0 2px rgba(240,196,91,.18), 0 2px 7px rgba(0,0,0,.3);
   }
-
   body.game-active .roster-copy {
     min-width: 0;
     margin-left: -3px;
@@ -4705,14 +4665,12 @@ body.game-active .final-results-art {
     background: rgba(7,31,37,.62);
     backdrop-filter: blur(4px);
   }
-
   body.game-active .roster-name-row {
     min-width: 0;
     display: flex;
     align-items: center;
     gap: 5px;
   }
-
   body.game-active .roster-name {
     min-width: 0;
     max-width: 118px;
@@ -4725,7 +4683,6 @@ body.game-active .final-results-art {
     white-space: nowrap;
     text-align: left;
   }
-
   body.game-active .roster-ship {
     max-width: 118px;
     overflow: hidden;
@@ -4736,7 +4693,6 @@ body.game-active .final-results-art {
     white-space: nowrap;
     text-align: left;
   }
-
   body.game-active .roster-turn-dot {
     flex: 0 0 6px;
     width: 6px;
@@ -4747,147 +4703,7 @@ body.game-active .final-results-art {
   body.game-active .roster-turn-dot-active { background: #38d878; }
   body.game-active .roster-turn-dot-next { background: #ef4444; }
   body.game-active .roster-turn-dot-waiting { background: #aab5b8; }
-}
 
-
-/* UI-40 staging HUD micro-patch — remove the full-width upper backing plate */
-@media (max-width: 900px) {
-  body.game-active .game-hud {
-    background: transparent;
-    border-bottom: 0;
-    box-shadow: none;
-  }
-}
-
-
-/* UI-40 staging HUD screenshot correction — isolated plates over an unblurred map */
-@media (max-width: 900px) {
-  body.game-active .game-hud {
-    background: none !important;
-    border-bottom: 0 !important;
-    box-shadow: none !important;
-    backdrop-filter: none !important;
-  }
-
-  body.game-active .hud-chip {
-    background: rgba(8,37,44,.92) !important;
-    border-color: rgba(255,255,255,.14) !important;
-    box-shadow: 0 3px 10px rgba(0,0,0,.24);
-    backdrop-filter: none;
-  }
-}
-
-
-/* UI-40 staging HUD alignment — one compact top row */
-@media (max-width: 900px) {
-  body.game-active .topbar .connection {
-    display: none;
-  }
-
-  body.game-active .game-hud {
-    --hud-row-size: 44px;
-    flex-basis: 54px;
-    min-height: 54px;
-    align-items: center;
-    grid-template-columns: minmax(88px,112px) minmax(0,1fr) minmax(84px,96px) var(--hud-row-size);
-  }
-
-  body.game-active .game-hud > .hud-player,
-  body.game-active .game-hud > .hud-turn,
-  body.game-active .game-hud > .hud-menu-btn {
-    box-sizing: border-box;
-    height: var(--hud-row-size) !important;
-    min-height: var(--hud-row-size) !important;
-    max-height: var(--hud-row-size);
-  }
-
-  body.game-active .hud-player {
-    padding-top: 4px;
-    padding-bottom: 4px;
-  }
-
-  body.game-active .hud-player-meta {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    min-width: 0;
-    line-height: 1.05;
-  }
-
-  body.game-active .hud-connection {
-    flex: 0 0 auto;
-    color: #79dfa0;
-    font-size: 7px;
-    font-weight: 800;
-    white-space: nowrap;
-  }
-
-  body.game-active .hud-connection.offline {
-    color: #ef7777;
-  }
-
-  body.game-active .hud-turn {
-    display: grid;
-    align-content: center;
-    gap: 0;
-    padding: 3px 6px;
-    line-height: 1;
-  }
-
-  body.game-active .hud-turn small {
-    font-size: 7px;
-    line-height: 1.05;
-  }
-
-  body.game-active .hud-turn strong {
-    font-size: 10px;
-    line-height: 1.05;
-  }
-
-  body.game-active .hud-phase {
-    font-size: 7px;
-    line-height: 1.05;
-  }
-
-  body.game-active .hud-menu-btn {
-    width: var(--hud-row-size) !important;
-    min-width: var(--hud-row-size) !important;
-    max-width: var(--hud-row-size);
-    padding: 0 !important;
-    aspect-ratio: 1 / 1;
-    align-self: center;
-  }
-}
-
-@media (max-width: 420px) {
-  body.game-active .game-hud {
-    --hud-row-size: 40px;
-    grid-template-columns: 82px minmax(0,1fr) 78px var(--hud-row-size);
-  }
-  body.game-active .hud-connection { font-size: 6px; }
-  body.game-active .hud-turn strong { font-size: 9px; }
-}
-
-
-/* UI-40 micro-patch — reduce top HUD icon artwork by exactly 10% without shrinking hit targets */
-body.game-active .game-hud .hud-chip .ui-icon { width: 13.5px; height: 13.5px; }
-body.game-active .game-hud .hud-ship-icon .ui-icon { width: 21.6px; height: 21.6px; }
-body.game-active .game-hud .hud-menu-btn .ui-icon { width: 18.9px; height: 18.9px; }
-body.game-active .game-hud .hud-politics-chip > span:first-child { font-size: 90%; }
-
-
-/* UI-40 map token correction — preserve canonical cell positioning; only correct visual height */
-body.game-active .token {
-  width: calc(100% / var(--map-cols, 28) * .576);
-  height: calc(100% / var(--map-rows, 28) * .576);
-  min-height: 0;
-  box-sizing: border-box;
-  border-radius: 50%;
-}
-
-
-/* UI-40 compact Action Bar — same canonical controls, less map obstruction */
-@media (max-width: 900px) {
   body.game-active .game-action-bar {
     left: 50%;
     right: auto;
@@ -4905,7 +4721,6 @@ body.game-active .token {
     box-shadow: 0 7px 20px rgba(0,0,0,.34);
     backdrop-filter: none;
   }
-
   body.game-active .game-action-copy {
     width: 100%;
     max-width: 330px;
@@ -4913,30 +4728,25 @@ body.game-active .token {
     gap: 1px;
     text-align: center;
   }
-
   body.game-active .game-action-kicker {
     font-size: 8px;
     line-height: 1.05;
   }
-
   body.game-active .game-action-copy > strong {
     font-size: 11px;
     line-height: 1.15;
   }
-
   body.game-active .game-action-detail {
     max-width: 320px;
     font-size: 8px;
     line-height: 1.2;
   }
-
   body.game-active .game-action-buttons {
     width: auto;
     max-width: 100%;
     justify-content: center;
     gap: 6px;
   }
-
   body.game-active .game-action-buttons button {
     flex: 0 1 auto;
     min-width: 88px;
@@ -4945,256 +4755,44 @@ body.game-active .token {
     font-size: 10px;
     border-radius: 9px;
   }
-
   body.game-active .game-action-progress {
     justify-content: center;
     gap: 4px;
     margin-top: 2px;
   }
-
   body.game-active .game-action-progress span {
     width: 6px;
     height: 6px;
   }
-}
 
-@media (max-width: 430px) {
-  body.game-active .game-action-bar {
-    width: max-content;
-    max-width: calc(100% - 16px);
-    grid-template-columns: auto;
-    gap: 5px;
-  }
-
-  body.game-active .game-action-buttons {
-    width: auto;
-  }
-
-  body.game-active .game-action-buttons button {
-    flex: 0 1 auto;
-    min-width: 82px;
-  }
-}
-
-
-/* UI-40 quick access — move navigational HUD buttons to a clear lower-left dock without changing the top HUD. */
-.game-quick-access { display: none; }
-@media (max-width: 900px) {
   body.game-active .game-quick-access {
     position: absolute;
     z-index: 67;
     left: 8px;
     bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    width: auto;
     display: grid;
-    gap: 5px;
-    width: 122px;
+    gap: 6px;
     pointer-events: auto;
   }
   body.game-active .quick-access-btn {
+    position: relative;
     box-sizing: border-box;
-    width: 100%;
-    min-height: 38px;
-    padding: 5px 8px;
-    display: grid;
-    grid-template-columns: 18px minmax(0, 1fr) auto;
-    gap: 6px;
-    align-items: center;
-    border: 1px solid rgba(240,196,91,.42);
-    border-radius: 10px;
-    background: rgba(8,48,78,.94);
-    color: var(--text);
-    box-shadow: 0 5px 16px rgba(0,0,0,.3);
-    backdrop-filter: blur(8px);
-    text-align: left;
-  }
-  body.game-active .quick-access-btn > span:first-child {
-    display: grid;
-    place-items: center;
-    color: var(--gold-soft);
-    font-size: 15px;
-  }
-  body.game-active .quick-access-btn .ui-icon { width: 16px; height: 16px; color: var(--gold-soft); }
-  body.game-active .quick-access-label { font-size: 10px; font-weight: 800; white-space: nowrap; }
-  body.game-active .quick-access-btn > strong {
-    min-width: 12px;
-    max-width: 24px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    color: var(--gold-soft);
-    font-size: 9px;
-    text-align: right;
-    white-space: nowrap;
-  }
-  body.game-active.decision-layer-open .game-quick-access,
-  body.game-active.result-layer-open .game-quick-access,
-  body.game-active.object-sheet-open .game-quick-access,
-  body.game-active.targeting-open .game-quick-access,
-  body.game-active.game-menu-open .game-quick-access { display: none; }
-}
-@media (max-width: 380px), (max-height: 700px) and (max-width: 900px) {
-  body.game-active .game-quick-access { width: 112px; bottom: calc(64px + env(safe-area-inset-bottom, 0px)); gap: 4px; }
-  body.game-active .quick-access-btn { min-height: 34px; padding: 4px 7px; }
-  body.game-active .quick-access-label { font-size: 9px; }
-}
-@media (min-width: 901px) {
-  body.game-active .game-quick-access { display: none; }
-}
-
-
-/* UI-40 quick access correction — menu-sized square controls with compact labels. */
-@media (max-width: 900px) {
-  body.game-active .game-quick-access {
-    width: auto;
-    gap: 6px;
-  }
-  body.game-active .quick-access-btn {
-    position: relative;
-    width: var(--hud-row-size, 42px);
-    min-width: var(--hud-row-size, 42px);
-    height: var(--hud-row-size, 42px);
-    min-height: var(--hud-row-size, 42px);
-    padding: 0;
-    display: grid;
-    place-items: center;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    background: var(--panel-2);
-    color: var(--text);
-    box-shadow: 0 5px 16px rgba(0,0,0,.3);
-    overflow: visible;
-  }
-  body.game-active .quick-access-btn > span:first-child {
-    font-size: 18px;
-  }
-  body.game-active .quick-access-btn .ui-icon { width: 20px; height: 20px; }
-  body.game-active .quick-access-label {
-    position: absolute;
-    left: calc(100% + 5px);
-    top: 50%;
-    transform: translateY(-50%);
-    padding: 3px 6px;
-    border-radius: 7px;
-    background: rgba(7,31,37,.88);
-    color: var(--text);
-    font-size: 9px;
-    font-weight: 800;
-    line-height: 1.1;
-    white-space: nowrap;
-    pointer-events: none;
-  }
-  body.game-active .quick-access-btn > strong {
-    position: absolute;
-    right: -4px;
-    top: -4px;
-    min-width: 15px;
-    max-width: 24px;
-    min-height: 15px;
-    padding: 1px 3px;
-    display: grid;
-    place-items: center;
-    border: 1px solid rgba(240,196,91,.45);
-    border-radius: 999px;
-    background: rgba(7,31,37,.96);
-    color: var(--gold-soft);
-    font-size: 7px;
-    line-height: 1;
-  }
-}
-@media (max-width: 420px) {
-  body.game-active .game-quick-access { --hud-row-size: 40px; }
-}
-
-
-/* UI-40 quick access refinement — center icons and keep labels inside the menu-sized buttons. */
-@media (max-width: 900px) {
-  body.game-active .quick-access-btn {
-    grid-template-rows: 1fr auto;
-    align-content: center;
-    justify-items: center;
-    gap: 1px;
-    padding: 4px 3px 3px;
-    overflow: hidden;
-  }
-  body.game-active .quick-access-btn > span:first-child {
-    align-self: end;
-    justify-self: center;
-    line-height: 1;
-  }
-  body.game-active .quick-access-label {
-    position: static;
-    align-self: start;
-    justify-self: stretch;
-    min-width: 0;
-    max-width: 100%;
-    padding: 0;
-    transform: none;
-    overflow: hidden;
-    text-overflow: clip;
-    background: transparent;
-    color: var(--text);
-    font-size: 6px;
-    font-weight: 800;
-    line-height: 1.05;
-    text-align: center;
-    white-space: nowrap;
-  }
-}
-
-
-/* UI-40 quick access final composition — icon centered in the tile, caption anchored inside at the bottom. */
-@media (max-width: 900px) {
-  body.game-active .quick-access-btn {
-    position: relative;
-    display: block;
-    padding: 0;
-    overflow: hidden;
-  }
-  body.game-active .quick-access-btn > span:first-child {
-    position: absolute;
-    left: 50%;
-    top: 46%;
-    width: 22px;
-    height: 22px;
-    display: grid;
-    place-items: center;
-    transform: translate(-50%, -50%);
-    line-height: 1;
-  }
-  body.game-active .quick-access-btn .ui-icon {
-    width: 20px;
-    height: 20px;
-  }
-  body.game-active .quick-access-label {
-    position: absolute;
-    left: 3px;
-    right: 3px;
-    bottom: 3px;
-    display: block;
-    max-width: none;
-    overflow: hidden;
-    color: var(--text);
-    background: transparent;
-    font-size: 6px;
-    font-weight: 800;
-    line-height: 1;
-    text-align: center;
-    text-overflow: clip;
-    white-space: nowrap;
-    transform: none;
-    pointer-events: none;
-  }
-}
-
-
-/* UI-40 quick access correction — reserve a real caption row below the icon. */
-@media (max-width: 900px) {
-  body.game-active .quick-access-btn {
+    width: var(--quick-access-size, 42px);
+    min-width: var(--quick-access-size, 42px);
+    height: var(--quick-access-size, 42px);
+    min-height: var(--quick-access-size, 42px);
     display: grid;
     grid-template-rows: minmax(0, 1fr) 10px;
     grid-template-columns: 1fr;
     align-items: stretch;
     justify-items: stretch;
     padding: 3px 3px 2px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel-2);
+    color: var(--text);
+    box-shadow: 0 5px 16px rgba(0,0,0,.3);
     overflow: hidden;
   }
   body.game-active .quick-access-btn > span:first-child {
@@ -5203,10 +4801,17 @@ body.game-active .token {
     height: auto;
     display: grid;
     place-items: center;
-    transform: none;
     align-self: stretch;
     justify-self: stretch;
+    transform: none;
+    color: var(--gold-soft);
+    font-size: 18px;
     line-height: 1;
+  }
+  body.game-active .quick-access-btn .ui-icon {
+    width: 20px;
+    height: 20px;
+    color: var(--gold-soft);
   }
   body.game-active .quick-access-btn .quick-access-label {
     position: static;
@@ -5214,25 +4819,82 @@ body.game-active .token {
     align-self: center;
     justify-self: stretch;
     min-width: 0;
+    max-width: 100%;
     padding: 0;
     overflow: hidden;
     transform: none;
     background: transparent;
+    color: var(--text);
     font-size: 6px;
+    font-weight: 800;
     line-height: 10px;
     text-align: center;
+    text-overflow: clip;
     white-space: nowrap;
+    pointer-events: none;
+  }
+  body.game-active .quick-access-btn > strong { display: none !important; }
+
+  body.game-active.decision-layer-open .game-quick-access,
+  body.game-active.result-layer-open .game-quick-access,
+  body.game-active.object-sheet-open .game-quick-access,
+  body.game-active.targeting-open .game-quick-access,
+  body.game-active.game-menu-open .game-quick-access,
+  body.game-active.game-lobby-active .game-quick-access,
+  body.game-active .game.lobby-state .game-quick-access,
+  body.game-active .game.lobby-state ~ .game-quick-access {
+    display: none !important;
   }
 }
 
-
-/* UI-40 quick access lifecycle — gameplay map only; captions carry no status badges. */
-@media (max-width: 900px) {
-  body.game-active .game.lobby-state ~ .game-quick-access { display: none !important; }
-  body.game-active .game.lobby-state .game-quick-access { display: none !important; }
-  body.game-active .quick-access-btn > strong { display: none !important; }
+@media (max-width: 430px) {
+  body.game-active .game-action-bar {
+    max-width: calc(100% - 16px);
+    gap: 5px;
+  }
+  body.game-active .game-action-buttons button { min-width: 82px; }
 }
 
-@media (max-width: 900px) {
-  body.game-active.game-lobby-active .game-quick-access { display: none !important; }
+@media (max-width: 420px) {
+  body.game-active .game-hud {
+    --hud-row-size: 40px;
+    grid-template-columns: 82px minmax(0,1fr) 78px var(--hud-row-size);
+  }
+  body.game-active .hud-connection { font-size: 6px; }
+  body.game-active .hud-turn strong { font-size: 9px; }
+  body.game-active .game-quick-access { --quick-access-size: 40px; }
 }
+
+@media (max-width: 380px), (max-height: 700px) and (max-width: 900px) {
+  body.game-active .game-quick-access {
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (min-width: 901px) {
+  body.game-active .game-quick-access { display: none; }
+}
+
+.canonical-map-art .anchor-marker {
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+body.game-active .game-hud .hud-chip .ui-icon { width: 13.5px; height: 13.5px; }
+body.game-active .game-hud .hud-ship-icon .ui-icon { width: 21.6px; height: 21.6px; }
+body.game-active .game-hud .hud-menu-btn .ui-icon { width: 18.9px; height: 18.9px; }
+body.game-active .game-hud .hud-politics-chip > span:first-child { font-size: 90%; }
+
+/* Player positions are cell centers in app.js; the marker must be translated by half
+   of its own box in both axes. Width and height use the same cell fraction. */
+body.game-active .token {
+  width: calc(100% / var(--map-cols, 28) * .576);
+  height: calc(100% / var(--map-rows, 28) * .576);
+  min-height: 0;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  border-radius: 50%;
+}
+
