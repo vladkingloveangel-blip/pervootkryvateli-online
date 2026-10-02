@@ -7,7 +7,7 @@ const path = require('node:path');
 const { io } = require('socket.io-client');
 const rules = require('../rules');
 
-test('leader, clockwise order and six complete personal circles', { timeout: 30000 }, async t => {
+test('join order and six complete personal circles', { timeout: 30000 }, async t => {
   const listener=net.createServer(); listener.listen(0,'127.0.0.1'); await once(listener,'listening');
   const port=listener.address().port; await new Promise(resolve=>listener.close(resolve));
   const base=`http://127.0.0.1:${port}`;
@@ -35,7 +35,6 @@ test('leader, clockwise order and six complete personal circles', { timeout: 300
   const minimumPlayer=await connect();
   const minimumCreated=await emit(minimumPlayer,'createRoom',{name:'Minimum One'});
   assert.equal(minimumCreated.ok,true);
-  await change(minimumPlayer,'setLeader',{playerId:minimumCreated.playerId});
   await change(minimumPlayer,'setReady',{ready:true});
   assert.equal((await emit(minimumPlayer,'startGame')).ok,true);
   minimumPlayer.disconnect();
@@ -45,23 +44,16 @@ test('leader, clockwise order and six complete personal circles', { timeout: 300
   const ids=[created.playerId];
   assert.equal(created.ok,true);
   for(let i=1;i<4;i++)ids.push((await emit(players[i],'joinRoom',{code:created.code,name:`Player ${i+1}`})).playerId);
-  assert.equal((await emit(players[1],'setLeader',{playerId:ids[1]})).ok,false);
-  assert.equal((await emit(players[0],'setSeatingOrder',{playerIds:[ids[0],ids[0],ids[1],ids[2]]})).ok,false);
   assert.equal((await emit(players[0],'startGame')).ok,false);
-  await change(players[0],'setSeatingOrder',{playerIds:[ids[0],ids[2],ids[1],ids[3]]});
-  await change(players[0],'setLeader',{playerId:ids[1]});
-  assert.equal((await emit(players[1],'changeShip',{shipClass:'frigate'})).ok,false);
   await change(players[0],'changeShip',{shipClass:'frigate'});
+  await change(players[1],'changeShip',{shipClass:'frigate'});
   for(const socket of players)await change(socket,'setReady',{ready:true});
   let room=await change(players[0],'startGame');
-  const order=[ids[1],ids[3],ids[0],ids[2]];
+  const order=[...ids];
   assert.deepEqual(room.order,order);
-  assert.equal(room.leaderId,ids[1]);
-  assert.equal(room.players.find(p=>p.id===ids[1]).shipClass,'carrack');
   assert.equal(room.players.find(p=>p.id===ids[0]).shipClass,'frigate');
+  assert.equal(room.players.find(p=>p.id===ids[1]).shipClass,'frigate');
   assert.equal(room.players.every(p=>p.row===0 && p.col===0 && p.level===1),true);
-  assert.equal((await emit(players[0],'setLeader',{playerId:ids[0]})).ok,false);
-  assert.equal((await emit(players[0],'setSeatingOrder',{playerIds:ids})).ok,false);
   assert.equal(room.players.find(p=>p.isYou).ducats,rules.session.startingDucats);
   assert.equal(room.players.filter(p=>!p.isYou).every(p=>!Object.hasOwn(p,'ducats')),true);
   assert.deepEqual([room.round,room.circle,room.players.find(p=>p.id===order[0]).actionsLeft],[1,1,rules.session.actionsPerTurn]);
