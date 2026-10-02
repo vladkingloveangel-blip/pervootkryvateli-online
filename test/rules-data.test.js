@@ -331,6 +331,9 @@ test('runtime consumers use canonical prices, characteristics, income and safe m
   }
   for(let count=0;count<3;count++) assert.equal(logic.escortPurchasePrice({escorts:Array(count).fill({})}),rules.fleet.escortPrices[count]);
   assert.deepEqual(data.GOODS,rules.economy.goods);
+  assert.deepEqual(Object.values(rules.economy.goods).filter(g=>['exotic','slaves','gold','diamonds'].includes(g.id)).map(g=>g.price),[3,3,3,3]);
+  assert.deepEqual([2,3,4,5,6].map(level=>rules.fleet.levels[level].price),[10,20,40,80,160]);
+  assert.deepEqual([1,2,3,4,5,6].map(level=>rules.fleet.levels[level].actionBonus),[0,1,1,2,2,3]);
   assert.equal(data.BALANCE.loadingLimitPerIslandPerRound,rules.economy.loadingLimitPerIslandPerRound);
   assert.deepEqual(data.TREASURE_CARDS.map(c=>c.id),rules.legends.treasures.map(c=>c.id));
   assert.equal(data.TREASURE_CARDS.find(c=>c.id==='full-diamonds-hold').cargoGoodId,'diamonds');
