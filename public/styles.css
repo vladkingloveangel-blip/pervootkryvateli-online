@@ -2322,3 +2322,76 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     border-radius: 9px;
   }
 }
+
+
+/* UI-15 — dedicated Citadel commerce and fleet shop */
+@media (max-width: 900px) {
+  body.game-active .citadel-overview {
+    display: grid;
+    gap: 4px;
+    padding: 10px;
+    border: 1px solid rgba(240,196,91,.34);
+    border-radius: 12px;
+    background: rgba(240,196,91,.055);
+  }
+
+  body.game-active .citadel-kicker {
+    color: var(--accent);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .075em;
+  }
+
+  body.game-active .citadel-overview > strong {
+    font-size: 16px;
+  }
+
+  body.game-active .citadel-overview > small,
+  body.game-active .citadel-overview > span:not(.citadel-kicker) {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  body.game-active .citadel-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  body.game-active .citadel-summary-grid > div {
+    display: grid;
+    gap: 2px;
+    padding: 8px 9px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(255,255,255,.035);
+  }
+
+  body.game-active .citadel-summary-grid span {
+    color: var(--muted);
+    font-size: 10px;
+  }
+
+  body.game-active .citadel-summary-grid strong {
+    font-size: 12px;
+  }
+
+  body.game-active .citadel-sheet-note {
+    padding: 9px 10px;
+    border: 1px dashed var(--line);
+    border-radius: 10px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  body.game-active .object-sheet.expanded .object-sheet-actions > .action-group-label {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 7px 5px;
+    border-radius: 8px;
+    background: rgba(8,37,44,.985);
+  }
+}

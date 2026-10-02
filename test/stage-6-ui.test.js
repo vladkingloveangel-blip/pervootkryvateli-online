@@ -664,3 +664,49 @@ test('UI-14 character information remains owner-only in the new path', () => {
   const publicCode = app.slice(playerStart, playerEnd);
   assert.doesNotMatch(publicCode, /character|characterAcquisitionOptions|characterReplacementOptions/);
 });
+
+
+test('UI-15 gives Citadel its own mobile commerce and fleet-shop sheet', () => {
+  const start = app.indexOf('  function citadelSheetHtml(');
+  const end = app.indexOf('\n  function renderObjectSheetFromMapInfo(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /citadelSheetHtml/);
+  assert.match(code, /moveCanonicalCitadelFleetActions/);
+  assert.match(code, /appendCanonicalCitadelTradeActions/);
+  assert.match(code, /renderCitadelObjectSheet/);
+  assert.match(code, /refreshOpenCitadelSheet/);
+  assert.match(code, /Уровень основного корабля/);
+  assert.match(code, /Торговля/);
+  assert.match(code, /renderFleet\(\);/);
+  assert.match(code, /renderTrade\(\);/);
+  assert.match(code, /legacySell\.click\(\)/);
+
+  assert.match(app, /if \(kind === 'citadel'\) \{\s*renderCitadelObjectSheet\(data\);/);
+  assert.match(app, /renderTrade\(\);\s*refreshOpenCitadelSheet\(\);\s*renderAnchors\(\);/);
+  assert.match(styles, /UI-15 — dedicated Citadel commerce and fleet shop/);
+});
+
+test('UI-15 Citadel sheet does not duplicate purchase or sale socket payloads', () => {
+  const start = app.indexOf('  function citadelSheetHtml(');
+  const end = app.indexOf('\n  function renderObjectSheetFromMapInfo(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  for (const command of ['buyShipLevel','buyShipUpgrade','removeShipUpgrade','buyEscort','buyCityGuard','buyPermanentGarrison','sellCargo']) {
+    assert.doesNotMatch(code, new RegExp("socket\\.emit\\('" + command));
+  }
+  assert.doesNotMatch(code, /emitDataAction\([^\n]*buyShip/);
+  assert.match(code, /target\.appendChild\(children\[i\]\)/);
+  assert.match(code, /while \(escortSource\.firstChild\) target\.appendChild\(escortSource\.firstChild\);/);
+});
+
+test('UI-15 remote Citadel inspection never enables commerce away from Citadel', () => {
+  const start = app.indexOf('  function renderCitadelObjectSheet(');
+  const end = app.indexOf('\n  function refreshOpenCitadelSheet()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /else if \(!mine\.atCitadel\)/);
+  assert.match(code, /Приплывите в Цитадель/);
+});

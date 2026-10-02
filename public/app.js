@@ -1082,6 +1082,7 @@
     renderFleet();
     refreshOpenCharacterSheet();
     renderTrade();
+    refreshOpenCitadelSheet();
     renderAnchors();
     renderIsland();
     renderAlliances();
@@ -4063,6 +4064,117 @@
     document.body.classList.add('object-sheet-open');
   }
 
+  function citadelSheetHtml(mine) {
+    if (!mine) {
+      return `
+        <div class="citadel-overview">
+          <strong>Цитадель</strong>
+          <span>Нейтральный торговый хаб. Владеть им нельзя, бои внутри запрещены.</span>
+        </div>
+      `;
+    }
+    const cargo = cargoSummary(mine, state.room);
+    const upgrades = mine.upgrades?.length || 0;
+    const escorts = mine.escorts?.length || 0;
+    return `
+      <div class="citadel-overview">
+        <span class="citadel-kicker">НЕЙТРАЛЬНЫЙ ТОРГОВЫЙ ХАБ</span>
+        <strong>${mine.atCitadel ? 'Флотилия находится в Цитадели' : 'Цитадель'}</strong>
+        <small>Здесь продаётся груз, улучшается основной корабль, покупается сопровождение и оборона владений.</small>
+      </div>
+      <div class="citadel-summary-grid">
+        <div><span>Дукаты</span><strong>${mine.ducats ?? 0}</strong></div>
+        <div><span>Корабль</span><strong>${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level}</strong></div>
+        <div><span>Трюм</span><strong>${cargo.quantity}/${cargo.capacity}</strong></div>
+        <div><span>Улучшения</span><strong>${upgrades}/${mine.upgradeSlots ?? 0}</strong></div>
+        <div><span>Сопровождение</span><strong>${escorts}/${mine.escortUseLimit ?? state.room?.balanceCatalog?.maxEscorts ?? 0}</strong></div>
+        <div><span>Действия</span><strong>${mine.actionsLeft ?? 0}</strong></div>
+      </div>
+    `;
+  }
+
+  function moveCanonicalCitadelFleetActions(target) {
+    const source = $('fleetActions');
+    if (!source || !target) return;
+    const children = Array.from(source.children);
+    const start = children.findIndex(node => node.classList?.contains('action-group-label') && node.textContent === 'Уровень основного корабля');
+    if (start < 0) return;
+    for (let i = start; i < children.length; i += 1) target.appendChild(children[i]);
+  }
+
+  function appendCanonicalCitadelTradeActions(target) {
+    if (!target) return;
+    const label = document.createElement('div');
+    label.className = 'action-group-label';
+    label.textContent = 'Торговля';
+    target.appendChild(label);
+
+    const legacySell = $('sellCargoBtn');
+    if (legacySell && !legacySell.classList.contains('hidden')) {
+      const mainSell = document.createElement('button');
+      mainSell.type = 'button';
+      mainSell.className = 'build-btn primary';
+      mainSell.textContent = legacySell.textContent;
+      mainSell.disabled = legacySell.disabled;
+      mainSell.addEventListener('click', () => legacySell.click());
+      target.appendChild(mainSell);
+    }
+
+    const escortSource = $('escortCargoActions');
+    if (escortSource) {
+      while (escortSource.firstChild) target.appendChild(escortSource.firstChild);
+    }
+  }
+
+  function renderCitadelObjectSheet(data = {}) {
+    const mine = me();
+    const sheet = $('objectSheet');
+    state.mapSelection = { kind: 'citadel', id: data.id || data.name || 'citadel', anchor: state.mapSelection?.anchor || null };
+    $('objectSheetKind').textContent = 'ЦИТАДЕЛЬ';
+    $('objectSheetTitle').textContent = data.name || 'Цитадель';
+    $('objectSheetBody').innerHTML = citadelSheetHtml(mine);
+
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+
+    if (!mine || state.spectating) {
+      const note = document.createElement('div');
+      note.className = 'citadel-sheet-note';
+      note.textContent = 'Торговые действия доступны только участнику партии.';
+      actions.appendChild(note);
+    } else if (!mine.atCitadel) {
+      const note = document.createElement('div');
+      note.className = 'citadel-sheet-note';
+      note.textContent = 'Приплывите в Цитадель, чтобы продавать груз и пользоваться её магазином.';
+      actions.appendChild(note);
+    } else {
+      // Existing renderers remain authoritative for legality, prices and socket payloads.
+      renderFleet();
+      moveCanonicalCitadelFleetActions(actions);
+      renderTrade();
+      appendCanonicalCitadelTradeActions(actions);
+
+      if (!actions.querySelector('button')) {
+        const note = document.createElement('div');
+        note.className = 'citadel-sheet-note';
+        note.textContent = 'Сейчас в Цитадели нет доступных действий.';
+        actions.appendChild(note);
+      }
+    }
+
+    sheet.classList.remove('hidden');
+    sheet.classList.add('expanded');
+    $('objectSheetExpand').textContent = '⌄';
+    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function refreshOpenCitadelSheet() {
+    if (state.mapSelection?.kind !== 'citadel' || !isMobileGameplayUi()) return;
+    const citadel = state.room?.map?.citadel || { name: 'Цитадель' };
+    renderCitadelObjectSheet(citadel);
+  }
+
   function renderObjectSheetFromMapInfo(kind, data) {
     const sheet = $('objectSheet');
     if (!sheet) return;
@@ -4076,6 +4188,10 @@
     }
     if (kind === 'player') {
       renderPlayerObjectSheet(data);
+      return;
+    }
+    if (kind === 'citadel') {
+      renderCitadelObjectSheet(data);
       return;
     }
 
@@ -4288,11 +4404,14 @@
         action.onclick = () => { closeMapInfo(); openMobileTab('actions'); };
       }
     } else if (kind === 'citadel') {
-      meta.innerHTML = '<span>Нейтральный торговый хаб</span><span>Продажа грузов · улучшения корабля · сопровождение</span><span>Владеть Цитаделью нельзя · бои запрещены</span>';
+      meta.innerHTML = '<span>Нейтральный торговый хаб</span><span>Продажа грузов · уровень корабля · улучшения · сопровождение</span><span>Городская стража · постоянные гарнизоны</span><span>Владеть Цитаделью нельзя · бои запрещены</span>';
       if (me()?.atCitadel) {
-        action.textContent = 'Открыть корабль и торговлю';
+        action.textContent = 'Открыть Цитадель';
         action.classList.remove('hidden');
-        action.onclick = () => { closeMapInfo(); openMobileTab('ship'); };
+        action.onclick = () => {
+          if (isMobileGameplayUi()) renderCitadelObjectSheet(data);
+          else { closeMapInfo(); openMobileTab('ship'); }
+        };
       }
     } else if (kind === 'anchor') {
       meta.innerHTML = `<span>Морской якорь</span><span>Бой добровольный в фазе действий</span><span>Победа: <strong>+${data.fleetPoints || 0} очк. флота</strong></span>`;
