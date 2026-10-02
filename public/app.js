@@ -677,6 +677,7 @@
     e.target.value = e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 5);
   });
 
+  $('finalHomeBtn').addEventListener('click', () => clearSession());
   $('lobbyCopyBtn').addEventListener('click', () => $('copyCodeBtn').click());
   $('lobbyShareBtn').addEventListener('click', () => $('shareInviteBtn').click());
   $('lobbyExitBtn').addEventListener('click', () => {
@@ -3927,12 +3928,14 @@
       return mine.character?.id === 'cartographer'
         && mine.phase === 'navigation'
         && mine.roll === null
+        && !mine.characterUsedThisRound
         && (mine.actionsLeft ?? 0) > 0
         && targetingOptions(mode).length > 0;
     }
     if (mode === 'scout-garrison' || mode === 'scout-money') {
       return mine.character?.id === 'scout'
         && mine.phase === 'actions'
+        && !mine.characterUsedThisRound
         && (mine.actionsLeft ?? 0) > 0
         && targetingOptions(mode).length > 0;
     }
@@ -4113,13 +4116,13 @@
         treasureHunter: 'Искатель сокровищ тратит одно действие, сразу определяет два независимых результата сокровища и позволяет выбрать один из них.',
         shipCarpenter: 'Корабельный плотник может предотвратить одну потерю уровня в бою. При объявлении своей атаки заранее отметьте его применение; дополнительное действие списывается только если уровень действительно сохранён.',
       };
-      effectNote.textContent = deferred[character.id] || `«${character.name}» готов к одноразовому применению.`;
+      effectNote.textContent = mine.characterUsedThisRound ? `«${character.name}» уже использован в этом раунде.` : (deferred[character.id] || `«${character.name}» готов к применению один раз в этом раунде.`);
       actions.appendChild(effectNote);
 
       if (character.id === 'navigator') {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
         b.textContent = 'Штурман: перебросить d6 · 1 действие';
-        b.disabled = !(myTurn && mine.phase === 'navigation' && mine.roll !== null && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending());
+        b.disabled = mine.characterUsedThisRound || !(myTurn && mine.phase === 'navigation' && mine.roll !== null && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending());
         b.addEventListener('click', () => socket.emit('useNavigator', {}, handleGameAck)); actions.appendChild(b);
       } else if (character.id === 'cartographer') {
         if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 900px)').matches) {
@@ -4225,20 +4228,20 @@
       } else if (character.id === 'treasureHunter') {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
         b.textContent = 'Искатель сокровищ: выбрать 1 из 2 · 1 действие';
-        b.disabled = !canAct;
+        b.disabled = mine.characterUsedThisRound || !canAct;
         b.addEventListener('click', () => socket.emit('useTreasureHunter', {}, handleGameAck));
         actions.appendChild(b);
       } else if (character.id === 'firstMate') {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
         b.textContent = 'Первый помощник: +1 дополнительное действие · бесплатно';
-        b.disabled = !(myTurn && mine.phase === 'actions' && !isDecisionPending());
+        b.disabled = mine.characterUsedThisRound || !(myTurn && mine.phase === 'actions' && !isDecisionPending());
         b.addEventListener('click', () => socket.emit('useFirstMate', {}, handleGameAck)); actions.appendChild(b);
       }
 
       if ((mine.characterReplacementOptions || []).length) {
         const replaceLabel = document.createElement('div');
         replaceLabel.className = 'cargo-meta';
-        replaceLabel.textContent = 'Неиспользованного персонажа можно заменить здесь один раз за раунд:';
+        replaceLabel.textContent = 'Персонажа можно заменить здесь один раз за раунд:';
         actions.appendChild(replaceLabel);
         for (const option of mine.characterReplacementOptions) {
           const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn';
