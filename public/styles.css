@@ -5020,3 +5020,316 @@ body.game-active .token {
   border-radius: 50%;
 }
 
+
+
+/* UI-41 — canonical island card workflow */
+@media (max-width: 900px) {
+  body.game-active .object-sheet.island-card-sheet {
+    max-height: min(80dvh, 720px);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    padding-top: 12px;
+  }
+
+  body.game-active .object-sheet.island-card-sheet .object-sheet-hero {
+    position: relative;
+    height: 138px;
+    margin: -12px -12px 0;
+    overflow: hidden;
+    border-radius: 16px 16px 11px 11px;
+    border-bottom: 1px solid rgba(240,196,91,.24);
+    background: #0b2730;
+  }
+
+  body.game-active .object-sheet.island-card-sheet .object-sheet-hero::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(180deg, rgba(5,22,28,.02) 28%, rgba(5,22,28,.28) 68%, rgba(5,22,28,.72) 100%);
+  }
+
+  body.game-active .object-sheet-hero-image {
+    position: absolute;
+    inset: 0;
+    background-image: url('/assets/map-base-4096.webp');
+    background-repeat: no-repeat;
+    background-position: 50% 50%;
+    transform: scale(1.02);
+  }
+
+  body.game-active .object-sheet.island-card-sheet .object-sheet-head {
+    min-height: 48px;
+    padding-bottom: 8px;
+  }
+
+  body.game-active .object-sheet-back {
+    flex: 0 0 auto;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0;
+    border-radius: 10px;
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  body.game-active .object-sheet.island-card-sheet .object-sheet-kind {
+    font-size: 9px;
+    letter-spacing: .1em;
+  }
+
+  body.game-active .object-sheet.island-card-sheet .object-sheet-heading strong {
+    font-size: 20px;
+  }
+
+  body.game-active .object-sheet.island-card-sheet .object-sheet-body {
+    display: block;
+    padding: 0 2px 0 0;
+  }
+
+  body.game-active .object-sheet.island-card-sheet .object-sheet-actions {
+    max-height: min(32dvh, 250px);
+  }
+
+  body.game-active .object-sheet.island-card-sheet .object-sheet-actions:empty {
+    display: none;
+  }
+
+  body.game-active .island-card-summary {
+    display: grid;
+  }
+
+  body.game-active .island-card-row {
+    display: grid;
+    grid-template-columns: minmax(86px, .78fr) minmax(0, 1.22fr);
+    gap: 12px;
+    align-items: start;
+    padding: 8px 2px;
+    border-bottom: 1px solid rgba(255,255,255,.075);
+  }
+
+  body.game-active .island-card-row:last-child {
+    border-bottom: 0;
+  }
+
+  body.game-active .island-card-row > span {
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  body.game-active .island-card-row > strong {
+    min-width: 0;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.35;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  body.game-active .island-card-buildings {
+    padding-top: 10px;
+  }
+
+  body.game-active .island-manage-primary {
+    width: 100%;
+    min-height: 48px !important;
+    font-size: 15px;
+  }
+
+  body.game-active .island-action-note {
+    padding: 10px 11px;
+    border: 1px dashed rgba(255,255,255,.17);
+    border-radius: 11px;
+    background: rgba(255,255,255,.025);
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  body.game-active .island-action-note.compact {
+    padding: 7px 9px;
+  }
+
+  body.game-active .island-management-status {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  body.game-active .island-management-status > div {
+    display: grid;
+    gap: 2px;
+    padding: 7px 8px;
+    border: 1px solid rgba(255,255,255,.11);
+    border-radius: 10px;
+    background: rgba(255,255,255,.03);
+  }
+
+  body.game-active .island-management-status span {
+    color: var(--muted);
+    font-size: 9px;
+  }
+
+  body.game-active .island-management-status strong {
+    font-size: 11px;
+    text-align: left;
+  }
+
+  body.game-active .island-management-menu {
+    display: grid;
+    gap: 7px;
+  }
+
+  body.game-active .island-management-button {
+    width: 100%;
+    min-height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 11px;
+    text-align: left;
+    border-color: rgba(255,255,255,.13);
+    background: rgba(27,75,86,.72);
+  }
+
+  body.game-active .island-management-button > span {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  body.game-active .island-management-button strong {
+    color: var(--text);
+    font-size: 13px;
+    text-align: left;
+  }
+
+  body.game-active .island-management-button small {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  body.game-active .island-management-button > b {
+    flex: 0 0 auto;
+    color: var(--accent);
+    font-size: 24px;
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  body.game-active .island-management-button.military {
+    border-color: rgba(239,119,119,.3);
+  }
+
+  body.game-active .island-action-intro {
+    display: grid;
+    gap: 3px;
+    padding: 9px 10px;
+    border: 1px solid rgba(240,196,91,.18);
+    border-radius: 11px;
+    background: rgba(240,196,91,.045);
+  }
+
+  body.game-active .island-action-intro > span {
+    color: var(--accent);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .08em;
+  }
+
+  body.game-active .island-action-intro > strong {
+    color: var(--text);
+    font-size: 14px;
+    text-align: left;
+  }
+
+  body.game-active .island-action-intro > small {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  body.game-active .island-action-context {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px 11px;
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 10px;
+  }
+
+  body.game-active .island-action-context strong {
+    color: var(--text);
+    font-size: 10px;
+  }
+
+  body.game-active .island-action-state {
+    margin-top: 8px;
+    padding: 8px 9px;
+    border-radius: 10px;
+    background: rgba(255,255,255,.035);
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  body.game-active .state-island-politics {
+    display: grid;
+    gap: 2px;
+    margin-top: 9px;
+    padding: 9px 10px;
+    border: 1px solid rgba(240,196,91,.22);
+    border-radius: 10px;
+    background: rgba(240,196,91,.045);
+  }
+
+  body.game-active .state-island-politics > span {
+    color: var(--accent);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .08em;
+  }
+
+  body.game-active .state-island-politics > strong {
+    color: var(--text);
+    font-size: 13px;
+    text-align: left;
+  }
+
+  body.game-active .state-island-politics > small {
+    color: var(--muted);
+    font-size: 10px;
+  }
+
+  body.game-active .foreign-island-scout-badge {
+    margin: 8px 0 2px;
+    padding: 5px 7px;
+    border-radius: 8px;
+    background: rgba(105,213,231,.09);
+    color: var(--info);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .06em;
+  }
+}
+
+@media (max-width: 420px) {
+  body.game-active .object-sheet.island-card-sheet {
+    left: 8px;
+    right: 8px;
+    max-height: min(82dvh, 720px);
+  }
+
+  body.game-active .object-sheet.island-card-sheet .object-sheet-hero {
+    height: 124px;
+  }
+
+  body.game-active .island-card-row {
+    grid-template-columns: 82px minmax(0, 1fr);
+    gap: 9px;
+  }
+}
