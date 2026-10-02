@@ -4154,11 +4154,9 @@ io.on('connection', socket => {
 
     if (found.kind === 'sea-curse') {
       const target = playerById(room, data?.targetPlayerId);
-      if (!target || target.id === p.id) return ackSafe(ack, { ok: false, error: 'Выберите другой основной корабль на своей клетке.' });
-      if (!sameCell(p, target)) return ackSafe(ack, { ok: false, error: '«Морское проклятие» применяется на одной клетке с кораблём цели.' });
+      if (!target || target.id === p.id) return ackSafe(ack, { ok: false, error: 'Выберите другого игрока.' });
       if (room.round === 1) return ackSafe(ack, { ok: false, error: 'В первом раунде нельзя разыгрывать враждебные легендарные карты против игроков.' });
-      if (isCitadelPeaceCell(p.row, p.col)) return ackSafe(ack, { ok: false, error: 'В зоне мира Цитадели «Морское проклятие» запрещено.' });
-      if (areAllies(room, p, target)) return ackSafe(ack, { ok: false, error: 'Союзники не применяют враждебные карты друг против друга.' });
+            if (areAllies(room, p, target)) return ackSafe(ack, { ok: false, error: 'Союзники не применяют враждебные карты друг против друга.' });
       const attackLimit = registerPlayerAttack(room, p, target.id);
       if (!attackLimit.ok) return ackSafe(ack, attackLimit);
       markAttackHostilityAgainstPlayer(room, p, target, 'враждебное «Морское проклятие» против вассала');
@@ -4175,12 +4173,12 @@ io.on('connection', socket => {
         emitRoom(room);
         return;
       }
-      if (target.connected && playerHasLegendaryKind(target, 'sea-veil')) {
-        setPendingLegacy(room, 'legendary-reaction', {
-          id: crypto.randomUUID(), kind: 'sea-curse', sourcePlayerId: p.id, targetPlayerId: target.id,
-        });
-        log(room, `${p.name} разыгрывает «Морское проклятие» против ${target.name} и тратит действие. ${target.name} может бесплатно ответить «Покровом моря».`);
-        ackSafe(ack, { ok: true, pending: true });
+      if (playerHasLegendaryKind(target, 'sea-veil')) {
+        const veilRef = (target.legendaryCards || []).map((card, index) => ({ card, index })).find(item => item.card?.kind === 'sea-veil');
+        if (veilRef) consumeLegendaryCard(room, target, { source: 'legendaryCards', index: veilRef.index });
+        applySeaVeilHostileReactionToShip(target, p.id);
+        log(room, `${target.name} автоматически разыгрывает «Покров моря» против «Морского проклятия» ${p.name}. Обе карты расходованы.`);
+        ackSafe(ack, { ok: true, canceled: true, protected: true });
         emitRoom(room);
         return;
       }
@@ -4220,12 +4218,12 @@ io.on('connection', socket => {
         emitRoom(room);
         return;
       }
-      if (owner?.connected && playerHasLegendaryKind(owner, 'sea-veil')) {
-        setPendingLegacy(room, 'legendary-reaction', {
-          id: crypto.randomUUID(), kind: 'hellfire', sourcePlayerId: p.id, targetPlayerId: owner.id, islandId: island.id,
-        });
-        log(room, `${p.name} объявляет «Пламя Ада» против ${island.name} и тратит действие. ${owner.name} может ответить «Покровом моря».`);
-        ackSafe(ack, { ok: true, pending: true });
+      if (owner && playerHasLegendaryKind(owner, 'sea-veil')) {
+        const veilRef = (owner.legendaryCards || []).map((card, index) => ({ card, index })).find(item => item.card?.kind === 'sea-veil');
+        if (veilRef) consumeLegendaryCard(room, owner, { source: 'legendaryCards', index: veilRef.index });
+        applySeaVeilHostileReactionToIsland(island, owner, p.id);
+        log(room, `${owner.name} автоматически разыгрывает «Покров моря» против «Пламени Ада» ${p.name}. Обе карты расходованы.`);
+        ackSafe(ack, { ok: true, canceled: true, protected: true });
         emitRoom(room);
         return;
       }
@@ -4502,14 +4500,12 @@ io.on('connection', socket => {
 
     markAttackHostilityAgainstPlayer(room, p, target);
     room.actionsLeft -= 1;
-    if (target.connected && playerHasLegendaryKind(target, 'sea-veil')) {
-      setPendingLegacy(room, 'legendary-reaction', {
-        id: crypto.randomUUID(), kind: 'sea-attack', sourcePlayerId: p.id, targetPlayerId: target.id,
-        inviteAllies: Boolean(data?.inviteAllies),
-        shipCarpenterPlayerIds: carpenter.playerIds,
-      });
-      log(room, `${p.name} объявляет морскую атаку на ${target.name} и тратит действие. ${target.name} может ответить «Покровом моря».`);
-      ackSafe(ack, { ok: true, pending: true });
+    if (playerHasLegendaryKind(target, 'sea-veil')) {
+      const veilRef = (target.legendaryCards || []).map((card, index) => ({ card, index })).find(item => item.card?.kind === 'sea-veil');
+      if (veilRef) consumeLegendaryCard(room, target, { source: 'legendaryCards', index: veilRef.index });
+      applySeaVeilToShip(target, { sourcePlayerId: target.id, ignoreCurrentTurn: false });
+      log(room, `${target.name} автоматически разыгрывает «Покров моря». Морская атака ${p.name} отменена.`);
+      ackSafe(ack, { ok: true, canceled: true, protected: true });
       emitRoom(room);
       return;
     }
