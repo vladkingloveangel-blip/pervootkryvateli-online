@@ -544,7 +544,6 @@ function publicRoom(room, viewerId = null) {
     code: room.code,
     started: room.started,
     hostId: room.hostId,
-    leaderId: room.leaderId || null,
     seatingOrder: (room.seatingOrder || room.players.map(p => p.id)).filter(id => room.players.some(p => p.id === id)),
     round: room.round,
     circle: room.circle,
