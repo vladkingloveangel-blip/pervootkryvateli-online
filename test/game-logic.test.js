@@ -677,7 +677,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const room = { islands: cloneIslands(), round: 2 };
   const source = room.islands.find(i => i.id === 'bogamia');
   source.ownerId = 'p1';
-  source.buildings.push({ type: 'farm', level: 1 });
+  source.buildings.push({ type: 'farm', level: 1 }, { type: 'shipyard', level: 1 });
   const p = {
     id: 'p1', row: 5, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], cargo: null, ducats: 0,
     escorts: [{ id: 'escort-1', type: 'cargo', special: false, cargo: null }],
