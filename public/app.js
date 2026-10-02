@@ -4378,8 +4378,6 @@
     const content = $('cargoContent');
     const badge = $('cargoBadge');
     const sell = $('sellCargoBtn');
-    const escortActions = $('escortCargoActions');
-    escortActions.innerHTML = '';
     if (!mine) {
       badge.textContent = '0/0';
       content.textContent = 'Трюм недоступен.';
@@ -4410,23 +4408,12 @@
       : '<div class="cargo-meta">Сопровождения с грузовым трюмом нет.</div>';
     content.innerHTML = `${mainText}${escortText}<div class="cargo-meta">${mine.atCitadel ? 'Флотилия находится в Цитадели.' : 'Для продажи доставьте флотилию в Цитадель.'}</div>`;
 
+    const totalSaleValue = (mine.cargo?.value || 0) + cargoEscorts.filter(e => e.active).reduce((sum, e) => sum + (e.cargo?.value || 0), 0);
     sell.classList.toggle('hidden', !mine.atCitadel);
-    sell.disabled = !mine.cargo || !canAct || !mine.atCitadel;
-    sell.textContent = mine.cargo && mine.atCitadel ? `Продать основной груз за ${mine.cargo.value} дукатов` : 'Продать основной груз в Цитадели';
-
-    if (!mine.atCitadel) return;
-
-    for (const e of cargoEscorts) {
-      if (!e.cargo) continue;
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'trade-button';
-      b.textContent = `Продать груз «${escortCatalog[e.type]?.name || 'сопровождения'}» за ${e.cargo.value} дукатов`;
-      b.disabled = !canAct || !mine.atCitadel || !e.active;
-      b.addEventListener('click', () => socket.emit('sellCargo', { holdId: e.id }, res => handleSoundAck(res, 'coins')));
-      escortActions.appendChild(b);
-    }
-  }
+    sell.disabled = totalSaleValue <= 0 || !canAct || !mine.atCitadel;
+    sell.textContent = totalSaleValue > 0 && mine.atCitadel
+      ? 'Продать весь груз флотилии за ' + totalSaleValue + ' дукатов'
+      : 'Продать весь груз флотилии в Цитадели';
 
 
   function renderAnchors() {
@@ -4569,12 +4556,10 @@
 
     const goods = state.room.goodsCatalog || {};
     const loadedThisRound = island.loadedRound === state.room.round;
-    const holdOptions = [{ id: 'main', name: mine?.landCompany ? 'основной трюм (занят ротой)' : 'основной трюм', capacity: mine?.cargoCapacity || 0, occupied: Boolean(mine?.cargo || mine?.landCompany) }];
     const escortCatalog = state.room.escortCatalog || {};
-    for (const e of (mine?.escorts || []).filter(e => e.active && (escortCatalog[e.type]?.cargo || 0) > 0)) {
-      const def = escortCatalog[e.type];
-      holdOptions.push({ id: e.id, name: (def?.name || 'сопровождение').toLowerCase(), capacity: def?.cargo || 0, occupied: Boolean(e.cargo) });
-    }
+    const freeMainCapacity = (!mine?.cargo && !mine?.landCompany) ? (mine?.cargoCapacity || 0) : 0;
+    const freeEscortCapacity = (mine?.escorts || []).filter(e => e.active && !e.cargo && (escortCatalog[e.type]?.cargo || 0) > 0).reduce((sum, e) => sum + (escortCatalog[e.type]?.cargo || 0), 0);
+    const freeFleetCapacity = freeMainCapacity + freeEscortCapacity;
 
     if ((island.availableGoods || []).length) {
       const label = document.createElement('div');
@@ -4584,18 +4569,16 @@
       for (const goodId of island.availableGoods) {
         const good = goods[goodId];
         if (!good) continue;
-        for (const hold of holdOptions) {
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.className = 'build-btn cargo-btn';
-          button.textContent = `Погрузить ${good.name} × ${hold.capacity} → ${hold.name}`;
-          button.disabled = !canAct || hold.occupied || loadedThisRound;
-          button.addEventListener('click', () => {
-            setError('gameError');
-            socket.emit('loadCargo', { islandId: island.id, goodId, holdId: hold.id }, res => handleSoundAck(res, 'cargo'));
-          });
-          actions.appendChild(button);
-        }
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'build-btn cargo-btn';
+        button.textContent = 'Погрузить ' + good.name + ' × ' + freeFleetCapacity + ' во флотилию';
+        button.disabled = !canAct || freeFleetCapacity <= 0 || loadedThisRound;
+        button.addEventListener('click', () => {
+          setError('gameError');
+          socket.emit('loadCargo', { islandId: island.id, goodId }, res => handleSoundAck(res, 'cargo'));
+        });
+        actions.appendChild(button);
       }
     }
 
