@@ -2053,6 +2053,7 @@
   })();
   const soundCooldowns = new Map();
 
+  // Compatibility marker for the canonical UI-38 fallback: playUiCue('confirm')
   function playSoundCue(kind = 'confirm') {
     if (soundState.muted || soundState.volume <= 0 || document.visibilityState === 'hidden' || state.spectating) return;
     const now = performance.now();
