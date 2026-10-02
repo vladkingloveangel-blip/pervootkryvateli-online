@@ -40,6 +40,7 @@ test('compact map tools match roster avatars and align beneath menu', () => {
   assert.match(css, /\.game-world-shell \.map-toolbar \{[\s\S]*?top:\s*55px;[\s\S]*?right:\s*15px;[\s\S]*?gap:\s*6px;/);
   assert.match(css, /\.map-center-me \{\s*\n\s*order:\s*1;/);
   assert.match(css, /\.map-zoom-control \{ order:\s*2; \}/);
+  assert.doesNotMatch(css, /\.game-world-shell \.map-toolbar button \{\s*\n\s*min-height:\s*34px/);
 });
 
 
