@@ -3896,7 +3896,7 @@ button[aria-disabled="true"] {
 }
 
 @media (max-width: 900px) {
-  body.game-active button:not(.map-object-hit):not(.navigation-hit):not(.targeting-hit):not(.targeting-marker):not(.cell-hit):not(.token) {
+  body.game-active button:not(.map-object-hit):not(.navigation-hit):not(.targeting-hit):not(.targeting-marker):not(.cell-hit):not(.token):not(.game-action-button) {
     min-height: 44px;
   }
 
@@ -4713,12 +4713,12 @@ body.game-active .final-results-art {
     grid-template-columns: auto;
     justify-items: center;
     align-items: center;
-    gap: 6px;
-    padding: 7px 8px 8px;
+    gap: 4px;
+    padding: 5px 7px 6px;
     border-color: rgba(240,196,91,.30);
-    border-radius: 13px;
+    border-radius: 12px;
     background: rgba(8,37,44,.94);
-    box-shadow: 0 7px 20px rgba(0,0,0,.34);
+    box-shadow: 0 6px 18px rgba(0,0,0,.32);
     backdrop-filter: none;
   }
   body.game-active .game-action-copy {
@@ -4745,24 +4745,69 @@ body.game-active .final-results-art {
     width: auto;
     max-width: 100%;
     justify-content: center;
-    gap: 6px;
+    gap: 5px;
   }
-  body.game-active .game-action-buttons button {
+  body.game-active .game-action-buttons .game-action-button {
     flex: 0 1 auto;
-    min-width: 88px;
-    min-height: 34px;
-    padding: 5px 10px;
+    min-width: 82px;
+    min-height: 36px;
+    height: 36px;
+    padding: 4px 9px;
     font-size: 10px;
-    border-radius: 9px;
+    border-radius: 8px;
   }
   body.game-active .game-action-progress {
     justify-content: center;
     gap: 4px;
-    margin-top: 2px;
+    margin-top: 1px;
   }
   body.game-active .game-action-progress span {
     width: 6px;
     height: 6px;
+  }
+
+  body.game-active .game-action-bar[data-mode="navigation"] .game-action-copy > strong:empty {
+    display: none;
+  }
+
+  body.game-active .game-action-bar[data-mode="actions"] {
+    width: min(270px, calc(100% - 20px));
+  }
+  body.game-active .game-action-bar[data-mode="actions"] .game-action-copy {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "progress title"
+      "detail detail";
+    column-gap: 10px;
+    row-gap: 3px;
+    align-items: center;
+    max-width: none;
+    text-align: left;
+  }
+  body.game-active .game-action-bar[data-mode="actions"] .game-action-kicker {
+    display: none;
+  }
+  body.game-active .game-action-bar[data-mode="actions"] .game-action-copy > strong {
+    grid-area: title;
+    justify-self: end;
+    text-align: right;
+  }
+  body.game-active .game-action-bar[data-mode="actions"] .game-action-progress {
+    grid-area: progress;
+    justify-self: start;
+    margin: 0;
+  }
+  body.game-active .game-action-bar[data-mode="actions"] .game-action-detail {
+    grid-area: detail;
+    justify-self: center;
+    text-align: center;
+  }
+  body.game-active .game-action-bar[data-mode="actions"] .game-action-buttons {
+    width: 100%;
+  }
+  body.game-active .game-action-bar[data-mode="actions"] .game-action-buttons .game-action-button {
+    min-width: 126px;
   }
 
   /* Canonical floating information windows. Voluntary information stays over the
