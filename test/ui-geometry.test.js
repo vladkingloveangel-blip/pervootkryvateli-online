@@ -204,3 +204,14 @@ test('anchor and public player UI use canonical glory metrics only', () => {
   assert.doesNotMatch(publicCode, /player\.glory/);
   assert.doesNotMatch(publicCode, /<span>Слава<\/span>/);
 });
+
+
+test('mobile roster keeps one 30px token system and landscape hide wins the cascade', () => {
+  assert.doesNotMatch(css, /(?:width|height):\s*26px/);
+  assert.match(css, /@media \(min-width: 901px\)[\s\S]*?\.roster-token \{[\s\S]*?width:\s*34px;[\s\S]*?height:\s*34px;/);
+  const canonicalStart = css.indexOf('/* UI-40 — staging visual normalization.');
+  const landscapeStart = css.lastIndexOf('@media (max-width: 900px) and (orientation: landscape)');
+  assert.ok(canonicalStart >= 0 && landscapeStart > canonicalStart);
+  const landscape = css.slice(landscapeStart);
+  assert.match(landscape, /body\.game-active \.game-roster \{\s*\n\s*display:\s*none !important;/);
+});
