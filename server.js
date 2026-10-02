@@ -499,7 +499,7 @@ function cleanName(name) {
   return s.slice(0, 24) || 'Мореплаватель';
 }
 function getRoom(code) { return rooms.get(String(code || '').trim().toUpperCase()); }
-function rollD6() { return 2 + Math.floor(Math.random() * (BALANCE.session.dieSides - 1)); }
+function rollD6() { return 2 + Math.floor(Math.random() * 4); }
 function ackSafe(ack, payload) { if (typeof ack === 'function') ack(payload); }
 const ROMAN_SERVER = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 
@@ -2860,9 +2860,9 @@ function beginTurn(room) {
   room.phase = 'navigation';
   room.roll = null;
   room.movePoints = null;
-  room.actionsLeft = BALANCE.session.actionsPerTurn;
   const p = currentPlayer(room);
   if (!p) return;
+  room.actionsLeft = shipStats(p).actionsPerTurn;
 
   p.personalTurnNo = (Number(p.personalTurnNo) || 0) + 1;
   p.brokenAlliesThisTurn = [];
@@ -2881,14 +2881,15 @@ function continueTurnAfterCards(room) {
   room.phase = 'navigation';
   room.roll = null;
   room.movePoints = null;
+  const normalActionLimit = shipStats(p).actionsPerTurn;
   const configuredActionLimit = p.nextActionLimit == null ? NaN : Number(p.nextActionLimit);
   const actionLimit = Math.max(0, Math.min(
-    BALANCE.session.actionsPerTurn,
-    Number.isFinite(configuredActionLimit) && configuredActionLimit >= 0 ? configuredActionLimit : BALANCE.session.actionsPerTurn
+    normalActionLimit,
+    Number.isFinite(configuredActionLimit) && configuredActionLimit >= 0 ? configuredActionLimit : normalActionLimit
   ));
   room.actionsLeft = actionLimit;
   p.nextActionLimit = null;
-  if (actionLimit < BALANCE.session.actionsPerTurn) log(room, `${p.name}: из-за недоплаченного налога в этом личном ходу доступно максимум ${actionLimit} действия.`);
+  if (actionLimit < normalActionLimit) log(room, `${p.name}: из-за недоплаченного налога в этом личном ходу доступно максимум ${actionLimit} действия.`);
 
   if ((Number(p.skipTurns) || 0) > 0) {
     p.skipTurns -= 1;
