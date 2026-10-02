@@ -1652,7 +1652,9 @@ test('UI-33 scenario: trade and island management keep canonical action owners',
   const islandEnd = app.indexOf('\n  function ', islandStart + 1);
   const island = app.slice(islandStart, islandEnd);
   assert.match(island, /renderIsland\(\)/);
-  assert.match(island, /moveCanonicalIslandActions/);
+  assert.match(island, /renderIsland\(\)/);
+  assert.match(island, /const sourceActions = \$\('islandActions'\)/);
+  assert.match(island, /actions\.appendChild\(sourceActions\.firstChild\)/);
 
   const citadelStart = app.indexOf('  function renderCitadelObjectSheet(');
   const citadelEnd = app.indexOf('\n  function refreshOpenCitadelSheet', citadelStart);
@@ -1673,7 +1675,8 @@ test('UI-33 scenario: character, Scout, assignment and expedition stay in their 
   assert.match(character, /moveCanonicalCharacterActions/);
   assert.doesNotMatch(character, /socket\.emit\(/);
 
-  assert.match(app, /function beginScoutTargeting\(/);
+  assert.match(app, /mode === 'scout-garrison'/);
+  assert.match(app, /mode === 'scout-money'/);
   assert.match(app, /socket\.emit\('useScout'/);
   assert.match(app, /function renderGoalsObjectSheet\(\)/);
   assert.match(app, /renderAssignments\(\)/);
@@ -1772,7 +1775,8 @@ test('UI-33 scenario: round transitions are ambient while finished state becomes
   assert.match(endGame, /const result = r\.finalResult/);
   assert.match(endGame, /result\.titles/);
   assert.match(endGame, /result\.playerMetrics/);
-  assert.doesNotMatch(endGame, /winner|podium|overallWinner/i);
+  assert.match(endGame, /title\.winnerIds/);
+  assert.doesNotMatch(endGame, /podium|overallWinner/i);
 });
 
 test('UI-33 scenario matrix covers every canonical mobile regression path', () => {
