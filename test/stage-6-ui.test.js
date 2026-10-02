@@ -594,7 +594,7 @@ test('UI-13 keeps desktop character target lists as migration fallback', () => {
   assert.ok(start >= 0 && end > start);
   const code = app.slice(start, end);
 
-  assert.match(code, /if \(isMobileGameplayUi\(\)\)/);
+  assert.match(code, /typeof window !== 'undefined'[\s\S]*?matchMedia\('\(max-width: 900px\)'\)/);
   assert.match(code, /Картограф: выбрать якорь на карте/);
   assert.match(code, /Разведчик: гарнизон на карте/);
   assert.match(code, /Разведчик: казна игрока на карте/);

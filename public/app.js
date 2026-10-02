@@ -2805,7 +2805,7 @@
         b.disabled = !(myTurn && mine.phase === 'navigation' && mine.roll !== null && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending());
         b.addEventListener('click', () => socket.emit('useNavigator', {}, handleGameAck)); actions.appendChild(b);
       } else if (character.id === 'cartographer') {
-        if (isMobileGameplayUi()) {
+        if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 900px)').matches) {
           const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
           b.textContent = 'Картограф: выбрать якорь на карте · 1 действие';
           b.disabled = !canStartTargeting('cartographer');
@@ -2838,7 +2838,7 @@
           const peek = document.createElement('div'); peek.className = 'event-effect'; peek.textContent = state.characterPeek; actions.appendChild(peek);
         }
       } else if (character.id === 'scout') {
-        if (isMobileGameplayUi()) {
+        if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 900px)').matches) {
           const garrisonTargets = targetingOptions('scout-garrison');
           const moneyTargets = targetingOptions('scout-money');
 
