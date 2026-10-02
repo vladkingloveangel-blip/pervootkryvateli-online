@@ -2260,6 +2260,7 @@ function takeCharacter(room, player, characterId) {
   const allowed = canTakeCharacter(room, player, characterId);
   if (!allowed.ok) return allowed;
   player.character = { id: allowed.character.id };
+  player.characterUsedRound = null;
   return { ok: true, character: allowed.character };
 }
 
@@ -2278,15 +2279,20 @@ function replaceCharacter(room, player, characterId) {
   if (!allowed.ok) return allowed;
   const previousId = heldCharacterId(player);
   player.character = { id: allowed.character.id };
+  player.characterUsedRound = null;
   player.characterReplacedRound = Number(room.round) || 1;
   return { ok: true, previousId, character: allowed.character };
 }
 
-function consumeCharacter(player, expectedId) {
+function consumeCharacter(player, expectedId, round = null) {
   const id = heldCharacterId(player);
   if (!id || (expectedId && id !== expectedId)) return { ok: false, error: 'Нужный персонаж не находится на основном корабле.' };
   const character = CHARACTERS[id];
-  player.character = null;
+  const currentRound = Number(round);
+  if (Number.isFinite(currentRound) && Number(player.characterUsedRound) === currentRound) {
+    return { ok: false, error: 'Этот персонаж уже использовался в текущем раунде.' };
+  }
+  if (Number.isFinite(currentRound)) player.characterUsedRound = currentRound;
   return { ok: true, character };
 }
 
