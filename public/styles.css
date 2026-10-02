@@ -3896,7 +3896,7 @@ button[aria-disabled="true"] {
 }
 
 @media (max-width: 900px) {
-  body.game-active button:not(.map-object-hit):not(.navigation-hit):not(.targeting-hit):not(.targeting-marker) {
+  body.game-active button:not(.map-object-hit):not(.navigation-hit):not(.targeting-hit):not(.targeting-marker):not(.cell-hit) {
     min-height: 44px;
   }
 
