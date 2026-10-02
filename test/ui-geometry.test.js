@@ -5,6 +5,8 @@ const fs = require('node:fs');
 const css = fs.readFileSync('public/styles.css', 'utf8');
 const app = fs.readFileSync('public/app.js', 'utf8');
 const index = fs.readFileSync('public/index.html', 'utf8');
+const server = fs.readFileSync('server.js', 'utf8');
+const projection = fs.readFileSync('state-projection.js', 'utf8');
 
 test('UI-40 uses one canonical normalization block', () => {
   assert.equal((css.match(/UI-40 — staging visual normalization/g) || []).length, 1);
@@ -112,4 +114,38 @@ test('mobile HUD uses one square tile system', () => {
   assert.doesNotMatch(app, /hudPhaseLabel/);
   assert.match(app, /\$\('hudRound'\)\.textContent = r\.started \? `Раунд \$\{r\.round\}` : 'Лобби'/);
   assert.match(app, /\$\('hudCircle'\)\.textContent = r\.started \? `Круг \$\{r\.circle\}` : '—'/);
+});
+
+
+test('HUD metrics use canonical scoring concepts and compact explanations', () => {
+  const metrics = [...index.matchAll(/data-hud-metric="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(metrics, ['ducats', 'cargo', 'army', 'artillery', 'army-glory', 'fleet-glory', 'prestige']);
+  assert.doesNotMatch(index, /hudGlory/);
+  assert.match(index, /id="hudMetricPopover"/);
+  assert.match(index, /id="hudArmyGlory"/);
+  assert.match(index, /id="hudFleetGlory"/);
+  assert.match(index, /id="hudPrestige"/);
+
+  assert.doesNotMatch(app, /hudGlory/);
+  assert.match(app, /function hudMetricInfo\(metric\)/);
+  assert.match(app, /title: 'АРМЕЙСКАЯ СЛАВА'/);
+  assert.match(app, /title: 'МОРСКАЯ СЛАВА'/);
+  assert.match(app, /title: 'ПРЕСТИЖ'/);
+  assert.match(app, /\$\('hudArmyGlory'\)\.textContent = mine\.armyPoints \?\? 0/);
+  assert.match(app, /\$\('hudFleetGlory'\)\.textContent = mine\.fleetPoints \?\? 0/);
+  assert.match(app, /\$\('hudPrestige'\)\.textContent = mine\.prestige \?\? 0/);
+  assert.match(app, /document\.querySelectorAll\('\[data-hud-metric\]'\)/);
+  assert.doesNotMatch(app, /\$\('hudDucatsBtn'\)\.addEventListener\('click', renderFleetOverviewObjectSheet\)/);
+  assert.doesNotMatch(app, /\$\('hudCargoBtn'\)\.addEventListener\('click', renderFleetOverviewObjectSheet\)/);
+  assert.match(app, /<span>Армейская слава<\/span>/);
+  assert.match(app, /<span>Морская слава<\/span>/);
+
+  assert.match(css, /\.hud-metric-popover \{[\s\S]*?position:\s*fixed;[\s\S]*?width:\s*200px/);
+  assert.match(css, /\.hud-chip\[data-hud-metric\]\[aria-expanded="true"\]/);
+
+  assert.match(server, /const \{ calculatePlayerFinalMetrics \} = require\('\.\/final-scoring'\)/);
+  assert.match(server, /const ownerLiveMetrics = p\.id === viewerId \? calculatePlayerFinalMetrics\(room, p\) : null/);
+  assert.match(server, /prestige:\s*ownerLiveMetrics\?\.prestige/);
+  assert.match(projection, /ducats:S, debt:S, prestige:S/);
+  assert.doesNotMatch(projection, /publicPlayer = o\(\{[\s\S]*?prestige/);
 });
