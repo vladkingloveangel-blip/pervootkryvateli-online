@@ -93,9 +93,12 @@
       powerPreference: 'low-power',
     });
     if (!gl) {
+      canvas.classList.remove('ocean-webgl-active');
+      canvas.classList.remove('ocean-webgl-active');
       canvas.classList.add('ocean-fallback');
       return { resize() {} };
     }
+    canvas.classList.add('ocean-webgl-active');
 
     const vertex = compile(gl, gl.VERTEX_SHADER, vertexSource);
     const fragment = compile(gl, gl.FRAGMENT_SHADER, fragmentSource);
