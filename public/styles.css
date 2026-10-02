@@ -4770,16 +4770,18 @@ body.game-active .final-results-art {
   body.game-active .object-sheet {
     position: absolute;
     z-index: 96;
-    inset: auto;
     top: calc(72px + env(safe-area-inset-top, 0px));
-    left: 50%;
-    width: min(390px, calc(100vw - 24px));
+    left: max(12px, env(safe-area-inset-left, 0px));
+    right: max(12px, env(safe-area-inset-right, 0px));
+    width: auto;
+    max-width: 390px;
     max-height: min(64dvh, 560px);
+    margin-inline: auto;
     padding: 12px;
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
     gap: 9px;
-    transform: translateX(-50%);
+    box-sizing: border-box;
     border: 1px solid rgba(240,196,91,.38);
     border-radius: 16px;
     background: rgba(8,37,44,.965);
@@ -4867,11 +4869,14 @@ body.game-active .final-results-art {
   body.game-active.game-menu-open .game-menu-panel {
     inset: auto;
     top: calc(72px + env(safe-area-inset-top, 0px));
-    left: 50%;
-    width: min(390px, calc(100vw - 24px));
+    left: max(12px, env(safe-area-inset-left, 0px));
+    right: max(12px, env(safe-area-inset-right, 0px));
+    width: auto;
+    max-width: 390px;
     max-height: min(74dvh, 680px);
+    margin-inline: auto;
     padding: 12px;
-    transform: translateX(-50%);
+    box-sizing: border-box;
     overflow-y: auto;
   }
   body.game-active.game-menu-open .game-menu-backdrop,
