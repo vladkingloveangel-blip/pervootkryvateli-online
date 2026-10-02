@@ -830,16 +830,14 @@ test('finished persisted room restart resume projects identical public result wi
 });
 
 
-test('navigation die is uniformly limited to 2 through 6', () => {
+test('navigation die is uniformly limited to 2 through 5', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
-  const match = source.match(/function rollD6\(\) \{([\s\S]*?)\}/);
+  const match = source.match(/function rollD6\\(\\) \\{([\\s\\S]*?)\\}/);
   assert.ok(match, 'rollD6 source');
   const evaluate = new Function('Math', 'BALANCE', match[1]);
   const BALANCE = { session: { dieSides: 6 } };
-  const samples = [0, 0.199999, 0.2, 0.399999, 0.4, 0.599999, 0.6, 0.799999, 0.8, 0.999999];
+  const samples = [0, 0.249999, 0.25, 0.499999, 0.5, 0.749999, 0.75, 0.999999];
   const results = samples.map(value => evaluate({ floor: Math.floor, random: () => value }, BALANCE));
-  assert.deepEqual([...new Set(results)], [2, 3, 4, 5, 6]);
-  assert.equal(results.includes(1), false);
-  assert.equal(Math.min(...results), 2);
-  assert.equal(Math.max(...results), 6);
+  assert.deepEqual(results, [2, 2, 3, 3, 4, 4, 5, 5]);
+  assert.deepEqual([...new Set(results)], [2, 3, 4, 5]);
 });
