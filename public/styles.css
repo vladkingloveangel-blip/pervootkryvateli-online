@@ -5141,3 +5141,48 @@ body.game-active .token {
     white-space: nowrap;
   }
 }
+
+
+/* UI-40 quick access final composition — icon centered in the tile, caption anchored inside at the bottom. */
+@media (max-width: 900px) {
+  body.game-active .quick-access-btn {
+    position: relative;
+    display: block;
+    padding: 0;
+    overflow: hidden;
+  }
+  body.game-active .quick-access-btn > span:first-child {
+    position: absolute;
+    left: 50%;
+    top: 46%;
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    transform: translate(-50%, -50%);
+    line-height: 1;
+  }
+  body.game-active .quick-access-btn .ui-icon {
+    width: 20px;
+    height: 20px;
+  }
+  body.game-active .quick-access-label {
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    bottom: 3px;
+    display: block;
+    max-width: none;
+    overflow: hidden;
+    color: var(--text);
+    background: transparent;
+    font-size: 6px;
+    font-weight: 800;
+    line-height: 1;
+    text-align: center;
+    text-overflow: clip;
+    white-space: nowrap;
+    transform: none;
+    pointer-events: none;
+  }
+}
