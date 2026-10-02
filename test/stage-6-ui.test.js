@@ -349,7 +349,7 @@ test('UI-7 unifies authoritative pending choices in one mobile Decision Layer', 
   assert.match(code, /room\.pendingAlliance\?\.viewerRole === 'recipient'/);
   assert.match(code, /room\.pendingDecision\?\.waiting/);
 
-  assert.match(app, /renderCombat\(\);\s*refreshOpenSeaBattleFlow\(\);\s*refreshOpenAssaultFlow\(\);\s*renderDecisionLayer\(\);\s*renderResultLayer\(\);\s*renderToastStack\(\);\s*renderTargetingBar\(\);\s*renderMap\(\);/);
+  assert.match(app, /renderCombat\(\);\s*refreshOpenSeaBattleFlow\(\);\s*refreshOpenAssaultFlow\(\);\s*renderEventFlowOverlay\(\);\s*renderDecisionLayer\(\);\s*renderResultLayer\(\);\s*renderToastStack\(\);\s*renderTargetingBar\(\);\s*renderMap\(\);/);
   assert.match(styles, /UI-7 — unified mandatory Decision Layer/);
   assert.match(styles, /body\.game-active \.decision-backdrop[\s\S]*?pointer-events: auto/);
   assert.doesNotMatch(index, /id="decisionClose"/);
@@ -920,7 +920,7 @@ test('UI-19 turns sea combat into target preview plus canonical battle actions',
   assert.doesNotMatch(code, /socket\.emit\('attackShip'/);
 
   assert.match(app, /combat\.addEventListener\('click', \(\) => renderSeaBattleFlowSheet\(player\.id\)\)/);
-  assert.match(app, /renderCombat\(\);\s*refreshOpenSeaBattleFlow\(\);\s*refreshOpenAssaultFlow\(\);\s*renderDecisionLayer\(\);/);
+  assert.match(app, /renderCombat\(\);\s*refreshOpenSeaBattleFlow\(\);\s*refreshOpenAssaultFlow\(\);\s*renderEventFlowOverlay\(\);\s*renderDecisionLayer\(\);/);
   assert.match(styles, /UI-19 — player-vs-player sea battle flow/);
 });
 
@@ -985,7 +985,7 @@ test('UI-20 turns foreign island assault into preview plus canonical combat acti
 
   assert.match(app, /attackable \? 'Штурм острова' : 'Действия на острове'/);
   assert.match(app, /if \(attackable\) renderAssaultFlowSheet\(island\.id\)/);
-  assert.match(app, /refreshOpenSeaBattleFlow\(\);\s*refreshOpenAssaultFlow\(\);\s*renderDecisionLayer\(\);/);
+  assert.match(app, /refreshOpenSeaBattleFlow\(\);\s*refreshOpenAssaultFlow\(\);\s*renderEventFlowOverlay\(\);\s*renderDecisionLayer\(\);/);
   assert.match(styles, /UI-20 — island assault orchestration flow/);
 });
 
