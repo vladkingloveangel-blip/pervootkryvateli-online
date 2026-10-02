@@ -5203,3 +5203,18 @@ body.game-active .token {
     max-height: calc(100dvh - 154px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   }
 }
+
+/* Island building cards */
+.island-building-card {
+  display: grid;
+  gap: 6px;
+  padding: 10px 11px;
+  margin: 7px 0;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 12px;
+  background: rgba(9,18,24,.48);
+}
+.island-building-card__head { font-weight: 800; line-height: 1.2; }
+.island-building-card__desc { font-size: 12px; line-height: 1.35; opacity: .88; }
+.island-building-card__meta { font-size: 11px; line-height: 1.3; opacity: .64; }
+.island-building-card .build-btn { width: 100%; margin-top: 2px; }
