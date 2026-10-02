@@ -4772,3 +4772,13 @@ body.game-active .final-results-art {
   body.game-active .roster-turn-dot-next { background: #ef4444; }
   body.game-active .roster-turn-dot-waiting { background: #aab5b8; }
 }
+
+
+/* UI-40 staging HUD micro-patch — remove the full-width upper backing plate */
+@media (max-width: 900px) {
+  body.game-active .game-hud {
+    background: transparent;
+    border-bottom: 0;
+    box-shadow: none;
+  }
+}
