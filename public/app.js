@@ -811,10 +811,19 @@
   $('objectSheetExpand').addEventListener('click', toggleObjectSheetExpanded);
   $('targetingCancelBtn').addEventListener('click', cancelTargeting);
   $('hudPlayerBtn').addEventListener('click', () => { if (!state.spectating) renderFleetOverviewObjectSheet(); });
-  $('hudDucatsBtn').addEventListener('click', renderFleetOverviewObjectSheet);
-  $('hudGloryBtn').addEventListener('click', () => renderScoreOverlay());
-  $('hudArmyBtn').addEventListener('click', renderFleetOverviewObjectSheet);
-  $('hudArtilleryBtn').addEventListener('click', renderFleetOverviewObjectSheet);
+  document.querySelectorAll('[data-hud-metric]').forEach(button => {
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      toggleHudMetricPopover(button.dataset.hudMetric, button);
+    });
+  });
+  document.addEventListener('click', event => {
+    const popover = $('hudMetricPopover');
+    if (!popover || popover.classList.contains('hidden')) return;
+    if (popover.contains(event.target) || event.target.closest?.('[data-hud-metric]')) return;
+    closeHudMetricPopover();
+  });
+  window.addEventListener('resize', closeHudMetricPopover);
   $('hudCharacterBtn').addEventListener('click', () => {
     if (state.spectating) return;
     if (isMobileGameplayUi()) renderCharacterObjectSheet();
@@ -833,7 +842,6 @@
     if (isMobileGameplayUi()) renderDiplomacyObjectSheet(me()?.suzerainId || null);
     else renderDiplomacyObjectSheet(me()?.suzerainId || null);
   });
-  $('hudCargoBtn').addEventListener('click', renderFleetOverviewObjectSheet);
   $('hudMenuBtn').addEventListener('click', toggleGameMenu);
   $('gameMenuCloseBtn').addEventListener('click', closeGameMenu);
   $('gameMenuBackdrop').addEventListener('click', closeGameMenu);
@@ -888,6 +896,99 @@
   }
   function me() { return state.room?.players.find(p => p.id === state.myId) || null; }
   function active() { return state.room?.players.find(p => p.id === state.room?.activePlayerId) || null; }
+
+  function hudMetricInfo(metric) {
+    const mine = me();
+    const room = state.room;
+    if (!mine || !room) return null;
+    const cargo = cargoSummary(mine, room);
+    const debt = Number(mine.debt) || 0;
+    const ducats = Number(mine.ducats) || 0;
+
+    const data = {
+      ducats: {
+        title: 'ДУКАТЫ',
+        value: String(ducats),
+        body: debt
+          ? `Казна для покупок и оплаты. Долг: ${debt}. Чистое богатство: ${ducats - debt}.`
+          : 'Казна для покупок, строительства и других платных действий.',
+      },
+      cargo: {
+        title: 'ТРЮМ',
+        value: `${cargo.quantity}/${cargo.capacity}`,
+        body: 'Текущая загрузка и общая вместимость доступных грузовых трюмов флотилии.',
+      },
+      army: {
+        title: 'ВОЙСКО',
+        value: String(mine.assaultArmy ?? mine.stats?.army ?? 0),
+        body: 'Текущая сила флотилии при штурме островов.',
+      },
+      artillery: {
+        title: 'АРТИЛЛЕРИЯ',
+        value: String(mine.fleetArtillery ?? mine.stats?.artillery ?? 0),
+        body: 'Текущая боевая сила флотилии в морских боях и встречах.',
+      },
+      'army-glory': {
+        title: 'АРМЕЙСКАЯ СЛАВА',
+        value: String(Number(mine.armyPoints) || 0),
+        body: 'Получается за военные успехи на суше и учитывается в итоговом результате партии.',
+      },
+      'fleet-glory': {
+        title: 'МОРСКАЯ СЛАВА',
+        value: String(Number(mine.fleetPoints) || 0),
+        body: 'Получается за победы на море и на якорных встречах и учитывается в итоговом результате.',
+      },
+      prestige: {
+        title: 'ПРЕСТИЖ',
+        value: String(Number(mine.prestige) || 0),
+        body: 'Складывается из статуса ваших островов и престижных публичных построек.',
+      },
+    };
+    return data[metric] || null;
+  }
+
+  function closeHudMetricPopover() {
+    const popover = $('hudMetricPopover');
+    if (!popover) return;
+    popover.classList.add('hidden');
+    popover.removeAttribute('data-metric');
+    document.querySelectorAll('[data-hud-metric]').forEach(button => button.setAttribute('aria-expanded', 'false'));
+  }
+
+  function positionHudMetricPopover(button) {
+    const popover = $('hudMetricPopover');
+    if (!popover || !button || popover.classList.contains('hidden')) return;
+    const width = Math.min(210, Math.max(168, window.innerWidth - 16));
+    popover.style.width = `${width}px`;
+    const rect = button.getBoundingClientRect();
+    let left = rect.left + rect.width / 2 - width / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+    popover.style.left = `${Math.round(left)}px`;
+    popover.style.top = `${Math.round(rect.bottom + 6)}px`;
+  }
+
+  function renderHudMetricPopover(metric, button) {
+    const info = hudMetricInfo(metric);
+    if (!info) return closeHudMetricPopover();
+    const popover = $('hudMetricPopover');
+    $('hudMetricPopoverTitle').textContent = info.title;
+    $('hudMetricPopoverValue').textContent = info.value;
+    $('hudMetricPopoverBody').textContent = info.body;
+    popover.dataset.metric = metric;
+    popover.classList.remove('hidden');
+    document.querySelectorAll('[data-hud-metric]').forEach(item => item.setAttribute('aria-expanded', item === button ? 'true' : 'false'));
+    positionHudMetricPopover(button);
+  }
+
+  function toggleHudMetricPopover(metric, button) {
+    const popover = $('hudMetricPopover');
+    if (!popover) return;
+    if (!popover.classList.contains('hidden') && popover.dataset.metric === metric) {
+      closeHudMetricPopover();
+      return;
+    }
+    renderHudMetricPopover(metric, button);
+  }
 
   function currentIslands() {
     const mine = me();
@@ -961,8 +1062,8 @@
           + '<div class="score-metric-grid">'
           + '<span>Острова</span><strong>' + metricValue(metrics.islands) + '</strong>'
           + '<span>Богатство</span><strong>' + metricValue(metrics.wealth) + '</strong>'
-          + '<span>Army points</span><strong>' + metricValue(metrics.army) + '</strong>'
-          + '<span>Fleet points</span><strong>' + metricValue(metrics.fleet) + '</strong>'
+          + '<span>Армейская слава</span><strong>' + metricValue(metrics.army) + '</strong>'
+          + '<span>Морская слава</span><strong>' + metricValue(metrics.fleet) + '</strong>'
           + '<span>Престиж</span><strong>' + metricValue(metrics.prestige) + '</strong>'
           + '<span>Легендарные места</span><strong>' + metricValue(metrics.legendaryPlaces) + '</strong></div>';
         body.appendChild(card);
@@ -975,9 +1076,9 @@
           + '<div class="score-metric-grid">'
           + '<span>Острова</span><strong>' + metricValue(player.islandCount) + '</strong>'
           + '<span>Богатство</span><strong>' + projectedWealthLabel(player) + '</strong>'
-          + '<span>Army points</span><strong>' + metricValue(player.armyPoints) + '</strong>'
-          + '<span>Fleet points</span><strong>' + metricValue(player.fleetPoints) + '</strong>'
-          + '<span>Престиж</span><strong>скрыто</strong>'
+          + '<span>Армейская слава</span><strong>' + metricValue(player.armyPoints) + '</strong>'
+          + '<span>Морская слава</span><strong>' + metricValue(player.fleetPoints) + '</strong>'
+          + '<span>Престиж</span><strong>' + metricValue(player.prestige) + '</strong>'
           + '<span>Легендарные места</span><strong>скрыто</strong></div>';
         body.appendChild(card);
       }
@@ -1089,10 +1190,12 @@
       $('hudPlayerName').textContent = mine.name;
       $('hudShipLevel').textContent = `${shipName(mine.shipClass)} · ${ROMAN[mine.level] || mine.level}`;
       $('hudDucats').textContent = mine.ducats ?? 0;
-      $('hudGlory').textContent = mine.glory ?? 0;
+      $('hudCargo').textContent = `${cargo.quantity}/${cargo.capacity}`;
       $('hudArmy').textContent = mine.assaultArmy ?? mine.stats?.army ?? 0;
       $('hudArtillery').textContent = mine.fleetArtillery ?? mine.stats?.artillery ?? 0;
-      $('hudCargo').textContent = `${cargo.quantity}/${cargo.capacity}`;
+      $('hudArmyGlory').textContent = mine.armyPoints ?? 0;
+      $('hudFleetGlory').textContent = mine.fleetPoints ?? 0;
+      $('hudPrestige').textContent = mine.prestige ?? 0;
       $('hudCharacter').textContent = mine.character?.name ? mine.character.name.slice(0, 3) : '—';
       $('hudCharacterBtn').title = mine.character?.name || 'Персонаж не нанят';
       $('hudCards').textContent = String(digitalCardEntries(mine).length);
@@ -1114,6 +1217,12 @@
 
     $('hudRound').textContent = r.started ? `Раунд ${r.round}` : 'Лобби';
     $('hudCircle').textContent = r.started ? `Круг ${r.circle}` : '—';
+
+    const openMetric = $('hudMetricPopover')?.dataset.metric;
+    if (openMetric && !$('hudMetricPopover').classList.contains('hidden')) {
+      const button = document.querySelector(`[data-hud-metric="${openMetric}"]`);
+      if (button) renderHudMetricPopover(openMetric, button);
+    }
   }
 
 
@@ -1401,7 +1510,7 @@
       const skip = mine.skipTurns ? ` · пропусков хода: ${mine.skipTurns}` : '';
       const suzerain = mine.suzerainId ? r.factions?.find(f => f.id === mine.suzerainId)?.name : null;
       const politics = suzerain ? ` · вассал: ${suzerain}` : (mine.enemyFactionIds?.length ? ` · вражда: ${mine.enemyFactionIds.length}` : '');
-      $('youStatus').innerHTML = `<strong>${escapeHtml(mine.name)}</strong><br><span class="muted">${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level} · ${mine.ducats} дукатов${mine.debt ? ` · долг ${mine.debt}` : ''} · очки армии ${mine.armyPoints || 0} · очки флота ${mine.fleetPoints || 0} · слава ${mine.glory || 0} · островов ${mine.islandCount} · клетка ${mine.col + 1}:${mine.row + 1}${escapeHtml(cargo)}${escapeHtml(cards)}${escapeHtml(eventHand)}${escapeHtml(legendary)}${escapeHtml(skip)}${escapeHtml(politics)}</span>`;
+      $('youStatus').innerHTML = `<strong>${escapeHtml(mine.name)}</strong><br><span class="muted">${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level} · ${mine.ducats} дукатов${mine.debt ? ` · долг ${mine.debt}` : ''} · армейская слава ${mine.armyPoints || 0} · морская слава ${mine.fleetPoints || 0} · престиж ${mine.prestige || 0} · островов ${mine.islandCount} · клетка ${mine.col + 1}:${mine.row + 1}${escapeHtml(cargo)}${escapeHtml(cards)}${escapeHtml(eventHand)}${escapeHtml(legendary)}${escapeHtml(skip)}${escapeHtml(politics)}</span>`;
     }
 
     renderGameRoster();
@@ -1562,7 +1671,7 @@
       const politicalLabel = suzerainName ? ` · вассал ${suzerainName}` : (p.enemyFactionIds?.length ? ` · вражда ${p.enemyFactionIds.length}` : '');
       const readyLabel = !r.started ? (p.ready ? ' · ✓ готов' : ' · не готов') : '';
       const moneyLabel = Object.hasOwn(p, 'ducats') ? ` · ${p.ducats} дукатов${Object.hasOwn(p, 'debt') && p.debt ? ` · долг ${p.debt}` : ''}` : '';
-      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${p.id === r.leaderId ? ' · ведущий' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level}${moneyLabel} · армия ${p.armyPoints || 0} · флот ${p.fleetPoints || 0} · слава ${p.glory || 0} · островов ${p.islandCount} · именных ${p.namedPlaceCardCount || 0} · экспедиций ${p.expeditionHistoryCount || 0} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
+      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${p.id === r.leaderId ? ' · ведущий' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level}${moneyLabel} · армейская слава ${p.armyPoints || 0} · морская слава ${p.fleetPoints || 0} · островов ${p.islandCount} · именных ${p.namedPlaceCardCount || 0} · экспедиций ${p.expeditionHistoryCount || 0} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
       if (!isSpectator && isHost && !r.started) {
         const actions = el.querySelector('.player-side-actions');
         if (p.id !== r.leaderId) {
