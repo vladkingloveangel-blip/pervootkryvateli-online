@@ -899,3 +899,67 @@ test('UI-18 existing Result Card remains the authoritative post-encounter feedba
   assert.match(code, /state\.mapSelection\?\.kind === 'anchor'/);
   assert.match(code, /refreshOpenAnchorSheet\(\)/);
 });
+
+
+test('UI-19 turns sea combat into target preview plus canonical battle actions', () => {
+  const start = app.indexOf('  function seaBattlePreviewHtml(');
+  const end = app.indexOf('\n  function renderPlayerObjectSheet(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /renderSeaBattleFlowSheet/);
+  assert.match(code, /refreshOpenSeaBattleFlow/);
+  assert.match(code, /battleFlowStatusHtml/);
+  assert.match(code, /fleetArtillery/);
+  assert.match(code, /attackAllies/);
+  assert.match(code, /defenseAllies/);
+  assert.match(code, /renderCombat\(\);/);
+  assert.match(code, /dataset\.combatKind === 'sea'/);
+  assert.match(code, /actions\.appendChild\(canonical\)/);
+  assert.doesNotMatch(code, /socket\.emit\('attackShip'/);
+
+  assert.match(app, /combat\.addEventListener\('click', \(\) => renderSeaBattleFlowSheet\(player\.id\)\)/);
+  assert.match(app, /renderCombat\(\);\s*refreshOpenSeaBattleFlow\(\);\s*renderDecisionLayer\(\);/);
+  assert.match(styles, /UI-19 — player-vs-player sea battle flow/);
+});
+
+test('UI-19 pending joint battle uses Decision Layer as the authoritative waiting and invite step', () => {
+  const start = app.indexOf('  function mobileDecisionDescriptor(');
+  const end = app.indexOf('\n  function renderDecisionLayer()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /pendingBattle\?\.viewerInvite/);
+  assert.match(code, /bodyHtml: battleFlowStatusHtml\(room\.pendingBattle\)/);
+  assert.match(code, /kind: 'waiting'/);
+
+  const decisionStart = app.indexOf('  function renderDecisionLayer()');
+  const decisionEnd = app.indexOf('\n  function renderControls()', decisionStart);
+  const decisionCode = app.slice(decisionStart, decisionEnd);
+  assert.match(decisionCode, /if \(descriptor\.bodyHtml\) body\.innerHTML = descriptor\.bodyHtml/);
+});
+
+test('UI-19 server emits a sanitized authoritative result event for resolved joint sea battles', () => {
+  assert.match(server, /function battlePresentationResult\(result\)/);
+  assert.match(server, /function emitResolvedBattlePresentation\(room, pending, result\)/);
+  assert.match(server, /io\.to\(player\.socketId\)\.emit\('battleResolved', payload\)/);
+  assert.match(server, /if \(result\?\.ok\) emitResolvedBattlePresentation\(room, pending, result\);\s*room\.pendingBattle = null;/);
+
+  const start = server.indexOf('function battlePresentationResult(result)');
+  const end = server.indexOf('\nfunction resolvePendingBattle(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = server.slice(start, end);
+  assert.match(code, /attackerPower/);
+  assert.match(code, /defenderPower/);
+  assert.match(code, /lootShares/);
+  assert.match(code, /fleetPointAwards/);
+  assert.match(code, /levelLosses/);
+  assert.doesNotMatch(code, /character|ducats|debt|cargo/);
+});
+
+test('UI-19 client converts joint battleResolved event into the existing Result Card contract', () => {
+  assert.match(app, /socket\.on\('battleResolved', data =>/);
+  assert.match(app, /data\.kind !== 'sea'/);
+  assert.match(app, /seaBattleResultCard\(\{ ok: true, result: data\.result \}/);
+  assert.match(app, /enqueueResultCard\(card\)/);
+});

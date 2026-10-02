@@ -2777,3 +2777,106 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     font-size: 13px;
   }
 }
+
+
+/* UI-19 — player-vs-player sea battle flow */
+@media (max-width: 900px) {
+  body.game-active .sea-battle-preview,
+  body.game-active .battle-flow-status {
+    display: grid;
+    gap: 4px;
+    padding: 10px;
+    border: 1px solid rgba(235,78,70,.42);
+    border-radius: 12px;
+    background: rgba(235,78,70,.045);
+  }
+
+  body.game-active .sea-battle-preview > span,
+  body.game-active .battle-flow-status > span {
+    color: var(--danger, #ef7777);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .075em;
+  }
+
+  body.game-active .sea-battle-preview > strong,
+  body.game-active .battle-flow-status > strong {
+    font-size: 17px;
+  }
+
+  body.game-active .sea-battle-preview > small,
+  body.game-active .battle-flow-status > small {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  body.game-active .sea-battle-sides,
+  body.game-active .sea-battle-allies {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 7px;
+  }
+
+  body.game-active .sea-battle-sides > div,
+  body.game-active .sea-battle-allies > div {
+    display: grid;
+    gap: 3px;
+    padding: 8px 9px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(255,255,255,.03);
+  }
+
+  body.game-active .sea-battle-sides span,
+  body.game-active .sea-battle-allies span {
+    color: var(--muted);
+    font-size: 9px;
+  }
+
+  body.game-active .sea-battle-sides strong,
+  body.game-active .sea-battle-allies strong {
+    font-size: 13px;
+  }
+
+  body.game-active .sea-battle-sides small {
+    color: var(--muted);
+    font-size: 9px;
+  }
+
+  body.game-active .sea-battle-warnings {
+    display: grid;
+    gap: 5px;
+  }
+
+  body.game-active .sea-battle-warnings > div,
+  body.game-active .sea-battle-note {
+    padding: 7px 8px;
+    border: 1px solid rgba(235,78,70,.35);
+    border-radius: 9px;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  body.game-active .battle-flow-invites {
+    display: grid;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  body.game-active .battle-flow-invite {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 8px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: rgba(255,255,255,.025);
+    font-size: 10px;
+  }
+
+  body.game-active .battle-flow-invite span {
+    color: var(--muted);
+  }
+}

@@ -491,6 +491,15 @@
   socket.on('connect_error', () => {
     if (state.everConnected) showConnectionBanner('Сервер пока недоступен. Продолжаем переподключение…', 'warning');
   });
+  socket.on('battleResolved', data => {
+    if (state.spectating || !data?.result || data.kind !== 'sea') return;
+    const target = state.room?.players?.find(player => player.id === data.targetPlayerId);
+    const attacker = state.room?.players?.find(player => player.id === data.attackerId);
+    const opponentName = data.attackerId === state.myId ? target?.name : attacker?.name;
+    const card = seaBattleResultCard({ ok: true, result: data.result }, opponentName || 'противник');
+    if (card) enqueueResultCard(card);
+  });
+
   socket.on('roomState', room => {
     if (state.spectating) return;
     state.room = room;
@@ -1104,6 +1113,7 @@
     renderIsland();
     renderAlliances();
     renderCombat();
+    refreshOpenSeaBattleFlow();
     renderDecisionLayer();
     renderResultLayer();
     renderToastStack();
@@ -1771,7 +1781,8 @@
     };
     if (room.pendingBattle?.viewerInvite) return {
       kind: 'decision', kicker: 'СОВМЕСТНЫЙ БОЙ', title: 'Присоединиться к бою?',
-      contentId: 'combatContent', actionsId: 'combatActions',
+      bodyHtml: battleFlowStatusHtml(room.pendingBattle),
+      actionsId: 'combatActions',
     };
     if (room.pendingAlliance?.viewerRole === 'recipient') return {
       kind: 'decision', kicker: 'ПРЕДЛОЖЕНИЕ СОЮЗА', title: `${playerName(room.pendingAlliance.fromId)} предлагает союз`,
@@ -1783,7 +1794,8 @@
     };
     if (room.pendingBattle) return {
       kind: 'waiting', kicker: 'БОЙ', title: 'Ожидаются ответы участников',
-      contentId: 'combatContent', actionsId: 'combatActions',
+      bodyHtml: battleFlowStatusHtml(room.pendingBattle),
+      actionsId: 'combatActions',
     };
     if (room.pendingDecision?.waiting) return {
       kind: 'waiting', kicker: 'ОЖИДАНИЕ', title: `Ждём решения: ${playerName(room.pendingDecision.actorPlayerId)}`,
@@ -1826,7 +1838,8 @@
     $('decisionKicker').textContent = descriptor.kicker;
     $('decisionTitle').textContent = descriptor.title;
     const sourceContent = descriptor.contentId ? $(descriptor.contentId) : null;
-    body.textContent = descriptor.body || sourceContent?.textContent?.trim() || (descriptor.kind === 'waiting' ? 'Ожидается решение другого игрока.' : 'Выберите один из доступных вариантов.');
+    if (descriptor.bodyHtml) body.innerHTML = descriptor.bodyHtml;
+    else body.textContent = descriptor.body || sourceContent?.textContent?.trim() || (descriptor.kind === 'waiting' ? 'Ожидается решение другого игрока.' : 'Выберите один из доступных вариантов.');
 
     actions.innerHTML = '';
     const sourceActions = descriptor.actionsId ? $(descriptor.actionsId) : null;
@@ -3990,6 +4003,8 @@
       for (const target of seaTargets) {
         const card = document.createElement('div');
         card.className = 'combat-target';
+        card.dataset.combatKind = 'sea';
+        card.dataset.targetPlayerId = target.id;
         let carpenterToggle = null;
         if (mine.character?.id === 'shipCarpenter') {
           const carpenterLabel = document.createElement('label');
@@ -4036,6 +4051,8 @@
         const defenseAllies = island.ownerId ? r.players.filter(p => p.id !== state.myId && p.id !== island.ownerId && areAlliesClient(island.ownerId, p.id) && !areAlliesClient(state.myId, p.id) && playerOnIslandClient(p, island)) : [];
         const card = document.createElement('div');
         card.className = 'combat-target';
+        card.dataset.combatKind = 'assault';
+        card.dataset.islandId = island.id;
         const islandInfo = document.createElement('div');
         islandInfo.innerHTML = `<strong>${escapeHtml(island.name)}</strong><div class="cargo-meta">${escapeHtml(owner)} · ваша сила ${mine.assaultArmy ?? mine.stats?.army ?? 0} · базовая защита ${island.defenseArmy ?? island.army} · союзники атаки в позиции ${attackAllies.length} · защиты ${defenseAllies.length}${island.legendaryVeil?.remaining ? ` · Покров моря ${island.legendaryVeil.remaining} хода` : ''}</div>`;
         card.appendChild(islandInfo);
@@ -4727,6 +4744,124 @@
     `;
   }
 
+  function seaBattlePreviewHtml(target) {
+    const mine = me();
+    if (!mine || !target) return '';
+    const attackAllies = (state.room?.players || []).filter(player =>
+      player.id !== state.myId && player.id !== target.id
+      && areAlliesClient(state.myId, player.id)
+      && !areAlliesClient(target.id, player.id)
+      && seaAttackPositionClient(player, target)
+      && !(player.attackedPlayerIdsThisRound || []).includes(target.id)
+    );
+    const defenseAllies = (state.room?.players || []).filter(player =>
+      player.id !== state.myId && player.id !== target.id
+      && areAlliesClient(target.id, player.id)
+      && !areAlliesClient(state.myId, player.id)
+      && seaAttackPositionClient(player, target)
+    );
+    const warnings = [];
+    if (state.room?.round === 1) warnings.push('В первом раунде атака на другого игрока запрещена.');
+    if (mine.inPeaceZone || target.inPeaceZone) warnings.push('Цитадель — зона мира.');
+    if ((mine.attackedPlayerIdsThisRound || []).includes(target.id)) warnings.push('Лимит нападения на этого игрока в текущем раунде уже использован.');
+    if ((mine.brokenAlliesThisTurn || []).includes(target.id)) warnings.push('После разрыва союза эту цель нельзя атаковать в текущем ходу.');
+    if (target.legendaryStatus?.shipVeilTurns) warnings.push(`Покров моря: защита ещё ${target.legendaryStatus.shipVeilTurns} ход.`);
+
+    return `
+      <section class="sea-battle-preview">
+        <span>МОРСКОЙ БОЙ</span>
+        <strong>${escapeHtml(mine.name)} → ${escapeHtml(target.name)}</strong>
+        <small>Сервер окончательно проверит допустимость и разрешит бой после всех обязательных реакций.</small>
+      </section>
+      <section class="sea-battle-sides">
+        <div>
+          <span>Ваша флотилия</span>
+          <strong>${mine.fleetArtillery ?? '—'} арт.</strong>
+          <small>${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level}</small>
+        </div>
+        <div>
+          <span>${escapeHtml(target.name)}</span>
+          <strong>${target.fleetArtillery ?? '—'} арт.</strong>
+          <small>${escapeHtml(shipName(target.shipClass))} ${ROMAN[target.level] || target.level}</small>
+        </div>
+      </section>
+      <section class="sea-battle-allies">
+        <div><span>Союзники атаки в позиции</span><strong>${attackAllies.length}</strong></div>
+        <div><span>Союзники защиты в позиции</span><strong>${defenseAllies.length}</strong></div>
+      </section>
+      ${warnings.length ? `<section class="sea-battle-warnings">${warnings.map(w => `<div>${escapeHtml(w)}</div>`).join('')}</section>` : ''}
+    `;
+  }
+
+  function renderSeaBattleFlowSheet(targetId) {
+    const target = state.room?.players?.find(player => player.id === targetId);
+    const mine = me();
+    if (!target || !mine || state.spectating || isDecisionPending()) return;
+
+    closeMapInfo();
+    state.mapSelection = { kind: 'sea-battle', id: target.id };
+    $('objectSheetKind').textContent = 'БОЕВОЙ FLOW';
+    $('objectSheetTitle').textContent = `Атака: ${target.name}`;
+    $('objectSheetBody').innerHTML = seaBattlePreviewHtml(target);
+
+    renderCombat();
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    const canonical = Array.from($('combatActions')?.children || []).find(node =>
+      node.classList?.contains('combat-target')
+      && node.dataset.combatKind === 'sea'
+      && node.dataset.targetPlayerId === target.id
+    );
+    if (canonical) actions.appendChild(canonical);
+
+    if (!canonical) {
+      const note = document.createElement('div');
+      note.className = 'sea-battle-note';
+      note.textContent = 'Сейчас эта цель недоступна для морского боя.';
+      actions.appendChild(note);
+    }
+
+    $('objectSheet').classList.remove('hidden');
+    $('objectSheet').classList.add('expanded');
+    $('objectSheetExpand').textContent = '⌄';
+    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function refreshOpenSeaBattleFlow() {
+    if (state.mapSelection?.kind !== 'sea-battle' || !isMobileGameplayUi()) return;
+    const targetId = state.mapSelection.id;
+    const target = state.room?.players?.find(player => player.id === targetId);
+    if (!target || state.room?.pendingBattle || state.room?.pendingLegendaryReaction) {
+      closeMapInfo();
+      return;
+    }
+    renderSeaBattleFlowSheet(targetId);
+  }
+
+  function battleFlowStatusHtml(pending) {
+    if (!pending) return '';
+    const attacker = playerName(pending.attackerId);
+    const target = pending.kind === 'sea'
+      ? playerName(pending.targetPlayerId)
+      : (state.room?.islands?.find(island => island.id === pending.islandId)?.name || 'остров');
+    const invites = (pending.invites || []).map(invite => {
+      const status = invite.status === 'pending' ? 'ожидается ответ'
+        : invite.status === 'joined' ? 'участвует'
+        : 'не участвует';
+      const side = invite.side === 'attacker' ? 'атака' : 'защита';
+      return `<div class="battle-flow-invite"><span>${escapeHtml(playerName(invite.playerId))} · ${side}</span><strong>${escapeHtml(status)}</strong></div>`;
+    }).join('');
+    return `
+      <section class="battle-flow-status">
+        <span>${pending.kind === 'sea' ? 'МОРСКОЙ БОЙ' : 'ШТУРМ'}</span>
+        <strong>${escapeHtml(attacker)} → ${escapeHtml(target)}</strong>
+        <small>Бой разрешится сервером после ответов всех приглашённых участников.</small>
+      </section>
+      <section class="battle-flow-invites">${invites || '<div class="battle-flow-invite"><span>Участники</span><strong>ожидание</strong></div>'}</section>
+    `;
+  }
+
   function renderPlayerObjectSheet(player) {
     const sheet = $('objectSheet');
     $('objectSheetKind').textContent = player.id === state.myId ? 'ВАША ФЛОТИЛИЯ' : 'ФЛОТИЛИЯ ИГРОКА';
@@ -4781,7 +4916,7 @@
         combat.className = 'danger-soft';
         combat.textContent = 'Морской бой';
         combat.disabled = !(myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 && !blocked);
-        combat.addEventListener('click', () => { closeMapInfo(); openMobileTab('actions'); });
+        combat.addEventListener('click', () => renderSeaBattleFlowSheet(player.id));
         actions.appendChild(combat);
       }
 

@@ -1784,6 +1784,48 @@ function resolvePendingLegendaryReaction(room, useVeil, cardRef = null) {
   return { ok: false, error: 'Неизвестный тип реакции.' };
 }
 
+function battlePresentationResult(result) {
+  if (!result?.ok) return null;
+  return {
+    outcome: result.outcome,
+    attackerPower: result.attackerPower,
+    defenderPower: result.defenderPower,
+    loot: Number(result.loot) || 0,
+    lootShares: { ...(result.lootShares || {}) },
+    fleetPointAwards: (result.fleetPointAwards || []).map(item => ({ playerId: item.playerId, points: item.points })),
+    levelLosses: (result.levelLosses || []).map(item => ({
+      playerId: item.playerId,
+      prevented: Boolean(item.prevented),
+      preventedByCharacter: item.preventedByCharacter || null,
+      before: item.before,
+      after: item.after,
+    })),
+    attackerParticipantIds: [...(result.attackerParticipantIds || [])],
+    defenderParticipantIds: [...(result.defenderParticipantIds || [])],
+  };
+}
+
+function emitResolvedBattlePresentation(room, pending, result) {
+  if (!room || !pending || pending.kind !== 'sea' || !result?.ok) return;
+  const participantIds = new Set([
+    pending.attackerId,
+    pending.targetPlayerId,
+    ...(result.attackerParticipantIds || []),
+    ...(result.defenderParticipantIds || []),
+  ].filter(Boolean));
+  const payload = {
+    battleId: pending.id,
+    kind: pending.kind,
+    attackerId: pending.attackerId,
+    targetPlayerId: pending.targetPlayerId,
+    result: battlePresentationResult(result),
+  };
+  for (const playerId of participantIds) {
+    const player = playerById(room, playerId);
+    if (player?.socketId) io.to(player.socketId).emit('battleResolved', payload);
+  }
+}
+
 function resolvePendingBattle(room) {
   const pending = room.pendingBattle;
   if (!pending || !allBattleInvitesAnswered(pending)) return null;
@@ -1818,6 +1860,7 @@ function resolvePendingBattle(room) {
     }
   }
   if (!result?.ok) log(room, `Совместный бой не удалось разрешить: ${result?.error || 'неизвестная ошибка'}`);
+  if (result?.ok) emitResolvedBattlePresentation(room, pending, result);
   room.pendingBattle = null;
   if (result?.ok) {
     const reason = pending.kind === 'sea' ? 'Потеря уровня после совместного морского боя.' : 'Потеря уровня после совместного штурма.';
