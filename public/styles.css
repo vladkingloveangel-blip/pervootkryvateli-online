@@ -5186,3 +5186,43 @@ body.game-active .token {
     pointer-events: none;
   }
 }
+
+
+/* UI-40 quick access correction — reserve a real caption row below the icon. */
+@media (max-width: 900px) {
+  body.game-active .quick-access-btn {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) 10px;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    justify-items: stretch;
+    padding: 3px 3px 2px;
+    overflow: hidden;
+  }
+  body.game-active .quick-access-btn > span:first-child {
+    position: static;
+    width: auto;
+    height: auto;
+    display: grid;
+    place-items: center;
+    transform: none;
+    align-self: stretch;
+    justify-self: stretch;
+    line-height: 1;
+  }
+  body.game-active .quick-access-btn .quick-access-label {
+    position: static;
+    display: block;
+    align-self: center;
+    justify-self: stretch;
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+    transform: none;
+    background: transparent;
+    font-size: 6px;
+    line-height: 10px;
+    text-align: center;
+    white-space: nowrap;
+  }
+}
