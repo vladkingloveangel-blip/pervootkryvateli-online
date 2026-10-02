@@ -3753,3 +3753,139 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     width: 100%;
   }
 }
+
+
+/* UI-34 — mobile device matrix and viewport hardening.
+   Portrait mobile remains the canonical gameplay layout. Dynamic viewport units
+   follow browser chrome; safe-area insets protect standalone/PWA and notched iPhones. */
+@media (max-width: 900px) {
+  body.game-active {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  body.game-active .topbar {
+    padding-top: max(5px, env(safe-area-inset-top, 0px));
+    height: calc(48px + env(safe-area-inset-top, 0px));
+    min-height: calc(48px + env(safe-area-inset-top, 0px));
+  }
+
+  body.game-active main {
+    height: calc(100vh - 48px - env(safe-area-inset-top, 0px));
+    height: calc(100dvh - 48px - env(safe-area-inset-top, 0px));
+  }
+
+  body.game-active .game-hud {
+    padding-left: max(8px, env(safe-area-inset-left, 0px));
+    padding-right: max(8px, env(safe-area-inset-right, 0px));
+  }
+
+  body.game-active .game-action-bar,
+  body.game-active .targeting-bar {
+    left: max(8px, env(safe-area-inset-left, 0px));
+    right: max(8px, env(safe-area-inset-right, 0px));
+  }
+
+  body.game-active .decision-card {
+    max-height: min(78vh, 720px);
+    max-height: min(78dvh, 720px);
+    padding-left: max(14px, env(safe-area-inset-left, 0px));
+    padding-right: max(14px, env(safe-area-inset-right, 0px));
+    scrollbar-gutter: stable;
+  }
+
+  body.game-active .result-card {
+    max-height: min(78vh, 680px);
+    max-height: min(78dvh, 680px);
+    scrollbar-gutter: stable;
+  }
+
+  body.game-active .object-sheet {
+    max-height: min(46vh, 430px);
+    max-height: min(46dvh, 430px);
+    padding-left: max(12px, env(safe-area-inset-left, 0px));
+    padding-right: max(12px, env(safe-area-inset-right, 0px));
+  }
+
+  body.game-active .object-sheet.expanded {
+    max-height: min(86vh, 780px);
+    max-height: min(86dvh, 780px);
+  }
+
+  body.game-active .decision-actions,
+  body.game-active .object-sheet-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    padding-bottom: max(2px, env(safe-area-inset-bottom, 0px));
+    background: rgba(8,37,44,.985);
+  }
+}
+
+/* Small Android / compact iPhone portrait: preserve the map and keep the
+   mandatory interaction surface scrollable above browser chrome. */
+@media (max-width: 380px), (max-height: 700px) and (max-width: 900px) {
+  body.game-active .game-hud {
+    grid-template-columns: 76px minmax(0, 1fr) 74px 36px;
+    gap: 4px;
+    min-height: 50px;
+  }
+
+  body.game-active .hud-menu-btn {
+    width: 36px;
+    min-width: 36px;
+  }
+
+  body.game-active .game-roster {
+    top: calc(52px + env(safe-area-inset-top, 0px));
+  }
+
+  body.game-active .game-action-bar {
+    gap: 6px;
+    padding: 7px 8px;
+  }
+
+  body.game-active .decision-card {
+    max-height: 88vh;
+    max-height: 88dvh;
+    gap: 7px;
+    padding-top: 12px;
+  }
+
+  body.game-active .result-card {
+    max-height: 88vh;
+    max-height: 88dvh;
+  }
+
+  body.game-active .object-sheet.expanded {
+    max-height: 90vh;
+    max-height: 90dvh;
+  }
+
+  body.game-active .event-flow-overlay {
+    top: calc(102px + env(safe-area-inset-top, 0px));
+  }
+}
+
+/* Landscape is secondary: keep gameplay usable rather than introducing a
+   separate desktop/mobile architecture. */
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 520px) {
+  body.game-active .game-hud {
+    min-height: 48px;
+  }
+
+  body.game-active .game-roster {
+    display: none;
+  }
+
+  body.game-active .decision-card,
+  body.game-active .result-card {
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 8px);
+  }
+
+  body.game-active .object-sheet.expanded {
+    max-height: 94dvh;
+  }
+}

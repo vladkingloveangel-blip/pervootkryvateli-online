@@ -1792,3 +1792,36 @@ test('UI-33 scenario matrix covers every canonical mobile regression path', () =
     'round transitions are ambient',
   ]) assert.match(source, new RegExp(token.replace(/[.*+?^$\\{}()|[\]\\]/g, '\\$&')));
 });
+
+
+test('UI-34 declares viewport-fit and PWA-safe mobile viewport behavior', () => {
+  assert.match(index, /name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/);
+  assert.match(index, /name="mobile-web-app-capable" content="yes"/);
+  assert.match(index, /name="apple-mobile-web-app-capable" content="yes"/);
+  assert.match(styles, /height: 100vh;\s*height: 100dvh;/);
+  assert.match(styles, /env\(safe-area-inset-top, 0px\)/);
+  assert.match(styles, /env\(safe-area-inset-bottom, 0px\)/);
+  assert.match(styles, /env\(safe-area-inset-left, 0px\)/);
+  assert.match(styles, /env\(safe-area-inset-right, 0px\)/);
+});
+
+test('UI-34 keeps mandatory actions reachable on short mobile screens', () => {
+  const start = styles.indexOf('/* UI-34 — mobile device matrix');
+  assert.ok(start >= 0);
+  const code = styles.slice(start);
+  assert.match(code, /\.decision-card \{[\s\S]*?max-height:[\s\S]*?overflow|\.decision-card \{[\s\S]*?max-height/);
+  assert.match(code, /\.decision-actions,[\s\S]*?\.object-sheet-actions[\s\S]*?position: sticky;[\s\S]*?bottom: 0/);
+  assert.match(code, /@media \(max-width: 380px\), \(max-height: 700px\) and \(max-width: 900px\)/);
+  assert.match(code, /\.decision-card \{[\s\S]*?max-height: 88dvh/);
+  assert.match(code, /\.object-sheet\.expanded \{[\s\S]*?max-height: 90dvh/);
+});
+
+test('UI-34 covers portrait phones and secondary landscape without a second UX architecture', () => {
+  const start = styles.indexOf('/* UI-34 — mobile device matrix');
+  const code = styles.slice(start);
+  assert.match(code, /Small Android \/ compact iPhone portrait/);
+  assert.match(code, /@media \(max-width: 900px\) and \(orientation: landscape\) and \(max-height: 520px\)/);
+  assert.match(code, /\.game-roster \{\s*display: none;/);
+  assert.match(code, /max-height: calc\(100dvh - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\) - 8px\)/);
+  assert.doesNotMatch(code, /mobileLandscapeApp|landscapeGameShell|desktopMobileMode/);
+});
