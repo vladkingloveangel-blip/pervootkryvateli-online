@@ -6111,8 +6111,8 @@
       const t = document.createElement('button');
       t.type = 'button';
       t.className = `token${p.id === state.myId ? ' you' : ''}`;
-      t.style.left = `calc(${p.col} * 100% / ${cols} + ${(idx % 3) * 4}px)`;
-      t.style.top = `calc(${p.row} * 100% / ${rows} + ${Math.floor(idx / 3) * 4}px)`;
+      t.style.left = `calc((${p.col} + .5) * 100% / ${cols} + ${(idx % 3) * 4}px)`;
+      t.style.top = `calc((${p.row} + .5) * 100% / ${rows} + ${Math.floor(idx / 3) * 4}px)`;
       t.style.background = p.color;
       t.textContent = '⚓';
       t.title = p.name;
