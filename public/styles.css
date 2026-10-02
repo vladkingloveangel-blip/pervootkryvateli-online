@@ -4792,19 +4792,19 @@ body.game-active .final-results-art {
   body.game-active .game-action-bar[data-mode="navigation"],
   body.game-active .game-action-bar[data-mode="navigation-result"],
   body.game-active .game-action-bar[data-mode="actions"] {
-    width: min(200px, calc(100% - 20px));
-    height: 84px;
-    min-height: 84px;
+    width: min(185px, calc(100% - 20px));
+    height: 77px;
+    min-height: 77px;
     grid-template-columns: 1fr;
-    grid-template-rows: 16px 36px 14px;
+    grid-template-rows: 16px 36px 11px;
     grid-template-areas:
       "status"
       "buttons"
       "detail";
     justify-items: center;
     align-items: center;
-    gap: 3px;
-    padding: 5px 6px;
+    gap: 2px;
+    padding: 3px 6px;
   }
 
   body.game-active .game-action-bar[data-mode="navigation"] .game-action-copy,
