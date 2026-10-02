@@ -1113,19 +1113,15 @@ function assignmentAssaultAvailable(room, player, island, playerOwnedOnly = fals
 
 function assignmentDeliveryHoldIds(room, player, task) {
   const card = task?.payload;
-  if (!card || card.type !== 'delivery') return [];
-  const ids = ['main', ...(player.escorts || []).map(escort => escort.id)];
-  const out = [];
-  for (const holdId of ids) {
-    const allowed = canSellCargo(room, player, holdId);
-    if (!allowed.ok) continue;
-    const cargo = allowed.hold?.cargo;
-    if (!cargo || cargo.assignmentInstanceId !== task.id) continue;
-    if ((Number(cargo.quantity) || 0) !== (Number(allowed.hold.capacity) || 0)) continue;
-    if (card.goodIds && !card.goodIds.includes(cargo.goodId)) continue;
-    out.push(allowed.hold.id);
-  }
-  return out;
+  if (!card || card.type !== 'delivery' || !isCitadelCell(player.row, player.col)) return [];
+  return fleetCargoHolds(room, player)
+    .filter(hold => {
+      const cargo = hold.cargo;
+      if (!cargo || cargo.assignmentInstanceId !== task.id) return false;
+      if ((Number(cargo.quantity) || 0) !== (Number(hold.capacity) || 0)) return false;
+      return !card.goodIds || card.goodIds.includes(cargo.goodId);
+    })
+    .map(hold => hold.id);
 }
 
 function assignmentRequiredAction(room, player, actionsLeft = 0) {
