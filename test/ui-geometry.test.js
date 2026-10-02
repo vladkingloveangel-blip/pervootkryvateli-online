@@ -72,21 +72,24 @@ test('mobile turn controller is compact and keeps canonical turn commands', () =
   assert.match(block, /addButton\('🎲 Бросить'.*rollMove/);
 
   assert.doesNotMatch(css, /button:not\(\.map-object-hit\):not\(\.navigation-hit\):not\(\.targeting-hit\):not\(\.targeting-marker\):not\(\.cell-hit\):not\(\.token\):not\(\.game-action-button\)/);
-  assert.match(css, /\.game-action-buttons \.game-action-button \{[\s\S]*?min-height:\s*36px;[\s\S]*?height:\s*36px/);
+  assert.match(css, /\.game-action-buttons \.game-action-button \{[\s\S]*?width:\s*66px;[\s\S]*?min-width:\s*66px;[\s\S]*?max-width:\s*66px;[\s\S]*?min-height:\s*33px;[\s\S]*?height:\s*33px/);
   assert.match(block, /bar\.dataset\.mode = 'navigation-result'/);
   assert.match(block, /Выберите объект или действие\./);
   assert.match(block, /setCopy\('', `Выпало \$\{mine\.roll\} · дальность \$\{mine\.movePoints\}`/);
   assert.match(block, /Выберите клетку · доступно:/);
   assert.match(block, /Бросьте кубик или останьтесь\./);
-  assert.match(css, /\.game-action-bar\[data-mode="navigation"\],\s*\n\s*body\.game-active \.game-action-bar\[data-mode="navigation-result"\],\s*\n\s*body\.game-active \.game-action-bar\[data-mode="actions"\] \{[\s\S]*?width:\s*min\(185px, calc\(100% - 20px\)\);[\s\S]*?height:\s*77px;[\s\S]*?min-height:\s*77px/);
-  assert.match(css, /grid-template-rows:\s*16px 36px 11px/);
+  assert.match(css, /\.game-action-bar\[data-mode="navigation"\],\s*\n\s*body\.game-active \.game-action-bar\[data-mode="navigation-result"\],\s*\n\s*body\.game-active \.game-action-bar\[data-mode="actions"\] \{[\s\S]*?width:\s*min\(165px, calc\(100% - 20px\)\);[\s\S]*?height:\s*66px;[\s\S]*?min-height:\s*66px/);
+  assert.match(css, /grid-template-rows:\s*1fr 33px 1fr/);
   assert.match(css, /grid-template-areas:\s*\n\s*"status"\s*\n\s*"buttons"\s*\n\s*"detail"/);
   assert.match(css, /\.game-action-bar\[data-mode="actions"\] \.game-action-copy \{\s*\n\s*display:\s*contents/);
   assert.match(css, /white-space:\s*nowrap/);
   assert.doesNotMatch(css, /-webkit-line-clamp:\s*2/);
   assert.match(css, /\.game-action-kicker \{[\s\S]*?color:\s*var\(--accent\)/);
   assert.match(css, /\.game-action-status > strong \{[\s\S]*?color:\s*var\(--accent\)/);
-  assert.match(css, /text-overflow:\s*clip;\s*\n\s*transform:\s*translateY\(3px\)/);
+  assert.match(css, /text-overflow:\s*clip;/);
+  assert.doesNotMatch(css, /transform:\s*translateY\(3px\)/);
+  assert.match(css, /\.game-action-bar\[data-mode="navigation-result"\] \.game-action-buttons \.game-action-button,[\s\S]*?width:\s*132px;[\s\S]*?min-width:\s*132px;[\s\S]*?max-width:\s*132px/);
+  assert.match(css, /gap:\s*0;\s*\n\s*padding:\s*0 6px;/);
   assert.match(css, /\.game-action-bar\[data-mode="actions"\] \.game-action-progress \{\s*\n\s*order:\s*0/);
   assert.match(css, /\.game-action-bar\[data-mode="actions"\] \.game-action-kicker \{\s*\n\s*order:\s*1/);
 });
