@@ -245,6 +245,13 @@ test('cleanup-8 removes audited dead UI code without touching compatibility stat
 });
 
 
+test('ocean has an animated non-WebGL fallback', () => {
+  assert.match(ocean, /ocean-webgl-active/);
+  assert.match(css, /@keyframes ocean-caustics-drift-a/);
+  assert.match(css, /@keyframes ocean-caustics-drift-b/);
+  assert.match(css, /prefers-reduced-motion:\s*reduce/);
+});
+
 test('ocean renderer contains visible moving water caustics and textured fallback', () => {
   assert.match(ocean, /Bright moving caustic cells/);
   assert.match(ocean, /float caustic =/);
