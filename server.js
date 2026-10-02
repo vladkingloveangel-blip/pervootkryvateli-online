@@ -2850,9 +2850,10 @@ function completePendingEvent(room, pending) {
 }
 
 function determineOrder(room) {
-  const seats = room.seatingOrder || room.players.map(p => p.id);
-  const leaderIndex = seats.indexOf(room.leaderId);
-  return [...seats.slice(leaderIndex), ...seats.slice(0, leaderIndex)];
+  const joined = room.players.map(p => p.id);
+  const seats = (room.seatingOrder || []).filter(id => joined.includes(id));
+  for (const id of joined) if (!seats.includes(id)) seats.push(id);
+  return seats;
 }
 
 function beginTurn(room) {
@@ -3240,7 +3241,6 @@ io.on('connection', socket => {
       rulesSchemaVersion: RULESET.schemaVersion,
       runtimeProfile: RUNTIME_PROFILE,
       hostId: player.id,
-      leaderId: null,
       seatingOrder: [player.id],
       players: [player],
       islands: persistedIslands(),
@@ -3337,7 +3337,6 @@ io.on('connection', socket => {
     const p = room?.players.find(x => x.id === socket.data.playerId);
     if (!room || !p || room.started) return ackSafe(ack, { ok: false, error: 'Сейчас класс корабля менять нельзя.' });
     if (!SHIPS[data?.shipClass]) return ackSafe(ack, { ok: false, error: 'Неизвестный класс корабля.' });
-    if (p.id === room.leaderId && data.shipClass !== 'carrack') return ackSafe(ack, { ok: false, error: 'Ведущий играет за каракку.' });
     p.shipClass = data.shipClass;
     p.ready = false;
     log(room, `${p.name} выбрал: ${SHIPS[p.shipClass].name}. Готовность снята.`);
@@ -3356,33 +3355,6 @@ io.on('connection', socket => {
     emitRoom(room);
   });
 
-  onSocketEvent(socket, 'setLeader', (data, ack) => {
-    const room = getRoom(socket.data.roomCode);
-    if (!room || room.started || room.hostId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Ведущего выбирают до начала партии.' });
-    const player = playerById(room, data?.playerId);
-    if (!player) return ackSafe(ack, { ok: false, error: 'Игрок не найден.' });
-    room.seatingOrder ||= room.players.map(p => p.id);
-    room.leaderId = player.id;
-    player.shipClass = 'carrack';
-    for (const member of room.players) member.ready = false;
-    log(room, `${player.name} выбран ведущим и играет за каракку.`);
-    ackSafe(ack, { ok: true });
-    emitRoom(room);
-  });
-
-  onSocketEvent(socket, 'setSeatingOrder', (data, ack) => {
-    const room = getRoom(socket.data.roomCode);
-    if (!room || room.started || room.hostId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Порядок мест задают до начала партии.' });
-    const ids = data?.playerIds;
-    if (!Array.isArray(ids) || ids.length !== room.players.length || new Set(ids).size !== ids.length ||
-      ids.some(id => !room.players.some(p => p.id === id))) return ackSafe(ack, { ok: false, error: 'Укажите всех игроков ровно по одному разу.' });
-    room.seatingOrder = [...ids];
-    for (const member of room.players) member.ready = false;
-    log(room, 'Порядок мест по часовой стрелке обновлён.');
-    ackSafe(ack, { ok: true });
-    emitRoom(room);
-  });
-
   onSocketEvent(socket, 'leaveRoom', (_data, ack) => {
     const room = getRoom(socket.data.roomCode);
     const playerId = socket.data.playerId;
@@ -3393,7 +3365,6 @@ io.on('connection', socket => {
     const player = room.players.find(p => p.id === playerId);
     room.players = room.players.filter(p => p.id !== playerId);
     room.seatingOrder = (room.seatingOrder || []).filter(id => id !== playerId);
-    if (room.leaderId === playerId) room.leaderId = null;
     socket.leave(room.code);
     socket.data.roomCode = null;
     socket.data.playerId = null;
@@ -3415,7 +3386,6 @@ io.on('connection', socket => {
 
     room.players = room.players.filter(p => p.id !== targetId);
     room.seatingOrder = (room.seatingOrder || []).filter(id => id !== targetId);
-    if (room.leaderId === targetId) room.leaderId = null;
     const targetSocket = target.socketId ? io.sockets.sockets.get(target.socketId) : null;
     if (targetSocket) {
       targetSocket.emit('removedFromRoom', { code: room.code, reason: 'Создатель комнаты удалил вас из лобби.' });
@@ -3444,11 +3414,9 @@ io.on('connection', socket => {
     if (room.hostId !== socket.data.playerId) return ackSafe(ack, { ok: false, error: 'Начать игру может только создатель комнаты.' });
     if (room.started) return ackSafe(ack, { ok: false, error: 'Игра уже началась.' });
     if (room.players.length < BALANCE.session.players.min || room.players.length > BALANCE.session.players.max) return ackSafe(ack, { ok: false, error: `Для старта нужно ${BALANCE.session.players.min}–${BALANCE.session.players.max} игроков.` });
-    if (!room.leaderId || !room.players.some(p => p.id === room.leaderId)) return ackSafe(ack, { ok: false, error: 'Перед стартом выберите ведущего.' });
-    if (playerById(room, room.leaderId)?.shipClass !== 'carrack') return ackSafe(ack, { ok: false, error: 'Ведущий должен играть за каракку.' });
     if (!Array.isArray(room.seatingOrder) || room.seatingOrder.length !== room.players.length ||
       new Set(room.seatingOrder).size !== room.players.length || room.seatingOrder.some(id => !playerById(room, id)))
-      return ackSafe(ack, { ok: false, error: 'Проверьте порядок мест по часовой стрелке.' });
+      return ackSafe(ack, { ok: false, error: 'Не удалось определить порядок входа игроков.' });
     if (!room.players.every(p => p.connected)) return ackSafe(ack, { ok: false, error: 'Перед стартом все игроки должны быть онлайн.' });
     if (!room.players.every(p => p.ready)) return ackSafe(ack, { ok: false, error: 'Перед стартом все игроки должны нажать «Готов».' });
 
