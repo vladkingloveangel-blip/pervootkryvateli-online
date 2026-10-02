@@ -16,7 +16,7 @@ const IMPLEMENTED_POLICY_KEYS = Object.freeze([
 const SCOUT_RUNTIME_ENABLED = true;
 
 const cargo = o(f('id goodId name quantity price value'));
-const stats = o(f('artillery army cargo moveMod'));
+const stats = o(f('artillery army cargo moveMod actionsPerTurn'));
 const upgrade = o(f('id name branch active disabledByLevel missingRequirement'));
 const escort = o({ ...f('id type special active inactiveReason'), cargo });
 const discovery = o(f('id name placeId claimedBy exploredBy'));
