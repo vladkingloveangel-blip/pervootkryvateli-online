@@ -2039,3 +2039,28 @@ test('UI-40 anchor markers render without a translucent backing plate', () => {
   assert.match(code, /box-shadow: none/);
   assert.match(code, /backdrop-filter: none/);
 });
+
+
+test('UI-40 roster uses authoritative turn order for active next and waiting status dots', () => {
+  const start = app.indexOf('  function renderGameRoster()');
+  const end = app.indexOf('\n  function renderLobbyShell()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /const orderedIds = Array\.isArray\(r\.order\)/);
+  assert.match(code, /const activeIndex = orderedIds\.indexOf\(r\.activePlayerId\)/);
+  assert.match(code, /orderedIds\[\(activeIndex \+ 1\) % orderedIds\.length\]/);
+  assert.match(code, /orderedIds\.length > 1/);
+  assert.match(code, /turnStatus = isActive \? 'active' : isNext \? 'next' : 'waiting'/);
+  assert.match(code, /roster-turn-dot-/);
+  assert.match(code, /shipName\(player\.shipClass\)/);
+  assert.doesNotMatch(code, /status\.textContent = player\.id === r\.activePlayerId/);
+
+  const cssStart = styles.indexOf('/* UI-40 staging roster pass');
+  assert.ok(cssStart >= 0);
+  const css = styles.slice(cssStart);
+  assert.match(css, /\.roster-player[\s\S]*?background: transparent;[\s\S]*?box-shadow: none/);
+  assert.match(css, /\.roster-copy[\s\S]*?background: rgba\(7,31,37,\.62\)/);
+  assert.match(css, /\.roster-turn-dot-active \{ background: #38d878; \}/);
+  assert.match(css, /\.roster-turn-dot-next \{ background: #ef4444; \}/);
+  assert.match(css, /\.roster-turn-dot-waiting \{ background: #aab5b8; \}/);
+});

@@ -1461,35 +1461,51 @@
     roster.innerHTML = '';
     roster.classList.remove('hidden');
     const orderedIds = Array.isArray(r.order) && r.order.length ? r.order : r.players.map(player => player.id);
+    const activeIndex = orderedIds.indexOf(r.activePlayerId);
+    const nextPlayerId = orderedIds.length > 1 && activeIndex >= 0
+      ? orderedIds[(activeIndex + 1) % orderedIds.length]
+      : null;
+
     for (const id of orderedIds) {
       const player = r.players.find(item => item.id === id);
       if (!player) continue;
+      const isActive = player.id === r.activePlayerId;
+      const isNext = !isActive && player.id === nextPlayerId;
+      const turnStatus = isActive ? 'active' : isNext ? 'next' : 'waiting';
+
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'roster-player';
+      button.className = `roster-player turn-${turnStatus}`;
       if (player.id === state.myId) button.classList.add('you');
-      if (player.id === r.activePlayerId) button.classList.add('active');
-      if (!player.connected) button.classList.add('offline');
       if (player.id !== state.myId && areAlliesClient(state.myId, player.id)) button.classList.add('ally');
-      button.setAttribute('aria-label', `${player.name}: ${playerRelationLabel(player)}`);
+      button.setAttribute('aria-label', `${player.name}: ${shipName(player.shipClass)}; ${isActive ? 'ходит сейчас' : isNext ? 'ходит следующим' : 'ожидает хода'}`);
 
       const token = document.createElement('span');
       token.className = 'roster-token';
       token.style.background = player.color;
       token.textContent = String(player.name || '?').trim().slice(0, 1).toUpperCase() || '?';
 
+      const copy = document.createElement('span');
+      copy.className = 'roster-copy';
+
+      const nameRow = document.createElement('span');
+      nameRow.className = 'roster-name-row';
+
       const name = document.createElement('span');
       name.className = 'roster-name';
       name.textContent = player.id === state.myId ? 'Вы' : player.name;
 
       const status = document.createElement('span');
-      status.className = 'roster-status';
-      status.textContent = player.id === r.activePlayerId ? 'ход'
-        : !player.connected ? 'офлайн'
-        : areAlliesClient(state.myId, player.id) ? 'союз'
-        : '';
+      status.className = `roster-turn-dot roster-turn-dot-${turnStatus}`;
+      status.setAttribute('aria-hidden', 'true');
 
-      button.append(token, name, status);
+      const ship = document.createElement('span');
+      ship.className = 'roster-ship';
+      ship.textContent = shipName(player.shipClass);
+
+      nameRow.append(name, status);
+      copy.append(nameRow, ship);
+      button.append(token, copy);
       button.addEventListener('click', () => {
         if (isDecisionPending()) return;
         showPlayerMapInfo(player);

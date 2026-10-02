@@ -4661,3 +4661,114 @@ body.game-active .final-results-art {
   box-shadow: none;
   backdrop-filter: none;
 }
+
+
+/* UI-40 staging roster pass — portrait + compact copy, authoritative turn-order dots */
+@media (max-width: 900px) {
+  body.game-active .game-roster {
+    left: 8px;
+    right: auto;
+    width: min(190px, 52vw);
+    display: grid;
+    gap: 5px;
+    overflow: visible;
+    padding: 2px 0 3px;
+  }
+
+  body.game-active .roster-player {
+    width: max-content;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 0 !important;
+    display: grid;
+    grid-template-columns: 30px minmax(0, auto);
+    grid-template-rows: 30px;
+    gap: 0;
+    align-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    overflow: visible;
+  }
+
+  body.game-active .roster-player.active,
+  body.game-active .roster-player.ally {
+    border: 0;
+    box-shadow: none;
+  }
+
+  body.game-active .roster-token {
+    position: relative;
+    z-index: 2;
+    grid-row: auto;
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    min-height: 30px;
+    border: 1px solid rgba(255,255,255,.58);
+    border-radius: 50%;
+    font-size: 10px;
+    box-shadow: 0 2px 7px rgba(0,0,0,.3);
+  }
+
+  body.game-active .roster-player.turn-active .roster-token {
+    border-color: rgba(240,196,91,.9);
+    box-shadow: 0 0 0 2px rgba(240,196,91,.18), 0 2px 7px rgba(0,0,0,.3);
+  }
+
+  body.game-active .roster-copy {
+    min-width: 0;
+    margin-left: -3px;
+    padding: 3px 7px 3px 8px;
+    display: grid;
+    gap: 0;
+    border-radius: 0 8px 8px 0;
+    background: rgba(7,31,37,.62);
+    backdrop-filter: blur(4px);
+  }
+
+  body.game-active .roster-name-row {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  body.game-active .roster-name {
+    min-width: 0;
+    max-width: 118px;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+  }
+
+  body.game-active .roster-ship {
+    max-width: 118px;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 7px;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+  }
+
+  body.game-active .roster-turn-dot {
+    flex: 0 0 6px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    box-shadow: 0 0 4px rgba(0,0,0,.45);
+  }
+  body.game-active .roster-turn-dot-active { background: #38d878; }
+  body.game-active .roster-turn-dot-next { background: #ef4444; }
+  body.game-active .roster-turn-dot-waiting { background: #aab5b8; }
+}
