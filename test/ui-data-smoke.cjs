@@ -46,7 +46,6 @@ const root = path.join(__dirname, '..');
         const first=room.players[0];
         room.players=[first,...[1,2,3].map(i=>({...first,id:`seat-${i}`,name:`Игрок ${i+1}`,isYou:false,color:['#1e88e5','#43a047','#8e24aa'][i-1]}))];
         room.seatingOrder=[first.id,'seat-2','seat-1','seat-3'];
-        room.leaderId='seat-1';
         window.__testSocket.listeners('roomState')[0](room);
       });
       if(width<900)await page.click('[data-mobile-nav="players"]');

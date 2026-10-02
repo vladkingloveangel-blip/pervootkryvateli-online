@@ -78,6 +78,7 @@ function room() {
     version: '0.33.0',
     code: 'SCOUT',
     started: true,
+    round: 2,
     order: ['p1', 'p2', 'p3'],
     turnIndex: 0,
     activePlayerId: 'p1',
@@ -95,10 +96,11 @@ function room() {
   };
 }
 
-function consumeCharacter(p, expectedId) {
+function consumeCharacter(p, expectedId, round) {
   const id = typeof p.character === 'string' ? p.character : p.character?.id;
   if (id !== expectedId) return { ok: false, error: 'wrong character' };
-  p.character = null;
+  if (Number(p.characterUsedRound) === Number(round)) return { ok: false, error: 'already used' };
+  p.characterUsedRound = Number(round);
   return { ok: true };
 }
 
@@ -109,7 +111,7 @@ function use(r, request, options = {}) {
     request,
     characterRule: scoutRule,
     hasBlockingPending: Boolean(options.pending),
-    consumeCharacter,
+    consumeCharacter: (player, expectedId) => consumeCharacter(player, expectedId, r.round),
   });
 }
 
@@ -129,7 +131,8 @@ test('Scout Manhattan range accepts 0-4, rejects 5, and multi-cell islands use t
     assert.equal(result.ok, true, 'distance ' + distance);
     assert.equal(result.actionCost, 1);
     assert.equal(r.actionsLeft, 1);
-    assert.equal(r.players[0].character, null);
+    assert.equal(r.players[0].character.id, 'scout');
+    assert.equal(r.players[0].characterUsedRound, r.round);
     assert.deepEqual(r.scoutRevealGrants, [{ viewerPlayerId: 'p1', mode: 'garrison', islandId: 'i1', personalTurnNo: 7 }]);
   }
 
@@ -213,14 +216,16 @@ test('successful Scout use replaces the same viewer money grant with one garriso
 
   const otherViewerGrant = { viewerPlayerId: 'p3', mode: 'money', targetPlayerId: 'p2', personalTurnNo: 3 };
   r.scoutRevealGrants.push(structuredClone(otherViewerGrant));
-  r.players[0].character = { id: 'scout', name: 'Scout' };
+  r.round = 3;
+  r.players[0].personalTurnNo = 8;
+  r.players[0].characterUsedRound = null;
   r.actionsLeft = 2;
 
   const second = use(r, { mode: 'garrison', islandId: 'i2' });
   assert.equal(second.ok, true);
   assert.deepEqual(r.scoutRevealGrants, [
     otherViewerGrant,
-    { viewerPlayerId: 'p1', mode: 'garrison', islandId: 'i2', personalTurnNo: 7 },
+    { viewerPlayerId: 'p1', mode: 'garrison', islandId: 'i2', personalTurnNo: 8 },
   ]);
   assert.equal(r.scoutRevealGrants.filter(grant => grant.viewerPlayerId === 'p1').length, 1);
 
@@ -234,13 +239,15 @@ test('successful Scout use replaces the same viewer money grant with one garriso
 test('successful Scout use replaces the same viewer garrison grant with one money grant', () => {
   const r = room();
   assert.equal(use(r, { mode: 'garrison', islandId: 'i1' }).ok, true);
-  r.players[0].character = { id: 'scout', name: 'Scout' };
+  r.round = 3;
+  r.players[0].personalTurnNo = 8;
+  r.players[0].characterUsedRound = null;
   r.actionsLeft = 2;
 
   const second = use(r, { mode: 'money', targetPlayerId: 'p2' });
   assert.equal(second.ok, true);
   assert.deepEqual(r.scoutRevealGrants, [
-    { viewerPlayerId: 'p1', mode: 'money', targetPlayerId: 'p2', personalTurnNo: 7 },
+    { viewerPlayerId: 'p1', mode: 'money', targetPlayerId: 'p2', personalTurnNo: 8 },
   ]);
 
   const out = projectOpponentFacingRoomView(r, scoutViewerContext(r, 'p1'));

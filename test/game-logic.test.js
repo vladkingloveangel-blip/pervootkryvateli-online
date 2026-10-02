@@ -568,8 +568,10 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(replaceCharacter(room, p1, 'firstMate').ok, true);
   island.buildings = [];
   assert.equal(p1.character.id, 'firstMate');
-  assert.equal(consumeCharacter(p1, 'firstMate').ok, true);
-  assert.equal(p1.character, null);
+  assert.equal(consumeCharacter(p1, 'firstMate', room.round).ok, true);
+  assert.equal(p1.character.id, 'firstMate');
+  assert.equal(p1.characterUsedRound, room.round);
+  assert.equal(consumeCharacter(p1, 'firstMate', room.round).ok, false);
 }
 
 // Картограф использует манхэттенскую дальность до клеток якорей.
@@ -812,8 +814,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(canAttackPlayerThisRound(room, a, b.id).ok, true);
 }
 
-// Корабельный плотник предотвращает одну боевую потерю уровня и после применения
-// возвращается в колоду персонажей. Без явного применения уровень теряется обычно.
+// Корабельный плотник предотвращает одну боевую потерю уровня за раунд и остаётся
+// на корабле, помечаясь characterUsedRound. Без явного применения уровень теряется обычно.
 {
   const room = { round: 2, islands: cloneIslands(), players: [] };
   const a = { id: 'a', row: 10, col: 10, shipClass: 'brigantine', level: 2, upgrades: [], escorts: [], ducats: 5, character: { id: 'shipCarpenter' } };
@@ -822,7 +824,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const result = seaBattle(room, a, b, { shipCarpenterPlayerIds: ['a'] });
   assert.equal(result.outcome, 'defender');
   assert.equal(a.level, 2);
-  assert.equal(a.character, null);
+  assert.equal(a.character.id, 'shipCarpenter');
+  assert.equal(a.characterUsedRound, room.round);
   assert.equal(result.levelLoss.prevented, true);
   assert.equal(result.levelLoss.preventedByCharacter, 'shipCarpenter');
 }
@@ -841,7 +844,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const result = assaultIsland(room, a, island, { shipCarpenterPlayerIds: ['a'] });
   assert.equal(result.outcome, 'defender');
   assert.equal(a.level, 2);
-  assert.equal(a.character, null);
+  assert.equal(a.character.id, 'shipCarpenter');
+  assert.equal(a.characterUsedRound, room.round);
   assert.equal(a.landCompany, null);
   assert.equal(result.levelLoss.prevented, true);
 }

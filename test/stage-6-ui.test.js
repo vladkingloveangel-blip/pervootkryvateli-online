@@ -106,7 +106,7 @@ test('4.4 projected pending choices render buttons with working command identifi
   assert.match(h.nodes.get('fleetAdjustmentActions').children[0].textContent,/Tea ×2/);
   click(h,'fleetAdjustmentActions',0);
   assert.deepEqual(click(h,'fleetAdjustmentActions',1),{event:'resolveFleetAdjustment',payload:{adjustmentId:'choice',ids:['escort']}});
-  h=uiHarness(uiRoom('pendingLegendaryReaction',{targetPlayerId:'p1',sourcePlayerId:'p2',kind:'sea-curse',veilOptions:[{source:'legendary',index:0,id:'sea-veil'}]}),'renderLegendary');
+  h=uiHarness(uiRoom('pendingLegendaryReaction',{targetPlayerId:'p1',sourcePlayerId:'p2',kind:'assault',islandId:'port',veilOptions:[{source:'legendary',index:0,id:'sea-veil'}]}),'renderLegendary');
   assert.deepEqual(click(h,'legendaryActions'),{event:'respondLegendaryReaction',payload:{reactionId:'choice',useVeil:true,source:'legendary',index:0}});
 });
 
@@ -1497,7 +1497,7 @@ test('UI-30 lobby shell is driven only by projected room state', () => {
   assert.ok(start >= 0 && end > start);
   const code = app.slice(start, end);
   assert.match(code, /r\.hostId === state\.myId/);
-  assert.match(code, /r\.leaderId/);
+  assert.doesNotMatch(code, /r\.leaderId/);
   assert.match(code, /r\.players/);
   assert.match(code, /r\.balanceCatalog\?\.session\?\.players/);
   assert.match(code, /player\.connected/);
@@ -1511,8 +1511,8 @@ test('UI-30 preserves canonical lobby command ownership inside renderPlayers', (
   const code = app.slice(start, end);
   assert.match(code, /socket\.emit\('changeShip'/);
   assert.match(code, /socket\.emit\('setReady'/);
-  assert.match(code, /setSeatingOrder/);
-  assert.match(code, /setLeader/);
+  assert.doesNotMatch(code, /setSeatingOrder/);
+  assert.doesNotMatch(code, /setLeader/);
   assert.match(code, /socket\.emit\('kickPlayer'/);
   assert.match(code, /r\.players\.length >= r\.balanceCatalog\.session\.players\.min/);
   assert.match(code, /r\.balanceCatalog\.session\.players\.max/);
