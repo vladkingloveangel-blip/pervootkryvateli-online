@@ -245,6 +245,13 @@ test('cleanup-8 removes audited dead UI code without touching compatibility stat
 });
 
 
+test('ocean renderer contains visible moving water caustics and textured fallback', () => {
+  assert.match(ocean, /Bright moving caustic cells/);
+  assert.match(ocean, /float caustic =/);
+  assert.match(ocean, /vec3 light = vec3/);
+  assert.match(css, /\.map-ocean-canvas\.ocean-fallback \{[\s\S]*background-size:/);
+});
+
 test('animated ocean is a visual pan buffer outside the authoritative board', () => {
   assert.doesNotThrow(() => new Function(ocean));
   assert.match(ocean, /window\.PervoOcean = \{ init \}/);
