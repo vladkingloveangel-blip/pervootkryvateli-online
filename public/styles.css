@@ -4222,3 +4222,204 @@ body.game-active .final-results-art {
   }
   body.game-active #mapBoard.move-pending { transition: none !important; }
 }
+
+
+/* UI-39 — desktop expansion of the same map-first presentation architecture. */
+@media (min-width: 901px) {
+  body.game-active #gameWorldShell {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+  }
+
+  body.game-active #gameWorldShell .map-column,
+  body.game-active #mapViewport {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+  }
+
+  body.game-active .map-info-card {
+    display: none !important;
+  }
+
+  body.game-active .game-hud {
+    width: min(760px, calc(100vw - 380px));
+    left: 18px;
+    right: auto;
+  }
+
+  body.game-active .game-roster {
+    position: absolute;
+    z-index: 64;
+    top: 18px;
+    right: 18px;
+    width: 320px;
+    max-height: calc(100dvh - 36px);
+    display: grid;
+    gap: 8px;
+    overflow-y: auto;
+    pointer-events: auto;
+  }
+
+  body.game-active .roster-player {
+    min-height: 54px;
+    grid-template-columns: 34px minmax(0,1fr);
+    padding: 7px 9px;
+    border: 1px solid var(--ui-border);
+    border-radius: var(--radius-md);
+    background: var(--ui-surface-glass);
+    box-shadow: var(--shadow-float);
+  }
+
+  body.game-active .roster-token {
+    width: 34px;
+    height: 34px;
+  }
+
+  body.game-active .roster-name {
+    max-width: 210px;
+    font-size: 12px;
+  }
+
+  body.game-active .object-sheet {
+    position: absolute;
+    z-index: 72;
+    top: 86px;
+    right: 18px;
+    bottom: 18px;
+    left: auto;
+    width: min(380px, calc(100vw - 36px));
+    max-height: none;
+    display: grid;
+    grid-template-rows: auto auto minmax(0,1fr) auto;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid var(--ui-border);
+    border-radius: var(--radius-lg);
+    background: var(--ui-surface-solid);
+    box-shadow: var(--shadow-float);
+    overflow: hidden;
+  }
+
+  body.game-active .object-sheet.hidden { display: none !important; }
+  body.game-active .object-sheet.expanded { max-height: none; width: min(460px, calc(100vw - 36px)); }
+  body.game-active .object-sheet-handle { display: none; }
+  body.game-active .object-sheet-body { min-height: 0; overflow-y: auto; }
+  body.game-active .object-sheet-actions { display: grid; gap: 8px; }
+  body.game-active .object-sheet-actions button { min-height: 42px; }
+
+  body.game-active.object-sheet-open .game-roster {
+    display: none;
+  }
+
+  body.game-active .game-action-bar {
+    left: 50%;
+    right: auto;
+    bottom: 18px;
+    width: min(720px, calc(100vw - 440px));
+    transform: translateX(-50%);
+  }
+
+  body.game-active.object-sheet-open .game-action-bar {
+    width: min(640px, calc(100vw - 460px));
+    transform: translateX(calc(-50% - 190px));
+  }
+
+  body.game-active .targeting-bar {
+    left: 50%;
+    right: auto;
+    bottom: 18px;
+    width: min(720px, calc(100vw - 440px));
+    transform: translateX(-50%);
+  }
+
+  body.game-active .decision-layer,
+  body.game-active .result-layer {
+    position: absolute;
+    z-index: 110;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 32px;
+    pointer-events: none;
+  }
+
+  body.game-active .decision-layer.hidden,
+  body.game-active .result-layer.hidden {
+    display: none !important;
+  }
+
+  body.game-active .decision-backdrop,
+  body.game-active .result-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(2,15,20,.58);
+    backdrop-filter: blur(3px);
+    pointer-events: auto;
+  }
+
+  body.game-active .decision-card,
+  body.game-active .result-card {
+    position: relative;
+    z-index: 1;
+    width: min(560px, 100%);
+    max-height: min(78dvh, 760px);
+    overflow-y: auto;
+    display: grid;
+    gap: 12px;
+    padding: 20px;
+    border: 1px solid var(--ui-border-strong);
+    border-radius: var(--radius-lg);
+    background: var(--ui-surface-solid);
+    box-shadow: var(--shadow-float);
+    pointer-events: auto;
+  }
+
+  body.game-active .decision-actions,
+  body.game-active .object-sheet-actions {
+    grid-template-columns: repeat(2, minmax(0,1fr));
+  }
+
+  body.game-active .decision-actions > :only-child,
+  body.game-active .object-sheet-actions > :only-child {
+    grid-column: 1 / -1;
+  }
+
+  body.game-active .toast-stack {
+    position: absolute;
+    z-index: 115;
+    top: 86px;
+    left: 50%;
+    width: min(420px, calc(100vw - 40px));
+    transform: translateX(-50%);
+    display: grid;
+    gap: 7px;
+    pointer-events: none;
+  }
+
+  body.game-active .game-toast {
+    padding: 10px 13px;
+    border: 1px solid var(--ui-border);
+    border-radius: var(--radius-sm);
+    background: var(--ui-surface-glass);
+    box-shadow: var(--shadow-float);
+    text-align: center;
+  }
+
+  body.game-active.decision-layer-open .game-roster,
+  body.game-active.result-layer-open .game-roster {
+    display: none !important;
+  }
+
+  body.game-active.decision-layer-open .game-action-bar,
+  body.game-active.result-layer-open .game-action-bar {
+    pointer-events: none;
+  }
+}
+
+@media (min-width: 1400px) {
+  body.game-active .game-roster { width: 350px; }
+  body.game-active .object-sheet { width: 420px; }
+  body.game-active .game-hud { width: min(860px, calc(100vw - 430px)); }
+}

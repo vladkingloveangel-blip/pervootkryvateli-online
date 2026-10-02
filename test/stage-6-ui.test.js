@@ -1947,3 +1947,45 @@ test('UI-38 uses local Web Audio cues without external audio assets or authorita
   assert.match(app, /playUiCue\('confirm'\)/);
   assert.doesNotMatch(app, /new Audio\(['"]https?:\/\//);
 });
+
+
+test('UI-39 removes viewport gating from canonical Decision and Result presentation', () => {
+  const decisionStart = app.indexOf('function renderDecisionLayer()');
+  const decisionEnd = app.indexOf('\n  function ', decisionStart + 20);
+  const decision = app.slice(decisionStart, decisionEnd);
+  assert.doesNotMatch(decision, /max-width: 900px/);
+  assert.match(decision, /mobileDecisionDescriptor\(state\.room\)/);
+
+  const resultStart = app.indexOf('function renderResultLayer()');
+  const resultEnd = app.indexOf('\n  function anchorResultCard', resultStart);
+  const result = app.slice(resultStart, resultEnd);
+  assert.doesNotMatch(result, /max-width: 900px/);
+  assert.match(result, /mobileDecisionDescriptor\(state\.room\)/);
+});
+
+test('UI-39 routes desktop map objects through the same canonical Object Sheet renderers', () => {
+  const showStart = app.indexOf('function showMapInfo(kind, data, anchor = null)');
+  const showEnd = app.indexOf('\n  function addMapCellButton', showStart);
+  const show = app.slice(showStart, showEnd);
+  assert.match(show, /renderObjectSheetFromMapInfo\(kind, data\)/);
+  assert.doesNotMatch(show, /max-width: 900px/);
+
+  const playerStart = app.indexOf('function showPlayerMapInfo(');
+  const playerEnd = app.indexOf('\n  function showMapInfo', playerStart);
+  const player = app.slice(playerStart, playerEnd);
+  assert.match(player, /renderPlayerObjectSheet\(player\)/);
+  assert.doesNotMatch(player, /max-width: 900px/);
+});
+
+test('UI-39 expands the map-first shell on desktop without creating a second UX system', () => {
+  const start = styles.indexOf('/* UI-39 — desktop expansion');
+  assert.ok(start >= 0);
+  const code = styles.slice(start);
+  assert.match(code, /@media \(min-width: 901px\)/);
+  assert.match(code, /#gameWorldShell[\s\S]*?position: fixed/);
+  assert.match(code, /\.game-roster[\s\S]*?right: 18px/);
+  assert.match(code, /\.object-sheet[\s\S]*?right: 18px/);
+  assert.match(code, /\.decision-layer,[\s\S]*?\.result-layer/);
+  assert.match(code, /\.game-action-bar[\s\S]*?bottom: 18px/);
+  assert.doesNotMatch(code, /desktop-(nav|panel|action|decision)/);
+});

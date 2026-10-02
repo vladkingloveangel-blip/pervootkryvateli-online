@@ -2102,9 +2102,8 @@
   function renderResultLayer() {
     const layer = $('resultLayer');
     if (!layer) return;
-    const mobile = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
     const decision = mobileDecisionDescriptor(state.room);
-    if (!mobile || !state.room?.started || state.room.finished || state.room.phase === 'finished' || decision) {
+    if (!state.room?.started || state.room.finished || state.room.phase === 'finished' || decision) {
       layer.classList.add('hidden');
       document.body.classList.remove('result-layer-open');
       return;
@@ -2437,8 +2436,7 @@
     const layer = $('decisionLayer');
     const actions = $('decisionActions');
     const body = $('decisionBody');
-    const mobile = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
-    if (!mobile || !state.room?.started || state.room.finished || state.room.phase === 'finished') {
+    if (!state.room?.started || state.room.finished || state.room.phase === 'finished') {
       layer.classList.add('hidden');
       document.body.classList.remove('decision-layer-open');
       actions.innerHTML = '';
@@ -5859,15 +5857,8 @@
       action.onclick = () => { closeMapInfo(); renderPlayerObjectSheet(player); };
     }
 
-    const mobile = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
-    if (mobile) {
-      $('mapInfoCard').classList.add('hidden');
-      renderPlayerObjectSheet(player);
-    } else {
-      const card = $('mapInfoCard');
-      card.classList.remove('hidden');
-      positionMapInfoAt(player.row, player.col);
-    }
+    $('mapInfoCard').classList.add('hidden');
+    renderPlayerObjectSheet(player);
   }
 
   function showMapInfo(kind, data, anchor = null) {
@@ -5940,15 +5931,9 @@
       };
       meta.innerHTML = `<span>${escapeHtml(descriptions[data.type] || 'Опасная морская клетка.')}</span>`;
     }
-    const mobile = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
-    if (mobile) {
-      card.classList.add('hidden');
-      card.style.visibility = '';
-      renderObjectSheetFromMapInfo(kind, data);
-    } else {
-      card.classList.remove('hidden');
-      positionMapInfoAt(resolvedAnchor.row, resolvedAnchor.col);
-    }
+    card.classList.add('hidden');
+    card.style.visibility = '';
+    renderObjectSheetFromMapInfo(kind, data);
   }
 
   function addMapCellButton(layer, row, col, className, label, onClick) {
