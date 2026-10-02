@@ -1854,3 +1854,40 @@ test('UI-35 reduced-motion disables decorative motion and targeting pulse', () =
   assert.match(code, /transition-duration: \.01ms !important/);
   assert.match(code, /\.targeting-hit,[\s\S]*?\.targeting-marker,[\s\S]*?\.sea-motion-layer[\s\S]*?animation: none !important/);
 });
+
+
+test('UI-36 defines one reusable visual token system for the mobile game shell', () => {
+  assert.match(styles, /--surface-deep:/);
+  assert.match(styles, /--surface-raised:/);
+  assert.match(styles, /--gold-soft:/);
+  assert.match(styles, /--success:/);
+  assert.match(styles, /--warning:/);
+  assert.match(styles, /--info:/);
+  assert.match(styles, /--radius-sm:/);
+  assert.match(styles, /--radius-lg:/);
+  assert.match(styles, /--shadow-float:/);
+  assert.match(styles, /--type-kicker:/);
+});
+
+test('UI-36 applies shared surface and typography grammar across HUD, sheets, decisions and results', () => {
+  const start = styles.indexOf('/* UI-36 — canonical visual kit.');
+  assert.ok(start >= 0);
+  const code = styles.slice(start);
+  assert.match(code, /\.game-hud, \.game-action-bar, \.targeting-bar/);
+  assert.match(code, /\.object-sheet, \.decision-card, \.result-card, \.game-menu-panel/);
+  assert.match(code, /\.decision-kicker, \.result-kicker, \.object-sheet-kind/);
+  assert.match(code, /font: var\(--type-kicker\)/);
+  assert.match(code, /var\(--shadow-sheet\)/);
+});
+
+test('UI-36 gives decisions, battle warnings, targeting and result tones distinct visual grammar', () => {
+  const start = styles.indexOf('/* UI-36 — canonical visual kit.');
+  const code = styles.slice(start);
+  assert.match(code, /\.decision-card \{[\s\S]*?border-top-color: var\(--gold\)/);
+  assert.match(code, /result-layer\[data-tone="success"\]/);
+  assert.match(code, /result-layer\[data-tone="danger"\]/);
+  assert.match(code, /result-layer\[data-tone="info"\]/);
+  assert.match(code, /\.sea-battle-warnings > div, \.sea-battle-note/);
+  assert.match(code, /body\.game-active\.targeting-open \.targeting-bar/);
+  assert.doesNotMatch(code, /url\([^)]*final|asset\/final|illustration-final/);
+});

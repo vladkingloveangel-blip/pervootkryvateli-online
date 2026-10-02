@@ -7,6 +7,21 @@
   --line: rgba(255,255,255,.14);
   --accent: #f0c45b;
   --danger: #ef7777;
+  --surface-deep: #071f25;
+  --surface: #0d3038;
+  --surface-raised: #123e48;
+  --surface-paper: #173f45;
+  --gold: #f0c45b;
+  --gold-soft: #ffe39a;
+  --success: #6ad39c;
+  --warning: #f1b95c;
+  --info: #69d5e7;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --shadow-float: 0 14px 38px rgba(0,0,0,.42);
+  --shadow-sheet: 0 -18px 48px rgba(0,0,0,.48);
+  --type-kicker: 900 10px/1.1 Inter, system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
@@ -3940,5 +3955,134 @@ button[aria-disabled="true"] {
   body.game-active .targeting-marker,
   .sea-motion-layer {
     animation: none !important;
+  }
+}
+
+
+/* UI-36 — canonical visual kit.
+   Final illustrations/icons belong to UI-37; this layer defines the reusable
+   digital-native visual grammar that those assets will plug into. */
+body.game-active {
+  --ui-surface-glass: rgba(7,31,37,.94);
+  --ui-surface-solid: rgba(8,37,44,.985);
+  --ui-border: rgba(240,196,91,.28);
+  --ui-border-strong: rgba(240,196,91,.52);
+}
+
+body.game-active :where(.decision-kicker, .result-kicker, .object-sheet-kind, .targeting-copy > span, .event-flow-kicker) {
+  font: var(--type-kicker);
+  letter-spacing: .11em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+body.game-active :where(.game-hud, .game-action-bar, .targeting-bar) {
+  border-color: var(--ui-border);
+  background: linear-gradient(180deg, rgba(13,48,56,.97), rgba(7,31,37,.97));
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(12px);
+}
+
+body.game-active :where(.object-sheet, .decision-card, .result-card, .game-menu-panel, .score-overlay-card, .journal-overlay-card, .end-game-vote-card) {
+  border-color: var(--ui-border);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.025), transparent 28%),
+    var(--ui-surface-solid);
+  box-shadow: var(--shadow-sheet);
+}
+
+body.game-active :where(.object-sheet, .decision-card, .result-card) h2,
+body.game-active :where(.object-sheet-title, .object-sheet-heading strong) {
+  letter-spacing: .01em;
+}
+
+body.game-active :where(button.primary, .decision-actions > button:first-child, .result-continue) {
+  border-color: rgba(255,227,154,.62);
+  background: linear-gradient(180deg, var(--gold-soft), var(--gold));
+  color: #182023;
+  font-weight: 900;
+  box-shadow: 0 5px 14px rgba(0,0,0,.24);
+}
+
+body.game-active button:not(.primary):not(:disabled) {
+  border-color: rgba(255,255,255,.16);
+}
+
+body.game-active :where(.hud-chip, .mini-badge, .roster-chip) {
+  border-color: rgba(255,255,255,.14);
+  background: rgba(255,255,255,.055);
+}
+
+body.game-active .object-sheet-handle {
+  background: rgba(240,196,91,.48);
+}
+
+body.game-active .decision-card {
+  border-top-color: var(--gold);
+}
+
+body.game-active .decision-actions {
+  border-top: 1px solid rgba(240,196,91,.16);
+  padding-top: 9px;
+}
+
+body.game-active .result-layer[data-tone="success"] .result-card {
+  border-color: rgba(106,211,156,.62);
+  box-shadow: 0 -18px 48px rgba(0,0,0,.48), inset 0 3px 0 rgba(106,211,156,.34);
+}
+
+body.game-active .result-layer[data-tone="danger"] .result-card {
+  border-color: rgba(239,119,119,.66);
+  box-shadow: 0 -18px 48px rgba(0,0,0,.48), inset 0 3px 0 rgba(239,119,119,.34);
+}
+
+body.game-active .result-layer[data-tone="info"] .result-card {
+  border-color: rgba(105,213,231,.58);
+  box-shadow: 0 -18px 48px rgba(0,0,0,.48), inset 0 3px 0 rgba(105,213,231,.28);
+}
+
+body.game-active :where(.sea-battle-warnings > div, .sea-battle-note) {
+  border-color: rgba(239,119,119,.42);
+  background: rgba(91,25,29,.22);
+}
+
+body.game-active :where(.battle-flow-invite, .event-flow-step, .goal-card, .cards-card) {
+  border-color: rgba(240,196,91,.18);
+  background: rgba(255,255,255,.035);
+}
+
+body.game-active.targeting-open .targeting-bar {
+  border-color: var(--gold);
+  box-shadow: 0 10px 32px rgba(0,0,0,.46), inset 0 0 0 1px rgba(255,227,154,.12);
+}
+
+body.game-active :where(.targeting-hit, .targeting-marker) {
+  filter: drop-shadow(0 0 7px rgba(240,196,91,.72));
+}
+
+body.game-active .error,
+body.game-active .danger-text {
+  color: #ffb6b6;
+}
+
+body.game-active :where(.success-text, [data-tone="success"] .result-kicker) {
+  color: var(--success);
+}
+
+body.game-active :where(.warning-text, [data-tone="warning"] .result-kicker) {
+  color: var(--warning);
+}
+
+@media (max-width: 900px) {
+  body.game-active :where(.object-sheet, .decision-card, .result-card) {
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+
+  body.game-active :where(.game-action-bar, .targeting-bar) {
+    border-radius: var(--radius-md);
+  }
+
+  body.game-active :where(.decision-actions > button, .object-sheet-actions > button, .game-action-buttons > button) {
+    border-radius: var(--radius-sm);
   }
 }
