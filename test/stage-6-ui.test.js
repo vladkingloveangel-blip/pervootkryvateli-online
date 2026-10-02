@@ -964,3 +964,82 @@ test('UI-19 client converts joint battleResolved event into the existing Result 
   assert.match(app, /seaBattleResultCard\(\{ ok: true, result: data\.result \}/);
   assert.match(app, /enqueueResultCard\(card\)/);
 });
+
+
+test('UI-20 turns foreign island assault into preview plus canonical combat actions', () => {
+  const start = app.indexOf('  function assaultDefenseLabel(');
+  const end = app.indexOf('\n  function seaBattlePreviewHtml(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /assaultPreviewHtml/);
+  assert.match(code, /renderAssaultFlowSheet/);
+  assert.match(code, /refreshOpenAssaultFlow/);
+  assert.match(code, /jointAssaultResultCard/);
+  assert.match(code, /Object\.hasOwn\(island, 'defenseArmy'\)/);
+  assert.match(code, /скрытый гарнизон не раскрывается/);
+  assert.match(code, /renderCombat\(\);/);
+  assert.match(code, /dataset\.combatKind === 'assault'/);
+  assert.match(code, /actions\.appendChild\(canonical\)/);
+  assert.doesNotMatch(code, /socket\.emit\('assaultIsland'/);
+
+  assert.match(app, /attackable \? 'Штурм острова' : 'Действия на острове'/);
+  assert.match(app, /if \(attackable\) renderAssaultFlowSheet\(island\.id\)/);
+  assert.match(app, /refreshOpenSeaBattleFlow\(\);\s*refreshOpenAssaultFlow\(\);\s*renderDecisionLayer\(\);/);
+  assert.match(styles, /UI-20 — island assault orchestration flow/);
+});
+
+test('UI-20 assault preview respects foreign-island privacy before battle', () => {
+  const start = app.indexOf('  function assaultDefenseLabel(');
+  const end = app.indexOf('\n  function renderAssaultFlowSheet(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /if \(Object\.hasOwn\(island, 'defenseArmy'\)\) return String\(island\.defenseArmy\)/);
+  assert.match(code, /return \`не менее \$\{island\.army \?\? 0\}\`/);
+  assert.doesNotMatch(code, /defenseBreakdown\.total/);
+  assert.doesNotMatch(code, /garrisonDefense/);
+});
+
+test('UI-20 joint assault uses the existing pending battle Decision Layer and queues Result Card behind consequences', () => {
+  assert.match(app, /bodyHtml: battleFlowStatusHtml\(room\.pendingBattle\)/);
+  assert.match(app, /if \(data\.kind === 'assault'\)/);
+  assert.match(app, /jointAssaultResultCard\(data\)/);
+  assert.match(app, /enqueueResultCard\(card\)/);
+
+  const resultStart = app.indexOf('  function renderResultLayer()');
+  const resultEnd = app.indexOf('\n  function anchorResultCard(', resultStart);
+  const resultCode = app.slice(resultStart, resultEnd);
+  assert.match(resultCode, /const decision = mobileDecisionDescriptor\(state\.room\)/);
+  assert.match(resultCode, /\|\| decision\)/);
+});
+
+test('UI-20 server battleResolved payload sanitizes authoritative joint assault outcome', () => {
+  const start = server.indexOf('function battlePresentationResult(result, kind)');
+  const end = server.indexOf('\nfunction resolvePendingBattle(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = server.slice(start, end);
+
+  assert.match(code, /kind === 'assault'/);
+  assert.match(code, /defense: result\.defense \? \{ total: result\.defense\.total \}/);
+  assert.match(code, /armyPointAwards/);
+  assert.match(code, /captureRetention/);
+  assert.match(code, /rewardNotes/);
+  assert.match(code, /islandId: pending\.islandId \|\| null/);
+  assert.match(code, /\['sea', 'assault'\]\.includes\(pending\.kind\)/);
+  assert.doesNotMatch(code, /garrisonType|garrisonName|buildings|ducats|debt|cargo/);
+});
+
+test('UI-20 joint assault Result Card is perspective-aware for attackers and defenders', () => {
+  const start = app.indexOf('  function jointAssaultResultCard(');
+  const end = app.indexOf('\n  function seaBattlePreviewHtml(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /onAttack/);
+  assert.match(code, /onDefense/);
+  assert.match(code, /viewerWon/);
+  assert.match(code, /Sila attack|Сила атаки/);
+  assert.match(code, /Защита острова/);
+  assert.match(code, /tone: outcome === 'tie' \? 'neutral' : viewerWon \? 'success' : 'danger'/);
+});

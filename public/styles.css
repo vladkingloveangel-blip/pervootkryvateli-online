@@ -2880,3 +2880,81 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     color: var(--muted);
   }
 }
+
+
+/* UI-20 — island assault orchestration flow */
+@media (max-width: 900px) {
+  body.game-active .assault-preview {
+    display: grid;
+    gap: 4px;
+    padding: 10px;
+    border: 1px solid rgba(235,120,70,.46);
+    border-radius: 12px;
+    background: rgba(235,120,70,.045);
+  }
+
+  body.game-active .assault-preview > span {
+    color: #ef9a69;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .075em;
+  }
+
+  body.game-active .assault-preview > strong {
+    font-size: 17px;
+  }
+
+  body.game-active .assault-preview > small {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  body.game-active .assault-sides,
+  body.game-active .assault-allies {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 7px;
+  }
+
+  body.game-active .assault-sides > div,
+  body.game-active .assault-allies > div {
+    display: grid;
+    gap: 3px;
+    padding: 8px 9px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(255,255,255,.03);
+  }
+
+  body.game-active .assault-sides span,
+  body.game-active .assault-allies span {
+    color: var(--muted);
+    font-size: 9px;
+  }
+
+  body.game-active .assault-sides strong,
+  body.game-active .assault-allies strong {
+    font-size: 13px;
+  }
+
+  body.game-active .assault-sides small {
+    color: var(--muted);
+    font-size: 9px;
+  }
+
+  body.game-active .assault-warnings {
+    display: grid;
+    gap: 5px;
+  }
+
+  body.game-active .assault-warnings > div,
+  body.game-active .assault-note {
+    padding: 7px 8px;
+    border: 1px solid rgba(235,120,70,.36);
+    border-radius: 9px;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.35;
+  }
+}

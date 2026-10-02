@@ -492,12 +492,19 @@
     if (state.everConnected) showConnectionBanner('Сервер пока недоступен. Продолжаем переподключение…', 'warning');
   });
   socket.on('battleResolved', data => {
-    if (state.spectating || !data?.result || data.kind !== 'sea') return;
-    const target = state.room?.players?.find(player => player.id === data.targetPlayerId);
-    const attacker = state.room?.players?.find(player => player.id === data.attackerId);
-    const opponentName = data.attackerId === state.myId ? target?.name : attacker?.name;
-    const card = seaBattleResultCard({ ok: true, result: data.result }, opponentName || 'противник');
-    if (card) enqueueResultCard(card);
+    if (state.spectating || !data?.result) return;
+    if (data.kind === 'sea') {
+      const target = state.room?.players?.find(player => player.id === data.targetPlayerId);
+      const attacker = state.room?.players?.find(player => player.id === data.attackerId);
+      const opponentName = data.attackerId === state.myId ? target?.name : attacker?.name;
+      const card = seaBattleResultCard({ ok: true, result: data.result }, opponentName || 'противник');
+      if (card) enqueueResultCard(card);
+      return;
+    }
+    if (data.kind === 'assault') {
+      const card = jointAssaultResultCard(data);
+      if (card) enqueueResultCard(card);
+    }
   });
 
   socket.on('roomState', room => {
@@ -1114,6 +1121,7 @@
     renderAlliances();
     renderCombat();
     refreshOpenSeaBattleFlow();
+    refreshOpenAssaultFlow();
     renderDecisionLayer();
     renderResultLayer();
     renderToastStack();
@@ -4395,13 +4403,16 @@
 
     if (canContextAct) {
       state.selectedIslandId = island.id;
+      const attackable = island.ownerId !== state.myId
+        && !(island.kind === 'free' && !island.ownerId)
+        && (!island.ownerId || !areAlliesClient(state.myId, island.ownerId));
       const action = document.createElement('button');
       action.type = 'button';
-      action.className = 'danger-soft';
-      action.textContent = 'Действия на острове';
+      action.className = attackable ? 'danger-soft' : 'primary';
+      action.textContent = attackable ? 'Штурм острова' : 'Действия на острове';
       action.addEventListener('click', () => {
-        closeMapInfo();
-        openMobileTab('actions');
+        if (attackable) renderAssaultFlowSheet(island.id);
+        else { closeMapInfo(); openMobileTab('actions'); }
       });
       actions.appendChild(action);
     }
@@ -4742,6 +4753,145 @@
       ${veil}
       ${skip}
     `;
+  }
+
+  function assaultDefenseLabel(island) {
+    if (!island) return '—';
+    if (Object.hasOwn(island, 'defenseArmy')) return String(island.defenseArmy);
+    return `не менее ${island.army ?? 0}`;
+  }
+
+  function assaultPreviewHtml(island) {
+    const mine = me();
+    if (!mine || !island) return '';
+    const owner = island.ownerId
+      ? playerName(island.ownerId)
+      : (island.kind === 'independent' ? 'Независимый гарнизон' : island.faction || 'Государство');
+    const attackAllies = (state.room?.players || []).filter(player =>
+      player.id !== state.myId && player.id !== island.ownerId
+      && areAlliesClient(state.myId, player.id)
+      && (!island.ownerId || !areAlliesClient(island.ownerId, player.id))
+      && playerOnIslandClient(player, island)
+    );
+    const defenseAllies = island.ownerId ? (state.room?.players || []).filter(player =>
+      player.id !== state.myId && player.id !== island.ownerId
+      && areAlliesClient(island.ownerId, player.id)
+      && !areAlliesClient(state.myId, player.id)
+      && playerOnIslandClient(player, island)
+    ) : [];
+    const warnings = [];
+    const pvpIsland = Boolean(island.ownerId);
+    if (state.room?.round === 1 && pvpIsland) warnings.push('В первом раунде нельзя штурмовать остров другого игрока.');
+    if (mine.inPeaceZone) warnings.push('Цитадель — зона мира.');
+    if (island.ownerId && (mine.attackedPlayerIdsThisRound || []).includes(island.ownerId)) warnings.push('Лимит нападения на владельца в этом раунде уже использован.');
+    if (island.ownerId && (mine.brokenAlliesThisTurn || []).includes(island.ownerId)) warnings.push('После разрыва союза владение бывшего союзника нельзя атаковать в текущем ходу.');
+    if (island.legendaryVeil?.remaining) warnings.push(`Покров моря защищает остров ещё ${island.legendaryVeil.remaining} ход.`);
+
+    return `
+      <section class="assault-preview">
+        <span>ШТУРМ ОСТРОВА</span>
+        <strong>${escapeHtml(island.name)}</strong>
+        <small>Владелец: ${escapeHtml(owner)}. Сервер окончательно проверит штурм и все обязательные реакции.</small>
+      </section>
+      <section class="assault-sides">
+        <div>
+          <span>Ваше войско</span>
+          <strong>${mine.assaultArmy ?? mine.stats?.army ?? '—'}</strong>
+          <small>${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level}</small>
+        </div>
+        <div>
+          <span>Защита острова</span>
+          <strong>${escapeHtml(assaultDefenseLabel(island))}</strong>
+          <small>${Object.hasOwn(island, 'defenseArmy') ? 'точное значение доступно вам' : 'скрытый гарнизон не раскрывается'}</small>
+        </div>
+      </section>
+      <section class="assault-allies">
+        <div><span>Союзники атаки в позиции</span><strong>${attackAllies.length}</strong></div>
+        <div><span>Союзники защиты в позиции</span><strong>${defenseAllies.length}</strong></div>
+      </section>
+      ${warnings.length ? `<section class="assault-warnings">${warnings.map(w => `<div>${escapeHtml(w)}</div>`).join('')}</section>` : ''}
+    `;
+  }
+
+  function renderAssaultFlowSheet(islandId) {
+    const island = state.room?.islands?.find(item => item.id === islandId);
+    const mine = me();
+    if (!island || !mine || state.spectating || isDecisionPending()) return;
+    if (!currentIslands().some(item => item.id === island.id)) return;
+
+    closeMapInfo();
+    state.mapSelection = { kind: 'assault', id: island.id };
+    state.selectedIslandId = island.id;
+    $('objectSheetKind').textContent = 'БОЕВОЙ FLOW';
+    $('objectSheetTitle').textContent = `Штурм: ${island.name}`;
+    $('objectSheetBody').innerHTML = assaultPreviewHtml(island);
+
+    renderCombat();
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    const canonical = Array.from($('combatActions')?.children || []).find(node =>
+      node.classList?.contains('combat-target')
+      && node.dataset.combatKind === 'assault'
+      && node.dataset.islandId === island.id
+    );
+    if (canonical) actions.appendChild(canonical);
+
+    if (!canonical) {
+      const note = document.createElement('div');
+      note.className = 'assault-note';
+      note.textContent = 'Сейчас этот остров недоступен для штурма.';
+      actions.appendChild(note);
+    }
+
+    $('objectSheet').classList.remove('hidden');
+    $('objectSheet').classList.add('expanded');
+    $('objectSheetExpand').textContent = '⌄';
+    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function refreshOpenAssaultFlow() {
+    if (state.mapSelection?.kind !== 'assault' || !isMobileGameplayUi()) return;
+    const islandId = state.mapSelection.id;
+    const island = state.room?.islands?.find(item => item.id === islandId);
+    if (!island || state.room?.pendingBattle || state.room?.pendingLegendaryReaction) {
+      closeMapInfo();
+      return;
+    }
+    renderAssaultFlowSheet(islandId);
+  }
+
+  function jointAssaultResultCard(data) {
+    const result = data?.result;
+    if (!result || data?.kind !== 'assault') return null;
+    const island = state.room?.islands?.find(item => item.id === data.islandId);
+    const islandName = island?.name || data.islandName || 'Остров';
+    const onAttack = (result.attackerParticipantIds || []).includes(state.myId);
+    const onDefense = (result.defenderParticipantIds || []).includes(state.myId) || data.targetPlayerId === state.myId;
+    const outcome = result.outcome;
+    const title = outcome === 'attacker' ? 'Остров захвачен'
+      : outcome === 'defender' ? 'Штурм отражён'
+      : 'Штурм завершён вничью';
+    const details = [
+      { label: 'Сила атаки', value: result.attackerPower ?? '—' },
+      { label: 'Защита острова', value: result.defense?.total ?? '—' },
+    ];
+    const myAward = (result.armyPointAwards || []).find(item => String(item.playerId) === String(state.myId));
+    if (myAward?.points) details.push({ label: 'Ваши очки армии', value: `+${myAward.points}` });
+    if (result.captureRetention) details.push({ label: 'Инфраструктура', value: `сохранится ${result.captureRetention.keepCount}/${result.captureRetention.initialCount}` });
+    if ((result.rewardNotes || []).length && onAttack) details.push({ label: 'Награда атаки', value: result.rewardNotes.join(', ') });
+
+    let body = 'Контроль не меняется.';
+    if (outcome === 'attacker') body = `${islandName} захвачен атакующей стороной.`;
+    if (outcome === 'defender') body = `Защита ${islandName} устояла.`;
+    const viewerWon = (outcome === 'attacker' && onAttack) || (outcome === 'defender' && onDefense);
+    return {
+      kicker: 'ШТУРМ',
+      title,
+      body,
+      details,
+      tone: outcome === 'tie' ? 'neutral' : viewerWon ? 'success' : 'danger',
+    };
   }
 
   function seaBattlePreviewHtml(target) {

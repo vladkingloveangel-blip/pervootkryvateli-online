@@ -1784,15 +1784,11 @@ function resolvePendingLegendaryReaction(room, useVeil, cardRef = null) {
   return { ok: false, error: 'Неизвестный тип реакции.' };
 }
 
-function battlePresentationResult(result) {
+function battlePresentationResult(result, kind) {
   if (!result?.ok) return null;
-  return {
+  const common = {
     outcome: result.outcome,
     attackerPower: result.attackerPower,
-    defenderPower: result.defenderPower,
-    loot: Number(result.loot) || 0,
-    lootShares: { ...(result.lootShares || {}) },
-    fleetPointAwards: (result.fleetPointAwards || []).map(item => ({ playerId: item.playerId, points: item.points })),
     levelLosses: (result.levelLosses || []).map(item => ({
       playerId: item.playerId,
       prevented: Boolean(item.prevented),
@@ -1803,22 +1799,44 @@ function battlePresentationResult(result) {
     attackerParticipantIds: [...(result.attackerParticipantIds || [])],
     defenderParticipantIds: [...(result.defenderParticipantIds || [])],
   };
+  if (kind === 'assault') {
+    return {
+      ...common,
+      defense: result.defense ? { total: result.defense.total } : null,
+      armyPointAwards: (result.armyPointAwards || []).map(item => ({ playerId: item.playerId, points: item.points })),
+      captureRetention: result.captureRetention ? {
+        initialBuildingCount: result.captureRetention.initialBuildingCount,
+        keepCount: result.captureRetention.keepCount,
+      } : null,
+      rewardNotes: [...(result.rewardNotes || [])],
+    };
+  }
+  return {
+    ...common,
+    defenderPower: result.defenderPower,
+    loot: Number(result.loot) || 0,
+    lootShares: { ...(result.lootShares || {}) },
+    fleetPointAwards: (result.fleetPointAwards || []).map(item => ({ playerId: item.playerId, points: item.points })),
+  };
 }
 
 function emitResolvedBattlePresentation(room, pending, result) {
-  if (!room || !pending || pending.kind !== 'sea' || !result?.ok) return;
+  if (!room || !pending || !['sea', 'assault'].includes(pending.kind) || !result?.ok) return;
   const participantIds = new Set([
     pending.attackerId,
     pending.targetPlayerId,
     ...(result.attackerParticipantIds || []),
     ...(result.defenderParticipantIds || []),
   ].filter(Boolean));
+  const island = pending.kind === 'assault' ? room.islands.find(item => item.id === pending.islandId) : null;
   const payload = {
     battleId: pending.id,
     kind: pending.kind,
     attackerId: pending.attackerId,
     targetPlayerId: pending.targetPlayerId,
-    result: battlePresentationResult(result),
+    islandId: pending.islandId || null,
+    islandName: island?.name || null,
+    result: battlePresentationResult(result, pending.kind),
   };
   for (const playerId of participantIds) {
     const player = playerById(room, playerId);
