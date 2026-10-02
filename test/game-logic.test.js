@@ -1820,9 +1820,10 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   };
   const sold = sellCargo(room, p);
   assert.equal(sold.ok, true);
-  assert.equal(sold.quantity, 2);
-  assert.equal(sold.capacity, 2);
-  assert.equal(sold.assignmentInstanceId, 'delivery-sale');
+  assert.equal(sold.sales.length, 1);
+  assert.equal(sold.sales[0].quantity, 2);
+  assert.equal(sold.sales[0].capacity, 2);
+  assert.equal(sold.sales[0].assignmentInstanceId, 'delivery-sale');
 }
 // Сокровище не засчитывается задним числом: получение и разрешение относятся к текущему поручению.
 {
