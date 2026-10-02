@@ -545,18 +545,17 @@ test('UI-12 adds a compact mobile roster and public player/ship object sheets', 
   assert.match(styles, /UI-12 — compact player roster and public player\/ship sheets/);
 });
 
-test('UI-12 player sheet only exposes direct alliance commands and delegates combat to existing flow', () => {
+test('UI-12 player sheet delegates alliance commands and combat to canonical flows', () => {
   const start = app.indexOf('  function renderPlayerObjectSheet(');
   const end = app.indexOf('\n  function showPlayerMapInfo(', start);
   assert.ok(start >= 0 && end > start);
   const code = app.slice(start, end);
 
-  assert.match(code, /socket\.emit\('requestAlliance'/);
-  assert.match(code, /socket\.emit\('breakAlliance'/);
+  assert.match(code, /appendCanonicalAllianceActions\(actions, player\.id\)/);
   assert.match(code, /renderSeaBattleFlowSheet\(player\.id\)/);
+  assert.doesNotMatch(code, /socket\.emit\('requestAlliance'/);
+  assert.doesNotMatch(code, /socket\.emit\('breakAlliance'/);
   assert.doesNotMatch(code, /socket\.emit\('attackShip'/);
-  assert.match(code, /sameCell/);
-  assert.match(code, /mine\.phase === 'navigation' && mine\.roll === null/);
 });
 
 
