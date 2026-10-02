@@ -1234,7 +1234,7 @@
 
   function renderEndGame() {
     const r = state.room;
-    renderEndGameVoteOverlay();
+    if (typeof renderEndGameVoteOverlay === 'function') renderEndGameVoteOverlay();
     const panel = $('endGamePanel');
     const finalPanel = $('finalResultsPanel');
     const finished = Boolean(r?.finished || r?.phase === 'finished');
