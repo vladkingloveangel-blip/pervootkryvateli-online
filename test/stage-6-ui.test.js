@@ -777,3 +777,66 @@ test('UI-16 restores legacy action panels after closing the digital cards sheet'
   assert.match(code, /renderEvents\(\)/);
   assert.match(code, /renderLegendary\(\)/);
 });
+
+
+test('UI-17 unifies assignment, expedition and legendary-place progress in one private Goals sheet', () => {
+  assert.match(index, /id="hudGoalsBtn"/);
+  assert.match(index, /id="hudGoals"/);
+
+  const start = app.indexOf('  function activeGoalCount(');
+  const end = app.indexOf('\n  function digitalCardEntries(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /activeAssignment/);
+  assert.match(code, /activeExpedition/);
+  assert.match(code, /assignmentGoalHtml/);
+  assert.match(code, /expeditionGoalHtml/);
+  assert.match(code, /legendaryGoalsHtml/);
+  assert.match(code, /namedPlaceCards/);
+  assert.match(code, /expeditionHistory/);
+  assert.match(code, /renderGoalsObjectSheet/);
+  assert.match(code, /refreshOpenGoalsSheet/);
+  assert.match(code, /Это представление существующего состояния игры/);
+
+  assert.match(app, /\$\('hudGoalsBtn'\)\.addEventListener\('click'/);
+  assert.match(app, /renderLegendaryPlaces\(\);\s*refreshOpenGoalsSheet\(\);\s*renderLegendary\(\);/);
+  assert.match(styles, /UI-17 — unified personal Goals UX/);
+});
+
+test('UI-17 reuses canonical assignment and expedition actions', () => {
+  const start = app.indexOf('  function moveCanonicalGoalActions(');
+  const end = app.indexOf('\n  function digitalCardEntries(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /assignmentActions/);
+  assert.match(code, /legendaryPlacesActions/);
+  assert.match(code, /renderAssignments\(\);/);
+  assert.match(code, /renderLegendaryPlaces\(\);/);
+  assert.doesNotMatch(code, /socket\.emit\('takeExpedition'/);
+  assert.doesNotMatch(code, /socket\.emit\('respondAssignmentChoice'/);
+});
+
+test('UI-17 mandatory assignment choice stays in Decision Layer rather than Goals', () => {
+  const start = app.indexOf('  function moveCanonicalGoalActions(');
+  const end = app.indexOf('\n  function renderGoalsObjectSheet()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /!state\.room\?\.pendingAssignmentChoice\?\.viewerCanRespond/);
+
+  const sheetStart = app.indexOf('  function renderGoalsObjectSheet()');
+  const sheetEnd = app.indexOf('\n  function refreshOpenGoalsSheet()', sheetStart);
+  const sheetCode = app.slice(sheetStart, sheetEnd);
+  assert.match(sheetCode, /isDecisionPending\(\)/);
+});
+
+test('UI-17 restores legacy goal panels when Goals sheet closes', () => {
+  const start = app.indexOf('  function closeMapInfo()');
+  const end = app.indexOf('\n  function ', start + 1);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /closingGoals/);
+  assert.match(code, /renderAssignments\(\)/);
+  assert.match(code, /renderLegendaryPlaces\(\)/);
+});

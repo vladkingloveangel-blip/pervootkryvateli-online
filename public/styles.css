@@ -2509,3 +2509,174 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     font-size: 12px;
   }
 }
+
+
+/* UI-17 — unified personal Goals UX */
+@media (max-width: 900px) {
+  body.game-active .hud-goals-chip strong {
+    min-width: 12px;
+    text-align: center;
+  }
+
+  body.game-active .goals-intro {
+    padding: 8px 9px;
+    border: 1px solid rgba(116,174,239,.28);
+    border-radius: 10px;
+    color: var(--muted);
+    background: rgba(116,174,239,.045);
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  body.game-active .goals-stack {
+    display: grid;
+    gap: 8px;
+  }
+
+  body.game-active .goal-card {
+    display: grid;
+    gap: 7px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(255,255,255,.035);
+  }
+
+  body.game-active .goal-card > span,
+  body.game-active .goals-history > span {
+    color: var(--accent);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .07em;
+  }
+
+  body.game-active .goal-card > strong {
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  body.game-active .goal-card > small {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  body.game-active .goal-card-assignment {
+    border-color: rgba(112,188,214,.42);
+  }
+
+  body.game-active .goal-card-expedition {
+    border-color: rgba(116,174,239,.48);
+  }
+
+  body.game-active .goal-card-muted {
+    opacity: .82;
+  }
+
+  body.game-active .goal-reward,
+  body.game-active .goal-progress {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255,255,255,.07);
+  }
+
+  body.game-active .goal-reward span,
+  body.game-active .goal-progress span {
+    color: var(--muted);
+    font-size: 10px;
+  }
+
+  body.game-active .goal-reward strong,
+  body.game-active .goal-progress strong {
+    font-size: 10px;
+    text-align: right;
+  }
+
+  body.game-active .goal-priority {
+    padding: 7px 8px;
+    border: 1px solid rgba(240,196,91,.42);
+    border-radius: 9px;
+    color: var(--accent);
+    background: rgba(240,196,91,.07);
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  body.game-active .goals-legendary-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  body.game-active .goals-legendary-summary > div {
+    display: grid;
+    gap: 2px;
+    padding: 7px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: rgba(255,255,255,.03);
+  }
+
+  body.game-active .goals-legendary-summary span {
+    color: var(--muted);
+    font-size: 8px;
+  }
+
+  body.game-active .goals-legendary-summary strong {
+    font-size: 12px;
+  }
+
+  body.game-active .goals-place-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  body.game-active .goals-place {
+    display: grid;
+    gap: 3px;
+    padding: 7px 8px;
+    border: 1px dashed var(--line);
+    border-radius: 9px;
+    font-size: 10px;
+  }
+
+  body.game-active .goals-place.mine {
+    border-style: solid;
+    border-color: rgba(240,196,91,.58);
+  }
+
+  body.game-active .goals-place span {
+    color: var(--muted);
+    font-size: 9px;
+  }
+
+  body.game-active .goals-history {
+    display: grid;
+    gap: 6px;
+    padding: 9px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+
+  body.game-active .goals-history > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  body.game-active .goals-history small {
+    color: var(--muted);
+  }
+
+  body.game-active .goals-no-actions {
+    padding: 9px;
+    border: 1px dashed var(--line);
+    border-radius: 9px;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.4;
+  }
+}

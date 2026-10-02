@@ -709,6 +709,11 @@
     if (isMobileGameplayUi()) renderCardsObjectSheet();
     else openMobileTab('actions');
   });
+  $('hudGoalsBtn').addEventListener('click', () => {
+    if (state.spectating) return;
+    if (isMobileGameplayUi()) renderGoalsObjectSheet();
+    else openMobileTab('actions');
+  });
   $('hudCargoBtn').addEventListener('click', () => openMobileTab('ship'));
   $('hudTurnBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : openMobileTab('actions'));
   $('hudMenuBtn').addEventListener('click', () => toggleGameAccountMenu());
@@ -861,11 +866,13 @@
       $('hudCharacter').textContent = mine.character?.name ? mine.character.name.slice(0, 3) : '—';
       $('hudCharacterBtn').title = mine.character?.name || 'Персонаж не нанят';
       $('hudCards').textContent = String(digitalCardEntries(mine).length);
+      $('hudGoals').textContent = String(activeGoalCount(mine));
     } else {
       $('hudPlayerName').textContent = state.spectating ? 'Наблюдение' : 'Игрок';
       $('hudShipLevel').textContent = state.spectating ? `Комната ${r.code}` : '—';
       $('hudCharacter').textContent = '—';
       $('hudCards').textContent = '0';
+      $('hudGoals').textContent = '0';
     }
 
     $('hudRound').textContent = !r.started
@@ -1085,6 +1092,7 @@
     renderFleetAdjustment();
     renderAssignments();
     renderLegendaryPlaces();
+    refreshOpenGoalsSheet();
     renderLegendary();
     refreshOpenCardsSheet();
     renderFleet();
@@ -2572,6 +2580,188 @@
     }
   }
 
+  function activeGoalCount(mine) {
+    if (!mine) return 0;
+    return Number(Boolean(mine.activeAssignment)) + Number(Boolean(mine.activeExpedition));
+  }
+
+  function assignmentGoalHtml(mine) {
+    const assignment = mine?.activeAssignment;
+    const r = state.room;
+    const suzerain = mine?.suzerainId ? r?.factions?.find(f => f.id === mine.suzerainId) : null;
+    if (!assignment) {
+      if (suzerain) {
+        return `
+          <section class="goal-card goal-card-muted">
+            <span>ПОРУЧЕНИЕ СЮЗЕРЕНА</span>
+            <strong>Активного поручения нет</strong>
+            <small>Если в начале подходящего шестого круга вы всё ещё вассал без поручения, оно будет выдано игровой системой.</small>
+          </section>
+        `;
+      }
+      return `
+        <section class="goal-card goal-card-muted">
+          <span>ПОРУЧЕНИЕ</span>
+          <strong>Нет активного поручения</strong>
+          <small>Поручения получают вассалы государств по действующим правилам политики.</small>
+        </section>
+      `;
+    }
+
+    const faction = r?.factions?.find(f => f.id === assignment.factionId) || suzerain;
+    const share = Number(faction?.rewardShare) || 0;
+    const withheld = share ? Math.floor((Number(assignment.reward) || 0) * share) : 0;
+    const net = (Number(assignment.reward) || 0) - withheld;
+    const progress = assignment.progress;
+    let progressHtml = '';
+    if (progress?.kind === 'mori-service') {
+      const completed = Number(progress.completedStopCount) || 0;
+      const total = Math.max(1, Number(progress.totalStops) || (assignment.type === 'visit-route' ? 2 : 1));
+      const labels = (progress.completedStops || []).map(stop => stop.label).filter(Boolean);
+      const leave = progress.departureRequired && !progress.departureSatisfied
+        ? 'Сначала нужно покинуть исходное место.'
+        : `${completed}/${total}${labels.length ? ` · ${labels.join(' → ')}` : ''}`;
+      progressHtml = `<div class="goal-progress"><span>Прогресс</span><strong>${escapeHtml(leave)}</strong></div>`;
+    }
+
+    const priority = mine.assignmentPriority;
+    const priorityText = priority
+      ? `<div class="goal-priority">Поручение сейчас имеет приоритет: ${escapeHtml(priority.kind || 'обязательное действие')}.</div>`
+      : '';
+
+    return `
+      <section class="goal-card goal-card-assignment">
+        <span>ПОРУЧЕНИЕ · ${escapeHtml(faction?.name || assignment.factionId || 'Сюзерен')}</span>
+        <strong>${escapeHtml(assignment.text)}</strong>
+        <div class="goal-reward"><span>Награда</span><strong>${assignment.reward} дук.${withheld ? ` · вам ${net}` : ''}</strong></div>
+        ${progressHtml}
+        ${priorityText}
+      </section>
+    `;
+  }
+
+  function expeditionGoalHtml(mine) {
+    const r = state.room;
+    const expedition = mine?.activeExpedition;
+    const places = r?.legendaryPlaces || [];
+    const placeById = Object.fromEntries(places.map(place => [place.id, place]));
+    if (!expedition) {
+      const status = mine?.expeditionTakenThisRound
+        ? 'В этом раунде новая экспедиция уже получалась.'
+        : 'Новую экспедицию можно получить при выполнении условий Картографической палаты.';
+      return `
+        <section class="goal-card goal-card-muted">
+          <span>ЭКСПЕДИЦИЯ</span>
+          <strong>Активной экспедиции нет</strong>
+          <small>${escapeHtml(status)}</small>
+        </section>
+      `;
+    }
+
+    const target = placeById[expedition.placeId];
+    const targetName = expedition.name || target?.name || expedition.placeId;
+    const kind = target?.kind === 'island' ? 'легендарный остров' : 'морское легендарное место';
+    const routeRule = expedition.requiresLeaveAndReturn
+      ? 'Сначала покиньте место назначения, затем вернитесь.'
+      : 'Завершится автоматически при следующем допустимом прибытии.';
+
+    return `
+      <section class="goal-card goal-card-expedition">
+        <span>ЭКСПЕДИЦИЯ</span>
+        <strong>${escapeHtml(targetName)}</strong>
+        <div class="goal-progress"><span>Цель</span><strong>${escapeHtml(kind)}</strong></div>
+        <div class="goal-reward"><span>Награда</span><strong>случайное сокровище</strong></div>
+        <small>${escapeHtml(routeRule)}</small>
+      </section>
+    `;
+  }
+
+  function legendaryGoalsHtml(mine) {
+    const r = state.room;
+    const cards = r?.namedPlaceCards || [];
+    const history = mine?.expeditionHistory || [];
+    const claimed = cards.filter(card => card.claimedBy);
+    const mineClaimed = claimed.filter(card => card.claimedBy === state.myId);
+    return `
+      <section class="goals-legendary-summary">
+        <div><span>Именные места</span><strong>${claimed.length}/${cards.length || 10}</strong></div>
+        <div><span>Открыто вами</span><strong>${mineClaimed.length}</strong></div>
+        <div><span>Экспедиции</span><strong>${history.length}</strong></div>
+      </section>
+      <section class="goals-place-list">
+        ${cards.map(card => {
+          const owner = card.claimedBy ? playerName(card.claimedBy) : 'не открыто';
+          const mineClass = card.claimedBy === state.myId ? ' mine' : '';
+          return `<div class="goals-place${mineClass}"><strong>${escapeHtml(card.name)}</strong><span>${escapeHtml(owner)}</span></div>`;
+        }).join('')}
+      </section>
+      ${history.length ? `
+        <section class="goals-history">
+          <span>ВАША ИСТОРИЯ ЭКСПЕДИЦИЙ</span>
+          ${history.map(item => `<div><strong>${escapeHtml(item.name || item.placeId)}</strong><small>раунд ${item.completedRound || '—'}</small></div>`).join('')}
+        </section>
+      ` : ''}
+    `;
+  }
+
+  function goalsSheetHtml(mine) {
+    return `
+      <div class="goals-intro">Текущие личные цели и прогресс. Это представление существующего состояния игры, а не отдельная система заданий.</div>
+      <div class="goals-stack">
+        ${assignmentGoalHtml(mine)}
+        ${expeditionGoalHtml(mine)}
+      </div>
+      ${legendaryGoalsHtml(mine)}
+    `;
+  }
+
+  function moveCanonicalGoalActions(target) {
+    if (!target) return;
+    const assignmentSource = $('assignmentActions');
+    if (assignmentSource && !state.room?.pendingAssignmentChoice?.viewerCanRespond) {
+      while (assignmentSource.firstChild) target.appendChild(assignmentSource.firstChild);
+    }
+    const expeditionSource = $('legendaryPlacesActions');
+    if (expeditionSource) {
+      while (expeditionSource.firstChild) target.appendChild(expeditionSource.firstChild);
+    }
+  }
+
+  function renderGoalsObjectSheet() {
+    const mine = me();
+    if (!mine || state.spectating || isDecisionPending()) return;
+    closeMapInfo();
+    state.mapSelection = { kind: 'goals', id: 'personal-goals' };
+    $('objectSheetKind').textContent = 'ВАШИ ЦЕЛИ';
+    $('objectSheetTitle').textContent = 'Цели';
+    $('objectSheetBody').innerHTML = goalsSheetHtml(mine);
+
+    // Existing assignment/legendary-place renderers remain authoritative for actions.
+    renderAssignments();
+    renderLegendaryPlaces();
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    moveCanonicalGoalActions(actions);
+
+    if (!actions.children.length) {
+      const note = document.createElement('div');
+      note.className = 'goals-no-actions';
+      note.textContent = 'Сейчас цели не требуют отдельного действия. Прогресс обновляется игровой механикой автоматически.';
+      actions.appendChild(note);
+    }
+
+    $('objectSheet').classList.remove('hidden');
+    $('objectSheet').classList.add('expanded');
+    $('objectSheetExpand').textContent = '⌄';
+    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function refreshOpenGoalsSheet() {
+    if (state.mapSelection?.kind !== 'goals' || !isMobileGameplayUi()) return;
+    renderGoalsObjectSheet();
+  }
+
   function digitalCardEntries(mine) {
     if (!mine) return [];
     const entries = [];
@@ -3895,6 +4085,7 @@
 
   function closeMapInfo() {
     const closingCards = state.mapSelection?.kind === 'cards';
+    const closingGoals = state.mapSelection?.kind === 'goals';
     state.mapSelection = null;
     const card = $('mapInfoCard');
     card.classList.add('hidden');
@@ -3909,6 +4100,10 @@
     if (closingCards && state.room && me()) {
       renderEvents();
       renderLegendary();
+    }
+    if (closingGoals && state.room && me()) {
+      renderAssignments();
+      renderLegendaryPlaces();
     }
   }
 
