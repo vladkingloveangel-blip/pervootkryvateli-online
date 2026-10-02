@@ -5041,3 +5041,67 @@ body.game-active .token {
 @media (min-width: 901px) {
   body.game-active .game-quick-access { display: none; }
 }
+
+
+/* UI-40 quick access correction — menu-sized square controls with compact labels. */
+@media (max-width: 900px) {
+  body.game-active .game-quick-access {
+    width: auto;
+    gap: 6px;
+  }
+  body.game-active .quick-access-btn {
+    position: relative;
+    width: var(--hud-row-size, 42px);
+    min-width: var(--hud-row-size, 42px);
+    height: var(--hud-row-size, 42px);
+    min-height: var(--hud-row-size, 42px);
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel-2);
+    color: var(--text);
+    box-shadow: 0 5px 16px rgba(0,0,0,.3);
+    overflow: visible;
+  }
+  body.game-active .quick-access-btn > span:first-child {
+    font-size: 18px;
+  }
+  body.game-active .quick-access-btn .ui-icon { width: 20px; height: 20px; }
+  body.game-active .quick-access-label {
+    position: absolute;
+    left: calc(100% + 5px);
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 3px 6px;
+    border-radius: 7px;
+    background: rgba(7,31,37,.88);
+    color: var(--text);
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1.1;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  body.game-active .quick-access-btn > strong {
+    position: absolute;
+    right: -4px;
+    top: -4px;
+    min-width: 15px;
+    max-width: 24px;
+    min-height: 15px;
+    padding: 1px 3px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(240,196,91,.45);
+    border-radius: 999px;
+    background: rgba(7,31,37,.96);
+    color: var(--gold-soft);
+    font-size: 7px;
+    line-height: 1;
+  }
+}
+@media (max-width: 420px) {
+  body.game-active .game-quick-access { --hud-row-size: 40px; }
+}
