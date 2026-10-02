@@ -627,6 +627,16 @@
     e.target.value = e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 5);
   });
 
+  $('lobbyCopyBtn').addEventListener('click', () => $('copyCodeBtn').click());
+  $('lobbyShareBtn').addEventListener('click', () => $('shareInviteBtn').click());
+  $('lobbyExitBtn').addEventListener('click', () => {
+    if (state.spectating) {
+      $('adminBackBtn').click();
+      return;
+    }
+    if (state.room?.hostId === state.myId) $('closeRoomBtn').click();
+    else $('leaveRoomBtn').click();
+  });
   $('copyCodeBtn').addEventListener('click', async () => {
     const code = state.room?.code || '';
     try {
@@ -1382,6 +1392,7 @@
     $('turnLabel').textContent = !r.started ? `Игроков: ${r.players.length}/${r.balanceCatalog.session.players.max}` : r.eventPhase?.active ? `Событие: ${eventPlayer?.name || '—'}` : (a ? `Ход: ${a.name}` : '—');
 
     const mine = me();
+    renderLobbyShell();
     renderMobileHud();
     renderEndGame();
     if (r.finished || r.phase === 'finished') return;
@@ -1480,8 +1491,44 @@
     }
   }
 
+  function renderLobbyShell() {
+    const r = state.room;
+    const game = $('game');
+    const lobby = Boolean(r && !r.started && !r.finished && r.phase !== 'finished');
+    game.classList.toggle('lobby-state', lobby);
+    $('lobbyHero')?.classList.toggle('hidden', !lobby);
+    $('lobbyToolbar')?.classList.toggle('hidden', !lobby);
+    if (!lobby) return;
+
+    const min = Number(r.balanceCatalog?.session?.players?.min) || 2;
+    const max = Number(r.balanceCatalog?.session?.players?.max) || 6;
+    const connected = (r.players || []).filter(player => player.connected).length;
+    const ready = (r.players || []).filter(player => player.ready && player.connected).length;
+    const isHost = r.hostId === state.myId;
+    const mine = me();
+
+    $('lobbyRoomCode').textContent = r.code || '—';
+    $('lobbyCapacity').textContent = `${r.players.length}/${max} игроков · минимум ${min}`;
+    $('lobbyRole').textContent = state.spectating ? 'Наблюдатель' : isHost ? 'Организатор' : (mine?.id === r.leaderId ? 'Ведущий' : 'Игрок');
+    $('lobbyConnectionStatus').textContent = connected === r.players.length
+      ? `Все подключены · готовы ${ready}/${r.players.length}`
+      : `Подключены ${connected}/${r.players.length} · ждём reconnect`;
+    $('lobbyReadySummary').textContent = r.players.length < min
+      ? `Нужно минимум ${min} игрока`
+      : `Готовы ${ready} из ${r.players.length}`;
+    $('lobbyStatusText').textContent = state.spectating
+      ? 'Наблюдение за подготовкой партии. Игровые настройки доступны участникам комнаты.'
+      : isHost
+        ? 'Настройте порядок мест и ведущего, затем дождитесь готовности всех игроков.'
+        : 'Выберите корабль, подтвердите готовность и дождитесь старта организатором.';
+
+    $('lobbyExitBtn').textContent = state.spectating ? 'Назад' : isHost ? 'Закрыть комнату' : 'Выйти';
+    $('lobbyExitBtn').classList.toggle('hidden', false);
+  }
+
   function renderPlayers() {
     const r = state.room;
+    if (!r.started) renderLobbyShell();
     $('players').innerHTML = '';
     const isHost = r.hostId === state.myId;
     const isSpectator = state.spectating;

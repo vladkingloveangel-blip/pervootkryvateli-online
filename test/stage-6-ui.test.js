@@ -1467,3 +1467,55 @@ test('UI-29 reconnect to a finished room renders directly from server finalResul
   const code = app.slice(start, end);
   assert.match(code, /const result = r\.finalResult \|\| \{ titles: \[\], playerMetrics: \[\] \}/);
 });
+
+
+test('UI-30 turns the existing players panel into a dedicated pre-game lobby surface', () => {
+  assert.match(index, /id="lobbyHero" class="lobby-hero hidden"/);
+  assert.match(index, /id="lobbyRoomCode"/);
+  assert.match(index, /id="lobbyCapacity"/);
+  assert.match(index, /id="lobbyRole"/);
+  assert.match(index, /id="lobbyReadySummary"/);
+  assert.match(styles, /UI-30 — dedicated pre-game lobby/);
+  assert.match(styles, /\.game\.lobby-state #playersPanel/);
+});
+
+test('UI-30 lobby shell is driven only by projected room state', () => {
+  const start = app.indexOf('  function renderLobbyShell()');
+  const end = app.indexOf('\n  function renderPlayers()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /r\.hostId === state\.myId/);
+  assert.match(code, /r\.leaderId/);
+  assert.match(code, /r\.players/);
+  assert.match(code, /r\.balanceCatalog\?\.session\?\.players/);
+  assert.match(code, /player\.connected/);
+  assert.match(code, /player\.ready/);
+  assert.doesNotMatch(code, /socket\.emit\(/);
+});
+
+test('UI-30 preserves canonical lobby command ownership inside renderPlayers', () => {
+  const start = app.indexOf('  function renderPlayers()');
+  const end = app.indexOf('\n  function centerMapOnMe(', start);
+  const code = app.slice(start, end);
+  assert.match(code, /socket\.emit\('changeShip'/);
+  assert.match(code, /socket\.emit\('setReady'/);
+  assert.match(code, /setSeatingOrder/);
+  assert.match(code, /setLeader/);
+  assert.match(code, /socket\.emit\('kickPlayer'/);
+  assert.match(code, /r\.players\.length >= r\.balanceCatalog\.session\.players\.min/);
+  assert.match(code, /r\.balanceCatalog\.session\.players\.max/);
+});
+
+test('UI-30 invite and exit controls delegate to existing room controls', () => {
+  assert.match(app, /\$\('lobbyCopyBtn'\)\.addEventListener\('click', \(\) => \$\('copyCodeBtn'\)\.click\(\)\)/);
+  assert.match(app, /\$\('lobbyShareBtn'\)\.addEventListener\('click', \(\) => \$\('shareInviteBtn'\)\.click\(\)\)/);
+  assert.match(app, /\$\('adminBackBtn'\)\.click\(\)/);
+  assert.match(app, /\$\('closeRoomBtn'\)\.click\(\)/);
+  assert.match(app, /\$\('leaveRoomBtn'\)\.click\(\)/);
+});
+
+test('UI-30 roomState reconnect returns directly to lobby state before game start', () => {
+  assert.match(app, /socket\.on\('roomState', room =>[\s\S]*?state\.room = room;[\s\S]*?render\(\)/);
+  assert.match(app, /renderLobbyShell\(\);\s*renderMobileHud\(\);/);
+  assert.match(app, /game\.classList\.toggle\('lobby-state', lobby\)/);
+});

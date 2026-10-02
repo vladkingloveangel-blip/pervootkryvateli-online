@@ -404,8 +404,34 @@
           </section>
 
           <section id="playersPanel" class="panel" data-ui-tab="players">
-            <div class="section-head">
-              <h2>Игроки</h2>
+            <div id="lobbyHero" class="lobby-hero hidden">
+              <div class="lobby-hero-copy">
+                <span>ЛОББИ</span>
+                <h1>Подготовка экспедиции</h1>
+                <p id="lobbyStatusText">Соберите команду, выберите корабли и подтвердите готовность.</p>
+              </div>
+              <div class="lobby-room-card">
+                <span>КОД КОМНАТЫ</span>
+                <strong id="lobbyRoomCode">—</strong>
+                <small id="lobbyCapacity">2–6 игроков</small>
+              </div>
+            </div>
+            <div id="lobbyToolbar" class="lobby-toolbar hidden">
+              <div>
+                <strong id="lobbyRole">Игрок</strong>
+                <small id="lobbyConnectionStatus">Ожидание игроков</small>
+              </div>
+              <div class="lobby-toolbar-actions">
+                <button id="lobbyCopyBtn" class="small" type="button">Копировать код</button>
+                <button id="lobbyShareBtn" class="small" type="button">Пригласить</button>
+                <button id="lobbyExitBtn" class="small danger-soft" type="button">Выйти</button>
+              </div>
+            </div>
+            <div class="section-head lobby-players-head">
+              <div>
+                <h2>Игроки</h2>
+                <small id="lobbyReadySummary" class="muted">Ожидание готовности</small>
+              </div>
               <button id="startBtn" class="primary small hidden">Начать игру</button>
             </div>
             <div id="players"></div>

@@ -3656,3 +3656,241 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     font-size: 11px;
   }
 }
+
+
+/* UI-30 — dedicated pre-game lobby */
+@media (max-width: 900px) {
+  body.game-active .game.lobby-state {
+    overflow: auto;
+    background:
+      radial-gradient(circle at top right, rgba(240,196,91,.08), transparent 36%),
+      linear-gradient(180deg, #0a2c34 0%, #071f25 100%);
+  }
+
+  body.game-active .game.lobby-state > .game-hud,
+  body.game-active .game.lobby-state > .status,
+  body.game-active .game.lobby-state > .game-roster,
+  body.game-active .game.lobby-state > .event-flow-overlay,
+  body.game-active .game.lobby-state > .mobile-game-nav,
+  body.game-active .game.lobby-state > .mobile-action-dock,
+  body.game-active .game.lobby-state > .game-action-bar {
+    display: none !important;
+  }
+
+  body.game-active .game.lobby-state #gameWorldShell {
+    position: static;
+    inset: auto;
+    display: block;
+    min-height: 100%;
+    overflow: visible;
+  }
+
+  body.game-active .game.lobby-state #gameWorldShell .map-column {
+    display: none !important;
+  }
+
+  body.game-active .game.lobby-state #gameSidePanel {
+    position: static;
+    inset: auto;
+    display: block;
+    width: 100%;
+    max-width: none;
+    height: auto;
+    min-height: 100%;
+    padding: max(14px, env(safe-area-inset-top, 0px)) 12px max(18px, env(safe-area-inset-bottom, 0px));
+    overflow: visible;
+    background: transparent;
+    transform: none;
+  }
+
+  body.game-active .game.lobby-state #gameSidePanel > :not(#playersPanel) {
+    display: none !important;
+  }
+
+  body.game-active .game.lobby-state #playersPanel {
+    display: grid !important;
+    gap: 12px;
+    width: min(720px, 100%);
+    margin: 0 auto;
+    padding: 14px;
+    border: 1px solid rgba(240,196,91,.3);
+    border-radius: 18px;
+    background: rgba(8,37,44,.96);
+    box-shadow: 0 18px 48px rgba(0,0,0,.34);
+  }
+
+  body.game-active .game.lobby-state .lobby-hero {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) auto;
+    gap: 14px;
+    align-items: start;
+  }
+
+  body.game-active .game.lobby-state .lobby-hero.hidden,
+  body.game-active .game.lobby-state .lobby-toolbar.hidden {
+    display: none !important;
+  }
+
+  body.game-active .game.lobby-state .lobby-hero-copy {
+    display: grid;
+    gap: 4px;
+  }
+
+  body.game-active .game.lobby-state .lobby-hero-copy > span {
+    color: var(--accent);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .1em;
+  }
+
+  body.game-active .game.lobby-state .lobby-hero-copy h1 {
+    margin: 0;
+    font-size: clamp(21px, 5.8vw, 30px);
+  }
+
+  body.game-active .game.lobby-state .lobby-hero-copy p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  body.game-active .game.lobby-state .lobby-room-card {
+    min-width: 112px;
+    display: grid;
+    gap: 2px;
+    padding: 10px;
+    border: 1px solid rgba(240,196,91,.34);
+    border-radius: 12px;
+    background: rgba(240,196,91,.055);
+    text-align: right;
+  }
+
+  body.game-active .game.lobby-state .lobby-room-card > span {
+    color: var(--muted);
+    font-size: 8px;
+    letter-spacing: .08em;
+  }
+
+  body.game-active .game.lobby-state .lobby-room-card > strong {
+    color: var(--accent);
+    font-size: 22px;
+    letter-spacing: .12em;
+  }
+
+  body.game-active .game.lobby-state .lobby-room-card > small {
+    color: var(--muted);
+    font-size: 9px;
+  }
+
+  body.game-active .game.lobby-state .lobby-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(255,255,255,.025);
+  }
+
+  body.game-active .game.lobby-state .lobby-toolbar > div:first-child {
+    display: grid;
+    gap: 2px;
+  }
+
+  body.game-active .game.lobby-state .lobby-toolbar small,
+  body.game-active .game.lobby-state #lobbyReadySummary {
+    color: var(--muted);
+    font-size: 9px;
+  }
+
+  body.game-active .game.lobby-state .lobby-toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  body.game-active .game.lobby-state .lobby-players-head {
+    align-items: end;
+  }
+
+  body.game-active .game.lobby-state .lobby-players-head > div {
+    display: grid;
+    gap: 2px;
+  }
+
+  body.game-active .game.lobby-state #players {
+    display: grid;
+    gap: 8px;
+  }
+
+  body.game-active .game.lobby-state #players .player-card {
+    grid-template-columns: 14px minmax(0,1fr);
+    gap: 8px;
+    align-items: start;
+    padding: 10px;
+  }
+
+  body.game-active .game.lobby-state #players .player-side-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+  }
+
+  body.game-active .game.lobby-state #players .player-sub {
+    display: none;
+  }
+
+  body.game-active .game.lobby-state #players .lobby-ship-label {
+    margin-top: 7px;
+    display: grid;
+    gap: 4px;
+    color: var(--muted);
+    font-size: 9px;
+  }
+
+  body.game-active .game.lobby-state #players .lobby-ship-label select {
+    width: 100%;
+    min-height: 40px;
+  }
+
+  body.game-active .game.lobby-state #startBtn {
+    min-height: 42px;
+  }
+}
+
+@media (max-width: 520px) {
+  body.game-active .game.lobby-state .lobby-hero {
+    grid-template-columns: 1fr;
+  }
+
+  body.game-active .game.lobby-state .lobby-room-card {
+    text-align: left;
+  }
+
+  body.game-active .game.lobby-state .lobby-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  body.game-active .game.lobby-state .lobby-toolbar-actions {
+    justify-content: stretch;
+  }
+
+  body.game-active .game.lobby-state .lobby-toolbar-actions > button {
+    flex: 1 1 30%;
+  }
+
+  body.game-active .game.lobby-state .lobby-players-head {
+    display: grid;
+    gap: 8px;
+  }
+
+  body.game-active .game.lobby-state #startBtn {
+    width: 100%;
+  }
+}
