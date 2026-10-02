@@ -228,3 +228,16 @@ test('short landscape floating sheet clears the canonical action bar', () => {
   assert.match(landscape, /\.object-sheet,\s*\n\s*body\.game-active \.object-sheet\.expanded/);
   assert.match(landscape, /max-height:\s*calc\(100dvh - 154px - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\)\)/);
 });
+
+
+test('animated ocean is a visual pan buffer outside the authoritative board', () => {
+  assert.match(index, /id="mapPanSurface"[\s\S]*id="mapOceanCanvas"[\s\S]*id="mapBoard"/);
+  assert.match(index, /<script src="\/ocean\.js"><\/script>\s*<script src="\/app\.js"><\/script>/);
+  assert.match(css, /\.map-pan-surface \{[\s\S]*padding:\s*var\(--map-pan-gutter-y\) var\(--map-pan-gutter-x\)/);
+  assert.match(css, /\.map-ocean-canvas \{[\s\S]*pointer-events:\s*none/);
+  assert.match(css, /\.map-board \{[^}]*z-index:\s*1/);
+  assert.match(app, /const gutterX = Math\.round\(Math\.max\(\(px \/ cols\) \* 2, 56\)\)/);
+  assert.match(app, /const gutterY = Math\.round\(Math\.max\(\(px \/ rows\) \* 2, 80\)\)/);
+  assert.match(app, /left:\s*board\.offsetLeft \+ mine\.col \* cellW/);
+  assert.match(app, /top:\s*board\.offsetTop \+ mine\.row \* cellH/);
+});
