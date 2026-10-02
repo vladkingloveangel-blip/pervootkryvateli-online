@@ -1626,7 +1626,7 @@
 
     $('lobbyRoomCode').textContent = r.code || '—';
     $('lobbyCapacity').textContent = `${r.players.length}/${max} игроков · минимум ${min}`;
-    $('lobbyRole').textContent = state.spectating ? 'Наблюдатель' : isHost ? 'Организатор' : (mine?.id === r.leaderId ? 'Ведущий' : 'Игрок');
+    $('lobbyRole').textContent = state.spectating ? 'Наблюдатель' : isHost ? 'Организатор' : 'Игрок';
     $('lobbyConnectionStatus').textContent = connected === r.players.length
       ? `Все подключены · готовы ${ready}/${r.players.length}`
       : `Подключены ${connected}/${r.players.length} · ждём reconnect`;
@@ -1708,8 +1708,8 @@
     const allReady = r.players.length >= r.balanceCatalog.session.players.min && r.players.every(p => p.ready && p.connected);
     const waitingReady = r.players.filter(p => !p.ready || !p.connected).length;
     $('startBtn').classList.toggle('hidden', isSpectator || r.started || !isHost);
-    $('startBtn').disabled = r.players.length < r.balanceCatalog.session.players.min || r.players.length > r.balanceCatalog.session.players.max || !r.leaderId || !allReady;
-    $('startBtn').textContent = r.players.length < r.balanceCatalog.session.players.min ? `Нужно ещё игроков: ${r.balanceCatalog.session.players.min - r.players.length}` : (!r.leaderId ? 'Выберите ведущего' : (!allReady ? `Ждём готовности: ${waitingReady}` : 'Начать игру'));
+    $('startBtn').disabled = r.players.length < r.balanceCatalog.session.players.min || r.players.length > r.balanceCatalog.session.players.max || !allReady;
+    $('startBtn').textContent = r.players.length < r.balanceCatalog.session.players.min ? `Нужно ещё игроков: ${r.balanceCatalog.session.players.min - r.players.length}` : (!allReady ? `Ждём готовности: ${waitingReady}` : 'Начать игру');
 
     $('closeRoomBtn').classList.toggle('hidden', isSpectator || !isHost);
     $('leaveRoomBtn').classList.toggle('hidden', isSpectator || isHost || r.started);
@@ -2629,7 +2629,7 @@
     $('endTurnBtn').disabled = !myTurn || blocked;
 
 
-    if (!r.started) $('moveResult').textContent = 'Выберите корабль. Организатор назначает ведущего и порядок мест; затем все нажимают «Готов».';
+    if (!r.started) $('moveResult').textContent = 'Выберите корабль и нажмите «Готов». Порядок хода определяется порядком входа в комнату.';
     else if (r.pendingDecision?.waiting) $('moveResult').textContent = `Ожидается обязательное решение игрока ${playerName(r.pendingDecision.actorPlayerId)}.`;
     else if (r.eventPhase?.active) $('moveResult').textContent = r.pendingIslandCorrection?.viewerCanRespond ? `Остров ${r.pendingIslandCorrection.islandName} нужно исправить перед продолжением.` : r.pendingAssignmentChoice?.viewerCanRespond ? 'Нужно решить, оставить или заменить поручение сюзерена.' : r.pendingFeud?.viewerCanRespond ? 'Нужно разрешить вашу карту вражды.' : r.pendingEvent?.viewerCanRespond ? 'Нужно принять решение по вашей карте события.' : `Карты получает ${playerName(r.eventPhase.currentPlayerId)}.`;
     else if (r.pendingIslandCorrection?.viewerCanRespond) $('moveResult').textContent = `Остров ${r.pendingIslandCorrection.islandName} нужно немедленно привести к допустимым ограничениям.`;
