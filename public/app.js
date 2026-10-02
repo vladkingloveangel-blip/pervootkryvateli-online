@@ -563,11 +563,15 @@
   socket.on('eventResolved', data => {
     if (state.spectating) return;
     const card = eventResolvedResultCard(data);
-    if (card) enqueueResultCard(card);
+    if (card) {
+      enqueueResultCard(card);
+      playSoundCue(card.tone === 'danger' ? 'danger' : card.tone === 'success' ? 'reward' : 'event');
+    }
   });
 
   socket.on('battleResolved', data => {
     if (state.spectating || !data?.result) return;
+    playSoundCue('battle');
     if (data.kind === 'sea') {
       const target = state.room?.players?.find(player => player.id === data.targetPlayerId);
       const attacker = state.room?.players?.find(player => player.id === data.attackerId);
@@ -867,12 +871,12 @@
       if (res && !res.ok) handleGameAck(res);
     });
   });
-  $('rollBtn').addEventListener('click', () => socket.emit('rollMove', {}, handleGameAck));
+  $('rollBtn').addEventListener('click', () => socket.emit('rollMove', {}, res => handleSoundAck(res, 'dice')));
   $('skipBtn').addEventListener('click', () => socket.emit('skipNavigation', {}, handleGameAck));
   $('endTurnBtn').addEventListener('click', () => socket.emit('endTurn', {}, handleGameAck));
-  $('mapNavRollBtn').addEventListener('click', () => socket.emit('rollMove', {}, handleGameAck));
+  $('mapNavRollBtn').addEventListener('click', () => socket.emit('rollMove', {}, res => handleSoundAck(res, 'dice')));
   $('mapNavStayBtn').addEventListener('click', () => socket.emit('skipNavigation', {}, handleGameAck));
-  $('sellCargoBtn').addEventListener('click', () => socket.emit('sellCargo', {}, handleGameAck));
+  $('sellCargoBtn').addEventListener('click', () => socket.emit('sellCargo', {}, res => handleSoundAck(res, 'coins')));
 
   function emitEndGameCommand(event) {
     setError('gameError');
@@ -880,6 +884,11 @@
   }
 
   function handleGameAck(res) { setError('gameError', res?.ok ? '' : (res?.error || 'Действие отклонено.')); }
+  function handleSoundAck(res, cue) {
+    handleGameAck(res);
+    if (res?.ok) playSoundCue(cue);
+    else if (res && res.ok === false) playSoundCue('error');
+  }
   function me() { return state.room?.players.find(p => p.id === state.myId) || null; }
   function active() { return state.room?.players.find(p => p.id === state.room?.activePlayerId) || null; }
 
@@ -1714,7 +1723,7 @@
     $('mapNavStayBtn').disabled = true;
     socket.emit('moveTo', { row: cell.row, col: cell.col }, res => {
       handleGameAck(res);
-      if (res?.ok) playUiCue('confirm');
+      if (res?.ok) playSoundCue('ship');
       if (res?.ok) return;
       state.mapMovePending = false;
       $('mapBoard').classList.remove('move-pending');
@@ -2058,6 +2067,13 @@
       danger: 'danger',
       reward: 'reward',
       confirm: 'confirm',
+      dice: 'dice',
+      ship: 'ship',
+      coins: 'coins',
+      cargo: 'cargo',
+      construction: 'construction',
+      legendary: 'legendary',
+      error: 'error',
     };
     playUiCue(map[kind] || 'confirm');
   }
@@ -2081,6 +2097,13 @@
         battle: [[130, .055, .05], [98, .08, .04]],
         danger: [[196, .05, .04], [147, .08, .035]],
         turn: [[392, .07, .04], [523, .11, .035]],
+        dice: [[190, .025, .045], [145, .028, .04], [220, .025, .035], [165, .035, .03]],
+        ship: [[105, .09, .035], [132, .11, .025]],
+        coins: [[880, .025, .035], [1175, .035, .028], [988, .03, .025]],
+        cargo: [[150, .045, .045], [110, .055, .03]],
+        construction: [[125, .035, .05], [210, .045, .035]],
+        legendary: [[98, .09, .045], [392, .1, .028], [659, .13, .025]],
+        error: [[120, .06, .045]],
       };
       let offset = 0;
       for (const [frequency, duration, gain] of profiles[kind] || profiles.confirm) {
@@ -4347,7 +4370,7 @@
       b.className = 'trade-button';
       b.textContent = `Продать груз «${escortCatalog[e.type]?.name || 'сопровождения'}» за ${e.cargo.value} дукатов`;
       b.disabled = !canAct || !mine.atCitadel || !e.active;
-      b.addEventListener('click', () => socket.emit('sellCargo', { holdId: e.id }, handleGameAck));
+      b.addEventListener('click', () => socket.emit('sellCargo', { holdId: e.id }, res => handleSoundAck(res, 'coins')));
       escortActions.appendChild(b);
     }
   }
@@ -4516,7 +4539,7 @@
           button.disabled = !canAct || hold.occupied || loadedThisRound;
           button.addEventListener('click', () => {
             setError('gameError');
-            socket.emit('loadCargo', { islandId: island.id, goodId, holdId: hold.id }, handleGameAck);
+            socket.emit('loadCargo', { islandId: island.id, goodId, holdId: hold.id }, res => handleSoundAck(res, 'cargo'));
           });
           actions.appendChild(button);
         }
@@ -4587,7 +4610,7 @@
       button.disabled = !canAct || mine.ducats < def.price;
       button.addEventListener('click', () => {
         setError('gameError');
-        socket.emit('build', { islandId: island.id, buildingType: id }, handleGameAck);
+        socket.emit('build', { islandId: island.id, buildingType: id }, res => handleSoundAck(res, 'construction'));
       });
       actions.appendChild(button);
     }
@@ -4606,7 +4629,7 @@
         button.disabled = !canAct || mine.ducats < b.nextUpgrade.price;
         button.addEventListener('click', () => {
           setError('gameError');
-          socket.emit('upgradeBuilding', { islandId: island.id, buildingIndex: b.index }, handleGameAck);
+          socket.emit('upgradeBuilding', { islandId: island.id, buildingIndex: b.index }, res => handleSoundAck(res, 'construction'));
         });
         actions.appendChild(button);
       }
