@@ -1989,3 +1989,19 @@ test('UI-39 expands the map-first shell on desktop without creating a second UX 
   assert.match(code, /\.game-action-bar[\s\S]*?bottom: 18px/);
   assert.doesNotMatch(code, /desktop-(nav|panel|action|decision)/);
 });
+
+
+test('UI-40 staging playtest keeps compact mobile map controls and clips long HUD identity', () => {
+  assert.match(index, /id="zoomToggle"[^>]*aria-controls="zoomPopover"/);
+  assert.match(index, /id="zoomPopover" class="map-zoom-popover hidden"/);
+  assert.match(index, /id="centerMe" class="map-tool-icon map-center-me"/);
+  assert.match(index, /class="hud-player-copy"/);
+  assert.match(app, /\$\('zoomToggle'\)\.addEventListener\('click'/);
+  const start = styles.indexOf('/* UI-40 staging playtest');
+  assert.ok(start >= 0);
+  const code = styles.slice(start);
+  assert.match(code, /\.hud-player-copy strong,[\s\S]*?text-overflow: ellipsis/);
+  assert.match(code, /\.roster-player \{[\s\S]*?min-height: 42px/);
+  assert.match(code, /\.map-toolbar \.map-tool-icon \{[\s\S]*?width: 38px/);
+  assert.match(code, /\.map-zoom-popover\.hidden \{ display: none; \}/);
+});

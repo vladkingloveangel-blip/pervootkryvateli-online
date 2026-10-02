@@ -6177,6 +6177,12 @@
   };
   $('mapViewport').addEventListener('scroll', scheduleMapInfoReposition, { passive: true });
   window.addEventListener('resize', scheduleMapInfoReposition);
+  $('zoomToggle').addEventListener('click', () => {
+    const popover = $('zoomPopover');
+    const opening = popover.classList.contains('hidden');
+    popover.classList.toggle('hidden', !opening);
+    $('zoomToggle').setAttribute('aria-expanded', opening ? 'true' : 'false');
+  });
   $('zoomIn').addEventListener('click', () => { state.zoom += .15; applyZoom(); scheduleMapInfoReposition(); });
   $('zoomOut').addEventListener('click', () => { state.zoom -= .15; applyZoom(); scheduleMapInfoReposition(); });
   $('centerMe').addEventListener('click', () => centerMapOnMe('smooth'));

@@ -155,7 +155,7 @@
       <section id="gameHud" class="game-hud" aria-label="Параметры игрока">
         <button id="hudPlayerBtn" class="hud-player" type="button" aria-label="Открыть корабль и флотилию">
           <span class="hud-ship-icon"><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#ship"></use></svg></span>
-          <span><strong id="hudPlayerName">Игрок</strong><small id="hudShipLevel">ур. I</small></span>
+          <span class="hud-player-copy"><strong id="hudPlayerName">Игрок</strong><small id="hudShipLevel">ур. I</small></span>
           <span class="hud-menu-chevron">⌄</span>
         </button>
         <div id="hudResources" class="hud-resources">
@@ -222,10 +222,15 @@
       <section id="gameWorldShell" class="layout game-world-shell">
         <div class="map-column">
           <div class="map-toolbar panel">
-            <button id="zoomOut" aria-label="Уменьшить карту">−</button>
-            <span id="zoomLabel">100%</span>
-            <button id="zoomIn" aria-label="Увеличить карту">+</button>
-            <button id="centerMe">Мой корабль</button>
+            <div class="map-zoom-control">
+              <button id="zoomToggle" class="map-tool-icon map-zoom-toggle" type="button" aria-label="Масштаб карты" aria-expanded="false" aria-controls="zoomPopover"></button>
+              <div id="zoomPopover" class="map-zoom-popover hidden">
+                <button id="zoomOut" type="button" aria-label="Уменьшить карту">−</button>
+                <span id="zoomLabel">100%</span>
+                <button id="zoomIn" type="button" aria-label="Увеличить карту">+</button>
+              </div>
+            </div>
+            <button id="centerMe" class="map-tool-icon map-center-me" type="button" aria-label="Показать мой корабль"><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#ship"></use></svg></button>
           </div>
 
           <div id="mapViewport" class="map-viewport" tabindex="0" aria-label="Игровая карта">
