@@ -4415,6 +4415,8 @@
       ? 'Продать весь груз флотилии за ' + totalSaleValue + ' дукатов'
       : 'Продать весь груз флотилии в Цитадели';
 
+  }
+
 
   function renderAnchors() {
     const mine = me();
