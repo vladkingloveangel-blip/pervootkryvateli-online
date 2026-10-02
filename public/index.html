@@ -54,6 +54,21 @@
       </div>
     </section>
 
+    <div id="gameMenuBackdrop" class="game-menu-backdrop hidden"></div>
+    <section id="gameMenuPanel" class="game-menu-panel hidden" role="dialog" aria-modal="true" aria-labelledby="gameMenuTitle">
+      <div class="game-menu-head"><div><span>МЕНЮ</span><strong id="gameMenuTitle">Первооткрыватели</strong></div><button id="gameMenuCloseBtn" class="small" type="button" aria-label="Закрыть меню">✕</button></div>
+      <div class="game-menu-grid">
+        <button type="button" data-game-menu="metrics"><span>◎</span><strong>Показатели партии</strong><small>Общий обзор игроков</small></button>
+        <button type="button" data-game-menu="holdings"><span>⌂</span><strong>Мои владения</strong><small>Острова и статусы</small></button>
+        <button type="button" data-game-menu="diplomacy"><span>⚜</span><strong>Дипломатия</strong><small>Государства и отношения</small></button>
+        <button type="button" data-game-menu="journal"><span>≡</span><strong>Журнал</strong><small>Последние публичные события</small></button>
+        <button type="button" data-game-menu="help"><span>?</span><strong>Справка</strong><small>Как устроен интерфейс</small></button>
+        <button type="button" data-game-menu="endgame"><span>◇</span><strong>Завершение игры</strong><small>Согласование окончания партии</small></button>
+        <button type="button" data-game-menu="settings"><span>⚙</span><strong>Настройки</strong><small>Профиль и аккаунт</small></button>
+        <button type="button" data-game-menu="exit" class="danger-soft"><span>↪</span><strong>Выход</strong><small>Выйти из аккаунта</small></button>
+      </div>
+    </section>
+
     <section id="profilePanel" class="panel profile-panel hidden">
       <div class="section-head">
         <div><h1>Профиль</h1><div class="muted">Настройки аккаунта игрока</div></div>

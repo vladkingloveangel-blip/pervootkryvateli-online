@@ -1252,3 +1252,39 @@ test('UI-24 shows a compact public active-alliance status in player cards', () =
   assert.ok(app.includes('Союзник · действующий союз'));
   assert.ok(styles.includes('UI-24 — alliances in player cards'));
 });
+
+
+test('UI-25 adds one unified secondary game menu over the map', () => {
+  assert.match(index, /id="gameMenuPanel" class="game-menu-panel hidden"/);
+  for (const key of ['metrics','holdings','diplomacy','journal','help','endgame','settings','exit']) {
+    assert.match(index, new RegExp('data-game-menu="' + key + '"'));
+  }
+  assert.match(styles, /UI-25 — unified secondary game menu/);
+});
+
+test('UI-25 HUD menu opens the game menu rather than the old account popover', () => {
+  assert.match(app, /\$\('hudMenuBtn'\)\.addEventListener\('click', toggleGameMenu\)/);
+  assert.match(app, /function openGameMenu\(\)/);
+  assert.match(app, /function closeGameMenu\(\)/);
+  assert.match(app, /function handleGameMenuAction\(kind\)/);
+  assert.doesNotMatch(app, /\$\('hudMenuBtn'\)\.addEventListener\('click', \(\) => toggleGameAccountMenu\(\)\)/);
+});
+
+test('UI-25 menu routes to existing secondary surfaces without adding gameplay socket logic', () => {
+  const start = app.indexOf('  function openMenuInfoSheet(');
+  const end = app.indexOf('\n  const MOBILE_TAB_TITLES', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /renderDiplomacyObjectSheet\(null\)/);
+  assert.match(code, /openGameAccountMenu\(\)/);
+  assert.match(code, /\$\('logoutBtn'\)\.click\(\)/);
+  assert.match(code, /openMobileTab\('players'\)/);
+  assert.doesNotMatch(code, /socket\.emit\(/);
+});
+
+test('UI-25 keeps ordinary turn actions outside the secondary menu', () => {
+  const start = index.indexOf('id="gameMenuPanel"');
+  const end = index.indexOf('id="profilePanel"', start);
+  const code = index.slice(start, end);
+  assert.doesNotMatch(code, /Бросить|Остаться на месте|Завершить ход|Штурм|Морской бой/);
+});

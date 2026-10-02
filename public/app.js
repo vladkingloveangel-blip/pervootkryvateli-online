@@ -66,11 +66,35 @@
 
   function setGameScreenActive(active) {
     document.body.classList.toggle('game-active', Boolean(active));
-    if (!active) closeGameAccountMenu();
+    if (!active) {
+      closeGameMenu();
+      closeGameAccountMenu();
+    }
+  }
+
+  function openGameMenu() {
+    if (!document.body.classList.contains('game-active') || !state.room) return;
+    closeGameAccountMenu();
+    closeMapInfo();
+    $('gameMenuPanel').classList.remove('hidden');
+    $('gameMenuBackdrop').classList.remove('hidden');
+    document.body.classList.add('game-menu-open');
+  }
+
+  function closeGameMenu() {
+    $('gameMenuPanel')?.classList.add('hidden');
+    $('gameMenuBackdrop')?.classList.add('hidden');
+    document.body.classList.remove('game-menu-open');
+  }
+
+  function toggleGameMenu() {
+    if (document.body.classList.contains('game-menu-open')) closeGameMenu();
+    else openGameMenu();
   }
 
   function openGameAccountMenu() {
     if (!state.accountUser || !document.body.classList.contains('game-active')) return;
+    closeGameMenu();
     document.body.classList.add('game-account-open');
     $('gameAccountBackdrop').classList.remove('hidden');
   }
@@ -743,7 +767,12 @@
   });
   $('hudCargoBtn').addEventListener('click', () => openMobileTab('ship'));
   $('hudTurnBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : openMobileTab('actions'));
-  $('hudMenuBtn').addEventListener('click', () => toggleGameAccountMenu());
+  $('hudMenuBtn').addEventListener('click', toggleGameMenu);
+  $('gameMenuCloseBtn').addEventListener('click', closeGameMenu);
+  $('gameMenuBackdrop').addEventListener('click', closeGameMenu);
+  document.querySelectorAll('[data-game-menu]').forEach(button => {
+    button.addEventListener('click', () => handleGameMenuAction(button.dataset.gameMenu));
+  });
 
   $('startBtn').addEventListener('click', () => {
     $('startBtn').disabled = true;
@@ -824,6 +853,80 @@
   }
 
 
+  function openMenuInfoSheet(kind) {
+    const room = state.room;
+    if (!room) return;
+    closeGameMenu();
+    state.mapSelection = { kind: 'menu', id: kind };
+    $('objectSheetKind').textContent = 'МЕНЮ';
+    const body = $('objectSheetBody');
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+  
+    if (kind === 'metrics') {
+      $('objectSheetTitle').textContent = 'Показатели партии';
+      body.innerHTML = (room.players || []).map(player =>
+        '<div class="menu-metric-row"><strong>' + escapeHtml(player.name) + '</strong><span>Острова '
+        + (player.islandCount ?? 0) + ' · слава ' + (player.glory ?? 0) + '</span></div>'
+      ).join('') || '<div class="menu-note">Показатели появятся после начала партии.</div>';
+    } else if (kind === 'holdings') {
+      $('objectSheetTitle').textContent = 'Мои владения';
+      const islands = (room.islands || []).filter(island => island.ownerId === state.myId);
+      body.innerHTML = islands.map(island =>
+        '<div class="menu-holding-row"><strong>' + escapeHtml(island.name) + '</strong><span>'
+        + escapeHtml(island.status || '—') + ' · площадь ' + (island.usedArea ?? 0) + '/'
+        + (island.effectiveArea ?? island.area ?? 0) + '</span></div>'
+      ).join('') || '<div class="menu-note">У вас пока нет островов.</div>';
+    } else if (kind === 'journal') {
+      $('objectSheetTitle').textContent = 'Журнал';
+      const entries = (room.log || []).slice(-30).reverse();
+      body.innerHTML = entries.map(entry =>
+        '<div class="menu-journal-row">' + escapeHtml(entry.text || String(entry)) + '</div>'
+      ).join('') || '<div class="menu-note">Журнал пока пуст.</div>';
+    } else if (kind === 'help') {
+      $('objectSheetTitle').textContent = 'Справка';
+      body.innerHTML = '<div class="menu-help-block"><strong>Карта</strong><span>Основное игровое пространство. Нажимайте на острова, корабли, якоря и другие объекты.</span></div>'
+        + '<div class="menu-help-block"><strong>Нижняя панель</strong><span>Показывает главное действие текущего состояния хода.</span></div>'
+        + '<div class="menu-help-block"><strong>Обязательные решения</strong><span>Появляются поверх карты и блокируют продолжение, пока сервер ждёт ваш выбор.</span></div>';
+    } else if (kind === 'endgame') {
+      $('objectSheetTitle').textContent = 'Завершение игры';
+      renderEndGame();
+      body.innerHTML = '<div class="menu-help-block"><strong>' + escapeHtml($('endGameTitle').textContent)
+        + '</strong><span>' + escapeHtml($('endGameSummary').textContent) + '</span></div>';
+      const openLegacy = document.createElement('button');
+      openLegacy.type = 'button';
+      openLegacy.className = 'primary';
+      openLegacy.textContent = 'Открыть согласование';
+      openLegacy.addEventListener('click', () => { closeMapInfo(); openMobileTab('players'); });
+      actions.appendChild(openLegacy);
+    }
+  
+    $('objectSheet').classList.remove('hidden');
+    $('objectSheet').classList.add('expanded');
+    $('objectSheetExpand').textContent = '⌄';
+    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function handleGameMenuAction(kind) {
+    if (kind === 'diplomacy') {
+      closeGameMenu();
+      renderDiplomacyObjectSheet(null);
+      return;
+    }
+    if (kind === 'settings') {
+      closeGameMenu();
+      openGameAccountMenu();
+      return;
+    }
+    if (kind === 'exit') {
+      closeGameMenu();
+      $('logoutBtn').click();
+      return;
+    }
+    openMenuInfoSheet(kind);
+  }
+
   const MOBILE_TAB_TITLES = {
     actions: 'Действия',
     ship: 'Корабль и имущество',
@@ -831,6 +934,7 @@
   };
 
   function openMobileTab(tab = 'map') {
+    closeGameMenu();
     closeGameAccountMenu();
     if (tab !== 'map' && state.mapSelection) closeMapInfo();
     state.mobileTab = tab;
