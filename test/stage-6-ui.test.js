@@ -2005,3 +2005,15 @@ test('UI-40 staging playtest keeps compact mobile map controls and clips long HU
   assert.match(code, /\.map-toolbar \.map-tool-icon \{[\s\S]*?width: 38px/);
   assert.match(code, /\.map-zoom-popover\.hidden \{ display: none; \}/);
 });
+
+
+test('UI-40 staging patch removes old mobile map-control plate and hides gameplay title bar', () => {
+  const start = styles.indexOf('/* UI-40 staging patch');
+  assert.ok(start >= 0);
+  const code = styles.slice(start);
+  assert.match(code, /body\.game-active \.topbar[\s\S]*?height: 0;[\s\S]*?background: transparent/);
+  assert.match(code, /\.topbar > div:first-child \{ display: none; \}/);
+  assert.match(code, /\.game-world-shell \.map-toolbar[\s\S]*?right: 8px;[\s\S]*?width: 30px;[\s\S]*?background: transparent;[\s\S]*?box-shadow: none/);
+  assert.match(code, /\.map-toolbar \.map-tool-icon[\s\S]*?width: 30px;[\s\S]*?height: 30px/);
+  assert.match(code, /\.map-center-me \.ui-icon[\s\S]*?width: 15px;[\s\S]*?height: 15px/);
+});
