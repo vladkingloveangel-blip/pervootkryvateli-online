@@ -57,7 +57,6 @@ main { width: min(1480px, 100%); margin: 0 auto; padding: 14px; }
 .map-column { min-width: 0; }
 .side-column { display: grid; gap: 12px; }
 .map-toolbar { border-bottom-left-radius: 0; border-bottom-right-radius: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.map-toolbar button { min-width: 44px; }
 .map-viewport { overflow: auto; width: 100%; max-height: 72vh; background: #071f25; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 14px 14px; touch-action: pan-x pan-y pinch-zoom; }
 .map-board { position: relative; width: 980px; aspect-ratio: 1 / 1; transform-origin: top left; }
 .map-art-layer { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
@@ -377,12 +376,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 
   .layout { display: block; }
   .map-column { height: calc(100dvh - 58px - 58px); min-height: 420px; display: flex; flex-direction: column; }
-  .map-toolbar {
-    flex: 0 0 auto;
-    padding: 6px 8px;
-    background: rgba(18,56,66,.96);
-  }
-  .map-toolbar button { min-height: 36px; }
   .map-viewport {
     flex: 1 1 auto;
     max-height: none;
@@ -554,20 +547,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     flex-direction: column;
   }
 
-  body.game-active .map-toolbar {
-    min-height: 43px;
-    padding: 4px 6px;
-    flex-wrap: nowrap;
-    gap: 6px;
-  }
-  body.game-active .map-toolbar button {
-    min-height: 34px;
-    padding: 5px 10px;
-  }
-  body.game-active .map-toolbar #centerMe {
-    margin-left: auto;
-    white-space: nowrap;
-  }
 
   body.game-active .map-viewport {
     flex: 1 1 auto;
@@ -1070,22 +1049,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     background: #071f25;
     overflow: auto;
     overscroll-behavior: contain;
-  }
-
-  body.game-active .game-world-shell .map-toolbar {
-    position: absolute;
-    z-index: 46;
-    top: calc(54px + env(safe-area-inset-top, 0px));
-    left: 8px;
-    right: 8px;
-    width: auto;
-    min-height: 0;
-    padding: 5px;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    background: rgba(8,37,44,.88);
-    box-shadow: 0 6px 18px rgba(0,0,0,.24);
-    backdrop-filter: blur(8px);
   }
 
   body.game-active .game-hud {
@@ -1956,9 +1919,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     font-size: 11px;
   }
 
-  body.game-active .game-world-shell .map-toolbar {
-    top: calc(112px + env(safe-area-inset-top, 0px));
-  }
 }
 
 
@@ -2941,10 +2901,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     font-size: 9px;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  body.game-active.event-flow-open .game-world-shell .map-toolbar {
-    top: calc(220px + env(safe-area-inset-top, 0px));
   }
 
   body.game-active .feud-scene-card {
@@ -4637,6 +4593,8 @@ body.game-active .final-results-art {
   }
 
   body.game-active .game-world-shell .map-toolbar {
+    position: absolute;
+    z-index: 46;
     top: 55px;
     left: auto;
     right: 15px;
