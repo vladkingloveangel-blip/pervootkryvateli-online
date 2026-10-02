@@ -878,6 +878,7 @@ function publicRoom(room, viewerId = null) {
         canDismissLandCompanyHere: p.id === viewerId ? canDismissLandCompany(room, p).ok : false,
         character: p.id === viewerId && p.character ? { ...(CHARACTERS[typeof p.character === 'string' ? p.character : p.character.id] || {}), id: typeof p.character === 'string' ? p.character : p.character.id } : null,
         characterReplacedThisRound: p.id === viewerId ? Number(p.characterReplacedRound) === Number(room.round) : false,
+        characterUsedThisRound: p.id === viewerId ? Number(p.characterUsedRound) === Number(room.round) : false,
         admiraltyLevelHere: p.id === viewerId ? bestAdmiraltyLevelAtPlayer(room, p) : 0,
         characterAcquisitionOptions: p.id === viewerId && !p.character ? characterOptionsAtAdmiralty(room, p).map(c => ({ id: c.id, name: c.name, admiraltyLevel: c.admiraltyLevel, effect: { ...c.effect } })) : [],
         characterReplacementOptions: p.id === viewerId && p.character && Number(p.characterReplacedRound) !== Number(room.round)
@@ -3457,7 +3458,7 @@ io.on('connection', socket => {
     room.factionState = {};
     room.players.forEach(p => {
       p.row = 0; p.col = 0; p.ducats = BALANCE.session.startingDucats; p.debt = 0; p.level = 1; p.consumableAbilities = []; p.consumableAbilitySequence = 0; delete p.specialCards; delete p.legendaryCards; p.cargo = null; p.upgrades = []; p.disabledUpgradeIds = []; p.escorts = []; p.levelInactiveEscortIds = []; p.nextEscortId = 0;
-      p.glory = 0; p.fleetPoints = 0; p.fleetPointRound = room.round; p.fleetPointOpponentIds = []; p.armyPoints = 0; p.armyPointRound = room.round; p.armyPointOpponentIds = []; p.skipTurns = 0; p.personalTurnNo = 0; p.attackLimitRound = room.round; p.attackCountsThisRound = {}; p.brokenAlliesThisTurn = []; p.pendingLandinEscort = false; p.activeExpeditionTask = null; p.expeditionCompletions = []; p.expeditionAccessUsage = { round: null, draws: 0 }; delete p.activeExpedition; delete p.expeditionHistory; delete p.expeditionDrawRound; delete p.expeditionsDrawnThisRound; p.temporaryEffects = { active: [], scheduled: [] }; delete p.legendaryEffects; delete p.nextTurnEffects; delete p.activeTurnEffects; delete p.namedPlaceCards; p.storedBenefits = []; delete p.savedEventCards; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignmentTask = null; delete p.activeAssignment; p.landCompany = null; p.bastionPriority = []; p.inactiveBastionIslandIds = []; p.character = null; p.characterReplacedRound = null; p.palaceUsed = false;
+      p.glory = 0; p.fleetPoints = 0; p.fleetPointRound = room.round; p.fleetPointOpponentIds = []; p.armyPoints = 0; p.armyPointRound = room.round; p.armyPointOpponentIds = []; p.skipTurns = 0; p.personalTurnNo = 0; p.attackLimitRound = room.round; p.attackCountsThisRound = {}; p.brokenAlliesThisTurn = []; p.pendingLandinEscort = false; p.activeExpeditionTask = null; p.expeditionCompletions = []; p.expeditionAccessUsage = { round: null, draws: 0 }; delete p.activeExpedition; delete p.expeditionHistory; delete p.expeditionDrawRound; delete p.expeditionsDrawnThisRound; p.temporaryEffects = { active: [], scheduled: [] }; delete p.legendaryEffects; delete p.nextTurnEffects; delete p.activeTurnEffects; delete p.namedPlaceCards; p.storedBenefits = []; delete p.savedEventCards; p.visitedAnchors = []; p.lastAnchorEncounter = null; p.suzerainId = null; p.vassalGiftIslandId = null; p.enemyFactionIds = []; p.nextActionLimit = null; p.activeAssignmentTask = null; delete p.activeAssignment; p.landCompany = null; p.bastionPriority = []; p.inactiveBastionIslandIds = []; p.character = null; p.characterUsedRound = null; p.characterReplacedRound = null; p.palaceUsed = false;
     });
     refreshFactionExistence(room);
     log(room, `Партия началась. Порядок: ${room.order.map(id => room.players.find(p => p.id === id)?.name).join(' → ')}.`);
@@ -3652,7 +3653,7 @@ io.on('connection', socket => {
     const penalty = (Number(getActiveTurnEffectValue(p, 'movePenalty')) || 0) + legendaryMovementPenalty(p);
     room.movePoints = Math.max(0, second + stats.moveMod + bonus + lighthouseBonus - penalty);
     room.actionsLeft -= character.useActionCost;
-    consumeCharacter(p, 'navigator');
+    consumeCharacter(p, 'navigator', room.round);
     log(room, `${p.name} использует Штурмана: d6 ${first} переброшен на ${second}; второй результат обязателен. Осталось действий: ${room.actionsLeft}.`);
     ackSafe(ack, { ok: true, roll: second, movePoints: room.movePoints });
     emitRoom(room);
@@ -3673,7 +3674,7 @@ io.on('connection', socket => {
     const card = seaEncounterSource(room, color)?.peekNext() || null;
     if (!card) return ackSafe(ack, { ok: false, error: 'В выбранной колоде якоря сейчас нет верхней карты.' });
     room.actionsLeft -= character.useActionCost;
-    consumeCharacter(p, 'cartographer');
+    consumeCharacter(p, 'cartographer', room.round);
     log(room, `${p.name} использует Картографа и смотрит верхнюю карту колоды «${option.name}», не меняя порядок.`);
     ackSafe(ack, { ok: true, anchorName: option.name, card: { name: card.name, artillery: card.artillery, reward: card.reward, quiet: Boolean(card.quiet) } });
     emitRoom(room);
@@ -3687,7 +3688,7 @@ io.on('connection', socket => {
       request: data,
       characterRule: CHARACTERS.scout,
       hasBlockingPending: hasPendingDecision(room),
-      consumeCharacter,
+      consumeCharacter: (player, expectedId) => consumeCharacter(player, expectedId, room.round),
     });
     if (!result.ok) return ackSafe(ack, result);
     const p = room.players.find(player => player.id === socket.data.playerId);
@@ -3710,7 +3711,7 @@ io.on('connection', socket => {
 
     const prepared = prepareTreasureHunterChoice(p);
     if (!prepared.ok || prepared.candidates.length !== 2 || prepared.options.length !== 2) return ackSafe(ack, prepared.ok ? { ok: false, error: 'Не удалось получить два результата сокровища.' } : prepared);
-    const consumed = consumeCharacter(p, 'treasureHunter');
+    const consumed = consumeCharacter(p, 'treasureHunter', room.round);
     if (!consumed.ok) return ackSafe(ack, consumed);
     room.actionsLeft -= actionCost;
     setPendingLegacy(room, 'event', {
@@ -3736,7 +3737,7 @@ io.on('connection', socket => {
     if (room.phase !== 'actions') return ackSafe(ack, { ok: false, error: 'Первый помощник применяется в фазе действий.' });
     if ((typeof p.character === 'string' ? p.character : p.character?.id) !== 'firstMate') return ackSafe(ack, { ok: false, error: 'На корабле нет Первого помощника.' });
     room.actionsLeft = Math.max(0, Number(room.actionsLeft) || 0) + Math.max(1, Number(CHARACTERS.firstMate.effect?.count) || 1);
-    consumeCharacter(p, 'firstMate');
+    consumeCharacter(p, 'firstMate', room.round);
     log(room, `${p.name} использует Первого помощника и получает одно дополнительное действие сверх обычного лимита.`);
     ackSafe(ack, { ok: true, actionsLeft: room.actionsLeft });
     emitRoom(room);
