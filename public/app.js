@@ -4636,45 +4636,76 @@
     }
 
     const catalog = state.room.buildingCatalog || {};
+    const buildingPurpose = (type, level = 1) => {
+      const purposes = {
+        farm: 'Производит провизию.', manor: 'Развитая продовольственная постройка.',
+        lumbermill: 'Производит древесину.', shipyard: 'Даёт места для судов сопровождения.',
+        quarry: 'Производит камень.', stoneworks: 'Даёт места поддержки бастионов.',
+        mine: 'Производит руду.', arsenal: 'Позволяет снаряжать роту ландскнехтов.',
+        fort: 'Усиливает защиту острова.', fortress: 'Сильно усиливает защиту острова.', bastion: 'Мощная защита острова.',
+        market: 'Приносит доход с острова.', bank: 'Увеличивает доход с острова.',
+        exotic: 'Даёт погрузку экзотических зверей.', slaves: 'Даёт погрузку невольников.',
+        gold: 'Даёт погрузку золота.', diamonds: 'Даёт погрузку алмазов.',
+        lighthouse: '+1 к движению при отплытии с острова.',
+        observatory: 'Позволяет заменить морское событие.',
+        embassy: 'Позволяет выбирать поручение из двух вариантов.',
+        palace: 'Один раз за партию позволяет прекратить вражду с государством.',
+        cartography: 'Открывает доступ к экспедициям.',
+        admiralty: 'Даёт доступ к персонажам и их замене.'
+      };
+      return purposes[type] || 'Развивает возможности острова.';
+    };
+    const makeBuildingCard = (title, purpose, meta) => {
+      const card = document.createElement('div');
+      card.className = 'island-building-card';
+      const head = document.createElement('div'); head.className = 'island-building-card__head'; head.textContent = title;
+      const desc = document.createElement('div'); desc.className = 'island-building-card__desc'; desc.textContent = purpose;
+      card.appendChild(head); card.appendChild(desc);
+      if (meta) { const info = document.createElement('div'); info.className = 'island-building-card__meta'; info.textContent = meta; card.appendChild(info); }
+      return card;
+    };
+
     const buildLabel = document.createElement('div');
     buildLabel.className = 'action-group-label';
-    buildLabel.textContent = 'Строительство';
+    buildLabel.textContent = 'Можно построить';
     actions.appendChild(buildLabel);
     const ordered = ['farm', 'lumbermill', 'quarry', 'mine', 'fort', 'market', 'exotic', 'slaves', 'gold', 'diamonds', 'lighthouse', 'observatory', 'embassy', 'palace', 'cartography', 'admiralty'];
     for (const id of ordered) {
       const def = catalog[id];
       if (!def) continue;
       if (def.resource && !island.resources.includes(def.resource)) continue;
+      const card = makeBuildingCard(def.name, buildingPurpose(id), `${def.price} дук. · площадь ${def.area || 1}`);
       const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'build-btn';
-      button.textContent = `${def.name} · ${def.price} дук.`;
+      button.type = 'button'; button.className = 'build-btn primary'; button.textContent = 'Построить';
       button.disabled = !canAct || mine.ducats < def.price;
       button.addEventListener('click', () => {
         setError('gameError');
         socket.emit('build', { islandId: island.id, buildingType: id }, res => handleSoundAck(res, 'construction'));
       });
-      actions.appendChild(button);
+      card.appendChild(button); actions.appendChild(card);
     }
 
-    const upgradeable = island.buildings.filter(b => b.nextUpgrade);
-    if (upgradeable.length) {
-      const upLabel = document.createElement('div');
-      upLabel.className = 'action-group-label';
-      upLabel.textContent = 'Улучшение построек';
-      actions.appendChild(upLabel);
-      for (const b of upgradeable) {
+    const builtLabel = document.createElement('div');
+    builtLabel.className = 'action-group-label';
+    builtLabel.textContent = 'Построено';
+    actions.appendChild(builtLabel);
+    if (!island.buildings.length) {
+      const empty = document.createElement('div'); empty.className = 'cargo-meta'; empty.textContent = 'На острове пока нет построек.'; actions.appendChild(empty);
+    }
+    for (const b of island.buildings) {
+      const level = Number(b.level) || 1;
+      const card = makeBuildingCard(b.name, buildingPurpose(b.type, level), b.nextUpgrade ? `Следующий уровень: ${b.nextUpgrade.name} · ${b.nextUpgrade.price} дук.` : 'Текущий максимальный уровень');
+      if (b.nextUpgrade) {
         const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'build-btn upgrade-building-btn';
-        button.textContent = `${b.name} → ${b.nextUpgrade.name} · ${b.nextUpgrade.price} дук.`;
+        button.type = 'button'; button.className = 'build-btn upgrade-building-btn'; button.textContent = `Улучшить · ${b.nextUpgrade.price} дук.`;
         button.disabled = !canAct || mine.ducats < b.nextUpgrade.price;
         button.addEventListener('click', () => {
           setError('gameError');
           socket.emit('upgradeBuilding', { islandId: island.id, buildingIndex: b.index }, res => handleSoundAck(res, 'construction'));
         });
-        actions.appendChild(button);
+        card.appendChild(button);
       }
+      actions.appendChild(card);
     }
   }
 
