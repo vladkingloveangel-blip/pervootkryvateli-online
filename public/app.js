@@ -736,6 +736,11 @@
     if (isMobileGameplayUi()) renderGoalsObjectSheet();
     else openMobileTab('actions');
   });
+  $('hudPoliticsBtn').addEventListener('click', () => {
+    if (state.spectating) return;
+    if (isMobileGameplayUi()) renderDiplomacyObjectSheet(me()?.suzerainId || null);
+    else openMobileTab('players');
+  });
   $('hudCargoBtn').addEventListener('click', () => openMobileTab('ship'));
   $('hudTurnBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : openMobileTab('actions'));
   $('hudMenuBtn').addEventListener('click', () => toggleGameAccountMenu());
@@ -889,12 +894,19 @@
       $('hudCharacterBtn').title = mine.character?.name || 'Персонаж не нанят';
       $('hudCards').textContent = String(digitalCardEntries(mine).length);
       $('hudGoals').textContent = String(activeGoalCount(mine));
+      const suzerain = mine.suzerainId ? r.factions?.find(faction => faction.id === mine.suzerainId) : null;
+      $('hudPolitics').textContent = suzerain ? String(suzerain.name || '⚜').slice(0, 3) : ((mine.enemyFactionIds || []).length ? '⚔' : '—');
+      $('hudPoliticsBtn').title = suzerain
+        ? `Сюзерен: ${suzerain.name}`
+        : ((mine.enemyFactionIds || []).length ? `Вражда с государствами: ${(mine.enemyFactionIds || []).length}` : 'Дипломатия');
     } else {
       $('hudPlayerName').textContent = state.spectating ? 'Наблюдение' : 'Игрок';
       $('hudShipLevel').textContent = state.spectating ? `Комната ${r.code}` : '—';
       $('hudCharacter').textContent = '—';
       $('hudCards').textContent = '0';
       $('hudGoals').textContent = '0';
+      $('hudPolitics').textContent = '—';
+      $('hudPoliticsBtn').title = 'Дипломатия';
     }
 
     $('hudRound').textContent = !r.started
@@ -2289,6 +2301,102 @@
     }
   }
 
+
+  function factionById(factionId) {
+    return state.room?.factions?.find(faction => faction.id === factionId) || null;
+  }
+
+  function factionForIsland(island) {
+    if (!island || island.kind !== 'state') return null;
+    const raw = String(island.faction || '').trim().toLowerCase();
+    return (state.room?.factions || []).find(faction =>
+      faction.id === island.faction
+      || String(faction.name || '').trim().toLowerCase() === raw
+    ) || null;
+  }
+
+  function factionRelationLabel(faction, mine = me()) {
+    if (!faction || !mine) return 'Нейтральные отношения';
+    if (mine.suzerainId === faction.id) return 'Ваш сюзерен';
+    if ((mine.enemyFactionIds || []).includes(faction.id)) return 'Вражда';
+    return 'Нейтральные отношения';
+  }
+
+  function factionDiplomacyHtml(faction) {
+    const mine = me();
+    if (!faction) return '<div class="diplomacy-note">Политические данные государства недоступны.</div>';
+    const relation = factionRelationLabel(faction, mine);
+    const existence = faction.exists ? 'Государство существует.' : `Государство прекратило существование${faction.ceasedRound ? ` в раунде ${faction.ceasedRound}` : ''}.`;
+    const vassal = faction.vassalPlayerId ? `Вассал: ${playerName(faction.vassalPlayerId)}.` : 'Сейчас у государства нет вассала.';
+    const tax = faction.tax ? `Налог вассала: ${faction.tax} дуката в начале личного хода шестого круга.` : 'Денежного налога за раунд нет.';
+    const gift = faction.giftIslandName ? `При вступлении государство может передать остров «${faction.giftIslandName}» по действующим правилам.` : 'Передаваемого острова нет.';
+    const prize = faction.fullConquestPrize
+      ? (faction.fullConquestPrize.amountUnresolved
+        ? 'Итоговая награда за полное завоевание пока не определена правилами.'
+        : `Итоговая награда за полное завоевание: ${faction.fullConquestPrize.ducats} дукатов.`)
+      : 'Отдельной итоговой награды за полное завоевание нет.';
+    const claimed = faction.fullConquestClaimed
+      ? `Награда уже получена: ${playerName(faction.fullConquestPlayerId)}.`
+      : '';
+    return `
+      <section class="diplomacy-state-card">
+        <span>ОТНОШЕНИЯ</span>
+        <strong>${escapeHtml(relation)}</strong>
+        <small>${escapeHtml(existence)}</small>
+      </section>
+      <div class="diplomacy-lines">
+        <div><span>Вассалитет</span><strong>${escapeHtml(vassal)}</strong></div>
+        <div><span>Налог</span><strong>${escapeHtml(tax)}</strong></div>
+        <div><span>Остров</span><strong>${escapeHtml(gift)}</strong></div>
+        <div><span>Завоевание</span><strong>${escapeHtml(prize)}${claimed ? ` ${escapeHtml(claimed)}` : ''}</strong></div>
+      </div>
+    `;
+  }
+
+  function appendCanonicalPoliticsActions(target, factionId = null) {
+    if (!target) return;
+    renderPolitics();
+    const source = $('politicsActions');
+    const faction = factionId ? factionById(factionId) : null;
+    for (const button of Array.from(source?.children || [])) {
+      if (faction && !button.textContent.includes(faction.name)) continue;
+      target.appendChild(button);
+    }
+  }
+
+  function renderDiplomacyObjectSheet(factionId = null) {
+    const sheet = $('objectSheet');
+    const room = state.room;
+    const mine = me();
+    if (!sheet || !room?.started || !mine) return;
+    const selectedFaction = factionId ? factionById(factionId) : null;
+    state.mapSelection = { kind: 'diplomacy', id: selectedFaction?.id || 'overview' };
+    $('objectSheetKind').textContent = selectedFaction ? 'ГОСУДАРСТВО' : 'ДИПЛОМАТИЯ';
+    $('objectSheetTitle').textContent = selectedFaction?.name || 'Дипломатия';
+    const factions = selectedFaction ? [selectedFaction] : (room.factions || []);
+    $('objectSheetBody').innerHTML = factions.map(faction => `
+      <section class="diplomacy-faction-block">
+        ${selectedFaction ? '' : `<h3>${escapeHtml(faction.name)}</h3>`}
+        ${factionDiplomacyHtml(faction)}
+      </section>
+    `).join('');
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    appendCanonicalPoliticsActions(actions, selectedFaction?.id || null);
+    if (!actions.children.length) {
+      const note = document.createElement('div');
+      note.className = 'diplomacy-note';
+      note.textContent = selectedFaction
+        ? 'Сейчас для этого государства нет доступного политического действия.'
+        : 'Сейчас политические действия недоступны.';
+      actions.appendChild(note);
+    }
+    sheet.classList.remove('hidden');
+    sheet.classList.add('expanded');
+    $('objectSheetExpand').textContent = '⌄';
+    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
+    document.body.classList.add('object-sheet-open');
+  }
 
   function renderPolitics() {
     const r = state.room;
@@ -4544,9 +4652,28 @@
     $('objectSheetKind').textContent = island.ownerId ? 'ЧУЖОЙ ОСТРОВ' : (island.kind === 'state' ? 'ГОСУДАРСТВЕННЫЙ ОСТРОВ' : 'ОСТРОВ');
     $('objectSheetTitle').textContent = island.name;
     $('objectSheetBody').innerHTML = foreignIslandCompactHtml(island);
+    const politicalFaction = factionForIsland(island);
+    if (politicalFaction) {
+      $('objectSheetBody').insertAdjacentHTML('beforeend', `
+        <section class="state-island-politics">
+          <span>ГОСУДАРСТВО</span>
+          <strong>${escapeHtml(politicalFaction.name)}</strong>
+          <small>${escapeHtml(factionRelationLabel(politicalFaction))}</small>
+        </section>
+      `);
+    }
 
     const actions = $('objectSheetActions');
     actions.innerHTML = '';
+    if (politicalFaction) {
+      const diplomacy = document.createElement('button');
+      diplomacy.type = 'button';
+      diplomacy.className = 'primary';
+      diplomacy.textContent = `Государство: ${politicalFaction.name}`;
+      diplomacy.addEventListener('click', () => renderDiplomacyObjectSheet(politicalFaction.id));
+      actions.appendChild(diplomacy);
+      appendCanonicalPoliticsActions(actions, politicalFaction.id);
+    }
     const here = currentIslands().some(item => item.id === island.id);
     const mine = me();
     const myTurn = state.room?.activePlayerId === state.myId;

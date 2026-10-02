@@ -1168,3 +1168,46 @@ test('UI-22 other viewers get stage-aware waiting instead of private choice deta
   assert.match(code, /body: eventFlowStageStatus\(room, room\.eventPhase\)/);
   assert.doesNotMatch(code, /room\.pendingDecision\.options/);
 });
+
+
+test('UI-23 exposes diplomacy through HUD without creating new political socket commands', () => {
+  assert.match(index, /id="hudPoliticsBtn"[^>]*aria-label="Дипломатия и сюзерен"/);
+  assert.match(index, /id="hudPolitics"/);
+  assert.match(app, /\$\('hudPoliticsBtn'\)\.addEventListener\('click',[\s\S]*?renderDiplomacyObjectSheet\(me\(\)\?\.suzerainId \|\| null\)/);
+  assert.match(app, /\$\('hudPolitics'\)\.textContent = suzerain/);
+});
+
+test('UI-23 state islands open human-readable faction diplomacy in the shared object sheet', () => {
+  const start = app.indexOf('  function factionById(');
+  const end = app.indexOf('\n  function renderPolitics()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /function factionForIsland/);
+  assert.match(code, /function factionRelationLabel/);
+  assert.match(code, /Ваш сюзерен/);
+  assert.match(code, /Вражда/);
+  assert.match(code, /Налог вассала/);
+  assert.match(code, /При вступлении государство может передать остров/);
+  assert.match(code, /Итоговая награда за полное завоевание/);
+  assert.doesNotMatch(code, /socket\.emit\(/);
+});
+
+test('UI-23 reuses canonical renderPolitics buttons for vassalage and rebellion legality', () => {
+  const start = app.indexOf('  function appendCanonicalPoliticsActions(');
+  const end = app.indexOf('\n  function renderPolitics()', start);
+  const code = app.slice(start, end);
+  assert.match(code, /renderPolitics\(\)/);
+  assert.match(code, /\$\('politicsActions'\)/);
+  assert.match(code, /target\.appendChild\(button\)/);
+  assert.doesNotMatch(code, /socket\.emit\(/);
+  assert.match(app, /appendCanonicalPoliticsActions\(actions, politicalFaction\.id\)/);
+});
+
+test('UI-23 keeps the legacy politics renderer as canonical fallback until UI-32', () => {
+  const start = app.indexOf('  function renderPolitics()');
+  const end = app.indexOf('\n\n\n  function renderIslandCorrection()', start);
+  const code = app.slice(start, end);
+  assert.match(code, /socket\.emit\('enterVassalage'/);
+  assert.match(code, /socket\.emit\('rebelVassalage'/);
+  assert.match(styles, /UI-23 — politics and state diplomacy/);
+});

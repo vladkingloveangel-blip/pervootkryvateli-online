@@ -3105,3 +3105,34 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     background: rgba(116,174,239,.045);
   }
 }
+
+
+/* UI-23 — politics and state diplomacy */
+@media (max-width: 900px) {
+  body.game-active .hud-politics-chip { min-width: 48px; }
+  body.game-active .diplomacy-faction-block { display: grid; gap: 8px; margin-bottom: 12px; }
+  body.game-active .diplomacy-faction-block h3 { margin: 2px 0 0; font-size: 14px; }
+  body.game-active .diplomacy-state-card,
+  body.game-active .state-island-politics {
+    display: grid; gap: 3px; padding: 10px;
+    border: 1px solid rgba(240,196,91,.32); border-radius: 12px;
+    background: rgba(240,196,91,.055);
+  }
+  body.game-active .diplomacy-state-card > span,
+  body.game-active .state-island-politics > span {
+    color: var(--accent); font-size: 9px; font-weight: 900; letter-spacing: .08em;
+  }
+  body.game-active .diplomacy-state-card > strong,
+  body.game-active .state-island-politics > strong { font-size: 15px; }
+  body.game-active .diplomacy-state-card > small,
+  body.game-active .state-island-politics > small,
+  body.game-active .diplomacy-note { color: var(--muted); font-size: 10px; line-height: 1.4; }
+  body.game-active .diplomacy-lines { display: grid; gap: 6px; }
+  body.game-active .diplomacy-lines > div {
+    display: grid; gap: 2px; padding: 8px 9px;
+    border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.025);
+  }
+  body.game-active .diplomacy-lines span { color: var(--muted); font-size: 9px; }
+  body.game-active .diplomacy-lines strong { font-size: 10px; line-height: 1.4; }
+  body.game-active .state-island-politics { margin-top: 8px; }
+}
