@@ -6494,8 +6494,8 @@
     state.zoom = Math.max(.65, Math.min(1.8, state.zoom));
     const px = Math.round(980 * state.zoom);
     const { rows, cols } = mapSize();
-    const gutterX = Math.round(Math.max((px / cols) * 2, 56));
-    const gutterY = Math.round(Math.max((px / rows) * 2, 80));
+    const gutterX = Math.round(Math.max((px / cols) * 5, 150));
+    const gutterY = Math.round(Math.max((px / rows) * 5, 150));
     $('mapBoard').style.width = `${px}px`;
     $('mapPanSurface').style.setProperty('--map-pan-gutter-x', `${gutterX}px`);
     $('mapPanSurface').style.setProperty('--map-pan-gutter-y', `${gutterY}px`);
