@@ -1690,7 +1690,10 @@
     $('mapNavStayBtn').disabled = true;
     socket.emit('moveTo', { row: cell.row, col: cell.col }, res => {
       handleGameAck(res);
-      if (res?.ok) return;
+      if (res?.ok) {
+        playUiCue('confirm');
+        return;
+      }
       state.mapMovePending = false;
       $('mapBoard').classList.remove('move-pending');
       renderMapNavigation();
@@ -2003,6 +2006,54 @@
     }
   }
 
+  let uiAudioContext = null;
+  let lastUiCueKey = '';
+
+  function motionReduced() {
+    return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+  }
+
+  function playUiCue(kind = 'confirm') {
+    if (document.visibilityState === 'hidden' || state.spectating) return;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    try {
+      uiAudioContext ||= new AudioCtx();
+      if (uiAudioContext.state === 'suspended') uiAudioContext.resume().catch(() => {});
+      const profiles = {
+        confirm: [[440, .035, .035]],
+        event: [[330, .04, .045], [392, .055, .035]],
+        reward: [[523, .04, .045], [659, .055, .035], [784, .075, .03]],
+        battle: [[130, .055, .05], [98, .08, .04]],
+        danger: [[196, .05, .04], [147, .08, .035]],
+      };
+      let offset = 0;
+      for (const [frequency, duration, gain] of profiles[kind] || profiles.confirm) {
+        const oscillator = uiAudioContext.createOscillator();
+        const volume = uiAudioContext.createGain();
+        oscillator.type = kind === 'battle' || kind === 'danger' ? 'triangle' : 'sine';
+        oscillator.frequency.value = frequency;
+        volume.gain.setValueAtTime(0.0001, uiAudioContext.currentTime + offset);
+        volume.gain.exponentialRampToValueAtTime(gain, uiAudioContext.currentTime + offset + .008);
+        volume.gain.exponentialRampToValueAtTime(0.0001, uiAudioContext.currentTime + offset + duration);
+        oscillator.connect(volume).connect(uiAudioContext.destination);
+        oscillator.start(uiAudioContext.currentTime + offset);
+        oscillator.stop(uiAudioContext.currentTime + offset + duration + .01);
+        offset += duration * .72;
+      }
+    } catch (_) {}
+  }
+
+  function cueForResult(result) {
+    if (!result) return;
+    const text = (result.kicker + ' ' + result.title).toLowerCase();
+    if (/бой|сраж|штурм|якор/.test(text)) return result.tone === 'danger' ? 'danger' : 'battle';
+    if (/событ|вражд/.test(text)) return 'event';
+    if (result.tone === 'success' || /награ|слава|сокров|побед|открыт/.test(text)) return 'reward';
+    if (result.tone === 'danger') return 'danger';
+    return 'confirm';
+  }
+
   function enqueueResultCard(result) {
     if (!result || !result.title) return;
     const entry = {
@@ -2083,6 +2134,11 @@
       details.appendChild(row);
     }
     layer.dataset.tone = result.tone || 'neutral';
+    const cueKey = [result.kicker, result.title, result.tone].join(':');
+    if (lastUiCueKey !== cueKey) {
+      lastUiCueKey = cueKey;
+      playUiCue(cueForResult(result));
+    }
   }
 
   function anchorResultCard(res) {

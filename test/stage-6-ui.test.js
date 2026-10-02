@@ -1916,3 +1916,34 @@ test('UI-37 wires final scene assets into events, combat, legendary goals and fi
   assert.match(index, /class="event-flow-art"/);
   assert.match(index, /class="final-results-art"/);
 });
+
+
+test('UI-38 adds short non-blocking motion for sheets, decisions, results, events and route targets', () => {
+  const start = styles.indexOf('/* UI-38 — motion and audio polish.');
+  assert.ok(start >= 0);
+  const code = styles.slice(start);
+  assert.match(code, /ui-sheet-in 180ms/);
+  assert.match(code, /ui-card-in 170ms/);
+  assert.match(code, /ui-result-in 210ms/);
+  assert.match(code, /ui-event-in 180ms/);
+  assert.match(code, /ui-route-breathe 1\.35s/);
+  assert.doesNotMatch(code, /animation-delay:\s*[1-9]/);
+});
+
+test('UI-38 fully suppresses gameplay motion when reduced motion is requested', () => {
+  const start = styles.indexOf('/* UI-38 — motion and audio polish.');
+  const code = styles.slice(start);
+  assert.match(code, /prefers-reduced-motion: reduce/);
+  assert.match(code, /animation: none !important/);
+  assert.match(code, /transition: none !important/);
+  assert.match(code, /\.targeting-hit, \.targeting-marker/);
+});
+
+test('UI-38 uses local Web Audio cues without external audio assets or authoritative state changes', () => {
+  assert.match(app, /function playUiCue\(kind = 'confirm'\)/);
+  assert.match(app, /window\.AudioContext \|\| window\.webkitAudioContext/);
+  assert.match(app, /function cueForResult\(result\)/);
+  assert.match(app, /playUiCue\(cueForResult\(result\)\)/);
+  assert.match(app, /playUiCue\('confirm'\)/);
+  assert.doesNotMatch(app, /new Audio\(['"]https?:\/\//);
+});

@@ -4157,3 +4157,68 @@ body.game-active .final-results-art {
   body.game-active .assault-preview::before { height: 58px; }
   body.game-active .final-results-art { height: 104px; }
 }
+
+
+/* UI-38 — motion and audio polish. Motion never gates interaction. */
+@media (max-width: 900px) and (prefers-reduced-motion: no-preference) {
+  body.game-active.object-sheet-open .object-sheet {
+    animation: ui-sheet-in 180ms cubic-bezier(.2,.8,.2,1) both;
+  }
+  body.game-active.decision-layer-open .decision-card {
+    animation: ui-card-in 170ms ease-out both;
+  }
+  body.game-active.result-layer-open .result-card {
+    animation: ui-result-in 210ms cubic-bezier(.18,.85,.25,1) both;
+  }
+  body.game-active.event-flow-open .event-flow-overlay {
+    animation: ui-event-in 180ms ease-out both;
+  }
+  body.game-active .game-toast {
+    animation: ui-toast-in 160ms ease-out both;
+  }
+  body.game-active .navigation-hit:not(:disabled) {
+    animation: ui-route-breathe 1.35s ease-in-out infinite alternate;
+  }
+  body.game-active .navigation-hit.legendary-destination,
+  body.game-active .navigation-hit.expedition-destination {
+    animation-duration: .9s;
+  }
+  body.game-active .mapBoard.move-pending,
+  body.game-active #mapBoard.move-pending {
+    transition: filter 120ms ease;
+    filter: saturate(.82) brightness(.92);
+  }
+}
+
+@keyframes ui-sheet-in {
+  from { opacity: .7; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes ui-card-in {
+  from { opacity: 0; transform: translateY(8px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ui-result-in {
+  from { opacity: 0; transform: translateY(14px) scale(.97); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ui-event-in {
+  from { opacity: 0; transform: translateY(-7px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ui-toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ui-route-breathe {
+  from { box-shadow: inset 0 0 0 1px rgba(105,213,231,.12); }
+  to { box-shadow: inset 0 0 0 2px rgba(105,213,231,.36), 0 0 12px rgba(105,213,231,.16); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.game-active :where(.object-sheet, .decision-card, .result-card, .event-flow-overlay, .game-toast, .navigation-hit, .targeting-hit, .targeting-marker) {
+    animation: none !important;
+    transition: none !important;
+  }
+  body.game-active #mapBoard.move-pending { transition: none !important; }
+}
