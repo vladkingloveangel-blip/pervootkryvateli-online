@@ -4782,3 +4782,23 @@ body.game-active .final-results-art {
     box-shadow: none;
   }
 }
+
+
+/* UI-40 HUD overlay correction — no visual plate behind upper gameplay controls */
+@media (max-width: 900px) {
+  body.game-active .game-hud {
+    background: none !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+
+  body.game-active .hud-player,
+  body.game-active .hud-turn,
+  body.game-active .hud-chip {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+}
