@@ -1890,10 +1890,19 @@ function applyBoardingLoss(player, upgradeId) {
   return { ok: true, id, name, cargoDiscarded, stats: shipStats(player) };
 }
 
+const STORM_DESTINATIONS = Object.freeze({
+  renaika: Object.freeze({ row: 4, col: 5 }),
+  kadingir: Object.freeze({ row: 0, col: 24 }),
+  landin: Object.freeze({ row: 9, col: 17 }),
+});
+
 function stormCellOptions(room, player, islandId) {
   const island = room?.islands?.find(i => i.id === islandId);
-  if (!island) return [];
-  return (island.cells || []).filter(([row, col]) => navigationAllowsHazards(player, hazardsAt(row, col))).map(([row, col]) => ({ row, col }));
+  const destination = STORM_DESTINATIONS[islandId];
+  if (!island || !destination) return [];
+  const belongsToIsland = (island.cells || []).some(([row, col]) => row === destination.row && col === destination.col);
+  if (!belongsToIsland || !navigationAllowsHazards(player, hazardsAt(destination.row, destination.col))) return [];
+  return [{ ...destination }];
 }
 
 function creditDucats(player, amount) {
@@ -2969,6 +2978,7 @@ function shipStats(player) {
     army: base.army + levelDef.statBonus,
     cargo: base.cargo + levelDef.statBonus,
     moveMod: base.moveMod + levelDef.moveBonus,
+    actionsPerTurn: (Number(BALANCE.session.actionsPerTurn) || 3) + (Number(levelDef.actionBonus) || 0),
   };
   for (const id of activeUpgradeIds(player)) {
     const u = SHIP_UPGRADES[id];
