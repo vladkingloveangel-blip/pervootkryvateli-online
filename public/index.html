@@ -269,8 +269,10 @@
                 <div id="mapContextActions" class="map-context-actions"></div>
               </div>
             </div>
-            <div id="mapBoard" class="map-board canonical-map-art">
-              <div id="mapArtLayer" class="map-art-layer" aria-hidden="true">
+            <div id="mapPanSurface" class="map-pan-surface">
+              <canvas id="mapOceanCanvas" class="map-ocean-canvas" aria-hidden="true"></canvas>
+              <div id="mapBoard" class="map-board canonical-map-art">
+                <div id="mapArtLayer" class="map-art-layer" aria-hidden="true">
                 <img id="mapBaseArt" class="map-base-art" src="/assets/map-base-4096.webp" alt="" draggable="false" />
               </div>
               <div id="gridLayer" class="grid-layer" aria-hidden="true"></div>
@@ -284,6 +286,7 @@
                 <strong id="mapInfoTitle">—</strong>
                 <div id="mapInfoMeta" class="map-info-meta"></div>
                 <button id="mapInfoAction" class="primary small hidden" type="button">Открыть действия</button>
+                </div>
               </div>
             </div>
           </div>
@@ -573,6 +576,7 @@
   </main>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/ocean.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
