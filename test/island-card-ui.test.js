@@ -39,14 +39,18 @@ test('foreign islands keep politics and assault as separate entry points', () =>
   assert.ok(block.includes('Свободный остров переходит под контроль автоматически'));
 });
 
-test('cargo action is placed near the top without a duplicated intro card', () => {
+test('all island action screens place their controls directly under one hint', () => {
   const start = app.indexOf('function renderOwnIslandActionView');
   const end = app.indexOf('function handleObjectSheetBack', start);
   const block = app.slice(start, end);
-  assert.ok(block.includes('id="islandCargoPrimaryActions"'));
-  assert.ok(block.includes("view === 'cargo' ? $('islandCargoPrimaryActions') : actions"));
+  assert.ok(block.includes('id="islandPrimaryActions"'));
   assert.ok(block.includes('class="island-action-hint"'));
-  assert.ok(styles.includes('.island-cargo-primary-actions'));
+  assert.ok(block.includes("moveCanonicalActionGroup($('islandActions'), labels[view], primaryActions)"));
+  assert.ok(block.includes("moveCanonicalActionGroup($('fleetActions'), 'Рота ландскнехтов', primaryActions)"));
+  assert.ok(block.includes("moveCanonicalActionGroup($('fleetActions'), 'Персонаж Адмиралтейства', primaryActions)"));
+  assert.equal(app.includes('function islandActionIntroHtml('), false);
+  assert.ok(styles.includes('.island-primary-actions'));
+  assert.equal(styles.includes('.island-cargo-primary-actions'), false);
 });
 
 test('open island screen survives authoritative room refreshes', () => {
