@@ -3367,3 +3367,98 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   body.game-active.score-overlay-open .mobile-game-nav,
   body.game-active.score-overlay-open .map-toolbar { pointer-events: none; }
 }
+
+
+/* UI-27 — journal and ambient notifications */
+.journal-overlay { display: none; }
+
+@media (max-width: 900px) {
+  body.game-active .journal-overlay {
+    position: absolute;
+    z-index: 111;
+    inset: 0;
+    display: grid;
+    align-items: end;
+    pointer-events: none;
+  }
+
+  body.game-active .journal-overlay.hidden { display: none !important; }
+
+  body.game-active .journal-overlay-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(2,15,20,.56);
+    backdrop-filter: blur(2px);
+    pointer-events: auto;
+  }
+
+  body.game-active .journal-overlay-card {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-height: min(82dvh, 740px);
+    display: grid;
+    grid-template-rows: auto minmax(0,1fr);
+    gap: 10px;
+    padding: 16px 14px calc(18px + env(safe-area-inset-bottom, 0px));
+    border: 1px solid rgba(240,196,91,.38);
+    border-bottom: 0;
+    border-radius: 18px 18px 0 0;
+    background: rgba(8,37,44,.985);
+    box-shadow: 0 -16px 42px rgba(0,0,0,.46);
+    pointer-events: auto;
+  }
+
+  body.game-active .journal-overlay-head {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  body.game-active .journal-overlay-head > div { display: grid; gap: 3px; }
+  body.game-active .journal-overlay-head span { color: var(--accent); font-size: 9px; font-weight: 900; letter-spacing: .09em; }
+  body.game-active .journal-overlay-head h2 { margin: 0; font-size: 20px; }
+  body.game-active .journal-overlay-head small { color: var(--muted); font-size: 10px; }
+
+  body.game-active .journal-overlay-body {
+    min-height: 0;
+    overflow-y: auto;
+    display: grid;
+    align-content: start;
+    gap: 7px;
+  }
+
+  body.game-active .journal-entry {
+    display: grid;
+    grid-template-columns: 42px 1fr;
+    gap: 2px 8px;
+    padding: 8px 9px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(255,255,255,.025);
+  }
+
+  body.game-active .journal-entry > span {
+    grid-row: 1 / 3;
+    color: var(--muted);
+    font-size: 9px;
+  }
+
+  body.game-active .journal-entry > strong { font-size: 11px; }
+  body.game-active .journal-entry > small { color: var(--muted); font-size: 9px; line-height: 1.35; }
+  body.game-active .journal-success { border-color: rgba(106,211,156,.32); }
+  body.game-active .journal-danger { border-color: rgba(239,119,119,.38); }
+  body.game-active .journal-empty { color: var(--muted); font-size: 11px; padding: 12px 2px; }
+
+  body.game-active.journal-overlay-open .game-action-bar,
+  body.game-active.journal-overlay-open .mobile-game-nav,
+  body.game-active.journal-overlay-open .map-toolbar { pointer-events: none; }
+
+  body.game-active .game-toast {
+    max-width: 330px;
+    justify-self: center;
+    font-size: 11px;
+    opacity: .96;
+  }
+}

@@ -1,7 +1,7 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '', resultQueue: [], activeResult: null, toastQueue: [], targeting: null };
+  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '', resultQueue: [], activeResult: null, toastQueue: [], journalEntries: [], ambientSnapshot: null, targeting: null };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
   const shipName = id => state.room?.shipCatalog?.[id]?.name || state.shipCatalog?.[id]?.name || $('shipSelect').querySelector(`option[value="${id}"]`)?.textContent || 'Корабль';
   fetch('/api/rules').then(response => response.ok ? response.json() : null).then(rules => {
@@ -75,6 +75,7 @@
   function openGameMenu() {
     if (!document.body.classList.contains('game-active') || !state.room) return;
     closeScoreOverlay();
+    closeJournalOverlay();
     closeGameAccountMenu();
     closeMapInfo();
     $('gameMenuPanel').classList.remove('hidden');
@@ -473,6 +474,8 @@
     state.resultQueue = [];
     state.activeResult = null;
     state.toastQueue = [];
+    state.journalEntries = [];
+    state.ambientSnapshot = null;
     state.targeting = null;
     closeMapInfo();
     openMobileTab('map');
@@ -540,6 +543,7 @@
 
   socket.on('roomState', room => {
     if (state.spectating) return;
+    processAmbientRoomState(room);
     state.room = room;
     if (room?.shipCatalog) state.shipCatalog = room.shipCatalog;
     const incomingMine = room?.players?.find(p => p.id === state.myId);
@@ -776,6 +780,8 @@
   });
   $('scoreOverlayCloseBtn').addEventListener('click', closeScoreOverlay);
   $('scoreOverlay').querySelector('.score-overlay-backdrop').addEventListener('click', closeScoreOverlay);
+  $('journalOverlayCloseBtn').addEventListener('click', closeJournalOverlay);
+  $('journalOverlay').querySelector('.journal-overlay-backdrop').addEventListener('click', closeJournalOverlay);
 
   $('startBtn').addEventListener('click', () => {
     $('startBtn').disabled = true;
@@ -937,12 +943,6 @@
         + escapeHtml(island.status || '—') + ' · площадь ' + (island.usedArea ?? 0) + '/'
         + (island.effectiveArea ?? island.area ?? 0) + '</span></div>'
       ).join('') || '<div class="menu-note">У вас пока нет островов.</div>';
-    } else if (kind === 'journal') {
-      $('objectSheetTitle').textContent = 'Журнал';
-      const entries = (room.log || []).slice(-30).reverse();
-      body.innerHTML = entries.map(entry =>
-        '<div class="menu-journal-row">' + escapeHtml(entry.text || String(entry)) + '</div>'
-      ).join('') || '<div class="menu-note">Журнал пока пуст.</div>';
     } else if (kind === 'help') {
       $('objectSheetTitle').textContent = 'Справка';
       body.innerHTML = '<div class="menu-help-block"><strong>Карта</strong><span>Основное игровое пространство. Нажимайте на острова, корабли, якоря и другие объекты.</span></div>'
@@ -971,6 +971,10 @@
   function handleGameMenuAction(kind) {
     if (kind === 'metrics') {
       renderScoreOverlay();
+      return;
+    }
+    if (kind === 'journal') {
+      renderJournalOverlay();
       return;
     }
     if (kind === 'diplomacy') {
@@ -1769,6 +1773,72 @@
     setCopy('ОЖИДАНИЕ', 'Состояние обновляется', 'Ожидаем следующего шага партии.');
   }
 
+  function recordJournal(message, tone = 'neutral', detail = '') {
+    if (!message) return;
+    const entry = { id: `${Date.now()}:${Math.random()}`, at: Date.now(), message: String(message), detail: detail ? String(detail) : '', tone };
+    state.journalEntries.push(entry);
+    if (state.journalEntries.length > 120) state.journalEntries.splice(0, state.journalEntries.length - 120);
+  }
+
+  function renderJournalOverlay() {
+    closeGameMenu();
+    closeMapInfo();
+    const body = $('journalOverlayBody');
+    body.innerHTML = '';
+    const entries = state.journalEntries.slice().reverse();
+    if (!entries.length) {
+      body.innerHTML = '<div class="journal-empty">Пока нет событий, показанных этому игроку в текущей сессии.</div>';
+    } else {
+      for (const entry of entries) {
+        const row = document.createElement('article');
+        row.className = `journal-entry journal-${entry.tone}`;
+        const time = new Date(entry.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        row.innerHTML = `<span>${escapeHtml(time)}</span><strong>${escapeHtml(entry.message)}</strong>${entry.detail ? `<small>${escapeHtml(entry.detail)}</small>` : ''}`;
+        body.appendChild(row);
+      }
+    }
+    $('journalOverlay').classList.remove('hidden');
+    document.body.classList.add('journal-overlay-open');
+  }
+
+  function closeJournalOverlay() {
+    $('journalOverlay')?.classList.add('hidden');
+    document.body.classList.remove('journal-overlay-open');
+  }
+
+  function processAmbientRoomState(room) {
+    if (!room?.started || room.finished || room.phase === 'finished') {
+      state.ambientSnapshot = room ? { round: room.round, circle: room.circle, activePlayerId: room.activePlayerId, eventActive: Boolean(room.eventPhase?.active), eventPlayerId: room.eventPhase?.currentPlayerId || null } : null;
+      return;
+    }
+    const next = { round: room.round, circle: room.circle, activePlayerId: room.activePlayerId, eventActive: Boolean(room.eventPhase?.active), eventPlayerId: room.eventPhase?.currentPlayerId || null };
+    const prev = state.ambientSnapshot;
+    state.ambientSnapshot = next;
+    if (!prev) return;
+    if (next.round !== prev.round) {
+      const message = `Начался раунд ${next.round}`;
+      recordJournal(message);
+      enqueueToast(message, 'neutral', false);
+      return;
+    }
+    if (next.circle !== prev.circle) {
+      const message = `Круг ${next.circle}`;
+      recordJournal(message);
+      enqueueToast(message, 'neutral', false);
+    }
+    if (next.eventActive && (!prev.eventActive || next.eventPlayerId !== prev.eventPlayerId)) {
+      const player = room.players?.find(item => item.id === next.eventPlayerId);
+      const message = player ? `События: ${player.name}` : 'Фаза событий';
+      recordJournal(message);
+      enqueueToast(message, 'neutral', false);
+    } else if (!next.eventActive && next.activePlayerId && next.activePlayerId !== prev.activePlayerId) {
+      const player = room.players?.find(item => item.id === next.activePlayerId);
+      const message = player ? `Ход: ${player.name}` : 'Следующий ход';
+      recordJournal(message);
+      enqueueToast(message, 'neutral', false);
+    }
+  }
+
   function enqueueResultCard(result) {
     if (!result || !result.title) return;
     const entry = {
@@ -1779,15 +1849,17 @@
       tone: result.tone || 'neutral',
     };
     state.resultQueue.push(entry);
+    recordJournal(entry.title, entry.tone, entry.body);
     if (state.resultQueue.length > 5) state.resultQueue.splice(0, state.resultQueue.length - 5);
     // Do not render immediately from the ack callback. The next authoritative
     // roomState render gets first chance to expose a higher-priority Decision Layer.
   }
 
-  function enqueueToast(message, tone = 'neutral') {
+  function enqueueToast(message, tone = 'neutral', journal = true) {
     if (!message) return;
     const toast = { id: `${Date.now()}:${Math.random()}`, message: String(message), tone };
     state.toastQueue.push(toast);
+    if (journal) recordJournal(toast.message, toast.tone);
     if (state.toastQueue.length > 4) state.toastQueue.splice(0, state.toastQueue.length - 4);
     renderToastStack();
     setTimeout(() => {

@@ -1332,3 +1332,44 @@ test('UI-26 menu metrics entry opens the dedicated overlay', () => {
   assert.match(code, /kind === 'metrics'/);
   assert.match(code, /renderScoreOverlay\(\)/);
 });
+
+
+test('UI-27 adds a viewer-safe journal overlay instead of exposing raw room.log', () => {
+  assert.match(index, /id="journalOverlay" class="journal-overlay hidden"/);
+  assert.match(index, /id="journalOverlayBody"/);
+  assert.match(app, /function renderJournalOverlay\(\)/);
+  assert.match(app, /function recordJournal\(/);
+  assert.match(styles, /UI-27 — journal and ambient notifications/);
+  const start = app.indexOf('  function renderJournalOverlay()');
+  const end = app.indexOf('\n  function closeJournalOverlay()', start);
+  const code = app.slice(start, end);
+  assert.doesNotMatch(code, /room\.log/);
+});
+
+test('UI-27 journal records result cards and lightweight toasts already visible to the viewer', () => {
+  const resultStart = app.indexOf('  function enqueueResultCard(');
+  const toastStart = app.indexOf('  function enqueueToast(', resultStart);
+  const toastEnd = app.indexOf('\n  function renderToastStack()', toastStart);
+  assert.match(app.slice(resultStart, toastStart), /recordJournal\(entry\.title, entry\.tone, entry\.body\)/);
+  assert.match(app.slice(toastStart, toastEnd), /if \(journal\) recordJournal\(toast\.message, toast\.tone\)/);
+});
+
+test('UI-27 ambient notifications use only public projected turn state and do not infer hidden mechanics', () => {
+  const start = app.indexOf('  function processAmbientRoomState(');
+  const end = app.indexOf('\n  function enqueueResultCard(', start);
+  const code = app.slice(start, end);
+  assert.match(code, /room\.round/);
+  assert.match(code, /room\.circle/);
+  assert.match(code, /room\.activePlayerId/);
+  assert.match(code, /room\.eventPhase\?\.active/);
+  assert.match(code, /room\.eventPhase\?\.currentPlayerId/);
+  assert.doesNotMatch(code, /room\.log|pendingAssignment|pendingFeud|hidden|ducats|garrison/);
+});
+
+test('UI-27 menu journal entry opens the dedicated journal overlay', () => {
+  const start = app.indexOf('  function handleGameMenuAction(kind)');
+  const end = app.indexOf('\n  const MOBILE_TAB_TITLES', start);
+  const code = app.slice(start, end);
+  assert.match(code, /kind === 'journal'/);
+  assert.match(code, /renderJournalOverlay\(\)/);
+});

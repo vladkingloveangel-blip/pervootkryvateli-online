@@ -434,6 +434,17 @@
         <button id="targetingCancelBtn" type="button">Отмена</button>
       </section>
 
+      <section id="journalOverlay" class="journal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="journalOverlayTitle">
+        <div class="journal-overlay-backdrop" aria-hidden="true"></div>
+        <div class="journal-overlay-card">
+          <div class="journal-overlay-head">
+            <div><span>ЖУРНАЛ</span><h2 id="journalOverlayTitle">Ход партии</h2><small>Только события, уже доступные этому игроку.</small></div>
+            <button id="journalOverlayCloseBtn" class="small" type="button" aria-label="Закрыть журнал">✕</button>
+          </div>
+          <div id="journalOverlayBody" class="journal-overlay-body"></div>
+        </div>
+      </section>
+
       <section id="scoreOverlay" class="score-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="scoreOverlayTitle">
         <div class="score-overlay-backdrop" aria-hidden="true"></div>
         <div class="score-overlay-card">
