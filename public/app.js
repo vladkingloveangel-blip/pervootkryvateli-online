@@ -1,7 +1,7 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '', resultQueue: [], activeResult: null, toastQueue: [], journalEntries: [], ambientSnapshot: null, targeting: null };
+  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '', resultQueue: [], activeResult: null, toastQueue: [], journalEntries: [], ambientSnapshot: null, targeting: null, rehydrateOnNextRoomState: false };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
   const shipName = id => state.room?.shipCatalog?.[id]?.name || state.shipCatalog?.[id]?.name || $('shipSelect').querySelector(`option[value="${id}"]`)?.textContent || 'Корабль';
   fetch('/api/rules').then(response => response.ok ? response.json() : null).then(rules => {
@@ -292,6 +292,7 @@
         button.addEventListener('click', () => {
           if (!state.socketConnected) return setError('myGamesError', 'Нет связи с сервером. Дождись подключения.');
           button.disabled = true;
+          state.rehydrateOnNextRoomState = true;
           socket.timeout(15000).emit('resumeRoom', { code: room.code, accountToken: state.accountToken }, (err, res) => {
             button.disabled = false;
             if (token !== state.accountToken) return;
@@ -365,6 +366,7 @@
     try {
       const sess = JSON.parse(localStorage.getItem(keyFor(last)) || 'null');
       if (sess?.code && sess?.playerToken) {
+        state.rehydrateOnNextRoomState = true;
         socket.emit('resumeRoom', { ...sess, accountToken: state.accountToken }, res => {
           if (res?.ok) {
             acceptSession(res);
@@ -459,6 +461,35 @@
     if (state.code) localStorage.setItem('pervo:lastRoom', state.code);
   }
 
+  function resetTransientPresentationState() {
+    state.selectedIslandId = null;
+    state.mapSelection = null;
+    state.mistCardRef = null;
+    state.characterPeek = '';
+    state.mapMovePending = false;
+    state.lastAutoCenterSignature = '';
+    state.targeting = null;
+    state.resultQueue = [];
+    state.activeResult = null;
+    state.toastQueue = [];
+
+    if (typeof closeGameMenu === 'function') closeGameMenu();
+    if (typeof closeGameAccountMenu === 'function') closeGameAccountMenu();
+    if (typeof closeScoreOverlay === 'function') closeScoreOverlay();
+    if (typeof closeJournalOverlay === 'function') closeJournalOverlay();
+    if (typeof closeEndGameVoteOverlay === 'function') closeEndGameVoteOverlay();
+    if (typeof closeMapInfo === 'function') closeMapInfo();
+
+    $('decisionLayer')?.classList.add('hidden');
+    $('resultLayer')?.classList.add('hidden');
+    $('targetingBar')?.classList.add('hidden');
+    $('eventFlowOverlay')?.classList.add('hidden');
+    document.body?.classList?.remove(
+      'decision-layer-open', 'result-layer-open', 'object-sheet-open', 'targeting-open',
+      'mobile-sheet-open', 'score-overlay-open', 'journal-overlay-open', 'end-game-vote-open'
+    );
+  }
+
   function setError(id, msg = '') { $(id).textContent = msg; }
   function setConnected(yes) { $('connection').textContent = yes ? '● онлайн' : '○ нет связи'; }
 
@@ -478,6 +509,7 @@
     state.journalEntries = [];
     state.ambientSnapshot = null;
     state.targeting = null;
+    state.rehydrateOnNextRoomState = false;
     closeMapInfo();
     openMobileTab('map');
     setGameScreenActive(false);
@@ -508,6 +540,7 @@
     setConnected(false);
     state.socketConnected = false;
     state.resumeAttempted = false;
+    state.rehydrateOnNextRoomState = Boolean(state.code || state.room);
     document.body.classList.add('connection-lost');
     showConnectionBanner('Связь потеряна. Переподключаемся автоматически…', 'warning');
   });
@@ -544,6 +577,13 @@
 
   socket.on('roomState', room => {
     if (state.spectating) return;
+    const rehydrating = state.rehydrateOnNextRoomState
+      || !state.room
+      || (state.room?.code && room?.code && state.room.code !== room.code);
+    if (rehydrating) {
+      resetTransientPresentationState();
+      state.rehydrateOnNextRoomState = false;
+    }
     processAmbientRoomState(room);
     state.room = room;
     if (room?.shipCatalog) state.shipCatalog = room.shipCatalog;
@@ -575,6 +615,11 @@
 
   function acceptSession(res) {
     state.spectating = false;
+    const sameSession = state.code === res.code && state.myId === res.playerId && Boolean(state.room);
+    if (sameSession || state.rehydrateOnNextRoomState) {
+      state.rehydrateOnNextRoomState = true;
+      resetTransientPresentationState();
+    }
     document.body.classList.remove('spectator-mode');
     $('spectatorBanner').classList.add('hidden');
     $('adminPanel').classList.add('hidden');
@@ -584,7 +629,7 @@
     openMobileTab('map');
     setGameScreenActive(true);
     saveSession();
-    if (state.room) render();
+    if (state.room && !state.rehydrateOnNextRoomState) render();
     $('entry').classList.add('hidden');
     $('game').classList.remove('hidden');
     try {
@@ -691,6 +736,7 @@
     $('authPanel').classList.add('hidden');
 
     if (state.code && state.playerToken) {
+      state.rehydrateOnNextRoomState = true;
       socket.emit('resumeRoom', { code: state.code, playerToken: state.playerToken, accountToken: state.accountToken }, res => {
         if (res?.ok) {
           acceptSession(res);

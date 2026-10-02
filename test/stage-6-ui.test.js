@@ -1519,3 +1519,57 @@ test('UI-30 roomState reconnect returns directly to lobby state before game star
   assert.match(app, /renderLobbyShell\(\);\s*renderMobileHud\(\);/);
   assert.match(app, /game\.classList\.toggle\('lobby-state', lobby\)/);
 });
+
+
+test('UI-31 marks reconnect for authoritative rehydration instead of trusting stale local room state', () => {
+  assert.match(app, /rehydrateOnNextRoomState: false/);
+  assert.match(app, /socket\.on\('disconnect',[\s\S]*?state\.rehydrateOnNextRoomState = Boolean\(state\.code \|\| state\.room\)/);
+  assert.match(app, /socket\.on\('roomState', room =>[\s\S]*?const rehydrating = state\.rehydrateOnNextRoomState/);
+  assert.match(app, /if \(rehydrating\) \{[\s\S]*?resetTransientPresentationState\(\)/);
+  assert.match(app, /state\.rehydrateOnNextRoomState = false/);
+});
+
+test('UI-31 clears only transient presentation state before rebuilding critical UI from roomState', () => {
+  const start = app.indexOf('  function resetTransientPresentationState()');
+  const end = app.indexOf('\n  function setError(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  for (const token of [
+    'state.selectedIslandId = null',
+    'state.mapSelection = null',
+    'state.mistCardRef = null',
+    "state.characterPeek = ''",
+    'state.mapMovePending = false',
+    'state.targeting = null',
+    'state.resultQueue = []',
+    'state.activeResult = null',
+    'state.toastQueue = []',
+  ]) assert.ok(code.includes(token), token);
+  assert.match(code, /decisionLayer/);
+  assert.match(code, /resultLayer/);
+  assert.match(code, /targetingBar/);
+  assert.match(code, /eventFlowOverlay/);
+  assert.doesNotMatch(code, /state\.room = null|state\.myId = null|state\.playerToken = null/);
+});
+
+test('UI-31 resume paths wait for a fresh authoritative snapshot before rendering stale room memory', () => {
+  assert.match(app, /state\.rehydrateOnNextRoomState = true;\s*socket\.timeout\(15000\)\.emit\('resumeRoom'/);
+  assert.match(app, /state\.rehydrateOnNextRoomState = true;\s*socket\.emit\('resumeRoom', \{ \.\.\.sess/);
+  assert.match(app, /if \(state\.room && !state\.rehydrateOnNextRoomState\) render\(\)/);
+});
+
+test('UI-31 critical server-pending flows remain reconstructed in render after rehydration', () => {
+  const start = app.indexOf('  function render() {');
+  const end = app.indexOf('\n  function renderGameRoster()', start);
+  const code = app.slice(start, end);
+  assert.match(code, /refreshOpenSeaBattleFlow\(\)/);
+  assert.match(code, /refreshOpenAssaultFlow\(\)/);
+  assert.match(code, /renderEventFlowOverlay\(\)/);
+  assert.match(code, /renderDecisionLayer\(\)/);
+  assert.match(code, /renderEndGame\(\)/);
+  assert.match(code, /if \(r\.finished \|\| r\.phase === 'finished'\) return/);
+});
+
+test('UI-31 refresh does not attempt to restore voluntary targeting or object sheets from localStorage', () => {
+  assert.doesNotMatch(app, /localStorage\.(?:getItem|setItem)\([^\n]*(?:targeting|mapSelection|selectedIslandId|activeResult|resultQueue)/);
+});
