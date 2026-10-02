@@ -208,7 +208,7 @@ function projectEventPhaseForViewer(phase, viewerContext=null){
 function projectRoomForViewer(roomView, viewerContext=null){
   if(!roomView || typeof roomView!=='object' || Array.isArray(roomView)) return {};
   const c=ctx(viewerContext), out={};
-  for(const key of 'version code started hostId leaderId round circle turnIndex activePlayerId finished phase'.split(' ')) put(out,roomView,key,S);
+  for(const key of 'version code started hostId round circle turnIndex activePlayerId finished phase'.split(' ')) put(out,roomView,key,S);
   for(const key of ['seatingOrder','order']) put(out,roomView,key,a(S));
   for(const [key,schema] of [['eventPhase',eventPhase],['treasurePool',pool],['legendaryPool',pool],['legendaryPlaces',a(legendaryPlace)],['namedPlaceCards',a(namedPlace)],['alliances',a(a(S))],['pendingBattle',battle],['pendingAlliance',alliance],['endGameConsensus',endGameConsensus],['finalResult',finalResult],['characterCatalog',characterCatalog],['buildingCatalog',simpleCatalog],['goodsCatalog',simpleCatalog],['shipUpgradeCatalog',simpleCatalog]]) put(out,roomView,key,schema);
   projectPersonalPendingFamilies(out,roomView,c);
