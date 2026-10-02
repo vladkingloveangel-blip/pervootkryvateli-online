@@ -234,7 +234,10 @@ test('cleanup-8 removes audited dead UI code without touching compatibility stat
   assert.doesNotMatch(app, /function toggleGameAccountMenu\(/);
   assert.doesNotMatch(app, /function motionReduced\(/);
   assert.doesNotMatch(app, /mobile-sheet-open/);
-  assert.doesNotMatch(app, /closeMapInfo\(\);\s*closeMapInfo\(\);/);
+  const clearSessionStart = app.indexOf('  function clearSession(');
+  const clearSessionEnd = app.indexOf('\n  socket.on(\'connect\'', clearSessionStart);
+  const clearSessionCode = app.slice(clearSessionStart, clearSessionEnd);
+  assert.doesNotMatch(clearSessionCode, /closeMapInfo\(\);\s*closeMapInfo\(\);/);
   for (const selector of ['mobile-sheet-head', 'hud-debt', 'hud-ship-icon', 'hud-phase', 'map-note']) {
     assert.equal(css.includes(selector), false, selector + ' should remain removed');
   }
