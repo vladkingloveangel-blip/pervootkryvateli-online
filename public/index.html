@@ -160,18 +160,28 @@
             <small id="hudShipLevel">ур. I</small>
           </span>
         </button>
-        <div id="hudResources" class="hud-resources">
-          <button class="hud-chip" id="hudDucatsBtn" type="button" aria-label="Дукаты"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#coin"></use></svg></span><strong id="hudDucats">0</strong></button>
-          <button class="hud-chip" id="hudGloryBtn" type="button" aria-label="Слава"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#glory"></use></svg></span><strong id="hudGlory">0</strong></button>
-          <button class="hud-chip" id="hudArmyBtn" type="button" aria-label="Войско"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#army"></use></svg></span><strong id="hudArmy">0</strong></button>
-          <button class="hud-chip" id="hudArtilleryBtn" type="button" aria-label="Артиллерия"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#cannon"></use></svg></span><strong id="hudArtillery">0</strong></button>
-          <button class="hud-chip" id="hudCargoBtn" type="button" aria-label="Трюм"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#cargo"></use></svg></span><strong id="hudCargo">0/0</strong></button>
+        <div id="hudResources" class="hud-resources" aria-label="Показатели игрока">
+          <button class="hud-chip" id="hudDucatsBtn" type="button" data-hud-metric="ducats" aria-label="Дукаты" aria-expanded="false"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#coin"></use></svg></span><strong id="hudDucats">0</strong></button>
+          <button class="hud-chip" id="hudCargoBtn" type="button" data-hud-metric="cargo" aria-label="Трюм" aria-expanded="false"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#cargo"></use></svg></span><strong id="hudCargo">0/0</strong></button>
+          <button class="hud-chip" id="hudArmyBtn" type="button" data-hud-metric="army" aria-label="Войско" aria-expanded="false"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#army"></use></svg></span><strong id="hudArmy">0</strong></button>
+          <button class="hud-chip" id="hudArtilleryBtn" type="button" data-hud-metric="artillery" aria-label="Артиллерия" aria-expanded="false"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#cannon"></use></svg></span><strong id="hudArtillery">0</strong></button>
+          <button class="hud-chip" id="hudArmyGloryBtn" type="button" data-hud-metric="army-glory" aria-label="Армейская слава" aria-expanded="false"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#army-glory"></use></svg></span><strong id="hudArmyGlory">0</strong></button>
+          <button class="hud-chip" id="hudFleetGloryBtn" type="button" data-hud-metric="fleet-glory" aria-label="Морская слава" aria-expanded="false"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#anchor"></use></svg></span><strong id="hudFleetGlory">0</strong></button>
+          <button class="hud-chip" id="hudPrestigeBtn" type="button" data-hud-metric="prestige" aria-label="Престиж" aria-expanded="false"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#glory"></use></svg></span><strong id="hudPrestige">0</strong></button>
         </div>
         <div id="hudTurnStatus" class="hud-turn hud-turn-status" aria-label="Раунд и круг партии">
           <small id="hudRound">Лобби</small>
           <strong id="hudCircle">—</strong>
         </div>
         <button id="hudMenuBtn" class="hud-menu-btn" type="button" aria-label="Меню"><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#menu"></use></svg></button>
+      </section>
+
+      <section id="hudMetricPopover" class="hud-metric-popover hidden" role="status" aria-live="polite">
+        <div class="hud-metric-popover-head">
+          <span id="hudMetricPopoverTitle">Показатель</span>
+          <strong id="hudMetricPopoverValue">0</strong>
+        </div>
+        <p id="hudMetricPopoverBody"></p>
       </section>
 
       <section class="status panel legacy-status">
