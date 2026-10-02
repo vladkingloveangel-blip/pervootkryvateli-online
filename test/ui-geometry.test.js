@@ -28,13 +28,18 @@ test('map player marker is centered on the authoritative cell center', () => {
   assert.doesNotMatch(css, /body\.game-active button:not\(\.map-object-hit\):not\(\.navigation-hit\):not\(\.targeting-hit\):not\(\.targeting-marker\):not\(\.cell-hit\):not\(\.token\):not\(\.game-action-button\)/);
 });
 
-test('compact map tools have explicit square geometry', () => {
+test('compact map tools match roster avatars and align beneath menu', () => {
   const block = css.match(/body\.game-active \.map-toolbar \.map-tool-icon \{([\s\S]*?)\n  \}/)?.[0] || '';
   assert.match(block, /width:\s*30px/);
   assert.match(block, /height:\s*30px/);
   assert.match(block, /min-width:\s*30px/);
   assert.match(block, /min-height:\s*30px/);
+  assert.match(block, /border-radius:\s*50%/);
   assert.match(block, /aspect-ratio:\s*1 \/ 1/);
+  assert.match(css, /\.roster-token \{[\s\S]*?width:\s*30px;[\s\S]*?height:\s*30px;/);
+  assert.match(css, /\.game-world-shell \.map-toolbar \{[\s\S]*?top:\s*55px;[\s\S]*?right:\s*15px;[\s\S]*?gap:\s*6px;/);
+  assert.match(css, /\.map-center-me \{\s*\n\s*order:\s*1;/);
+  assert.match(css, /\.map-zoom-control \{ order:\s*2; \}/);
 });
 
 
