@@ -4876,13 +4876,11 @@ body.game-active .game-hud .hud-menu-btn .ui-icon { width: 18.9px; height: 18.9p
 body.game-active .game-hud .hud-politics-chip > span:first-child { font-size: 90%; }
 
 
-/* UI-40 map token correction — circular marker centered on authoritative grid cell */
+/* UI-40 map token correction — preserve canonical cell positioning; only correct visual height */
 body.game-active .token {
   width: calc(100% / var(--map-cols, 28) * .576);
-  height: auto;
-  aspect-ratio: 1 / 1;
+  height: calc(100% / var(--map-rows, 28) * .576);
   min-height: 0;
-  transform: translate(-50%, -50%);
   box-sizing: border-box;
   border-radius: 50%;
 }
