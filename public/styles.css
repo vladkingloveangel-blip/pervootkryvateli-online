@@ -764,30 +764,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   body.game-active .hazard-marker { font-size: 16px; }
 }
 
-/* v0.28.1 — стабильная статичная карта; косметическая анимация отключена */
-.static-map-art .map-art-layer { background: #27b8cc; }
-.static-map-art .map-base-art {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-  filter: none;
-  opacity: 1;
-}
-.static-map-art .sea-motion-layer,
-.static-map-art .map-land-art,
-.static-map-art .map-sea-art { display: none !important; }
-
-/* В reference-арте сетка, подписи, якоря и препятствия уже нанесены.
-   Интерактивные hit-зоны продолжают работать поверх, но визуально не дублируются. */
-.static-map-art .grid-layer,
-.static-map-art .map-label-layer,
-.static-map-art .hazard-marker,
-.static-map-art .anchor-cell { display: none !important; }
-
 /* v0.29 — каноническая карта: арт отдельно, игровая разметка отдельно */
 .canonical-map-art .map-art-layer { background: #27b8cc; }
 .canonical-map-art .map-base-art {
