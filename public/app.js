@@ -1949,10 +1949,10 @@
     }
 
     if (mine.phase === 'navigation') {
-      bar.dataset.mode = 'navigation';
+      bar.dataset.mode = 'navigation-result';
       const destinations = (r.reachableCells || []).filter(cell => cell.row !== mine.row || cell.col !== mine.col);
       setCopy('НАВИГАЦИЯ', `Выпало ${mine.roll} · дальность ${mine.movePoints}`,
-        destinations.length ? `Выберите подсвеченную клетку · доступно: ${destinations.length}` : 'Доступных клеток нет.');
+        destinations.length ? `Выберите клетку · доступно: ${destinations.length}` : 'Доступных клеток нет.');
       addButton('Остаться здесь', () => socket.emit('skipNavigation', {}, handleGameAck));
       return;
     }
@@ -1962,7 +1962,7 @@
       const left = Math.max(0, Number(mine.actionsLeft) || 0);
       const actionLabel = left === 1 ? '1 действие' : left > 1 ? `${left} действия` : 'Нет действий';
       setCopy('', actionLabel,
-        left > 0 ? 'Выберите объект на карте или доступное действие.' : 'Завершите ход.');
+        left > 0 ? 'Выберите объект или действие.' : 'Завершите ход.');
       progress.classList.remove('hidden');
       const total = Number(r.balanceCatalog?.session?.actionsPerTurn) || 3;
       for (let i = 0; i < total; i += 1) {
