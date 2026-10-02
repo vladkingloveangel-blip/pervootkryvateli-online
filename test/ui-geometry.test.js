@@ -16,8 +16,9 @@ test('map player marker is centered on the authoritative cell center', () => {
   assert.match(app, /t\.style\.top = `calc\(\(\$\{p\.row\} \+ \.5\) \* 100% \/ \$\{rows\}/);
 
   const tokenBlock = css.match(/body\.game-active \.token \{([\s\S]*?)\n\}/g)?.at(-1) || '';
-  assert.match(tokenBlock, /width:\s*calc\(100% \/ var\(--map-cols, 28\) \* \.576\)/);
-  assert.match(tokenBlock, /height:\s*calc\(100% \/ var\(--map-rows, 28\) \* \.576\)/);
+  assert.match(tokenBlock, /width:\s*calc\(100% \/ var\(--map-cols, 28\) \* \.4608\)/);
+  assert.match(tokenBlock, /height:\s*auto/);
+  assert.match(tokenBlock, /aspect-ratio:\s*1 \/ 1/);
   assert.match(tokenBlock, /transform:\s*translate\(-50%, -50%\)/);
   assert.match(tokenBlock, /min-height:\s*0/);
 });
