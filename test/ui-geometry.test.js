@@ -259,7 +259,7 @@ test('animated fog is a decorative border outside the authoritative board', () =
   assert.doesNotMatch(fog, /socket\.emit|MAP_META|reachableCells|moveToMapCell/);
   assert.match(index, /id="mapOceanCanvas"[\s\S]*id="mapFogCanvas"[\s\S]*id="mapFogFallback"[\s\S]*id="mapBoard"/);
   assert.match(index, /<link rel="stylesheet" href="\/fog\.css" \/>/);
-  assert.match(index, /<script src="\/ocean\.js"><\/script>\s*<script src="\/fog\.js"><\/script>\s*<script src="\/app\.js"><\/script>/);
+  assert.match(index, /<script src="\\/ocean\\.js"><\\/script>\\s*<script src="\\/app\\.js"><\\/script>\\s*<script src="\\/fog\\.js"><\\/script>/);
   assert.match(fogCss, /\.map-fog-canvas \{[\s\S]*pointer-events:\s*none/);
   assert.match(fogCss, /\.map-fog-fallback \{[\s\S]*pointer-events:\s*none/);
   assert.match(fogCss, /\.map-pan-surface > \.map-board \{\s*z-index:\s*2/);
