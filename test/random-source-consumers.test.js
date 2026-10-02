@@ -52,7 +52,7 @@ test('Cartographer consumer reads the next encounter only through SeaEncounterSo
   assert.doesNotMatch(handler, /anchorDecks[\s\S]*drawPile/);
   assert.match(handler, /cartographerAnchorOptions\(p\)/);
   assert.match(handler, /character\.useActionCost/);
-  assert.match(handler, /consumeCharacter\(p, 'cartographer'\)/);
+  assert.match(handler, /consumeCharacter\(p, 'cartographer', room\.round\)/);
   assert.match(handler, /anchorName: option\.name, card: \{ name: card\.name, artillery: card\.artillery, reward: card\.reward, quiet: Boolean\(card\.quiet\) \}/);
 });
 
