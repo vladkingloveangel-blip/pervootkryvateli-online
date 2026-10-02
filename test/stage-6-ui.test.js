@@ -1607,3 +1607,184 @@ test('UI-32 retains legacy panel DOM only as internal canonical action hosts', (
   assert.match(app, /Existing renderers remain authoritative for legality, prices and socket payloads/);
   assert.match(app, /Existing event\/legendary renderers remain authoritative for all legality and payloads/);
 });
+
+
+test('UI-33 scenario: first turn navigation exposes canonical roll, stay and map movement commands', () => {
+  const start = app.indexOf('  function renderGameActionBar()');
+  const end = app.indexOf('\n  function recordJournal(', start);
+  assert.ok(start >= 0 && end > start);
+  const actionBar = app.slice(start, end);
+  assert.match(actionBar, /mine\.phase === 'navigation' && mine\.roll === null/);
+  assert.match(actionBar, /socket\.emit\('rollMove', \{\}, handleGameAck\)/);
+  assert.match(actionBar, /socket\.emit\('skipNavigation', \{\}, handleGameAck\)/);
+  assert.match(actionBar, /r\.reachableCells/);
+
+  const moveStart = app.indexOf('  function moveToMapCell(');
+  const moveEnd = app.indexOf('\n  function renderMapContext()', moveStart);
+  const move = app.slice(moveStart, moveEnd);
+  assert.match(move, /state\.mapMovePending = true/);
+  assert.match(move, /socket\.emit\('moveTo', \{ row: cell\.row, col: cell\.col \}/);
+  assert.match(move, /if \(res\?\.ok\) return/);
+
+  const mapStart = app.indexOf('  function renderMap()');
+  const mapEnd = app.indexOf('\n  function placeCell(', mapStart);
+  const map = app.slice(mapStart, mapEnd);
+  assert.match(map, /navigation-hit/);
+  assert.match(map, /b\.addEventListener\('click', \(\) => moveToMapCell\(cell\)\)/);
+});
+
+test('UI-33 scenario: action phase routes island, Citadel and combat through map-first flows', () => {
+  const start = app.indexOf('  function renderMapContext() {');
+  const end = app.indexOf('\n  function actionBarDecisionLabel', start);
+  const code = app.slice(start, end);
+  assert.match(code, /mine\.atCitadel/);
+  assert.match(code, /renderCitadelObjectSheet/);
+  assert.match(code, /renderOwnIslandObjectSheet/);
+  assert.match(code, /renderForeignIslandObjectSheet/);
+  assert.match(code, /renderPlayerObjectSheet/);
+  assert.match(code, /renderAnchorEncounterSheet/);
+  assert.match(code, /mine\.actionsLeft/);
+  assert.doesNotMatch(code, /openMobileTab|mobileGameNav|mobileActionDock/);
+});
+
+test('UI-33 scenario: trade and island management keep canonical action owners', () => {
+  const islandStart = app.indexOf('  function expandOwnIslandManagement(');
+  const islandEnd = app.indexOf('\n  function ', islandStart + 1);
+  const island = app.slice(islandStart, islandEnd);
+  assert.match(island, /renderIsland\(\)/);
+  assert.match(island, /moveCanonicalIslandActions/);
+
+  const citadelStart = app.indexOf('  function renderCitadelObjectSheet(');
+  const citadelEnd = app.indexOf('\n  function refreshOpenCitadelSheet', citadelStart);
+  const citadel = app.slice(citadelStart, citadelEnd);
+  assert.match(citadel, /renderFleet\(\)/);
+  assert.match(citadel, /renderTrade\(\)/);
+  assert.match(citadel, /moveCanonicalCitadelFleetActions/);
+  assert.match(citadel, /appendCanonicalCitadelTradeActions/);
+  assert.doesNotMatch(citadel, /socket\.emit\(/);
+});
+
+test('UI-33 scenario: character, Scout, assignment and expedition stay in their canonical private flows', () => {
+  const characterStart = app.indexOf('  function renderCharacterObjectSheet()');
+  const characterEnd = app.indexOf('\n  function refreshOpenCharacterSheet', characterStart);
+  const character = app.slice(characterStart, characterEnd);
+  assert.match(character, /if \(!mine \|\| state\.spectating\) return/);
+  assert.match(character, /renderFleet\(\)/);
+  assert.match(character, /moveCanonicalCharacterActions/);
+  assert.doesNotMatch(character, /socket\.emit\(/);
+
+  assert.match(app, /function beginScoutTargeting\(/);
+  assert.match(app, /socket\.emit\('useScout'/);
+  assert.match(app, /function renderGoalsObjectSheet\(\)/);
+  assert.match(app, /renderAssignments\(\)/);
+  assert.match(app, /renderLegendaryPlaces\(\)/);
+  assert.match(app, /moveCanonicalGoalActions/);
+});
+
+test('UI-33 scenario: event → feud → assignment is one server-driven mandatory sequence', () => {
+  const flowStart = app.indexOf('  function renderEventFlowOverlay()');
+  const flowEnd = app.indexOf('\n  function feudDecisionSceneHtml', flowStart);
+  const flow = app.slice(flowStart, flowEnd);
+  assert.match(flow, /room\.phase !== 'event'/);
+  assert.match(flow, /Событие/);
+  assert.match(flow, /Вражда/);
+  assert.match(flow, /Поручение/);
+  assert.match(flow, /eventFlowStageStatus/);
+
+  const decisionStart = app.indexOf('  function renderDecisionLayer()');
+  const decisionEnd = app.indexOf('\n  function ', decisionStart + 1);
+  const decision = app.slice(decisionStart, decisionEnd);
+  assert.match(decision, /mobileDecisionDescriptor\(state\.room\)/);
+  assert.match(decision, /if \(descriptor && state\.targeting\) state\.targeting = null/);
+  assert.match(decision, /if \(descriptor && state\.mapSelection\) closeMapInfo\(\)/);
+});
+
+test('UI-33 scenario: anchor, sea battle and assault use canonical actions then authoritative results', () => {
+  const anchorStart = app.indexOf('  function renderAnchorEncounterSheet(');
+  const anchorEnd = app.indexOf('\n  function refreshOpenAnchorSheet', anchorStart);
+  const anchor = app.slice(anchorStart, anchorEnd);
+  assert.match(anchor, /renderAnchors\(\)/);
+  assert.match(anchor, /moveCanonicalAnchorActions/);
+  assert.doesNotMatch(anchor, /socket\.emit\('fightAnchor'/);
+
+  const seaStart = app.indexOf('  function renderSeaBattleFlowSheet(');
+  const seaEnd = app.indexOf('\n  function refreshOpenSeaBattleFlow', seaStart);
+  const sea = app.slice(seaStart, seaEnd);
+  assert.match(sea, /renderCombat\(\)/);
+  assert.match(sea, /data\.combatKind === 'sea'|dataset\.combatKind === 'sea'/);
+  assert.doesNotMatch(sea, /socket\.emit\(/);
+
+  const assaultStart = app.indexOf('  function renderAssaultFlowSheet(');
+  const assaultEnd = app.indexOf('\n  function refreshOpenAssaultFlow', assaultStart);
+  const assault = app.slice(assaultStart, assaultEnd);
+  assert.match(assault, /renderCombat\(\)/);
+  assert.match(assault, /dataset\.combatKind === 'assault'/);
+  assert.doesNotMatch(assault, /socket\.emit\(/);
+
+  assert.match(app, /socket\.on\('battleResolved'/);
+  assert.match(app, /enqueueResult/);
+});
+
+test('UI-33 scenario: alliance proposal and response stay split between player sheet and Decision Layer', () => {
+  const playerStart = app.indexOf('  function renderPlayerObjectSheet(');
+  const playerEnd = app.indexOf('\n  function showPlayerMapInfo', playerStart);
+  const player = app.slice(playerStart, playerEnd);
+  assert.match(player, /appendCanonicalAllianceActions/);
+  assert.doesNotMatch(player, /socket\.emit\('proposeAlliance'|socket\.emit\('breakAlliance'/);
+
+  const descriptorStart = app.indexOf('  function mobileDecisionDescriptor(');
+  const descriptorEnd = app.indexOf('\n  function renderControls()', descriptorStart);
+  const descriptor = app.slice(descriptorStart, descriptorEnd);
+  assert.match(descriptor, /pendingAlliance/);
+  assert.match(descriptor, /allianceActions/);
+});
+
+test('UI-33 scenario: reconnect rebuilds mandatory flow from roomState and drops voluntary local presentation', () => {
+  const roomStart = app.indexOf("socket.on('roomState', room =>");
+  const roomEnd = app.indexOf("socket.on('adminRoomState'", roomStart);
+  const roomState = app.slice(roomStart, roomEnd);
+  assert.match(roomState, /resetTransientPresentationState\(\)/);
+  assert.match(roomState, /state\.room = room/);
+  assert.match(roomState, /render\(\)/);
+
+  const renderStart = app.indexOf('  function render() {');
+  const renderEnd = app.indexOf('\n  function renderGameRoster()', renderStart);
+  const render = app.slice(renderStart, renderEnd);
+  assert.match(render, /renderEventFlowOverlay\(\)/);
+  assert.match(render, /renderDecisionLayer\(\)/);
+  assert.match(render, /refreshOpenSeaBattleFlow\(\)/);
+  assert.match(render, /refreshOpenAssaultFlow\(\)/);
+  assert.match(render, /renderEndGame\(\)/);
+});
+
+test('UI-33 scenario: round transitions are ambient while finished state becomes canonical final screen', () => {
+  const ambientStart = app.indexOf('  function processAmbientRoomState(');
+  const ambientEnd = app.indexOf('\n  function ', ambientStart + 1);
+  const ambient = app.slice(ambientStart, ambientEnd);
+  assert.match(ambient, /next\.round !== prev\.round/);
+  assert.match(ambient, /Начался раунд/);
+  assert.match(ambient, /enqueueToast/);
+
+  const endStart = app.indexOf('  function renderEndGame()');
+  const endEnd = app.indexOf('\n  function renderMobileHud()', endStart);
+  const endGame = app.slice(endStart, endEnd);
+  assert.match(endGame, /r\?\.finished \|\| r\?\.phase === 'finished'/);
+  assert.match(endGame, /const result = r\.finalResult/);
+  assert.match(endGame, /result\.titles/);
+  assert.match(endGame, /result\.playerMetrics/);
+  assert.doesNotMatch(endGame, /winner|podium|overallWinner/i);
+});
+
+test('UI-33 scenario matrix covers every canonical mobile regression path', () => {
+  const source = fs.readFileSync(__filename, 'utf8');
+  for (const token of [
+    'first turn navigation',
+    'trade and island management',
+    'character, Scout, assignment and expedition',
+    'event → feud → assignment',
+    'anchor, sea battle and assault',
+    'alliance proposal and response',
+    'reconnect rebuilds mandatory flow',
+    'round transitions are ambient',
+  ]) assert.match(source, new RegExp(token.replace(/[.*+?^$\\{}()|[\]\\]/g, '\\$&')));
+});
