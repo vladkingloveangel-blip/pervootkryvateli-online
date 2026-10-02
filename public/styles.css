@@ -1010,7 +1010,7 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     max-height: none;
     border: 0;
     border-radius: 0;
-    background: #071f25;
+    background: #0795a5;
     overflow: auto;
     overscroll-behavior: contain;
   }
@@ -5227,5 +5227,20 @@ body.game-active .token {
   body.game-active .object-sheet,
   body.game-active .object-sheet.expanded {
     max-height: calc(100dvh - 154px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  }
+}
+
+
+/* MAP-2 seam fix: viewport itself is ocean; the pan buffer has no visible frame. */
+@media (max-width: 900px) {
+  body.game-active .game,
+  body.game-active .game-world-shell,
+  body.game-active .game-world-shell .map-column,
+  body.game-active .game-world-shell .map-viewport {
+    background: #0795a5;
+  }
+
+  body.game-active .map-pan-surface {
+    background: transparent;
   }
 }
