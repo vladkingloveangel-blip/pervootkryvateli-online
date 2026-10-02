@@ -32,3 +32,18 @@ test('compact map tools have explicit square geometry', () => {
   assert.match(block, /min-height:\s*30px/);
   assert.match(block, /aspect-ratio:\s*1 \/ 1/);
 });
+
+
+test('mobile information surfaces use the floating-window architecture', () => {
+  const canonical = css.slice(css.indexOf('/* UI-40 — staging visual normalization.'));
+  const objectWindow = canonical.match(/body\.game-active \.object-sheet \{([\s\S]*?)\n  \}/)?.[0] || '';
+  assert.match(objectWindow, /top:\s*calc\(72px \+ env\(safe-area-inset-top, 0px\)\)/);
+  assert.match(objectWindow, /left:\s*50%/);
+  assert.match(objectWindow, /width:\s*min\(390px, calc\(100vw - 24px\)\)/);
+  assert.match(objectWindow, /transform:\s*translateX\(-50%\)/);
+  assert.match(objectWindow, /border-radius:\s*16px/);
+  assert.doesNotMatch(objectWindow, /bottom:\s*0/);
+  assert.match(canonical, /body\.game-active \.object-sheet-handle,\s*\n\s*body\.game-active #objectSheetExpand \{\s*\n\s*display:\s*none !important/);
+  assert.match(canonical, /body\.game-active \.object-sheet\.expanded ~ \.game-action-bar:not\(\.hidden\)/);
+  assert.match(canonical, /body\.game-active \.score-overlay-card,\s*\n\s*body\.game-active \.journal-overlay-card,\s*\n\s*body\.game-active\.game-menu-open \.game-menu-panel/);
+});
