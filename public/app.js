@@ -1690,10 +1690,8 @@
     $('mapNavStayBtn').disabled = true;
     socket.emit('moveTo', { row: cell.row, col: cell.col }, res => {
       handleGameAck(res);
-      if (res?.ok) {
-        playUiCue('confirm');
-        return;
-      }
+      if (res?.ok) playUiCue('confirm');
+      if (res?.ok) return;
       state.mapMovePending = false;
       $('mapBoard').classList.remove('move-pending');
       renderMapNavigation();

@@ -1356,7 +1356,7 @@ test('UI-27 journal records result cards and lightweight toasts already visible 
 
 test('UI-27 ambient notifications use only public projected turn state and do not infer hidden mechanics', () => {
   const start = app.indexOf('  function processAmbientRoomState(');
-  const end = app.indexOf('\n  function enqueueResultCard(', start);
+  const end = app.indexOf('\n  let uiAudioContext', start);
   const code = app.slice(start, end);
   assert.match(code, /room\.round/);
   assert.match(code, /room\.circle/);
