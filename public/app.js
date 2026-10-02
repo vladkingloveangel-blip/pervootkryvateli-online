@@ -1,7 +1,7 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '', resultQueue: [], activeResult: null, toastQueue: [] };
+  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '', resultQueue: [], activeResult: null, toastQueue: [], targeting: null };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
   const shipName = id => state.room?.shipCatalog?.[id]?.name || state.shipCatalog?.[id]?.name || $('shipSelect').querySelector(`option[value="${id}"]`)?.textContent || 'Корабль';
   fetch('/api/rules').then(response => response.ok ? response.json() : null).then(rules => {
@@ -448,6 +448,7 @@
     state.resultQueue = [];
     state.activeResult = null;
     state.toastQueue = [];
+    state.targeting = null;
     closeMapInfo();
     openMobileTab('map');
     setGameScreenActive(false);
@@ -692,6 +693,7 @@
   $('resultContinueBtn').addEventListener('click', dismissResultCard);
   $('objectSheetClose').addEventListener('click', closeMapInfo);
   $('objectSheetExpand').addEventListener('click', toggleObjectSheetExpanded);
+  $('targetingCancelBtn').addEventListener('click', cancelTargeting);
   $('hudPlayerBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : openMobileTab('ship'));
   $('hudDucatsBtn').addEventListener('click', () => openMobileTab('ship'));
   $('hudGloryBtn').addEventListener('click', () => openMobileTab('players'));
@@ -1078,6 +1080,7 @@
     renderDecisionLayer();
     renderResultLayer();
     renderToastStack();
+    renderTargetingBar();
     renderMap();
     updateContextualActionPanels();
   }
@@ -1775,6 +1778,7 @@
     }
 
     const descriptor = mobileDecisionDescriptor(state.room);
+    if (descriptor && state.targeting) state.targeting = null;
     if (descriptor && state.mapSelection) closeMapInfo();
     layer.classList.toggle('hidden', !descriptor);
     document.body.classList.toggle('decision-layer-open', Boolean(descriptor));
@@ -2550,6 +2554,175 @@
     }
   }
 
+  function isMobileGameplayUi() {
+    return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
+  }
+
+  function scoutTargetOptions(mode) {
+    const mine = me();
+    if (!mine?.character || mine.character.id !== 'scout') return [];
+    const range = Math.max(0, Number(mine.character.effect?.range) || 4);
+    if (mode === 'scout-garrison') {
+      const islandDistance = island => Math.min(...(island.cells || []).map(([row, col]) => Math.abs(Number(mine.row) - Number(row)) + Math.abs(Number(mine.col) - Number(col))));
+      return (state.room?.islands || [])
+        .filter(island => island.ownerId && island.ownerId !== state.myId)
+        .map(island => ({ kind: 'island', id: island.id, name: island.name, data: island, distance: islandDistance(island) }))
+        .filter(target => Number.isFinite(target.distance) && target.distance <= range)
+        .sort((a, b) => a.distance - b.distance || String(a.name).localeCompare(String(b.name)));
+    }
+    if (mode === 'scout-money') {
+      return (state.room?.players || [])
+        .filter(player => player.id !== state.myId)
+        .map(player => ({
+          kind: 'player',
+          id: player.id,
+          name: player.name,
+          data: player,
+          distance: Math.abs(Number(mine.row) - Number(player.row)) + Math.abs(Number(mine.col) - Number(player.col)),
+        }))
+        .filter(target => Number.isFinite(target.distance) && target.distance <= range)
+        .sort((a, b) => a.distance - b.distance || String(a.name).localeCompare(String(b.name)));
+    }
+    return [];
+  }
+
+  function targetingOptions(mode = state.targeting?.mode) {
+    const mine = me();
+    if (!mine || !mode) return [];
+    if (mode === 'cartographer') {
+      return (mine.cartographerAnchorOptions || []).map(option => ({
+        kind: 'anchor',
+        id: option.id || option.color,
+        name: option.name,
+        color: option.color,
+        distance: option.distance,
+        data: option,
+      }));
+    }
+    return scoutTargetOptions(mode);
+  }
+
+  function canStartTargeting(mode) {
+    const mine = me();
+    if (!mine || state.spectating || isDecisionPending()) return false;
+    const myTurn = state.room?.activePlayerId === state.myId;
+    if (!myTurn) return false;
+    if (mode === 'cartographer') {
+      return mine.character?.id === 'cartographer'
+        && mine.phase === 'navigation'
+        && mine.roll === null
+        && (mine.actionsLeft ?? 0) > 0
+        && targetingOptions(mode).length > 0;
+    }
+    if (mode === 'scout-garrison' || mode === 'scout-money') {
+      return mine.character?.id === 'scout'
+        && mine.phase === 'actions'
+        && (mine.actionsLeft ?? 0) > 0
+        && targetingOptions(mode).length > 0;
+    }
+    return false;
+  }
+
+  function startTargeting(mode) {
+    if (!canStartTargeting(mode)) return;
+    closeMapInfo();
+    state.targeting = { mode };
+    openMobileTab('map');
+    render();
+  }
+
+  function cancelTargeting() {
+    state.targeting = null;
+    document.body.classList.remove('targeting-open');
+    render();
+  }
+
+  function completeTargeting(target) {
+    const mode = state.targeting?.mode;
+    if (!mode || !target) return;
+    if (mode === 'cartographer') {
+      socket.emit('useCartographer', { color: target.color }, res => {
+        handleGameAck(res);
+        if (!res?.ok) return;
+        state.targeting = null;
+        if (res.card) {
+          state.characterPeek = `${res.anchorName}: «${res.card.name}» · арт. ${res.card.artillery ?? '—'} · награда ${res.card.reward}`;
+          enqueueResultCard({
+            kicker: 'КАРТОГРАФ',
+            title: `Верхняя карта: ${res.anchorName}`,
+            body: `«${res.card.name}»`,
+            details: [
+              { label: 'Артиллерия', value: res.card.artillery ?? '—' },
+              { label: 'Награда', value: res.card.reward ?? '—' },
+            ],
+          });
+        }
+      });
+      return;
+    }
+    if (mode === 'scout-garrison') {
+      socket.emit('useScout', { mode: 'garrison', islandId: target.id }, res => {
+        handleGameAck(res);
+        if (!res?.ok) return;
+        state.targeting = null;
+        enqueueToast(`Разведан гарнизон: ${target.name}. Откройте остров на карте.`, 'success');
+      });
+      return;
+    }
+    if (mode === 'scout-money') {
+      socket.emit('useScout', { mode: 'money', targetPlayerId: target.id }, res => {
+        handleGameAck(res);
+        if (!res?.ok) return;
+        state.targeting = null;
+        enqueueToast(`Разведана казна: ${target.name}`, 'success');
+      });
+    }
+  }
+
+  function renderTargetingBar() {
+    const bar = $('targetingBar');
+    const mode = state.targeting?.mode;
+    if (!bar || !mode || !canStartTargeting(mode)) {
+      if (mode && !canStartTargeting(mode)) state.targeting = null;
+      bar?.classList.add('hidden');
+      document.body.classList.remove('targeting-open');
+      return;
+    }
+    const options = targetingOptions(mode);
+    const labels = {
+      cartographer: ['КАРТОГРАФ', 'Выберите морской якорь', 'На карте показаны только доступные якоря.'],
+      'scout-garrison': ['РАЗВЕДЧИК', 'Выберите чужой остров', `Доступные цели: ${options.length}`],
+      'scout-money': ['РАЗВЕДЧИК', 'Выберите корабль игрока', `Доступные цели: ${options.length}`],
+    };
+    const copy = labels[mode] || ['ВЫБОР ЦЕЛИ', 'Выберите цель', ''];
+    $('targetingKicker').textContent = copy[0];
+    $('targetingTitle').textContent = copy[1];
+    $('targetingDetail').textContent = copy[2];
+    bar.classList.remove('hidden');
+    document.body.classList.add('targeting-open');
+  }
+
+  function renderTargetingMapTargets(layer) {
+    const mode = state.targeting?.mode;
+    if (!mode || !canStartTargeting(mode)) return false;
+    const options = targetingOptions(mode);
+    for (const target of options) {
+      if (target.kind === 'island') {
+        for (const [row, col] of target.data.cells || []) {
+          addMapCellButton(layer, row, col, 'targeting-hit targeting-island', `${target.name} · ${target.distance} кл.`, () => completeTargeting(target));
+        }
+      } else if (target.kind === 'player') {
+        addMapMarker(layer, target.data.row, target.data.col, 'targeting-marker targeting-player', '◎', `${target.name} · ${target.distance} кл.`, () => completeTargeting(target));
+      } else if (target.kind === 'anchor') {
+        const anchors = (state.room?.anchorCells || []).filter(anchor => anchor.color === target.color || anchor.id === target.id);
+        for (const anchor of anchors) {
+          addMapMarker(layer, anchor.row, anchor.col, `targeting-marker targeting-anchor anchor-${anchor.color}`, '◎', `${target.name} · ${target.distance} кл.`, () => completeTargeting(target));
+        }
+      }
+    }
+    return true;
+  }
+
   function renderFleet() {
     const mine = me();
     const content = $('fleetContent');
@@ -2632,78 +2805,105 @@
         b.disabled = !(myTurn && mine.phase === 'navigation' && mine.roll !== null && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending());
         b.addEventListener('click', () => socket.emit('useNavigator', {}, handleGameAck)); actions.appendChild(b);
       } else if (character.id === 'cartographer') {
-        for (const option of mine.cartographerAnchorOptions || []) {
+        if (isMobileGameplayUi()) {
           const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
-          b.textContent = `Картограф: посмотреть «${option.name}» · ${option.distance} кл. · 1 действие`;
-          b.disabled = !(myTurn && mine.phase === 'navigation' && mine.roll === null && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending());
-          b.addEventListener('click', () => socket.emit('useCartographer', { color: option.color }, res => {
-            if (res?.ok && res.card) {
-              state.characterPeek = `${res.anchorName}: «${res.card.name}» · арт. ${res.card.artillery ?? '—'} · награда ${res.card.reward}`;
-              enqueueResultCard({
-                kicker: 'КАРТОГРАФ',
-                title: `Верхняя карта: ${res.anchorName}`,
-                body: `«${res.card.name}»`,
-                details: [
-                  { label: 'Артиллерия', value: res.card.artillery ?? '—' },
-                  { label: 'Награда', value: res.card.reward ?? '—' },
-                ],
-              });
-            }
-            handleGameAck(res); renderFleet();
-          }));
+          b.textContent = 'Картограф: выбрать якорь на карте · 1 действие';
+          b.disabled = !canStartTargeting('cartographer');
+          b.addEventListener('click', () => startTargeting('cartographer'));
           actions.appendChild(b);
+        } else {
+          for (const option of mine.cartographerAnchorOptions || []) {
+            const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
+            b.textContent = `Картограф: посмотреть «${option.name}» · ${option.distance} кл. · 1 действие`;
+            b.disabled = !(myTurn && mine.phase === 'navigation' && mine.roll === null && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending());
+            b.addEventListener('click', () => socket.emit('useCartographer', { color: option.color }, res => {
+              if (res?.ok && res.card) {
+                state.characterPeek = `${res.anchorName}: «${res.card.name}» · арт. ${res.card.artillery ?? '—'} · награда ${res.card.reward}`;
+                enqueueResultCard({
+                  kicker: 'КАРТОГРАФ',
+                  title: `Верхняя карта: ${res.anchorName}`,
+                  body: `«${res.card.name}»`,
+                  details: [
+                    { label: 'Артиллерия', value: res.card.artillery ?? '—' },
+                    { label: 'Награда', value: res.card.reward ?? '—' },
+                  ],
+                });
+              }
+              handleGameAck(res); renderFleet();
+            }));
+            actions.appendChild(b);
+          }
         }
         if (state.characterPeek) {
           const peek = document.createElement('div'); peek.className = 'event-effect'; peek.textContent = state.characterPeek; actions.appendChild(peek);
         }
       } else if (character.id === 'scout') {
-        const range = Math.max(0, Number(character.effect?.range) || 4);
-        const islandDistance = island => Math.min(...(island.cells || []).map(([row, col]) => Math.abs(Number(mine.row) - Number(row)) + Math.abs(Number(mine.col) - Number(col))));
-        const garrisonTargets = (state.room.islands || [])
-          .filter(island => island.ownerId && island.ownerId !== state.myId)
-          .map(island => ({ island, distance: islandDistance(island) }))
-          .filter(item => Number.isFinite(item.distance) && item.distance <= range)
-          .sort((a, b) => a.distance - b.distance || String(a.island.name).localeCompare(String(b.island.name)));
-        const moneyTargets = (state.room.players || [])
-          .filter(player => player.id !== state.myId)
-          .map(player => ({ player, distance: Math.abs(Number(mine.row) - Number(player.row)) + Math.abs(Number(mine.col) - Number(player.col)) }))
-          .filter(item => Number.isFinite(item.distance) && item.distance <= range)
-          .sort((a, b) => a.distance - b.distance || String(a.player.name).localeCompare(String(b.player.name)));
+        if (isMobileGameplayUi()) {
+          const garrisonTargets = targetingOptions('scout-garrison');
+          const moneyTargets = targetingOptions('scout-money');
 
-        const garrisonLabel = document.createElement('div');
-        garrisonLabel.className = 'cargo-meta';
-        garrisonLabel.textContent = 'Разведка гарнизона';
-        actions.appendChild(garrisonLabel);
-        for (const { island, distance } of garrisonTargets) {
-          const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
-          b.textContent = `Гарнизон: ${island.name} · ${distance} кл. · 1 действие`;
-          b.disabled = !canAct;
-          b.addEventListener('click', () => socket.emit('useScout', { mode: 'garrison', islandId: island.id }, res => {
-            handleGameAck(res);
-            if (res?.ok) enqueueToast(`Разведан гарнизон: ${island.name}. Откройте остров на карте.`, 'success');
-          }));
-          actions.appendChild(b);
-        }
-        if (!garrisonTargets.length) {
-          const note = document.createElement('div'); note.className = 'cargo-meta'; note.textContent = 'Чужих островов в радиусе разведки нет.'; actions.appendChild(note);
-        }
+          const garrison = document.createElement('button');
+          garrison.type = 'button'; garrison.className = 'build-btn primary';
+          garrison.textContent = `Разведчик: гарнизон на карте · ${garrisonTargets.length} цел.`;
+          garrison.disabled = !canStartTargeting('scout-garrison');
+          garrison.addEventListener('click', () => startTargeting('scout-garrison'));
+          actions.appendChild(garrison);
 
-        const moneyLabel = document.createElement('div');
-        moneyLabel.className = 'cargo-meta';
-        moneyLabel.textContent = 'Разведка денег';
-        actions.appendChild(moneyLabel);
-        for (const { player, distance } of moneyTargets) {
-          const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
-          b.textContent = `Деньги: ${player.name} · ${distance} кл. · 1 действие`;
-          b.disabled = !canAct;
-          b.addEventListener('click', () => socket.emit('useScout', { mode: 'money', targetPlayerId: player.id }, res => {
-            handleGameAck(res);
-            if (res?.ok) enqueueToast(`Разведана казна: ${player.name}`, 'success');
-          }));
-          actions.appendChild(b);
-        }
-        if (!moneyTargets.length) {
-          const note = document.createElement('div'); note.className = 'cargo-meta'; note.textContent = 'Других кораблей в радиусе разведки нет.'; actions.appendChild(note);
+          const money = document.createElement('button');
+          money.type = 'button'; money.className = 'build-btn primary';
+          money.textContent = `Разведчик: казна игрока на карте · ${moneyTargets.length} цел.`;
+          money.disabled = !canStartTargeting('scout-money');
+          money.addEventListener('click', () => startTargeting('scout-money'));
+          actions.appendChild(money);
+        } else {
+          const range = Math.max(0, Number(character.effect?.range) || 4);
+          const islandDistance = island => Math.min(...(island.cells || []).map(([row, col]) => Math.abs(Number(mine.row) - Number(row)) + Math.abs(Number(mine.col) - Number(col))));
+          const garrisonTargets = (state.room.islands || [])
+            .filter(island => island.ownerId && island.ownerId !== state.myId)
+            .map(island => ({ island, distance: islandDistance(island) }))
+            .filter(item => Number.isFinite(item.distance) && item.distance <= range)
+            .sort((a, b) => a.distance - b.distance || String(a.island.name).localeCompare(String(b.island.name)));
+          const moneyTargets = (state.room.players || [])
+            .filter(player => player.id !== state.myId)
+            .map(player => ({ player, distance: Math.abs(Number(mine.row) - Number(player.row)) + Math.abs(Number(mine.col) - Number(player.col)) }))
+            .filter(item => Number.isFinite(item.distance) && item.distance <= range)
+            .sort((a, b) => a.distance - b.distance || String(a.player.name).localeCompare(String(b.player.name)));
+
+          const garrisonLabel = document.createElement('div');
+          garrisonLabel.className = 'cargo-meta';
+          garrisonLabel.textContent = 'Разведка гарнизона';
+          actions.appendChild(garrisonLabel);
+          for (const { island, distance } of garrisonTargets) {
+            const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
+            b.textContent = `Гарнизон: ${island.name} · ${distance} кл. · 1 действие`;
+            b.disabled = !canAct;
+            b.addEventListener('click', () => socket.emit('useScout', { mode: 'garrison', islandId: island.id }, res => {
+              handleGameAck(res);
+              if (res?.ok) enqueueToast(`Разведан гарнизон: ${island.name}. Откройте остров на карте.`, 'success');
+            }));
+            actions.appendChild(b);
+          }
+          if (!garrisonTargets.length) {
+            const note = document.createElement('div'); note.className = 'cargo-meta'; note.textContent = 'Чужих островов в радиусе разведки нет.'; actions.appendChild(note);
+          }
+
+          const moneyLabel = document.createElement('div');
+          moneyLabel.className = 'cargo-meta';
+          moneyLabel.textContent = 'Разведка денег';
+          actions.appendChild(moneyLabel);
+          for (const { player, distance } of moneyTargets) {
+            const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
+            b.textContent = `Деньги: ${player.name} · ${distance} кл. · 1 действие`;
+            b.disabled = !canAct;
+            b.addEventListener('click', () => socket.emit('useScout', { mode: 'money', targetPlayerId: player.id }, res => {
+              handleGameAck(res);
+              if (res?.ok) enqueueToast(`Разведана казна: ${player.name}`, 'success');
+            }));
+            actions.appendChild(b);
+          }
+          if (!moneyTargets.length) {
+            const note = document.createElement('div'); note.className = 'cargo-meta'; note.textContent = 'Других кораблей в радиусе разведки нет.'; actions.appendChild(note);
+          }
         }
       } else if (character.id === 'treasureHunter') {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
@@ -4149,6 +4349,8 @@
 
     const mine = me();
     if (!mine || !r.started || r.activePlayerId !== state.myId) return;
+
+    if (renderTargetingMapTargets(highlightLayer)) return;
 
     if (state.mistCardRef && mine.phase === 'actions' && !isDecisionPending()) {
       for (const cell of r.mistReachableCells || []) {

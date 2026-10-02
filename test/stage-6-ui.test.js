@@ -557,3 +557,55 @@ test('UI-12 player sheet only exposes direct alliance commands and delegates com
   assert.match(code, /sameCell/);
   assert.match(code, /mine\.phase === 'navigation' && mine\.roll === null/);
 });
+
+
+test('UI-13 provides one reusable map targeting mode for Scout and Cartographer', () => {
+  assert.match(index, /id="targetingBar" class="targeting-bar hidden"/);
+  assert.match(index, /id="targetingTitle"/);
+  assert.match(index, /id="targetingCancelBtn"/);
+
+  const start = app.indexOf('  function isMobileGameplayUi()');
+  const end = app.indexOf('\n  function renderFleet()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /scoutTargetOptions/);
+  assert.match(code, /targetingOptions/);
+  assert.match(code, /canStartTargeting/);
+  assert.match(code, /startTargeting/);
+  assert.match(code, /cancelTargeting/);
+  assert.match(code, /completeTargeting/);
+  assert.match(code, /renderTargetingMapTargets/);
+  assert.match(code, /cartographerAnchorOptions/);
+  assert.match(code, /mode === 'scout-garrison'/);
+  assert.match(code, /mode === 'scout-money'/);
+  assert.match(code, /socket\.emit\('useCartographer'/);
+  assert.match(code, /socket\.emit\('useScout'/);
+
+  assert.match(app, /if \(renderTargetingMapTargets\(highlightLayer\)\) return;/);
+  assert.match(app, /renderToastStack\(\);\s*renderTargetingBar\(\);\s*renderMap\(\);/);
+  assert.match(app, /\$\('targetingCancelBtn'\)\.addEventListener\('click', cancelTargeting\)/);
+  assert.match(styles, /UI-13 — reusable map targeting mode/);
+});
+
+test('UI-13 keeps desktop character target lists as migration fallback', () => {
+  const start = app.indexOf('  function renderFleet()');
+  const end = app.indexOf('\n  function renderTrade()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /if \(isMobileGameplayUi\(\)\)/);
+  assert.match(code, /Картограф: выбрать якорь на карте/);
+  assert.match(code, /Разведчик: гарнизон на карте/);
+  assert.match(code, /Разведчик: казна игрока на карте/);
+  assert.match(code, /Гарнизон: \$\{island\.name\}/);
+  assert.match(code, /Деньги: \$\{player\.name\}/);
+});
+
+test('UI-13 local target mode never survives a mandatory server decision', () => {
+  const start = app.indexOf('  function renderDecisionLayer()');
+  const end = app.indexOf('\n  function renderControls()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /if \(descriptor && state\.targeting\) state\.targeting = null/);
+});

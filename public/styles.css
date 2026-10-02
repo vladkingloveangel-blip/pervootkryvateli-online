@@ -2108,3 +2108,107 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     top: calc(112px + env(safe-area-inset-top, 0px));
   }
 }
+
+
+/* UI-13 — reusable map targeting mode */
+.targeting-bar { display: none; }
+
+@media (max-width: 900px) {
+  body.game-active .targeting-bar {
+    position: absolute;
+    z-index: 76;
+    left: 8px;
+    right: 8px;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 11px;
+    border: 1px solid rgba(240,196,91,.5);
+    border-radius: 14px;
+    background: rgba(7,31,37,.96);
+    box-shadow: 0 10px 30px rgba(0,0,0,.4);
+    backdrop-filter: blur(10px);
+  }
+
+  body.game-active .targeting-bar.hidden {
+    display: none !important;
+  }
+
+  body.game-active .targeting-copy {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  body.game-active .targeting-copy > span {
+    color: var(--accent);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .08em;
+  }
+
+  body.game-active .targeting-copy > strong {
+    font-size: 14px;
+  }
+
+  body.game-active .targeting-copy > small {
+    color: var(--muted);
+    font-size: 10px;
+  }
+
+  body.game-active .targeting-bar button {
+    min-width: 74px;
+    min-height: 40px;
+  }
+
+  body.game-active.targeting-open .game-action-bar,
+  body.game-active.targeting-open .object-sheet,
+  body.game-active.targeting-open .map-object-layer,
+  body.game-active.targeting-open .token-layer,
+  body.game-active.targeting-open .game-roster {
+    pointer-events: none;
+  }
+
+  body.game-active.targeting-open .game-action-bar,
+  body.game-active.targeting-open .object-sheet {
+    display: none !important;
+  }
+
+  body.game-active .targeting-hit {
+    position: absolute;
+    width: calc(100% / var(--map-cols, 28));
+    height: calc(100% / var(--map-rows, 28));
+    min-height: 0;
+    padding: 0;
+    border: 2px solid rgba(240,196,91,.95);
+    border-radius: 8px;
+    background: rgba(240,196,91,.22);
+    box-shadow: 0 0 0 2px rgba(7,31,37,.75), 0 0 18px rgba(240,196,91,.5);
+    animation: targeting-pulse 1s ease-in-out infinite alternate;
+  }
+
+  body.game-active .targeting-marker {
+    position: absolute;
+    transform: translate(-50%,-50%);
+    width: 34px;
+    height: 34px;
+    min-height: 0;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 2px solid var(--accent);
+    border-radius: 50%;
+    background: rgba(7,31,37,.92);
+    color: var(--accent);
+    font-size: 20px;
+    box-shadow: 0 0 0 3px rgba(240,196,91,.18), 0 0 18px rgba(240,196,91,.55);
+    animation: targeting-pulse 1s ease-in-out infinite alternate;
+  }
+
+  @keyframes targeting-pulse {
+    from { opacity: .72; }
+    to { opacity: 1; }
+  }
+}
