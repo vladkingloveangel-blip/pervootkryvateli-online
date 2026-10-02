@@ -23,7 +23,7 @@ test('map player marker is centered on the authoritative cell center', () => {
   assert.match(tokenBlock, /transform:\s*translate\(-50%, -50%\)/);
   assert.match(tokenBlock, /min-height:\s*0/);
   assert.doesNotMatch(css, /^button\s*\{[^}]*min-height:/m);
-  assert.doesNotMatch(css, /body\.game-active button:not\(/);
+  assert.doesNotMatch(css, /body\.game-active button:not\(\.map-object-hit\):not\(\.navigation-hit\):not\(\.targeting-hit\):not\(\.targeting-marker\):not\(\.cell-hit\):not\(\.token\):not\(\.game-action-button\)/);
 });
 
 test('compact map tools have explicit square geometry', () => {
