@@ -1107,3 +1107,64 @@ test('UI-21 client converts eventResolved into the shared Result Card queue', ()
   assert.match(app, /enqueueResultCard\(card\)/);
   assert.doesNotMatch(app.slice(app.indexOf("socket.on('eventResolved'"), app.indexOf("socket.on('battleResolved'")), /state\.room\s*=|socket\.emit/);
 });
+
+
+test('UI-22 renders sixth-circle progress as Event → Feud → Assignment overlay', () => {
+  assert.match(index, /id="eventFlowOverlay" class="event-flow-overlay hidden"/);
+  assert.match(index, /id="eventFlowSteps"/);
+  assert.match(index, /id="eventFlowLastCard"/);
+
+  const start = app.indexOf('  function eventFlowStageKey(');
+  const end = app.indexOf('\n  function eventDecisionSceneHtml(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /eventFlowStageIndex/);
+  assert.match(code, /eventFlowStageStatus/);
+  assert.match(code, /renderEventFlowOverlay/);
+  assert.match(code, /Событие/);
+  assert.match(code, /Вражда/);
+  assert.match(code, /Поручение/);
+  assert.match(code, /phase\.lastCard/);
+  assert.match(code, /phase\.currentPlayerId === state\.myId/);
+
+  assert.match(app, /refreshOpenAssaultFlow\(\);\s*renderEventFlowOverlay\(\);\s*renderDecisionLayer\(\);/);
+  assert.match(styles, /UI-22 — sixth-circle event orchestration/);
+});
+
+test('UI-22 normalizes legacy and domain event stage names without changing server flow', () => {
+  const start = app.indexOf('  function eventFlowStageKey(');
+  const end = app.indexOf('\n  function eventFlowStageIndex(', start);
+  const code = app.slice(start, end);
+  assert.match(code, /stage === 'political' \|\| stage === 'feud'/);
+  assert.match(code, /stage === 'assignment' \|\| stage === 'assignment-replace'/);
+  assert.match(code, /return 'sailing'/);
+});
+
+test('UI-22 Feud and Assignment mandatory choices use scene bodies but canonical action handlers', () => {
+  const start = app.indexOf('  function feudDecisionSceneHtml(');
+  const end = app.indexOf('\n  function eventDecisionSceneHtml(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /downgrade-building/);
+  assert.match(code, /remove-building/);
+  assert.match(code, /reclaim-island/);
+  assert.match(code, /remove-upgrade/);
+  assert.match(code, /assignmentDecisionSceneHtml/);
+
+  const descStart = app.indexOf('  function mobileDecisionDescriptor(');
+  const descEnd = app.indexOf('\n  function renderDecisionLayer()', descStart);
+  const desc = app.slice(descStart, descEnd);
+  assert.match(desc, /bodyHtml: feudDecisionSceneHtml\(room\.pendingFeud\)/);
+  assert.match(desc, /actionsId: 'eventActions'/);
+  assert.match(desc, /bodyHtml: assignmentDecisionSceneHtml\(room\.pendingAssignmentChoice\)/);
+  assert.match(desc, /actionsId: 'assignmentActions'/);
+});
+
+test('UI-22 other viewers get stage-aware waiting instead of private choice details', () => {
+  const start = app.indexOf('  function mobileDecisionDescriptor(');
+  const end = app.indexOf('\n  function renderDecisionLayer()', start);
+  const code = app.slice(start, end);
+  assert.match(code, /room\.phase === 'event' && room\.eventPhase\?\.active && room\.pendingDecision\?\.waiting/);
+  assert.match(code, /body: eventFlowStageStatus\(room, room\.eventPhase\)/);
+  assert.doesNotMatch(code, /room\.pendingDecision\.options/);
+});

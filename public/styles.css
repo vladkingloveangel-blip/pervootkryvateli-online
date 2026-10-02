@@ -2993,3 +2993,115 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     color: var(--text);
   }
 }
+
+
+/* UI-22 — sixth-circle event orchestration */
+.event-flow-overlay { display: none; }
+
+@media (max-width: 900px) {
+  body.game-active .event-flow-overlay {
+    position: absolute;
+    z-index: 52;
+    top: calc(112px + env(safe-area-inset-top, 0px));
+    left: 8px;
+    right: 8px;
+    display: grid;
+    gap: 7px;
+    padding: 9px 10px;
+    border: 1px solid rgba(240,196,91,.4);
+    border-radius: 14px;
+    background: rgba(7,31,37,.94);
+    box-shadow: 0 8px 24px rgba(0,0,0,.32);
+    backdrop-filter: blur(9px);
+    pointer-events: none;
+  }
+
+  body.game-active .event-flow-overlay.hidden,
+  body.game-active.decision-layer-open .event-flow-overlay {
+    display: none !important;
+  }
+
+  body.game-active .event-flow-head {
+    display: grid;
+    gap: 2px;
+  }
+
+  body.game-active .event-flow-head > span {
+    color: var(--accent);
+    font-size: 8px;
+    font-weight: 900;
+    letter-spacing: .08em;
+  }
+
+  body.game-active .event-flow-head > strong {
+    font-size: 13px;
+  }
+
+  body.game-active .event-flow-head > small {
+    color: var(--muted);
+    font-size: 9px;
+    line-height: 1.35;
+  }
+
+  body.game-active .event-flow-steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0,1fr));
+    gap: 5px;
+  }
+
+  body.game-active .event-flow-step {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    padding: 6px 7px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    color: var(--muted);
+    background: rgba(255,255,255,.025);
+  }
+
+  body.game-active .event-flow-step > span {
+    font-size: 9px;
+  }
+
+  body.game-active .event-flow-step > strong {
+    overflow: hidden;
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.game-active .event-flow-step.done {
+    border-color: rgba(106,211,156,.32);
+    color: rgba(170,230,198,.8);
+  }
+
+  body.game-active .event-flow-step.current {
+    border-color: var(--accent);
+    color: var(--text);
+    background: rgba(240,196,91,.08);
+  }
+
+  body.game-active .event-flow-last-card {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.game-active.event-flow-open .game-world-shell .map-toolbar {
+    top: calc(220px + env(safe-area-inset-top, 0px));
+  }
+
+  body.game-active .feud-scene-card {
+    border-color: rgba(235,78,70,.42);
+    background: rgba(235,78,70,.045);
+  }
+
+  body.game-active .assignment-scene-card {
+    border-color: rgba(116,174,239,.42);
+    background: rgba(116,174,239,.045);
+  }
+}

@@ -1128,6 +1128,7 @@
     renderCombat();
     refreshOpenSeaBattleFlow();
     refreshOpenAssaultFlow();
+    renderEventFlowOverlay();
     renderDecisionLayer();
     renderResultLayer();
     renderToastStack();
@@ -1767,6 +1768,113 @@
     if (card) enqueueResultCard(card);
   }
 
+  function eventFlowStageKey(phase) {
+    const stage = phase?.stage || 'sailing';
+    if (stage === 'political' || stage === 'feud') return 'feud';
+    if (stage === 'assignment' || stage === 'assignment-replace') return 'assignment';
+    return 'sailing';
+  }
+
+  function eventFlowStageIndex(phase) {
+    const key = eventFlowStageKey(phase);
+    return key === 'feud' ? 1 : key === 'assignment' ? 2 : 0;
+  }
+
+  function eventFlowStageStatus(room, phase) {
+    const key = eventFlowStageKey(phase);
+    if (room.pendingEvent) return room.pendingEvent.viewerCanRespond ? 'Нужно ваше решение по событию.' : `Ждём решения: ${playerName(room.pendingEvent.playerId)}.`;
+    if (room.pendingFeud) return room.pendingFeud.viewerCanRespond ? 'Нужно ваше решение по карте вражды.' : `Ждём решения: ${playerName(room.pendingFeud.playerId)}.`;
+    if (room.pendingAssignmentChoice) return room.pendingAssignmentChoice.viewerCanRespond ? 'Выберите поручение сюзерена.' : `Ждём выбора поручения: ${playerName(room.pendingAssignmentChoice.playerId)}.`;
+    if (room.pendingIslandCorrection?.viewerCanRespond || room.pendingFleetAdjustment?.viewerCanRespond) return 'Сначала завершите обязательное последствие карты.';
+    if (key === 'sailing') return 'Разрешается личное событие плавания.';
+    if (key === 'feud') return phase?.feudTotal ? `Разрешается вражда · ${Math.min((phase.feudIndex || 0) + 1, phase.feudTotal)}/${phase.feudTotal}.` : 'Проверяется вражда государств.';
+    return phase?.assignmentTotal ? `Выдаётся поручение · ${Math.min((phase.assignmentIndex || 0) + 1, phase.assignmentTotal)}/${phase.assignmentTotal}.` : 'Проверяется выдача поручения.';
+  }
+
+  function renderEventFlowOverlay() {
+    const overlay = $('eventFlowOverlay');
+    const room = state.room;
+    const phase = room?.eventPhase;
+    if (!overlay || !room?.started || room.finished || room.phase !== 'event' || !phase?.active) {
+      overlay?.classList.add('hidden');
+      document.body.classList.remove('event-flow-open');
+      return;
+    }
+
+    const currentName = playerName(phase.currentPlayerId);
+    const mine = phase.currentPlayerId === state.myId;
+    $('eventFlowKicker').textContent = phase.personalTurn ? 'ШЕСТОЙ КРУГ' : 'ФАЗА СОБЫТИЙ';
+    $('eventFlowTitle').textContent = mine ? 'Ваши предходовые события' : `Ход: ${currentName}`;
+    $('eventFlowStatus').textContent = eventFlowStageStatus(room, phase);
+
+    const currentIndex = eventFlowStageIndex(phase);
+    const steps = [
+      { key: 'sailing', label: 'Событие', icon: 'Ⅰ' },
+      { key: 'feud', label: 'Вражда', icon: 'Ⅱ' },
+      { key: 'assignment', label: 'Поручение', icon: 'Ⅲ' },
+    ];
+    const holder = $('eventFlowSteps');
+    holder.innerHTML = '';
+    steps.forEach((step, index) => {
+      const item = document.createElement('div');
+      item.className = 'event-flow-step';
+      if (index < currentIndex) item.classList.add('done');
+      if (index === currentIndex) item.classList.add('current');
+      item.innerHTML = `<span>${step.icon}</span><strong>${step.label}</strong>`;
+      holder.appendChild(item);
+    });
+
+    const last = $('eventFlowLastCard');
+    if (phase.lastCard?.cardName) {
+      const faction = phase.lastCard.factionName ? ` · ${phase.lastCard.factionName}` : '';
+      last.textContent = `Последнее: «${phase.lastCard.cardName}»${faction}${phase.lastCard.pending ? ' · ожидает решения' : ''}`;
+      last.classList.remove('hidden');
+    } else {
+      last.classList.add('hidden');
+      last.textContent = '';
+    }
+
+    overlay.classList.remove('hidden');
+    document.body.classList.add('event-flow-open');
+  }
+
+  function feudDecisionSceneHtml(pending) {
+    if (!pending) return '';
+    const descriptions = {
+      'downgrade-building': 'Выберите свою постройку для обязательного понижения.',
+      'remove-building': 'Выберите свою постройку, которую государство удалит.',
+      'reclaim-island': 'Выберите остров, который возвращается государству.',
+      'building-downgrade': 'Выберите постройку для понижения.',
+      'building-choice': 'Для выбранной постройки решите: удалить её или понизить.',
+      'remove-forts': 'Удалите требуемое число оборонительных построек.',
+      'remove-upgrade': 'Снимите одно установленное улучшение корабля.',
+      'remove-cargo': 'Выберите трюм, груз которого будет потерян.',
+    };
+    const remaining = Number(pending.remaining) > 1 ? ` Осталось решений: ${pending.remaining}.` : '';
+    return `
+      <section class="event-scene-card feud-scene-card">
+        <span>ВРАЖДА · ${escapeHtml(pending.factionName || 'ГОСУДАРСТВО')}</span>
+        <strong>«${escapeHtml(pending.cardName || 'Карта вражды')}»</strong>
+        <small>${escapeHtml(descriptions[pending.kind] || 'Карта вражды требует обязательного решения.')}${escapeHtml(remaining)}</small>
+      </section>
+    `;
+  }
+
+  function assignmentDecisionSceneHtml(pending) {
+    if (!pending) return '';
+    const options = pending.options || [];
+    const rewardText = options.length
+      ? `Предложено вариантов: ${options.length}. Награды указаны на кнопках выбора.`
+      : 'Выберите одно допустимое поручение.';
+    return `
+      <section class="event-scene-card assignment-scene-card">
+        <span>ПОРУЧЕНИЕ · ${escapeHtml(pending.factionName || 'СЮЗЕРЕН')}</span>
+        <strong>Посольство предлагает выбор</strong>
+        <small>${escapeHtml(rewardText)}</small>
+      </section>
+    `;
+  }
+
   function eventDecisionSceneHtml(pending) {
     if (!pending) return '';
     const scene = {
@@ -1810,11 +1918,13 @@
     };
     if (room.pendingFeud?.viewerCanRespond) return {
       kind: 'decision', kicker: 'ВРАЖДА', title: room.pendingFeud.cardName || 'Решение по вражде',
-      contentId: 'eventContent', actionsId: 'eventActions',
+      bodyHtml: feudDecisionSceneHtml(room.pendingFeud),
+      actionsId: 'eventActions',
     };
     if (room.pendingAssignmentChoice?.viewerCanRespond) return {
       kind: 'decision', kicker: 'ПОРУЧЕНИЕ', title: 'Выберите поручение сюзерена',
-      contentId: 'assignmentContent', actionsId: 'assignmentActions',
+      bodyHtml: assignmentDecisionSceneHtml(room.pendingAssignmentChoice),
+      actionsId: 'assignmentActions',
     };
     if (room.pendingIslandCorrection?.viewerCanRespond) return {
       kind: 'decision', kicker: 'ОБЯЗАТЕЛЬНОЕ РЕШЕНИЕ', title: room.pendingIslandCorrection.islandName || 'Исправление острова',
@@ -1841,6 +1951,10 @@
       kind: 'waiting', kicker: 'БОЙ', title: 'Ожидаются ответы участников',
       bodyHtml: battleFlowStatusHtml(room.pendingBattle),
       actionsId: 'combatActions',
+    };
+    if (room.phase === 'event' && room.eventPhase?.active && room.pendingDecision?.waiting) return {
+      kind: 'waiting', kicker: 'ШЕСТОЙ КРУГ', title: `Ждём: ${playerName(room.pendingDecision.actorPlayerId)}`,
+      body: eventFlowStageStatus(room, room.eventPhase),
     };
     if (room.pendingDecision?.waiting) return {
       kind: 'waiting', kicker: 'ОЖИДАНИЕ', title: `Ждём решения: ${playerName(room.pendingDecision.actorPlayerId)}`,
