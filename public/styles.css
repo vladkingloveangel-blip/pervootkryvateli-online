@@ -4552,6 +4552,51 @@ body.game-active .final-results-art {
     color: var(--gold-soft);
   }
 
+  body.game-active .hud-chip[data-hud-metric] {
+    cursor: pointer;
+  }
+  body.game-active .hud-chip[data-hud-metric][aria-expanded="true"] {
+    border-color: rgba(240,196,91,.58);
+    box-shadow: 0 0 0 1px rgba(240,196,91,.12), 0 4px 12px rgba(0,0,0,.28);
+  }
+
+  body.game-active .hud-metric-popover {
+    position: fixed;
+    z-index: 118;
+    box-sizing: border-box;
+    width: 200px;
+    padding: 9px 10px;
+    border: 1px solid rgba(240,196,91,.34);
+    border-radius: 12px;
+    background: rgba(8,37,44,.97);
+    box-shadow: 0 10px 26px rgba(0,0,0,.38);
+    color: var(--text);
+    pointer-events: auto;
+  }
+  body.game-active .hud-metric-popover-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  body.game-active .hud-metric-popover-head span {
+    color: var(--gold-soft);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .06em;
+  }
+  body.game-active .hud-metric-popover-head strong {
+    color: var(--text);
+    font-size: 16px;
+    line-height: 1;
+  }
+  body.game-active .hud-metric-popover p {
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
   body.game-active .hud-turn-status {
     width: var(--hud-tile);
     min-width: var(--hud-tile);
