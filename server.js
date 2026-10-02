@@ -4652,8 +4652,7 @@ io.on('connection', socket => {
     }
     const disconnectLegendaryReaction = pendingLegacy(room, 'legendary-reaction');
     if (disconnectLegendaryReaction && disconnectLegendaryReaction.targetPlayerId === p.id) {
-      log(room, `${p.name} не использует «Покров моря» из-за отключения.`);
-      resolvePendingLegendaryReaction(room, false, null);
+      log(room, `${p.name} отключился во время обязательного решения по «Покрову моря». Решение сохранено до переподключения.`);
     }
     if (room.pendingBattle) {
       const invite = room.pendingBattle.invites.find(inv => inv.playerId === p.id && inv.response == null);
