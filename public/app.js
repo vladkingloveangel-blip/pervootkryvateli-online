@@ -1942,7 +1942,7 @@
 
     if (mine.phase === 'navigation' && mine.roll === null) {
       bar.dataset.mode = 'navigation';
-      setCopy('НАВИГАЦИЯ', '', 'Бросьте навигацию или останьтесь на месте.');
+      setCopy('НАВИГАЦИЯ', '', 'Бросьте кубик или останьтесь.');
       addButton('Остаться', () => socket.emit('skipNavigation', {}, handleGameAck));
       addButton('🎲 Бросить', () => socket.emit('rollMove', {}, handleGameAck), 'primary');
       return;
@@ -1951,7 +1951,7 @@
     if (mine.phase === 'navigation') {
       bar.dataset.mode = 'navigation-result';
       const destinations = (r.reachableCells || []).filter(cell => cell.row !== mine.row || cell.col !== mine.col);
-      setCopy('НАВИГАЦИЯ', `Выпало ${mine.roll} · дальность ${mine.movePoints}`,
+      setCopy('', `Выпало ${mine.roll} · дальность ${mine.movePoints}`,
         destinations.length ? `Выберите клетку · доступно: ${destinations.length}` : 'Доступных клеток нет.');
       addButton('Остаться здесь', () => socket.emit('skipNavigation', {}, handleGameAck));
       return;
