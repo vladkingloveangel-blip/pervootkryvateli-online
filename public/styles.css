@@ -5266,14 +5266,14 @@ body.game-active .token {
   background-image:
     radial-gradient(ellipse at 50% 50%, transparent 0 42%, rgba(208,249,240,.52) 45%, transparent 50%),
     radial-gradient(ellipse at 50% 50%, transparent 0 38%, rgba(164,235,231,.38) 42%, transparent 48%);
-  background-size: 128px 92px, 174px 126px;
+  background-size: 58px 42px, 82px 60px;
   background-position: 0 0, 38px 27px;
   animation: ocean-caustics-drift-a 8s linear infinite;
 }
 .map-pan-surface::after {
   background-image:
     radial-gradient(ellipse at 50% 50%, transparent 0 40%, rgba(225,252,243,.34) 44%, transparent 49%);
-  background-size: 102px 138px;
+  background-size: 48px 64px;
   background-position: 21px 13px;
   opacity: .52;
   animation: ocean-caustics-drift-b 11s linear infinite;
@@ -5284,11 +5284,11 @@ body.game-active .token {
 }
 @keyframes ocean-caustics-drift-a {
   from { background-position: 0 0, 38px 27px; }
-  to { background-position: 128px 92px, -136px 153px; }
+  to { background-position: 58px 42px, -44px 87px; }
 }
 @keyframes ocean-caustics-drift-b {
   from { background-position: 21px 13px; transform: translate3d(0,0,0); }
-  to { background-position: -81px 151px; transform: translate3d(8px,-5px,0); }
+  to { background-position: -27px 77px; transform: translate3d(4px,-3px,0); }
 }
 @media (prefers-reduced-motion: reduce) {
   .map-pan-surface::before,
