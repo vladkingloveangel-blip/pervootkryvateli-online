@@ -3653,7 +3653,8 @@ io.on('connection', socket => {
     const penalty = (Number(getActiveTurnEffectValue(p, 'movePenalty')) || 0) + legendaryMovementPenalty(p);
     room.movePoints = Math.max(0, second + stats.moveMod + bonus + lighthouseBonus - penalty);
     room.actionsLeft -= character.useActionCost;
-    consumeCharacter(p, 'navigator', room.round);
+    const consumed = consumeCharacter(p, 'navigator', room.round);
+    if (!consumed.ok) return ackSafe(ack, consumed);
     log(room, `${p.name} использует Штурмана: d6 ${first} переброшен на ${second}; второй результат обязателен. Осталось действий: ${room.actionsLeft}.`);
     ackSafe(ack, { ok: true, roll: second, movePoints: room.movePoints });
     emitRoom(room);
@@ -3674,7 +3675,8 @@ io.on('connection', socket => {
     const card = seaEncounterSource(room, color)?.peekNext() || null;
     if (!card) return ackSafe(ack, { ok: false, error: 'В выбранной колоде якоря сейчас нет верхней карты.' });
     room.actionsLeft -= character.useActionCost;
-    consumeCharacter(p, 'cartographer', room.round);
+    const consumed = consumeCharacter(p, 'cartographer', room.round);
+    if (!consumed.ok) return ackSafe(ack, consumed);
     log(room, `${p.name} использует Картографа и смотрит верхнюю карту колоды «${option.name}», не меняя порядок.`);
     ackSafe(ack, { ok: true, anchorName: option.name, card: { name: card.name, artillery: card.artillery, reward: card.reward, quiet: Boolean(card.quiet) } });
     emitRoom(room);
@@ -3737,7 +3739,8 @@ io.on('connection', socket => {
     if (room.phase !== 'actions') return ackSafe(ack, { ok: false, error: 'Первый помощник применяется в фазе действий.' });
     if ((typeof p.character === 'string' ? p.character : p.character?.id) !== 'firstMate') return ackSafe(ack, { ok: false, error: 'На корабле нет Первого помощника.' });
     room.actionsLeft = Math.max(0, Number(room.actionsLeft) || 0) + Math.max(1, Number(CHARACTERS.firstMate.effect?.count) || 1);
-    consumeCharacter(p, 'firstMate', room.round);
+    const consumed = consumeCharacter(p, 'firstMate', room.round);
+    if (!consumed.ok) return ackSafe(ack, consumed);
     log(room, `${p.name} использует Первого помощника и получает одно дополнительное действие сверх обычного лимита.`);
     ackSafe(ack, { ok: true, actionsLeft: room.actionsLeft });
     emitRoom(room);
