@@ -60,7 +60,13 @@ test('mobile information surfaces use the floating-window architecture', () => {
   assert.doesNotMatch(objectWindow, /transform:/);
   assert.match(objectWindow, /border-radius:\s*16px/);
   assert.doesNotMatch(objectWindow, /bottom:\s*0/);
-  assert.match(canonical, /body\.game-active \.object-sheet-handle,\s*\n\s*body\.game-active #objectSheetExpand \{\s*\n\s*display:\s*none !important/);
+  assert.doesNotMatch(index, /object-sheet-handle|id="objectSheetExpand"/);
+  assert.doesNotMatch(app, /objectSheetExpand|toggleObjectSheetExpanded/);
+  assert.doesNotMatch(css, /object-sheet-handle|#objectSheetExpand/);
+  assert.doesNotMatch(css, /body\.game-active \.object-sheet\s*\{[^}]*bottom:\s*0/s);
+  assert.doesNotMatch(css, /body\.game-active \.object-sheet\s*\{[^}]*max-height:\s*min\(46d?vh/s);
+  assert.doesNotMatch(css, /body\.game-active \.object-sheet\.expanded\s*\{[^}]*max-height:\s*(?:min\(86d?vh|min\(90d?vh|94dvh)/s);
+  assert.match(canonical, /body\.game-active \.object-sheet\.expanded \{\s*\n\s*max-height:\s*min\(74dvh, 680px\)/);
   assert.match(canonical, /body\.game-active \.object-sheet\.expanded ~ \.game-action-bar:not\(\.hidden\)/);
   assert.match(canonical, /body\.game-active \.score-overlay-card,\s*\n\s*body\.game-active \.journal-overlay-card,\s*\n\s*body\.game-active\.game-menu-open \.game-menu-panel/);
 });
@@ -214,4 +220,11 @@ test('mobile roster keeps one 30px token system and landscape hide wins the casc
   assert.ok(canonicalStart >= 0 && landscapeStart > canonicalStart);
   const landscape = css.slice(landscapeStart);
   assert.match(landscape, /body\.game-active \.game-roster \{\s*\n\s*display:\s*none !important;/);
+});
+
+
+test('short landscape floating sheet clears the canonical action bar', () => {
+  const landscape = css.slice(css.lastIndexOf('@media (max-width: 900px) and (orientation: landscape)'));
+  assert.match(landscape, /\.object-sheet,\s*\n\s*body\.game-active \.object-sheet\.expanded/);
+  assert.match(landscape, /max-height:\s*calc\(100dvh - 154px - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\)\)/);
 });

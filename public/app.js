@@ -808,7 +808,6 @@
   $('resultContinueBtn').addEventListener('click', dismissResultCard);
   $('objectSheetClose').addEventListener('click', closeMapInfo);
   $('objectSheetBack').addEventListener('click', handleObjectSheetBack);
-  $('objectSheetExpand').addEventListener('click', toggleObjectSheetExpanded);
   $('targetingCancelBtn').addEventListener('click', cancelTargeting);
   $('hudPlayerBtn').addEventListener('click', () => { if (!state.spectating) renderFleetOverviewObjectSheet(); });
   document.querySelectorAll('[data-hud-metric]').forEach(button => {
@@ -1130,8 +1129,6 @@
   
     $('objectSheet').classList.remove('hidden');
     $('objectSheet').classList.add('expanded');
-    $('objectSheetExpand').textContent = '⌄';
-    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
     document.body.classList.add('object-sheet-open');
   }
 
@@ -3003,8 +3000,6 @@
     }
     sheet.classList.remove('hidden');
     sheet.classList.add('expanded');
-    $('objectSheetExpand').textContent = '⌄';
-    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
     document.body.classList.add('object-sheet-open');
   }
 
@@ -3644,8 +3639,6 @@
 
     $('objectSheet').classList.remove('hidden');
     $('objectSheet').classList.add('expanded');
-    $('objectSheetExpand').textContent = '⌄';
-    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
     document.body.classList.add('object-sheet-open');
   }
 
@@ -3764,8 +3757,6 @@
 
     $('objectSheet').classList.remove('hidden');
     $('objectSheet').classList.add('expanded');
-    $('objectSheetExpand').textContent = '⌄';
-    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
     document.body.classList.add('object-sheet-open');
   }
 
@@ -5108,8 +5099,6 @@
     const backButton = $('objectSheetBack');
     backButton.classList.toggle('hidden', !back);
     backButton.setAttribute('aria-label', back ? `Назад: ${island.name}` : 'Назад');
-    $('objectSheetExpand').textContent = '⌄';
-    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
     showIslandSheetHero(island);
     sheet.classList.remove('hidden');
     document.body.classList.add('object-sheet-open');
@@ -5614,8 +5603,6 @@
 
     sheet.classList.remove('hidden');
     sheet.classList.add('expanded');
-    $('objectSheetExpand').textContent = '⌄';
-    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
     document.body.classList.add('object-sheet-open');
   }
 
@@ -5790,22 +5777,6 @@
     document.body.classList.add('object-sheet-open');
   }
 
-  function toggleObjectSheetExpanded() {
-    const sheet = $('objectSheet');
-    if (!sheet || sheet.classList.contains('hidden')) return;
-    const selectedOwnIsland = state.mapSelection?.kind === 'island'
-      ? state.room?.islands?.find(item => item.id === state.mapSelection.id && item.ownerId === state.myId)
-      : null;
-    if (selectedOwnIsland && !sheet.classList.contains('expanded')) {
-      expandOwnIslandManagement(selectedOwnIsland.id);
-      return;
-    }
-    const expanded = sheet.classList.toggle('expanded');
-    $('objectSheetExpand').textContent = expanded ? '⌄' : '⌃';
-    $('objectSheetExpand').setAttribute('aria-label', expanded ? 'Свернуть карточку' : 'Развернуть карточку');
-    if (!expanded && selectedOwnIsland) renderOwnIslandObjectSheet(selectedOwnIsland);
-  }
-
   function playerRelationLabel(player) {
     if (!player || player.id === state.myId) return 'Вы';
     const mine = me();
@@ -5937,8 +5908,6 @@
 
     $('objectSheet').classList.remove('hidden');
     $('objectSheet').classList.add('expanded');
-    $('objectSheetExpand').textContent = '⌄';
-    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
     document.body.classList.add('object-sheet-open');
   }
 
@@ -6065,8 +6034,6 @@
 
     $('objectSheet').classList.remove('hidden');
     $('objectSheet').classList.add('expanded');
-    $('objectSheetExpand').textContent = '⌄';
-    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
     document.body.classList.add('object-sheet-open');
   }
 
@@ -6160,8 +6127,6 @@
 
     $('objectSheet').classList.remove('hidden');
     $('objectSheet').classList.add('expanded');
-    $('objectSheetExpand').textContent = '⌄';
-    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
     document.body.classList.add('object-sheet-open');
   }
 
