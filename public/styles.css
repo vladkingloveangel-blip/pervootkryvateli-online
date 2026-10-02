@@ -2958,3 +2958,38 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     line-height: 1.35;
   }
 }
+
+
+/* UI-21 — sailing event scenes and authoritative results */
+@media (max-width: 900px) {
+  body.game-active .event-scene-card {
+    display: grid;
+    gap: 5px;
+    padding: 11px;
+    border: 1px solid rgba(240,196,91,.42);
+    border-radius: 12px;
+    background: rgba(240,196,91,.055);
+  }
+
+  body.game-active .event-scene-card > span {
+    color: var(--accent);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .075em;
+  }
+
+  body.game-active .event-scene-card > strong {
+    font-size: 17px;
+    line-height: 1.25;
+  }
+
+  body.game-active .event-scene-card > small {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  body.game-active .decision-body .event-scene-card {
+    color: var(--text);
+  }
+}

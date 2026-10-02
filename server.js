@@ -1952,6 +1952,130 @@ function queueEventDecision(room, player, card, kind, options, extra = {}) {
   setPreTurnLastCard(room, { playerId: player.id, playerName: player.name, cardName: card.name, pending: true });
 }
 
+function sailingEventPresentationSnapshot(player) {
+  return {
+    ducats: Number(player?.ducats) || 0,
+    debt: Number(player?.debt) || 0,
+    row: Number(player?.row),
+    col: Number(player?.col),
+    cargo: {
+      main: player?.cargo ? { goodId: player.cargo.goodId, quantity: Number(player.cargo.quantity) || 0 } : null,
+      escorts: (player?.escorts || []).map(escort => ({
+        id: escort.id,
+        cargo: escort.cargo ? { goodId: escort.cargo.goodId, quantity: Number(escort.cargo.quantity) || 0 } : null,
+      })),
+    },
+    legendaryNames: (player?.legendaryCards || []).map(card => card.name),
+    specialCards: [...(player?.specialCards || [])],
+    savedEventIds: (player?.savedEventCards || []).map(card => card.id),
+  };
+}
+
+function sailingEventCargoGain(before, player) {
+  const gains = [];
+  if (!before?.cargo?.main && player?.cargo) {
+    gains.push({ holdName: 'Основной трюм', goodId: player.cargo.goodId, quantity: Number(player.cargo.quantity) || 0 });
+  }
+  const beforeEscorts = new Map((before?.cargo?.escorts || []).map(item => [item.id, item.cargo]));
+  for (const escort of player?.escorts || []) {
+    if (!beforeEscorts.get(escort.id) && escort.cargo) {
+      gains.push({ holdName: 'Трюм сопровождения', goodId: escort.cargo.goodId, quantity: Number(escort.cargo.quantity) || 0 });
+    }
+  }
+  return gains[0] || null;
+}
+
+function buildSailingEventPresentation(room, player, card, before) {
+  if (!room || !player || !card || !before) return null;
+  const details = [];
+  let body = 'Событие разрешено.';
+  let tone = 'neutral';
+
+  if (card.type === 'storm') {
+    const island = room.islands.find(item => item.id === card.islandId);
+    body = `Шторм отнёс вашу флотилию к берегам ${island?.name || 'острова'}.`;
+    details.push({ label: 'Новая позиция', value: `${Number(player.col) + 1}:${Number(player.row) + 1}` });
+    tone = 'danger';
+  } else if (card.type === 'treasury-loss') {
+    const lost = Math.max(0, before.ducats - (Number(player.ducats) || 0));
+    body = lost ? `Из казны потеряно ${lost} дукатов.` : 'Казна не изменилась.';
+    details.push({ label: 'Потеря', value: `${lost} дукатов` });
+    tone = lost ? 'danger' : 'neutral';
+  } else if (card.type === 'turn-effect') {
+    const descriptions = {
+      moveBonus: `Навигация в этом ходу: +${card.value} к дальности.`,
+      movePenalty: `Навигация в этом ходу: −${card.value} к дальности.`,
+      bestOfTwo: 'В этом ходу бросаются два результата навигации и используется лучший.',
+      noNavigation: 'В этом ходу обычная навигация пропускается.',
+      noIncome: 'В этом ходу доход рынков и банков не начисляется.',
+    };
+    body = descriptions[card.effect] || 'На текущий ход наложен временный эффект.';
+  } else if (card.type === 'legendary') {
+    const beforeNames = new Set(before.legendaryNames || []);
+    const gained = (player.legendaryCards || []).map(item => item.name).find(name => !beforeNames.has(name));
+    body = gained ? `Получен легендарный эффект «${gained}».` : 'Легендарный эффект разыгран.';
+    if (gained) details.push({ label: 'Получено', value: gained });
+    tone = 'success';
+  } else if (card.type === 'special-card') {
+    const beforeCards = new Set(before.specialCards || []);
+    const gained = (player.specialCards || []).find(name => !beforeCards.has(name));
+    body = gained ? `Получен одноразовый эффект «${gained}».` : 'Одноразовый эффект получен.';
+    if (gained) details.push({ label: 'Получено', value: gained });
+    tone = 'success';
+  } else if (card.type === 'save-card') {
+    body = 'Эффект сохранён в вашей закрытой цифровой руке для позднего применения.';
+    tone = 'success';
+  } else if (card.type === 'found-cargo') {
+    const gain = sailingEventCargoGain(before, player);
+    const saved = (player.savedEventCards || []).some(item => !(before.savedEventIds || []).includes(item.id));
+    if (gain) {
+      const good = GOODS[gain.goodId]?.name || gain.goodId;
+      body = `${gain.holdName} заполнен товаром «${good}» ×${gain.quantity}.`;
+      details.push({ label: 'Груз', value: `${good} ×${gain.quantity}` });
+      tone = 'success';
+    } else if (saved) {
+      body = 'Свободного трюма нет. Событие сохранено в закрытой цифровой руке.';
+    } else {
+      body = 'Событие не изменило груз.';
+    }
+  } else if (card.type === 'treasure') {
+    const ducatGain = Math.max(0, (Number(player.ducats) || 0) - before.ducats);
+    const debtPaid = Math.max(0, before.debt - (Number(player.debt) || 0));
+    const gain = sailingEventCargoGain(before, player);
+    if (ducatGain || debtPaid) {
+      body = `Сокровище принесло ${ducatGain + debtPaid} дукатов.`;
+      if (ducatGain) details.push({ label: 'В казну', value: `+${ducatGain}` });
+      if (debtPaid) details.push({ label: 'Погашено долга', value: debtPaid });
+      tone = 'success';
+    } else if (gain) {
+      const good = GOODS[gain.goodId]?.name || gain.goodId;
+      body = `Сокровище заполнило ${gain.holdName.toLowerCase()} товаром «${good}» ×${gain.quantity}.`;
+      details.push({ label: 'Груз', value: `${good} ×${gain.quantity}` });
+      tone = 'success';
+    } else {
+      body = 'Сокровище не дало дополнительного эффекта.';
+    }
+  } else {
+    body = `«${card.name}» разрешено игровой системой.`;
+  }
+
+  return {
+    source: 'sailing',
+    cardName: card.name,
+    cardType: card.type,
+    title: card.name,
+    body,
+    details,
+    tone,
+  };
+}
+
+function emitSailingEventPresentation(room, player, card, before) {
+  if (!player?.socketId) return;
+  const presentation = buildSailingEventPresentation(room, player, card, before);
+  if (presentation) io.to(player.socketId).emit('eventResolved', presentation);
+}
+
 function resolveSailingEventCard(room, player, card) {
   if (!card) return { pending: false, holdEventCard: false };
   const resultBase = { pending: false, holdEventCard: false };
@@ -2362,8 +2486,10 @@ function processEventPhase(room) {
         log(room, `${player.name}: Обсерватория позволяет оставить первую карту или сбросить её без применения и взять обязательную вторую.`);
         return;
       }
+      const presentationBefore = sailingEventPresentationSnapshot(player);
       const resolved = resolveSailingEventCard(room, player, card);
       if (resolved.pending) return;
+      emitSailingEventPresentation(room, player, card, presentationBefore);
       if (!resolved.holdEventCard) sailingEventSource(room).markUsed(card);
       advancePreTurnStageIndex(room, 'sailing');
       continue;
@@ -2601,8 +2727,10 @@ function continueAfterObservedSailingCard(room, player, card) {
     return { ok: true, empty: true };
   }
   setPreTurnLastCard(room, { playerId: player.id, playerName: player.name, cardName: card.name, pending: false, source: 'sailing' });
+  const presentationBefore = sailingEventPresentationSnapshot(player);
   const resolved = resolveSailingEventCard(room, player, card);
   if (resolved.pending) return { ok: true, pending: true };
+  emitSailingEventPresentation(room, player, card, presentationBefore);
   if (!resolved.holdEventCard) sailingEventSource(room).markUsed(card);
   clearPendingResolution(room, 'event');
   advancePreTurnStageIndex(room, 'sailing');
@@ -2685,6 +2813,7 @@ function resolveTreasureHunterChoice(room, pending, choiceId) {
 function completePendingEvent(room, pending) {
   const player = playerById(room, pending.playerId);
   if (!player) return { ok: false, error: 'Игрок карты события не найден.' };
+  const presentationBefore = pending.origin === 'event-phase' ? sailingEventPresentationSnapshot(player) : null;
   const choice = pending.choice || {};
   if (pending.kind === 'cargo') {
     const result = fillCargoDirect(room, player, pending.goodId, choice.holdId);
@@ -2712,6 +2841,7 @@ function completePendingEvent(room, pending) {
     const island = room.islands.find(i => i.id === pending.islandId);
     log(room, `${player.name}: «${pending.cardName}». Флотилия немедленно перенесена к берегу ${island?.name || 'острова'}.`);
   } else return { ok: false, error: 'Неизвестный тип решения события.' };
+  if (presentationBefore && pending.eventCard) emitSailingEventPresentation(room, player, pending.eventCard, presentationBefore);
   finishPendingEvent(room, pending);
   return { ok: true };
 }

@@ -1043,3 +1043,67 @@ test('UI-20 joint assault Result Card is perspective-aware for attackers and def
   assert.match(code, /Защита острова/);
   assert.match(code, /tone: outcome === 'tie' \? 'neutral' : viewerWon \? 'success' : 'danger'/);
 });
+
+
+test('UI-21 pending sailing events render as Decision Layer event scenes', () => {
+  const start = app.indexOf('  function eventDecisionSceneHtml(');
+  const end = app.indexOf('\n  function mobileDecisionDescriptor(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  for (const kind of ['observatory','cargo','raid','boarding','storm','treasure-choice']) {
+    assert.match(code, new RegExp(kind.replace('-', '\\-')));
+  }
+  assert.match(code, /ШТОРМ/);
+  assert.match(code, /Выберите допустимую клетку берега/);
+  assert.match(code, /eventResolvedResultCard/);
+
+  const descStart = app.indexOf('  function mobileDecisionDescriptor(');
+  const descEnd = app.indexOf('\n  function renderDecisionLayer()', descStart);
+  const desc = app.slice(descStart, descEnd);
+  assert.match(desc, /bodyHtml: eventDecisionSceneHtml\(room\.pendingEvent\)/);
+  assert.match(desc, /actionsId: 'eventActions'/);
+  assert.match(styles, /UI-21 — sailing event scenes and authoritative results/);
+});
+
+test('UI-21 server emits private authoritative presentations for automatic sailing events', () => {
+  assert.match(server, /function sailingEventPresentationSnapshot\(player\)/);
+  assert.match(server, /function buildSailingEventPresentation\(room, player, card, before\)/);
+  assert.match(server, /function emitSailingEventPresentation\(room, player, card, before\)/);
+  assert.match(server, /io\.to\(player\.socketId\)\.emit\('eventResolved', presentation\)/);
+
+  const start = server.indexOf('function buildSailingEventPresentation(room, player, card, before)');
+  const end = server.indexOf('\nfunction resolveSailingEventCard(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = server.slice(start, end);
+  assert.match(code, /card\.type === 'storm'/);
+  assert.match(code, /Шторм отнёс вашу флотилию к берегам/);
+  assert.match(code, /card\.type === 'treasury-loss'/);
+  assert.match(code, /card\.type === 'turn-effect'/);
+  assert.match(code, /card\.type === 'legendary'/);
+  assert.match(code, /card\.type === 'found-cargo'/);
+  assert.match(code, /card\.type === 'treasure'/);
+});
+
+test('UI-21 automatic and observatory-resolved cards emit only after authoritative resolution', () => {
+  assert.match(server, /const presentationBefore = sailingEventPresentationSnapshot\(player\);\s*const resolved = resolveSailingEventCard\(room, player, card\);\s*if \(resolved\.pending\) return;\s*emitSailingEventPresentation/);
+  assert.match(server, /const presentationBefore = sailingEventPresentationSnapshot\(player\);\s*const resolved = resolveSailingEventCard\(room, player, card\);\s*if \(resolved\.pending\) return \{ ok: true, pending: true \};\s*emitSailingEventPresentation/);
+});
+
+test('UI-21 pending event result is emitted after the chosen effect is applied', () => {
+  const start = server.indexOf('function completePendingEvent(room, pending)');
+  const end = server.indexOf('\nfunction ', start + 1);
+  assert.ok(start >= 0 && end > start);
+  const code = server.slice(start, end);
+  assert.match(code, /presentationBefore = pending\.origin === 'event-phase'/);
+  assert.match(code, /if \(presentationBefore && pending\.eventCard\) emitSailingEventPresentation/);
+  assert.match(code, /finishPendingEvent\(room, pending\)/);
+  assert.ok(code.indexOf('emitSailingEventPresentation') < code.indexOf('finishPendingEvent(room, pending)'));
+});
+
+test('UI-21 client converts eventResolved into the shared Result Card queue', () => {
+  assert.match(app, /socket\.on\('eventResolved', data =>/);
+  assert.match(app, /eventResolvedResultCard\(data\)/);
+  assert.match(app, /enqueueResultCard\(card\)/);
+  assert.doesNotMatch(app.slice(app.indexOf("socket.on('eventResolved'"), app.indexOf("socket.on('battleResolved'")), /state\.room\s*=|socket\.emit/);
+});

@@ -491,6 +491,12 @@
   socket.on('connect_error', () => {
     if (state.everConnected) showConnectionBanner('Сервер пока недоступен. Продолжаем переподключение…', 'warning');
   });
+  socket.on('eventResolved', data => {
+    if (state.spectating) return;
+    const card = eventResolvedResultCard(data);
+    if (card) enqueueResultCard(card);
+  });
+
   socket.on('battleResolved', data => {
     if (state.spectating || !data?.result) return;
     if (data.kind === 'sea') {
@@ -1761,6 +1767,36 @@
     if (card) enqueueResultCard(card);
   }
 
+  function eventDecisionSceneHtml(pending) {
+    if (!pending) return '';
+    const scene = {
+      observatory: ['ОБСЕРВАТОРИЯ', 'Оставить первую карту или заменить её обязательной второй.'],
+      cargo: ['РАЗМЕЩЕНИЕ ГРУЗА', 'Выберите один свободный трюм для результата события.'],
+      raid: ['НАБЕГ', 'Событие требует выбрать одну вашу постройку для понижения.'],
+      boarding: ['АБОРДАЖ', 'Событие требует снять одно установленное улучшение корабля.'],
+      storm: ['ШТОРМ', 'Выберите допустимую клетку берега. После выбора флотилия будет перенесена немедленно.'],
+      'treasure-choice': ['ИСКАТЕЛЬ СОКРОВИЩ', 'Выберите один из двух независимых результатов сокровища.'],
+    }[pending.kind] || ['СОБЫТИЕ', 'Требуется ваш выбор для продолжения партии.'];
+    return `
+      <section class="event-scene-card">
+        <span>${escapeHtml(scene[0])}</span>
+        <strong>«${escapeHtml(pending.cardName || 'Событие')}»</strong>
+        <small>${escapeHtml(scene[1])}</small>
+      </section>
+    `;
+  }
+
+  function eventResolvedResultCard(data) {
+    if (!data || data.source !== 'sailing' || !data.title) return null;
+    return {
+      kicker: 'СОБЫТИЕ',
+      title: data.title,
+      body: data.body || 'Событие разрешено.',
+      details: Array.isArray(data.details) ? data.details : [],
+      tone: data.tone || 'neutral',
+    };
+  }
+
   function mobileDecisionDescriptor(room) {
     if (!room) return null;
     if (room.pendingLegendaryReaction?.viewerCanRespond) return {
@@ -1769,7 +1805,8 @@
     };
     if (room.pendingEvent?.viewerCanRespond) return {
       kind: 'decision', kicker: 'СОБЫТИЕ', title: room.pendingEvent.cardName || 'Решение по событию',
-      contentId: 'eventContent', actionsId: 'eventActions',
+      bodyHtml: eventDecisionSceneHtml(room.pendingEvent),
+      actionsId: 'eventActions',
     };
     if (room.pendingFeud?.viewerCanRespond) return {
       kind: 'decision', kicker: 'ВРАЖДА', title: room.pendingFeud.cardName || 'Решение по вражде',
