@@ -1088,10 +1088,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     backdrop-filter: blur(8px);
   }
 
-  body.game-active .game-world-shell .map-toolbar button {
-    min-height: 34px;
-  }
-
   body.game-active .game-hud {
     position: absolute;
     z-index: 50;
