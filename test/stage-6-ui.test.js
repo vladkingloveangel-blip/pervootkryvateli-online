@@ -1426,7 +1426,7 @@ test('UI-28 accepted consensus closes voting and leaves finalization server-auth
   const panelStart = app.indexOf('  function renderEndGame()');
   const panelEnd = app.indexOf('\n  function render()', panelStart);
   const panel = app.slice(panelStart, panelEnd);
-  assert.match(panel, /consensus\.status === 'accepted'/);
+  assert.match(panel, /consensus\?\.status === 'accepted'/);
   assert.match(panel, /finishAfterRound/);
   assert.doesNotMatch(vote + panel, /room\.finished\s*=|room\.phase\s*=\s*['"]finished/);
 });
