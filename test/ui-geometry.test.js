@@ -62,7 +62,8 @@ test('mobile turn controller is compact and keeps canonical turn commands', () =
   assert.match(block, /socket\.emit\('endTurn'/);
   assert.doesNotMatch(block, /addButton\('Действия'/);
   assert.match(block, /bar\.dataset\.mode = 'actions'/);
-  assert.match(block, /left === 1 \? '1 действие' : left > 1 \? `\$\{left\} действия` : 'Нет действий'/);
+  assert.match(block, /setCopy\('ДЕЙСТВИЯ', '',/);
+  assert.doesNotMatch(block, /actionLabel/);
   assert.match(block, /addButton\('Остаться'.*skipNavigation/);
   assert.match(block, /addButton\('🎲 Бросить'.*rollMove/);
 
@@ -79,4 +80,9 @@ test('mobile turn controller is compact and keeps canonical turn commands', () =
   assert.match(css, /\.game-action-bar\[data-mode="actions"\] \.game-action-copy \{\s*\n\s*display:\s*contents/);
   assert.match(css, /white-space:\s*nowrap/);
   assert.doesNotMatch(css, /-webkit-line-clamp:\s*2/);
+  assert.match(css, /\.game-action-kicker \{[\s\S]*?color:\s*var\(--accent\)/);
+  assert.match(css, /\.game-action-status > strong \{[\s\S]*?color:\s*var\(--accent\)/);
+  assert.match(css, /text-overflow:\s*clip;\s*\n\s*transform:\s*translateY\(3px\)/);
+  assert.match(css, /\.game-action-bar\[data-mode="actions"\] \.game-action-progress \{\s*\n\s*order:\s*0/);
+  assert.match(css, /\.game-action-bar\[data-mode="actions"\] \.game-action-kicker \{\s*\n\s*order:\s*1/);
 });
