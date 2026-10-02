@@ -44,32 +44,29 @@
       vec2 p = uv * 2.0 - 1.0;
       p.x *= u_resolution.x / max(u_resolution.y, 1.0);
 
-      float t = u_time * 0.18;
-      float swell = fbm(p * 1.55 + vec2(t * 0.72, -t * 0.33));
-      float crossWave = fbm(p * 4.2 + vec2(-t * 0.26, t * 0.48));
-      float ripple = 0.5 + 0.5 * sin(
-        p.x * 8.5 +
-        p.y * 3.1 +
-        t * 3.0 +
-        swell * 3.2
-      );
+      float t = u_time * 0.10;
+      vec2 drift = vec2(t * 0.34, -t * 0.22);
+      float broad = fbm(p * 1.35 + drift);
+      float detail = fbm(p * 3.4 - drift * 0.7);
 
-      float surface = clamp(swell * 0.58 + crossWave * 0.29 + ripple * 0.13, 0.0, 1.0);
+      // Bright moving caustic cells: two warped wave fields intersect into thin highlights.
+      vec2 warp = p + vec2(broad - 0.5, detail - 0.5) * 0.34;
+      float waveA = abs(sin(warp.x * 7.2 + warp.y * 4.1 + t * 2.1));
+      float waveB = abs(sin(warp.y * 8.0 - warp.x * 3.7 - t * 1.7));
+      float causticA = 1.0 - smoothstep(0.08, 0.34, abs(waveA - waveB));
+      float waveC = abs(sin(warp.x * 4.9 - warp.y * 7.4 - t * 1.25 + broad * 2.8));
+      float causticB = 1.0 - smoothstep(0.05, 0.28, abs(waveB - waveC));
+      float caustic = clamp(causticA * 0.72 + causticB * 0.55, 0.0, 1.0);
+      caustic = pow(caustic, 2.0);
 
-      vec3 deep = vec3(0.018, 0.255, 0.325);
-      vec3 mid = vec3(0.025, 0.475, 0.565);
-      vec3 crest = vec3(0.33, 0.77, 0.81);
+      vec3 deep = vec3(0.015, 0.43, 0.50);
+      vec3 shallow = vec3(0.035, 0.66, 0.70);
+      vec3 light = vec3(0.66, 0.94, 0.91);
 
-      vec3 color = mix(deep, mid, smoothstep(0.18, 0.82, surface));
-      float foamLight = smoothstep(0.70, 0.96, surface + ripple * 0.08);
-      color = mix(color, crest, foamLight * 0.28);
-
-      float glintBand = sin((p.x - p.y * 0.55) * 13.0 + t * 4.0 + crossWave * 5.0);
-      float glint = pow(max(glintBand, 0.0), 10.0) * (0.025 + 0.035 * swell);
-      color += vec3(0.45, 0.82, 0.86) * glint;
-
-      float edgeShade = 1.0 - smoothstep(0.72, 1.55, length(p)) * 0.07;
-      color *= edgeShade;
+      float body = smoothstep(0.18, 0.86, broad * 0.68 + detail * 0.32);
+      vec3 color = mix(deep, shallow, body * 0.72);
+      color = mix(color, light, caustic * 0.62);
+      color += vec3(0.08, 0.20, 0.18) * max(detail - 0.56, 0.0);
 
       gl_FragColor = vec4(color, 1.0);
     }
