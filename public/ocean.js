@@ -46,15 +46,15 @@
 
       float t = u_time * 0.10;
       vec2 drift = vec2(t * 0.34, -t * 0.22);
-      float broad = fbm(p * 1.35 + drift);
-      float detail = fbm(p * 3.4 - drift * 0.7);
+      float broad = fbm(p * 3.1 + drift);
+      float detail = fbm(p * 7.6 - drift * 0.7);
 
       // Bright moving caustic cells: two warped wave fields intersect into thin highlights.
       vec2 warp = p + vec2(broad - 0.5, detail - 0.5) * 0.34;
-      float waveA = abs(sin(warp.x * 7.2 + warp.y * 4.1 + t * 2.1));
-      float waveB = abs(sin(warp.y * 8.0 - warp.x * 3.7 - t * 1.7));
+      float waveA = abs(sin(warp.x * 15.8 + warp.y * 9.0 + t * 2.1));
+      float waveB = abs(sin(warp.y * 17.6 - warp.x * 8.1 - t * 1.7));
       float causticA = 1.0 - smoothstep(0.08, 0.34, abs(waveA - waveB));
-      float waveC = abs(sin(warp.x * 4.9 - warp.y * 7.4 - t * 1.25 + broad * 2.8));
+      float waveC = abs(sin(warp.x * 10.8 - warp.y * 16.3 - t * 1.25 + broad * 2.8));
       float causticB = 1.0 - smoothstep(0.05, 0.28, abs(waveB - waveC));
       float caustic = clamp(causticA * 0.72 + causticB * 0.55, 0.0, 1.0);
       caustic = pow(caustic, 2.0);
