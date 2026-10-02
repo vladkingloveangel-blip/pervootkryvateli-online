@@ -1825,3 +1825,32 @@ test('UI-34 covers portrait phones and secondary landscape without a second UX a
   assert.match(code, /max-height: calc\(100dvh - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\) - 8px\)/);
   assert.doesNotMatch(code, /mobileLandscapeApp|landscapeGameShell|desktopMobileMode/);
 });
+
+
+test('UI-35 exposes mandatory interaction state to assistive technology', () => {
+  assert.match(index, /id="gameActionBar"[^>]*role="status"[^>]*aria-live="polite"[^>]*aria-atomic="true"/);
+  assert.match(index, /id="targetingBar"[^>]*role="status"[^>]*aria-live="polite"[^>]*aria-atomic="true"[^>]*aria-label="Режим выбора цели"/);
+  assert.match(index, /id="decisionLayer"[^>]*role="dialog"[^>]*aria-modal="true"[^>]*aria-labelledby="decisionTitle"/);
+  assert.match(index, /id="decisionActions"[^>]*role="group"[^>]*aria-label="Варианты решения"/);
+  assert.match(index, /id="resultLayer"[^>]*role="dialog"[^>]*aria-modal="true"/);
+  assert.match(index, /id="toastStack"[^>]*aria-live="polite"/);
+});
+
+test('UI-35 provides visible keyboard focus, disabled feedback and mobile tap targets', () => {
+  const start = styles.indexOf('/* UI-35 — accessibility and interaction quality */');
+  assert.ok(start >= 0);
+  const code = styles.slice(start);
+  assert.match(code, /:where\(button, input, select,[\s\S]*?\):focus-visible \{/);
+  assert.match(code, /outline: 3px solid var\(--accent\)/);
+  assert.match(code, /button:disabled,[\s\S]*?button\[aria-disabled="true"\]/);
+  assert.match(code, /body\.game-active button:not\([\s\S]*?min-height: 44px/);
+});
+
+test('UI-35 reduced-motion disables decorative motion and targeting pulse', () => {
+  const start = styles.indexOf('/* UI-35 — accessibility and interaction quality */');
+  const code = styles.slice(start);
+  assert.match(code, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(code, /animation-duration: \.01ms !important/);
+  assert.match(code, /transition-duration: \.01ms !important/);
+  assert.match(code, /\.targeting-hit,[\s\S]*?\.targeting-marker,[\s\S]*?\.sea-motion-layer[\s\S]*?animation: none !important/);
+});

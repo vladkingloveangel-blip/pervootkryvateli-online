@@ -448,7 +448,7 @@
         </aside>
       </section>
 
-      <section id="targetingBar" class="targeting-bar hidden" aria-live="polite">
+      <section id="targetingBar" class="targeting-bar hidden" role="status" aria-live="polite" aria-atomic="true" aria-label="Режим выбора цели">
         <div class="targeting-copy">
           <span id="targetingKicker">ВЫБОР ЦЕЛИ</span>
           <strong id="targetingTitle">—</strong>
@@ -511,7 +511,7 @@
         <div id="objectSheetActions" class="object-sheet-actions"></div>
       </section>
 
-      <section id="gameActionBar" class="game-action-bar hidden" aria-live="polite" aria-label="Текущее действие">
+      <section id="gameActionBar" class="game-action-bar hidden" role="status" aria-live="polite" aria-atomic="true" aria-label="Текущее действие">
         <div class="game-action-copy">
           <span id="gameActionKicker" class="game-action-kicker">Ожидание</span>
           <strong id="gameActionTitle">—</strong>
@@ -527,7 +527,7 @@
           <span id="decisionKicker" class="decision-kicker">Требуется ваше решение</span>
           <h2 id="decisionTitle">—</h2>
           <div id="decisionBody" class="decision-body"></div>
-          <div id="decisionActions" class="decision-actions"></div>
+          <div id="decisionActions" class="decision-actions" role="group" aria-label="Варианты решения"></div>
         </div>
       </section>
 
@@ -537,7 +537,7 @@
           <span id="resultKicker" class="result-kicker">Результат</span>
           <h2 id="resultTitle">—</h2>
           <div id="resultBody" class="result-body"></div>
-          <div id="resultDetails" class="result-details"></div>
+          <div id="resultDetails" class="result-details" aria-live="polite"></div>
           <button id="resultContinueBtn" class="primary result-continue" type="button">Продолжить</button>
         </article>
       </section>

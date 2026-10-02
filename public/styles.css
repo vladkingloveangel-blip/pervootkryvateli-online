@@ -3889,3 +3889,56 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     max-height: 94dvh;
   }
 }
+
+
+/* UI-35 — accessibility and interaction quality */
+:where(button, input, select, [role="button"], .map-object-hit, .navigation-hit, .targeting-hit, .targeting-marker):focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+button:disabled,
+button[aria-disabled="true"] {
+  opacity: .5;
+  cursor: not-allowed;
+  filter: saturate(.55);
+}
+
+@media (max-width: 900px) {
+  body.game-active button:not(.map-object-hit):not(.navigation-hit):not(.targeting-hit):not(.targeting-marker) {
+    min-height: 44px;
+  }
+
+  body.game-active .map-object-hit,
+  body.game-active .navigation-hit,
+  body.game-active .targeting-hit {
+    touch-action: manipulation;
+  }
+
+  body.game-active .decision-card,
+  body.game-active .result-card,
+  body.game-active .object-sheet,
+  body.game-active .game-menu-panel,
+  body.game-active .score-overlay-card,
+  body.game-active .journal-overlay-card,
+  body.game-active .end-game-vote-card {
+    scroll-behavior: smooth;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+
+  body.game-active .targeting-hit,
+  body.game-active .targeting-marker,
+  .sea-motion-layer {
+    animation: none !important;
+  }
+}
