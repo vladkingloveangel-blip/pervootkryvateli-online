@@ -2267,7 +2267,7 @@ function takeCharacter(room, player, characterId) {
 function canReplaceCharacter(room, player, characterId) {
   if (!heldCharacterId(player)) return { ok: false, error: 'На основном корабле нет персонажа для замены.' };
   if (Number(player.characterReplacedRound) === Number(room?.round)) {
-    return { ok: false, error: 'Неиспользованного персонажа уже заменяли в этом раунде.' };
+    return { ok: false, error: 'Персонажа уже заменяли в этом раунде.' };
   }
   const character = characterOptionsAtAdmiralty(room, player, { replacing: true }).find(item => item.id === characterId);
   if (!character) return { ok: false, error: 'Этот персонаж недоступен для замены в текущем Адмиралтействе.' };
