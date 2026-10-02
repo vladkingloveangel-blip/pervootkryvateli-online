@@ -3947,10 +3947,10 @@ io.on('connection', socket => {
     if (room.phase !== 'actions') return ackSafe(ack, { ok: false, error: 'Сначала завершите навигацию.' });
     if (room.actionsLeft <= 0) return ackSafe(ack, { ok: false, error: 'Действий больше нет.' });
 
-    const result = loadCargo(room, p, String(data?.islandId || ''), String(data?.goodId || ''), String(data?.holdId || 'main'));
+    const result = loadCargo(room, p, String(data?.islandId || ''), String(data?.goodId || ''));
     if (!result.ok) return ackSafe(ack, result);
     room.actionsLeft -= 1;
-    log(room, `${p.name} загружает на ${result.island.name} в ${result.holdName.toLowerCase()}: ${result.good.name} × ${result.quantity}. Осталось действий: ${room.actionsLeft}.`);
+    log(room, `${p.name} загружает на ${result.island.name} всю доступную флотилию: ${result.good.name} × ${result.quantity}. Осталось действий: ${room.actionsLeft}.`);
     ackSafe(ack, { ok: true });
     emitRoom(room);
   });
@@ -3964,13 +3964,16 @@ io.on('connection', socket => {
     if (room.actionsLeft <= 0) return ackSafe(ack, { ok: false, error: 'Действий больше нет.' });
     if (!isCitadelCell(p.row, p.col)) return ackSafe(ack, { ok: false, error: 'Это действие доступно только в Цитадели.' });
 
-    const result = sellCargo(room, p, String(_data?.holdId || 'main'));
+    const result = sellCargo(room, p);
     if (!result.ok) return ackSafe(ack, result);
     room.actionsLeft -= 1;
-    const matchesDeliveryAssignment = deliveryAssignmentMatch(p, result);
+    for (const sale of result.sales) {
+      if (deliveryAssignmentMatch(p, sale)) {
+        trackAssignment(room, p, { type: 'delivery', goodId: sale.good.id, assignmentInstanceId: sale.assignmentInstanceId, fullHold: true });
+      }
+    }
     const debtText = result.credit?.debtPaid ? ` Из обычной выручки ${result.credit.debtPaid} уходит в погашение долга; в казну ${result.credit.net}.` : '';
-    log(room, `${p.name} продаёт в Цитадели из ${result.holdName.toLowerCase()}: ${result.good.name} ×${result.quantity} за ${result.revenue} дукатов.${debtText} Осталось действий: ${room.actionsLeft}.`);
-    if (matchesDeliveryAssignment) trackAssignment(room, p, { type: 'delivery', goodId: result.good.id, assignmentInstanceId: result.assignmentInstanceId, fullHold: true });
+    log(room, `${p.name} продаёт в Цитадели весь груз флотилии за ${result.revenue} дукатов.${debtText} Осталось действий: ${room.actionsLeft}.`);
     ackSafe(ack, { ok: true, revenue: result.revenue });
     emitRoom(room);
   });
