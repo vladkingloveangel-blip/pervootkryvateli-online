@@ -2064,3 +2064,13 @@ test('UI-40 roster uses authoritative turn order for active next and waiting sta
   assert.match(css, /\.roster-turn-dot-next \{ background: #ef4444; \}/);
   assert.match(css, /\.roster-turn-dot-waiting \{ background: #aab5b8; \}/);
 });
+
+
+test('UI-40 mobile HUD integrates connection status and aligns turn/menu controls', () => {
+  assert.match(html, /id="hudConnection" class="hud-connection"/);
+  assert.match(app, /hudConnection\.textContent = yes \? '● онлайн' : '○ нет связи'/);
+  assert.match(styles, /body\.game-active \.topbar \.connection \{\s*display: none;/);
+  assert.match(styles, /--hud-row-size: 44px/);
+  assert.match(styles, /height: var\(--hud-row-size\) !important/);
+  assert.match(styles, /body\.game-active \.hud-menu-btn[\s\S]*?aspect-ratio: 1 \/ 1/);
+});

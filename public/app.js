@@ -491,7 +491,14 @@
   }
 
   function setError(id, msg = '') { $(id).textContent = msg; }
-  function setConnected(yes) { $('connection').textContent = yes ? '● онлайн' : '○ нет связи'; }
+  function setConnected(yes) {
+    $('connection').textContent = yes ? '● онлайн' : '○ нет связи';
+    const hudConnection = $('hudConnection');
+    if (hudConnection) {
+      hudConnection.textContent = yes ? '● онлайн' : '○ нет связи';
+      hudConnection.classList.toggle('offline', !yes);
+    }
+  }
 
   function clearSession(message = '') {
     const code = state.code;

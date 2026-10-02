@@ -4800,3 +4800,94 @@ body.game-active .final-results-art {
     backdrop-filter: none;
   }
 }
+
+
+/* UI-40 staging HUD alignment — one compact top row */
+@media (max-width: 900px) {
+  body.game-active .topbar .connection {
+    display: none;
+  }
+
+  body.game-active .game-hud {
+    --hud-row-size: 44px;
+    flex-basis: 54px;
+    min-height: 54px;
+    align-items: center;
+    grid-template-columns: minmax(88px,112px) minmax(0,1fr) minmax(84px,96px) var(--hud-row-size);
+  }
+
+  body.game-active .game-hud > .hud-player,
+  body.game-active .game-hud > .hud-turn,
+  body.game-active .game-hud > .hud-menu-btn {
+    box-sizing: border-box;
+    height: var(--hud-row-size) !important;
+    min-height: var(--hud-row-size) !important;
+    max-height: var(--hud-row-size);
+  }
+
+  body.game-active .hud-player {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
+  body.game-active .hud-player-meta {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    line-height: 1.05;
+  }
+
+  body.game-active .hud-connection {
+    flex: 0 0 auto;
+    color: #79dfa0;
+    font-size: 7px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  body.game-active .hud-connection.offline {
+    color: #ef7777;
+  }
+
+  body.game-active .hud-turn {
+    display: grid;
+    align-content: center;
+    gap: 0;
+    padding: 3px 6px;
+    line-height: 1;
+  }
+
+  body.game-active .hud-turn small {
+    font-size: 7px;
+    line-height: 1.05;
+  }
+
+  body.game-active .hud-turn strong {
+    font-size: 10px;
+    line-height: 1.05;
+  }
+
+  body.game-active .hud-phase {
+    font-size: 7px;
+    line-height: 1.05;
+  }
+
+  body.game-active .hud-menu-btn {
+    width: var(--hud-row-size) !important;
+    min-width: var(--hud-row-size) !important;
+    max-width: var(--hud-row-size);
+    padding: 0 !important;
+    aspect-ratio: 1 / 1;
+    align-self: center;
+  }
+}
+
+@media (max-width: 420px) {
+  body.game-active .game-hud {
+    --hud-row-size: 40px;
+    grid-template-columns: 82px minmax(0,1fr) 78px var(--hud-row-size);
+  }
+  body.game-active .hud-connection { font-size: 6px; }
+  body.game-active .hud-turn strong { font-size: 9px; }
+}
