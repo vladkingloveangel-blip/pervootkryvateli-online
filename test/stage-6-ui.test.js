@@ -660,7 +660,7 @@ test('UI-14 character information remains owner-only in the new path', () => {
   assert.match(code, /if \(!mine \|\| state\.spectating\) return/);
 
   const playerStart = app.indexOf('  function playerPublicSheetHtml(');
-  const playerEnd = app.indexOf('\n  function renderPlayerObjectSheet(', playerStart);
+  const playerEnd = app.indexOf('\n  function renderFleetOverviewObjectSheet(', playerStart);
   const publicCode = app.slice(playerStart, playerEnd);
   assert.doesNotMatch(publicCode, /character|characterAcquisitionOptions|characterReplacementOptions/);
 });

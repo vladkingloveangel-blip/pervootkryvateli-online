@@ -1195,7 +1195,7 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     z-index: 68;
     left: 8px;
     right: 8px;
-    bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 9px;
@@ -1209,7 +1209,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   }
 
   body.game-active .game-action-bar.hidden,
-  body.game-active.mobile-sheet-open .game-action-bar,
   body.game-active .finished-state .game-action-bar {
     display: none !important;
   }
@@ -1274,9 +1273,10 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     background: var(--accent);
   }
 
-  /* The new action bar is the mobile turn controller. Legacy controls remain
-     reachable in the Actions sheet until their mechanics migrate. */
-
+  /* The action bar is the mobile turn controller; the legacy map navigation overlay is retired. */
+  body.game-active .map-nav-overlay {
+    display: none !important;
+  }
 }
 
 @media (max-width: 430px) {
