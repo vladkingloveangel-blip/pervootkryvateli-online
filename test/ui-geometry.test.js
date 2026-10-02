@@ -4,6 +4,7 @@ const fs = require('node:fs');
 
 const css = fs.readFileSync('public/styles.css', 'utf8');
 const app = fs.readFileSync('public/app.js', 'utf8');
+const ocean = fs.readFileSync('public/ocean.js', 'utf8');
 const index = fs.readFileSync('public/index.html', 'utf8');
 const server = fs.readFileSync('server.js', 'utf8');
 const projection = fs.readFileSync('state-projection.js', 'utf8');
@@ -231,6 +232,9 @@ test('short landscape floating sheet clears the canonical action bar', () => {
 
 
 test('animated ocean is a visual pan buffer outside the authoritative board', () => {
+  assert.doesNotThrow(() => new Function(ocean));
+  assert.match(ocean, /window\.PervoOcean = \{ init \}/);
+  assert.match(ocean, /requestAnimationFrame\(draw\)/);
   assert.match(index, /id="mapPanSurface"[\s\S]*id="mapOceanCanvas"[\s\S]*id="mapBoard"/);
   assert.match(index, /<script src="\/ocean\.js"><\/script>\s*<script src="\/app\.js"><\/script>/);
   assert.match(css, /\.map-pan-surface \{[\s\S]*padding:\s*var\(--map-pan-gutter-y\) var\(--map-pan-gutter-x\)/);
