@@ -2037,7 +2037,7 @@
       setCopy('ДЕЙСТВИЯ', '',
         left > 0 ? 'Выберите объект или действие.' : 'Завершите ход.');
       progress.classList.remove('hidden');
-      const total = Number(r.balanceCatalog?.session?.actionsPerTurn) || 3;
+      const total = Math.max(left, Number(mine.stats?.actionsPerTurn) || Number(r.balanceCatalog?.session?.actionsPerTurn) || 3);
       for (let i = 0; i < total; i += 1) {
         const dot = document.createElement('span');
         dot.className = i < left ? 'active' : '';
@@ -4085,6 +4085,7 @@
         <span>Войско</span><strong>${stats.army ?? '—'}</strong>
         <span>Основной трюм</span><strong>${stats.cargo ?? '—'}</strong>
         <span>Модификатор хода</span><strong>${moveText}</strong>
+        <span>Действий за ход</span><strong>${stats.actionsPerTurn ?? 3}</strong>
         <span>Артиллерия флотилии</span><strong>${mine.fleetArtillery ?? stats.artillery ?? '—'}</strong>
         <span>Места улучшений</span><strong>${upgrades.length}/${mine.upgradeSlots}</strong>
         <span>Места верфей</span><strong>${mine.shipyardSlots}</strong>
