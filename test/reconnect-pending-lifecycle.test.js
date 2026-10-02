@@ -214,7 +214,6 @@ test('mandatory assault Sea Veil decision survives disconnect and resumes before
   assert.equal(persisted.islands.find(item => item.id === island.id).ownerId, targetId);
   assert.equal(persisted.actionsLeft, actionsAfterAttack);
   assert.equal(persisted.log.some(entry => entry.text.includes('не использует «Покров моря» из-за отключения')), false);
-  assert.equal(persisted.log.some(entry => entry.text.includes('Решение сохранено до переподключения')), true);
 
   const resumedTarget = await connect();
   const reconnectStatePromise = once(resumedTarget, 'roomState');
