@@ -3136,3 +3136,29 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   body.game-active .diplomacy-lines strong { font-size: 10px; line-height: 1.4; }
   body.game-active .state-island-politics { margin-top: 8px; }
 }
+
+
+/* UI-24 — alliances in player cards */
+@media (max-width: 900px) {
+  body.game-active .player-alliance-status {
+    display: grid;
+    gap: 3px;
+    margin-top: 8px;
+    padding: 9px 10px;
+    border: 1px solid rgba(106,211,156,.34);
+    border-radius: 11px;
+    background: rgba(106,211,156,.055);
+  }
+  body.game-active .player-alliance-status > span {
+    color: rgba(170,230,198,.9);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .08em;
+  }
+  body.game-active .player-alliance-status > strong { font-size: 12px; }
+  body.game-active .player-alliance-status > small {
+    color: var(--muted);
+    font-size: 9px;
+    line-height: 1.4;
+  }
+}

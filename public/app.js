@@ -4994,7 +4994,7 @@
   function playerRelationLabel(player) {
     if (!player || player.id === state.myId) return 'Вы';
     const mine = me();
-    if ((mine?.allyIds || []).includes(player.id)) return 'Союзник';
+    if ((mine?.allyIds || []).includes(player.id)) return 'Союзник · действующий союз';
     if ((mine?.brokenAlliesThisTurn || []).includes(player.id)) return 'Бывший союзник';
     if (player.suzerainId) {
       const faction = state.room?.factions?.find(item => item.id === player.suzerainId);
@@ -5290,11 +5290,32 @@
     `;
   }
 
+  function appendCanonicalAllianceActions(target, playerId) {
+    if (!target || !playerId) return;
+    renderAlliances();
+    const player = state.room?.players?.find(item => item.id === playerId);
+    if (!player) return;
+    const source = $('allianceActions');
+    for (const node of Array.from(source?.children || [])) {
+      if (node.tagName !== 'BUTTON') continue;
+      if (!node.textContent.includes(player.name)) continue;
+      target.appendChild(node);
+    }
+  }
+
+  function alliancePublicStatusHtml(player) {
+    if (!player || player.id === state.myId) return '';
+    if (areAlliesClient(state.myId, player.id)) {
+      return '<div class="player-alliance-status"><span>СОЮЗ</span><strong>Действующий союз</strong><small>Разрыв доступен только в разрешённый правилами момент.</small></div>';
+    }
+    return '';
+  }
+
   function renderPlayerObjectSheet(player) {
     const sheet = $('objectSheet');
     $('objectSheetKind').textContent = player.id === state.myId ? 'ВАША ФЛОТИЛИЯ' : 'ФЛОТИЛИЯ ИГРОКА';
     $('objectSheetTitle').textContent = player.name;
-    $('objectSheetBody').innerHTML = playerPublicSheetHtml(player);
+    $('objectSheetBody').innerHTML = playerPublicSheetHtml(player) + alliancePublicStatusHtml(player);
 
     const actions = $('objectSheetActions');
     actions.innerHTML = '';
@@ -5311,31 +5332,8 @@
       const myTurn = state.room.activePlayerId === state.myId;
       const blocked = isDecisionPending();
       const allies = areAlliesClient(state.myId, player.id);
-      const sameCell = Number(mine.row) === Number(player.row) && Number(mine.col) === Number(player.col);
-      const canProposeAlliance = myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0
-        && !blocked && !state.room.pendingAlliance && !state.room.pendingBattle
-        && !allies && !(mine.allyIds || []).length && !(player.allyIds || []).length
-        && sameCell && player.connected;
-      const canBreakAlliance = allies && myTurn && mine.phase === 'navigation' && mine.roll === null
-        && !blocked && !state.room.pendingBattle;
 
-      if (canProposeAlliance) {
-        const alliance = document.createElement('button');
-        alliance.type = 'button';
-        alliance.className = 'primary';
-        alliance.textContent = 'Предложить союз';
-        alliance.addEventListener('click', () => socket.emit('requestAlliance', { targetPlayerId: player.id }, handleGameAck));
-        actions.appendChild(alliance);
-      }
-
-      if (canBreakAlliance) {
-        const breakButton = document.createElement('button');
-        breakButton.type = 'button';
-        breakButton.className = 'danger-soft';
-        breakButton.textContent = 'Разорвать союз';
-        breakButton.addEventListener('click', () => socket.emit('breakAlliance', { targetPlayerId: player.id }, handleGameAck));
-        actions.appendChild(breakButton);
-      }
+      appendCanonicalAllianceActions(actions, player.id);
 
       const canReachForSeaBattle = seaAttackPositionClient(mine, player) && !allies;
       if (canReachForSeaBattle) {

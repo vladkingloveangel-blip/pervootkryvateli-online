@@ -1211,3 +1211,45 @@ test('UI-23 keeps the legacy politics renderer as canonical fallback until UI-32
   assert.match(code, /socket\.emit\('rebelVassalage'/);
   assert.match(styles, /UI-23 — politics and state diplomacy/);
 });
+
+
+test('UI-24 moves alliance actions into player cards through the canonical alliance renderer', () => {
+  const start = app.indexOf('  function appendCanonicalAllianceActions(');
+  const end = app.indexOf('\n  function renderPlayerObjectSheet(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.ok(code.includes('renderAlliances();'));
+  assert.ok(code.includes("$('allianceActions')"));
+  assert.ok(code.includes('node.textContent.includes(player.name)'));
+  assert.ok(code.includes('target.appendChild(node)'));
+  assert.equal(code.includes('socket.emit'), false);
+});
+
+test('UI-24 removes duplicated alliance legality from the player object sheet', () => {
+  const start = app.indexOf('  function renderPlayerObjectSheet(');
+  const end = app.indexOf('\n  function showPlayerMapInfo(', start);
+  const code = app.slice(start, end);
+  assert.ok(code.includes('appendCanonicalAllianceActions(actions, player.id)'));
+  assert.equal(code.includes('canProposeAlliance'), false);
+  assert.equal(code.includes('canBreakAlliance'), false);
+  assert.equal(code.includes("socket.emit('requestAlliance'"), false);
+  assert.equal(code.includes("socket.emit('breakAlliance'"), false);
+});
+
+test('UI-24 keeps incoming alliance response in the mandatory Decision Layer', () => {
+  const start = app.indexOf('  function mobileDecisionDescriptor(');
+  const end = app.indexOf('\n  function renderDecisionLayer()', start);
+  const code = app.slice(start, end);
+  assert.ok(code.includes("room.pendingAlliance?.viewerRole === 'recipient'"));
+  assert.ok(code.includes("kind: 'decision', kicker: 'ПРЕДЛОЖЕНИЕ СОЮЗА'"));
+  assert.ok(code.includes("actionsId: 'allianceActions'"));
+  assert.ok(code.includes("room.pendingAlliance?.viewerRole === 'sender'"));
+  assert.ok(code.includes("kind: 'waiting'"));
+});
+
+test('UI-24 shows a compact public active-alliance status in player cards', () => {
+  assert.ok(app.includes('function alliancePublicStatusHtml'));
+  assert.ok(app.includes('Действующий союз'));
+  assert.ok(app.includes('Союзник · действующий союз'));
+  assert.ok(styles.includes('UI-24 — alliances in player cards'));
+});
