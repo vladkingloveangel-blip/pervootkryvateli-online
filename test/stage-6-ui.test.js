@@ -282,7 +282,7 @@ test('UI-5 HUD separates live combat stats from scoring metrics and exposes phas
 
   assert.match(app, /\$\('hudPlayerBtn'\)\.addEventListener\('click',[\s\S]*?openMobileTab\('ship'\)/);
   assert.match(app, /\$\('hudCargoBtn'\)\.addEventListener\('click',[\s\S]*?openMobileTab\('ship'\)/);
-  assert.match(app, /\$\('hudMenuBtn'\)\.addEventListener\('click', \(\) => toggleGameAccountMenu\(\)\)/);
+  assert.match(app, /\$\('hudMenuBtn'\)\.addEventListener\('click', toggleGameMenu\)/);
   assert.match(styles, /UI-5 — canonical mobile gameplay HUD/);
 });
 
