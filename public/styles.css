@@ -4886,13 +4886,14 @@ body.game-active .game-hud .hud-ship-icon .ui-icon { width: 21.6px; height: 21.6
 body.game-active .game-hud .hud-menu-btn .ui-icon { width: 18.9px; height: 18.9px; }
 body.game-active .game-hud .hud-politics-chip > span:first-child { font-size: 90%; }
 
-/* Player positions are cell centers in app.js; the marker must be translated by half
-   of its own box in both axes. Width and height use the same cell fraction. */
+/* Player positions are cell centers in app.js. Token geometry is derived from one
+   axis only so the marker remains a true circle even if row/column layout changes. */
 body.game-active .token {
-  width: calc(100% / var(--map-cols, 28) * .576);
-  height: calc(100% / var(--map-rows, 28) * .576);
+  width: calc(100% / var(--map-cols, 28) * .4608);
+  height: auto;
   min-height: 0;
   padding: 0;
+  aspect-ratio: 1 / 1;
   transform: translate(-50%, -50%);
   box-sizing: border-box;
   border-radius: 50%;
