@@ -52,7 +52,7 @@
       float edgeDistance = distanceOutsideBoard(topUv);
 
       // The authoritative board stays clear. Fog only fades in outside it.
-      float edgeMask = smoothstep(0.006, 0.055, edgeDistance);
+      float edgeMask = smoothstep(0.020, 0.115, edgeDistance);
       if (edgeMask <= 0.001) {
         gl_FragColor = vec4(0.0);
         return;
@@ -68,8 +68,8 @@
         vec2(-t * 0.21, t * 0.17)
       );
       float cloud = smoothstep(0.34, 0.82, broad * 0.69 + curled * 0.31);
-      float outer = smoothstep(0.016, 0.09, edgeDistance);
-      float density = (0.065 + 0.18 * outer) * (0.52 + 0.48 * cloud);
+      float outer = smoothstep(0.035, 0.145, edgeDistance);
+      float density = (0.10 + 0.58 * outer) * (0.58 + 0.42 * cloud);
 
       vec3 cool = vec3(0.68, 0.77, 0.78);
       vec3 pale = vec3(0.86, 0.90, 0.88);
