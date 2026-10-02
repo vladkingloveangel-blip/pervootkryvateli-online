@@ -4633,3 +4633,23 @@ body.game-active .final-results-art {
     right: 36px;
   }
 }
+
+
+/* UI-40 staging micro-patch — keep map tool buttons circular and below HUD */
+@media (max-width: 900px) {
+  body.game-active .game-world-shell .map-toolbar {
+    top: calc(72px + env(safe-area-inset-top, 0px));
+  }
+  body.game-active .map-toolbar .map-tool-icon {
+    box-sizing: border-box;
+    flex: 0 0 30px;
+    width: 30px !important;
+    min-width: 30px !important;
+    max-width: 30px;
+    height: 30px !important;
+    min-height: 30px !important;
+    max-height: 30px;
+    aspect-ratio: 1 / 1;
+    line-height: 1;
+  }
+}

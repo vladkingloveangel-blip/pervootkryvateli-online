@@ -2017,3 +2017,15 @@ test('UI-40 staging patch removes old mobile map-control plate and hides gamepla
   assert.match(code, /\.map-toolbar \.map-tool-icon[\s\S]*?width: 30px;[\s\S]*?height: 30px/);
   assert.match(code, /\.map-center-me \.ui-icon[\s\S]*?width: 15px;[\s\S]*?height: 15px/);
 });
+
+
+test('UI-40 map tool micro-patch forces circular controls below the HUD', () => {
+  const start = styles.indexOf('/* UI-40 staging micro-patch');
+  assert.ok(start >= 0);
+  const code = styles.slice(start);
+  assert.match(code, /\.map-toolbar[\s\S]*?top: calc\(72px/);
+  assert.match(code, /\.map-tool-icon[\s\S]*?flex: 0 0 30px/);
+  assert.match(code, /width: 30px !important/);
+  assert.match(code, /height: 30px !important/);
+  assert.match(code, /aspect-ratio: 1 \/ 1/);
+});
