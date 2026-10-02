@@ -1635,7 +1635,7 @@
     $('lobbyStatusText').textContent = state.spectating
       ? 'Наблюдение за подготовкой партии. Игровые настройки доступны участникам комнаты.'
       : isHost
-        ? 'Настройте порядок мест и ведущего, затем дождитесь готовности всех игроков.'
+        ? 'Порядок хода определяется порядком входа в комнату. Дождитесь готовности всех игроков.'
         : 'Выберите корабль, подтвердите готовность и дождитесь старта организатором.';
 
     $('lobbyExitBtn').textContent = state.spectating ? 'Назад' : isHost ? 'Закрыть комнату' : 'Выйти';
@@ -1663,25 +1663,7 @@
       const politicalLabel = suzerainName ? ` · вассал ${suzerainName}` : (p.enemyFactionIds?.length ? ` · вражда ${p.enemyFactionIds.length}` : '');
       const readyLabel = !r.started ? (p.ready ? ' · ✓ готов' : ' · не готов') : '';
       const moneyLabel = Object.hasOwn(p, 'ducats') ? ` · ${p.ducats} дукатов${Object.hasOwn(p, 'debt') && p.debt ? ` · долг ${p.debt}` : ''}` : '';
-      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${p.id === r.leaderId ? ' · ведущий' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level}${moneyLabel} · армейская слава ${p.armyPoints || 0} · морская слава ${p.fleetPoints || 0} · островов ${p.islandCount} · именных ${p.namedPlaceCardCount || 0} · экспедиций ${p.expeditionHistoryCount || 0} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
-      if (!isSpectator && isHost && !r.started) {
-        const actions = el.querySelector('.player-side-actions');
-        if (p.id !== r.leaderId) {
-          const leader = document.createElement('button'); leader.className = 'seat-btn'; leader.textContent = 'Ведущий';
-          leader.addEventListener('click', () => sendLobbyChange(leader, 'setLeader', { playerId: p.id }));
-          actions.appendChild(leader);
-        }
-        for (const [step, label] of [[-1, 'Раньше'], [1, 'Позже']]) {
-          const target = seats.indexOf(p.id) + step;
-          if (target < 0 || target >= seats.length) continue;
-          const button = document.createElement('button'); button.className = 'seat-btn'; button.textContent = label;
-          button.addEventListener('click', () => {
-            const ids = [...seats]; [ids[target], ids[target - step]] = [ids[target - step], ids[target]];
-            sendLobbyChange(button, 'setSeatingOrder', { playerIds: ids });
-          });
-          actions.appendChild(button);
-        }
-      }
+      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level}${moneyLabel} · армейская слава ${p.armyPoints || 0} · морская слава ${p.fleetPoints || 0} · островов ${p.islandCount} · именных ${p.namedPlaceCardCount || 0} · экспедиций ${p.expeditionHistoryCount || 0} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
       if (!isSpectator && !r.started && p.isYou) {
         const label = document.createElement('label');
         label.className = 'lobby-ship-label';
@@ -1694,12 +1676,12 @@
           shipSelect.appendChild(option);
         }
         shipSelect.value = p.shipClass;
-        shipSelect.disabled = p.id === r.leaderId;
+        shipSelect.disabled = false;
         shipSelect.addEventListener('change', () => {
           shipSelect.disabled = true;
           socket.emit('changeShip', { shipClass: shipSelect.value }, res => {
             handleGameAck(res);
-            if (!res?.ok) { shipSelect.value = p.shipClass; shipSelect.disabled = p.id === r.leaderId; }
+            if (!res?.ok) { shipSelect.value = p.shipClass; shipSelect.disabled = false; }
           });
         });
         label.appendChild(shipSelect);
