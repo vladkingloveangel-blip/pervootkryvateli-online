@@ -73,8 +73,8 @@ test('mobile turn controller is compact and keeps canonical turn commands', () =
   assert.match(block, /setCopy\('', `Выпало \$\{mine\.roll\} · дальность \$\{mine\.movePoints\}`/);
   assert.match(block, /Выберите клетку · доступно:/);
   assert.match(block, /Бросьте кубик или останьтесь\./);
-  assert.match(css, /\.game-action-bar\[data-mode="navigation"\],\s*\n\s*body\.game-active \.game-action-bar\[data-mode="navigation-result"\],\s*\n\s*body\.game-active \.game-action-bar\[data-mode="actions"\] \{[\s\S]*?width:\s*min\(200px, calc\(100% - 20px\)\);[\s\S]*?height:\s*84px;[\s\S]*?min-height:\s*84px/);
-  assert.match(css, /grid-template-rows:\s*16px 36px 14px/);
+  assert.match(css, /\.game-action-bar\[data-mode="navigation"\],\s*\n\s*body\.game-active \.game-action-bar\[data-mode="navigation-result"\],\s*\n\s*body\.game-active \.game-action-bar\[data-mode="actions"\] \{[\s\S]*?width:\s*min\(185px, calc\(100% - 20px\)\);[\s\S]*?height:\s*77px;[\s\S]*?min-height:\s*77px/);
+  assert.match(css, /grid-template-rows:\s*16px 36px 11px/);
   assert.match(css, /grid-template-areas:\s*\n\s*"status"\s*\n\s*"buttons"\s*\n\s*"detail"/);
   assert.match(css, /\.game-action-bar\[data-mode="actions"\] \.game-action-copy \{\s*\n\s*display:\s*contents/);
   assert.match(css, /white-space:\s*nowrap/);
