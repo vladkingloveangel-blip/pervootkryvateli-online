@@ -77,7 +77,6 @@ main { width: min(1480px, 100%); margin: 0 auto; padding: 14px; }
 .cell-hit.shore { background: rgba(97, 208, 132, .28); outline-color: rgba(130, 235, 158, .8); }
 .token { position: absolute; width: calc(100% / var(--map-cols, 28) * .72); height: calc(100% / var(--map-rows, 28) * .72); transform: translate(19%, 19%); border-radius: 50%; display: grid; place-items: center; font-size: clamp(10px, 1.3vw, 20px); font-weight: 900; color: white; border: 2px solid rgba(255,255,255,.9); box-shadow: 0 2px 7px rgba(0,0,0,.5); pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,.75); }
 .token.you { outline: 3px solid var(--accent); outline-offset: 2px; }
-.map-note { color: var(--muted); font-size: 12px; margin: 8px 4px 0; }
 .controls .button-stack { display: grid; gap: 8px; }
 .you-status { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 8px; }
 .move-result { color: var(--muted); margin-bottom: 10px; font-size: 14px; }
@@ -331,7 +330,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 
 /* v0.23 — мобильный игровой каркас */
 .game-hud { display: none; }
-.mobile-sheet-head { display: none; }
 
 @media (max-width: 900px) {
   body { overscroll-behavior: none; }
@@ -346,11 +344,9 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   }
   .hud-player strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
   .hud-player small, .hud-turn small { color: var(--muted); font-size: 10px; }
-  .hud-ship-icon { font-size: 21px; }
   .hud-resources { display: flex; gap: 5px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   .hud-resources::-webkit-scrollbar { display: none; }
   .hud-chip strong { font-size: 13px; }
-  .hud-debt { border-color: rgba(239,119,119,.55); }
   .hud-turn strong { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .layout { display: block; }
@@ -361,8 +357,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     min-height: 0;
     border-radius: 0 0 11px 11px;
   }
-  .map-note { display: none !important; }
-
   #gameSidePanel {
     display: none;
     position: fixed;
@@ -384,10 +378,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   .side-column .panel > h2,
   .side-column .section-head h2 { font-size: 16px; }
 
-}
-
-@media (max-width: 520px) {
-  .hud-ship-icon { display: none; }
 }
 
 /* v0.24 — фиксированный мобильный экран партии и компактное меню аккаунта */
@@ -481,7 +471,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   body.game-active .hud-player strong { font-size: 12px; }
   body.game-active .hud-player small,
   body.game-active .hud-turn small { font-size: 9px; }
-  body.game-active .hud-ship-icon { font-size: 17px; }
   .hud-menu-chevron { margin-left: auto; font-size: 12px; color: var(--muted); }
 
   body.game-active .hud-chip strong { font-size: 12px; }
@@ -518,7 +507,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 }
 
 @media (max-width: 420px) {
-  body.game-active .hud-ship-icon { display: none; }
   body.game-active.game-account-open #accountBar { top: 102px; }
 }
 
@@ -1029,13 +1017,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 
 
 /* UI-5 — canonical mobile gameplay HUD */
-.game-hud .hud-phase {
-  color: var(--accent);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: .055em;
-  white-space: nowrap;
-}
 .hud-menu-btn {
   display: none;
   padding: 0;
@@ -1049,13 +1030,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     overscroll-behavior-x: contain;
   }
 }
-@media (max-width: 420px) {
-  body.game-active .hud-phase {
-    font-size: 8px;
-  }
-}
-
-
 /* UI-6 — state-driven mobile action bar */
 .game-action-bar { display: none; }
 
@@ -3744,7 +3718,6 @@ body.game-active :where(.warning-text, [data-tone="warning"] .result-kicker) {
   pointer-events: none;
 }
 .hud-chip .ui-icon { width: 15px; height: 15px; color: var(--gold-soft); }
-.hud-ship-icon .ui-icon { width: 24px; height: 24px; color: var(--gold-soft); }
 .hud-menu-btn .ui-icon { width: 21px; height: 21px; }
 
 body.game-active .event-flow-art {

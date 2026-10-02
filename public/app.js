@@ -107,11 +107,6 @@
     $('gameAccountBackdrop').classList.add('hidden');
   }
 
-  function toggleGameAccountMenu() {
-    if (document.body.classList.contains('game-account-open')) closeGameAccountMenu();
-    else openGameAccountMenu();
-  }
-
   function showAuth(message = '') {
     setGameScreenActive(false);
     state.profileOpen = false;
@@ -486,7 +481,7 @@
     $('eventFlowOverlay')?.classList.add('hidden');
     document.body?.classList?.remove(
       'decision-layer-open', 'result-layer-open', 'object-sheet-open', 'targeting-open',
-      'mobile-sheet-open', 'score-overlay-open', 'journal-overlay-open', 'end-game-vote-open'
+      'score-overlay-open', 'journal-overlay-open', 'end-game-vote-open'
     );
   }
 
@@ -517,7 +512,6 @@
     state.ambientSnapshot = null;
     state.targeting = null;
     state.rehydrateOnNextRoomState = false;
-    closeMapInfo();
     closeMapInfo();
     setGameScreenActive(false);
     $('game').classList.add('hidden');
@@ -1371,7 +1365,7 @@
       $('resultLayer')?.classList.add('hidden');
       $('targetingBar')?.classList.add('hidden');
       $('eventFlowOverlay')?.classList.add('hidden');
-      document.body?.classList?.remove('decision-layer-open', 'result-layer-open', 'object-sheet-open', 'mobile-sheet-open', 'score-overlay-open', 'journal-overlay-open', 'end-game-vote-open');
+      document.body?.classList?.remove('decision-layer-open', 'result-layer-open', 'object-sheet-open', 'score-overlay-open', 'journal-overlay-open', 'end-game-vote-open');
       const result = r.finalResult || { titles: [], playerMetrics: [] };
       $('finalResultsRound').textContent = result.finishedRound == null ? '' : `Финальная граница: раунд ${result.finishedRound}`;
 
@@ -2162,10 +2156,6 @@
       error: 'error',
     };
     playUiCue(map[kind] || 'confirm');
-  }
-
-  function motionReduced() {
-    return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
   }
 
   function playUiCue(kind = 'confirm') {

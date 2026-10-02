@@ -228,3 +228,14 @@ test('short landscape floating sheet clears the canonical action bar', () => {
   assert.match(landscape, /\.object-sheet,\s*\n\s*body\.game-active \.object-sheet\.expanded/);
   assert.match(landscape, /max-height:\s*calc\(100dvh - 154px - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\)\)/);
 });
+
+
+test('cleanup-8 removes audited dead UI code without touching compatibility state', () => {
+  assert.doesNotMatch(app, /function toggleGameAccountMenu\(/);
+  assert.doesNotMatch(app, /function motionReduced\(/);
+  assert.doesNotMatch(app, /mobile-sheet-open/);
+  assert.doesNotMatch(app, /closeMapInfo\(\);\s*closeMapInfo\(\);/);
+  for (const selector of ['mobile-sheet-head', 'hud-debt', 'hud-ship-icon', 'hud-phase', 'map-note']) {
+    assert.equal(css.includes(selector), false, selector + ' should remain removed');
+  }
+});
