@@ -5225,34 +5225,6 @@ body.game-active .token {
     border-color: rgba(239,119,119,.3);
   }
 
-  body.game-active .island-action-intro {
-    display: grid;
-    gap: 3px;
-    padding: 9px 10px;
-    border: 1px solid rgba(240,196,91,.18);
-    border-radius: 11px;
-    background: rgba(240,196,91,.045);
-  }
-
-  body.game-active .island-action-intro > span {
-    color: var(--accent);
-    font-size: 9px;
-    font-weight: 900;
-    letter-spacing: .08em;
-  }
-
-  body.game-active .island-action-intro > strong {
-    color: var(--text);
-    font-size: 14px;
-    text-align: left;
-  }
-
-  body.game-active .island-action-intro > small {
-    color: var(--muted);
-    font-size: 10px;
-    line-height: 1.35;
-  }
-
   body.game-active .island-action-context {
     display: flex;
     flex-wrap: wrap;
@@ -5274,19 +5246,19 @@ body.game-active .token {
     line-height: 1.4;
   }
 
-  body.game-active .island-cargo-primary-actions {
+  body.game-active .island-primary-actions {
     display: grid;
     gap: 7px;
     margin-bottom: 9px;
   }
 
-  body.game-active .island-cargo-primary-actions button {
+  body.game-active .island-primary-actions button {
     width: 100%;
     min-height: 48px;
     font-size: 13px;
   }
 
-  body.game-active .island-cargo-primary-actions + .island-action-context {
+  body.game-active .island-primary-actions + .island-action-context {
     margin-top: 0;
     padding-top: 8px;
     border-top: 1px solid rgba(255,255,255,.075);
