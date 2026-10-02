@@ -35,7 +35,18 @@ test('foreign islands keep politics and assault as separate entry points', () =>
   assert.ok(block.includes('Государство: ${politicalFaction.name}'));
   assert.ok(block.includes("action.textContent = 'Штурм острова'"));
   assert.equal(block.includes('appendCanonicalPoliticsActions'), false);
+  assert.equal(block.includes('state-island-politics'), false);
   assert.ok(block.includes('Свободный остров переходит под контроль автоматически'));
+});
+
+test('cargo action is placed near the top without a duplicated intro card', () => {
+  const start = app.indexOf('function renderOwnIslandActionView');
+  const end = app.indexOf('function handleObjectSheetBack', start);
+  const block = app.slice(start, end);
+  assert.ok(block.includes('id="islandCargoPrimaryActions"'));
+  assert.ok(block.includes("view === 'cargo' ? $('islandCargoPrimaryActions') : actions"));
+  assert.ok(block.includes('class="island-action-hint"'));
+  assert.ok(styles.includes('.island-cargo-primary-actions'));
 });
 
 test('open island screen survives authoritative room refreshes', () => {
