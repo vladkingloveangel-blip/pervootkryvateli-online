@@ -4739,11 +4739,13 @@ body.game-active .final-results-art {
   }
 
   body.game-active .game-action-kicker {
+    color: var(--accent);
     font-size: 8px;
     line-height: 1.05;
   }
 
   body.game-active .game-action-status > strong {
+    color: var(--accent);
     font-size: 11px;
     line-height: 1.15;
   }
@@ -4851,6 +4853,15 @@ body.game-active .final-results-art {
     text-align: center;
     white-space: nowrap;
     text-overflow: clip;
+    transform: translateY(3px);
+  }
+
+  body.game-active .game-action-bar[data-mode="actions"] .game-action-progress {
+    order: 0;
+  }
+
+  body.game-active .game-action-bar[data-mode="actions"] .game-action-kicker {
+    order: 1;
   }
 
   /* Canonical floating information windows. Voluntary information stays over the
