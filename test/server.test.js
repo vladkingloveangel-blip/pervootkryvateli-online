@@ -111,9 +111,10 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   const joinedFourth = await emit(fourth, 'joinRoom', { code, accountToken: d.token, name: 'Four' });
   assert.equal(joinedSecond.ok && joinedThird.ok && joinedFourth.ok, true);
   assert.equal((await emit(first, 'startGame')).ok, false);
-  assert.equal((await emit(first, 'setSeatingOrder', { playerIds: [created.playerId,joinedThird.playerId,joinedSecond.playerId,joinedFourth.playerId] })).ok,true);
-  assert.equal((await emit(first, 'setLeader', { playerId: joinedSecond.playerId })).ok,true);
-  assert.equal((await emit(second, 'changeShip', { shipClass:'brigantine' })).ok,false);
+  assert.equal((await emit(first, 'changeShip', { shipClass:'frigate' })).ok,true);
+  assert.equal((await emit(second, 'changeShip', { shipClass:'carrack' })).ok,true);
+  assert.equal((await emit(third, 'changeShip', { shipClass:'brigantine' })).ok,true);
+  assert.equal((await emit(fourth, 'changeShip', { shipClass:'caravel' })).ok,true);
   assert.equal((await emit(first, 'setReady', { ready: true })).ok, true);
   assert.equal((await emit(second, 'setReady', { ready: true })).ok, true);
   assert.equal((await emit(third, 'setReady', { ready: true })).ok, true);
@@ -149,26 +150,27 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(started.players.every(p => p.consumableAbilitySequence === 0), true);
   assert.equal(started.players.every(p => Array.isArray(p.storedBenefits) && p.storedBenefits.length === 0), true);
   assert.equal(started.players.every(p => ['activeAssignment','legendaryCards','specialCards','savedEventCards'].every(key => !Object.hasOwn(p,key))), true);
+  assert.equal(started.players.find(p=>p.id===created.playerId).shipClass,'frigate');
   assert.equal(started.players.find(p=>p.id===joinedSecond.playerId).shipClass,'carrack');
-  assert.deepEqual(started.order,[joinedSecond.playerId,joinedFourth.playerId,created.playerId,joinedThird.playerId]);
+  assert.deepEqual(started.order,[created.playerId,joinedSecond.playerId,joinedThird.playerId,joinedFourth.playerId]);
   assert.equal(started.players.every(p=>p.ducats===canonical.session.startingDucats),true);
   assert.equal(started.players.every(p=>p.row===0 && p.col===0),true);
   const lockedClass = started.players.find(p=>p.id===created.playerId).shipClass;
   const attemptedClass = lockedClass === 'brigantine' ? 'frigate' : 'brigantine';
   assert.equal((await emit(first, 'changeShip', { shipClass: attemptedClass })).ok, false);
   assert.equal(rows()[0].state.players.find(p=>p.id===created.playerId).shipClass, lockedClass);
-  const active = second;
-  const navigationScout = await emit(active, 'useScout', { mode: 'money', targetPlayerId: created.playerId });
+  const active = first;
+  const navigationScout = await emit(active, 'useScout', { mode: 'money', targetPlayerId: joinedSecond.playerId });
   assert.equal(navigationScout.ok, false);
-  const wrongTurnScout = await emit(first, 'useScout', { mode: 'money', targetPlayerId: joinedSecond.playerId });
+  const wrongTurnScout = await emit(second, 'useScout', { mode: 'money', targetPlayerId: created.playerId });
   assert.equal(wrongTurnScout.ok, false);
   assert.equal((await emit(active, 'skipNavigation')).ok, true);
   const beforeScoutFailure = structuredClone(rows()[0].state);
-  const missingScout = await emit(active, 'useScout', { mode: 'money', targetPlayerId: created.playerId, viewerPlayerId: created.playerId, debt: true });
+  const missingScout = await emit(active, 'useScout', { mode: 'money', targetPlayerId: joinedSecond.playerId, viewerPlayerId: joinedSecond.playerId, debt: true });
   assert.equal(missingScout.ok, false);
   const afterScoutFailure = rows()[0].state;
   assert.equal(afterScoutFailure.actionsLeft, beforeScoutFailure.actionsLeft);
-  assert.deepEqual(afterScoutFailure.players.find(p=>p.id===joinedSecond.playerId).character, beforeScoutFailure.players.find(p=>p.id===joinedSecond.playerId).character);
+  assert.deepEqual(afterScoutFailure.players.find(p=>p.id===created.playerId).character, beforeScoutFailure.players.find(p=>p.id===created.playerId).character);
   assert.deepEqual(afterScoutFailure.scoutRevealGrants, beforeScoutFailure.scoutRevealGrants);
   assert.equal((await emit(active, 'endTurn')).ok, true);
   assertCurrentPersistedShape(rows()[0].state);
@@ -534,8 +536,7 @@ test('Scout reveal lifecycle survives reconnect, device replacement and same-tur
     ...joined.map((entry, index) => ({ playerId: entry.playerId, account: accounts[index + 1], socket: initialSockets[index + 1] })),
   ];
 
-  assert.equal((await emit(initialSockets[0], 'setSeatingOrder', { playerIds: members.map(member => member.playerId) })).ok, true);
-  assert.equal((await emit(initialSockets[0], 'setLeader', { playerId: members[0].playerId })).ok, true);
+  for (const member of members) assert.equal((await emit(member.socket, 'changeShip', { shipClass: 'brigantine' })).ok, true);
   for (const member of members) assert.equal((await emit(member.socket, 'setReady', { ready: true })).ok, true);
   assert.equal((await emit(initialSockets[0], 'startGame')).ok, true);
   await new Promise(resolve => setTimeout(resolve, 50));

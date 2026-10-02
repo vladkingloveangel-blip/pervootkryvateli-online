@@ -97,7 +97,7 @@ test('join order and six complete personal circles', { timeout: 30000 }, async t
   assert.equal(full.ok,true);
   for(let i=1;i<6;i++)assert.equal((await emit(six[i],'joinRoom',{code:full.code,name:`Seat ${i+1}`})).ok,true);
   assert.equal((await emit(six[6],'joinRoom',{code:full.code,name:'Seventh'})).ok,false);
-  await change(six[0],'setLeader',{playerId:full.playerId});
+  for(let i=0;i<6;i++)await change(six[i],'changeShip',{shipClass:'brigantine'});
   for(let i=0;i<6;i++)await change(six[i],'setReady',{ready:true});
   const fullRoom=await change(six[0],'startGame');
   assert.equal(fullRoom.players.length,6);
