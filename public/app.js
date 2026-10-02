@@ -74,6 +74,7 @@
 
   function openGameMenu() {
     if (!document.body.classList.contains('game-active') || !state.room) return;
+    closeScoreOverlay();
     closeGameAccountMenu();
     closeMapInfo();
     $('gameMenuPanel').classList.remove('hidden');
@@ -773,6 +774,8 @@
   document.querySelectorAll('[data-game-menu]').forEach(button => {
     button.addEventListener('click', () => handleGameMenuAction(button.dataset.gameMenu));
   });
+  $('scoreOverlayCloseBtn').addEventListener('click', closeScoreOverlay);
+  $('scoreOverlay').querySelector('.score-overlay-backdrop').addEventListener('click', closeScoreOverlay);
 
   $('startBtn').addEventListener('click', () => {
     $('startBtn').disabled = true;
@@ -853,6 +856,69 @@
   }
 
 
+  function metricValue(value, hidden = 'скрыто') {
+    return value == null ? hidden : String(value);
+  }
+
+  function projectedWealthLabel(player) {
+    if (!player || !Object.hasOwn(player, 'ducats')) return 'скрыто';
+    const debt = Object.hasOwn(player, 'debt') ? Number(player.debt) || 0 : 0;
+    return String((Number(player.ducats) || 0) - debt);
+  }
+
+  function renderScoreOverlay() {
+    const room = state.room;
+    if (!room) return;
+    closeGameMenu();
+    closeMapInfo();
+    const finished = Boolean(room.finished || room.phase === 'finished');
+    $('scoreOverlayTitle').textContent = finished ? 'Финальные показатели' : 'Текущие показатели';
+    $('scoreOverlayNote').textContent = finished
+      ? 'Финальные значения взяты из canonical finalResult.'
+      : 'Показываются только данные, уже разрешённые server-side visibility. Скрытые показатели не вычисляются на клиенте.';
+    const body = $('scoreOverlayBody');
+    body.innerHTML = '';
+    if (finished) {
+      const rows = room.finalResult?.playerMetrics || [];
+      for (const row of rows) {
+        const player = room.players?.find(item => item.id === row.playerId);
+        const metrics = row.metrics || {};
+        const card = document.createElement('article');
+        card.className = 'score-player-card';
+        card.innerHTML = '<h3>' + escapeHtml(player?.name || playerName(row.playerId)) + '</h3>'
+          + '<div class="score-metric-grid">'
+          + '<span>Острова</span><strong>' + metricValue(metrics.islands) + '</strong>'
+          + '<span>Богатство</span><strong>' + metricValue(metrics.wealth) + '</strong>'
+          + '<span>Army points</span><strong>' + metricValue(metrics.army) + '</strong>'
+          + '<span>Fleet points</span><strong>' + metricValue(metrics.fleet) + '</strong>'
+          + '<span>Престиж</span><strong>' + metricValue(metrics.prestige) + '</strong>'
+          + '<span>Легендарные места</span><strong>' + metricValue(metrics.legendaryPlaces) + '</strong></div>';
+        body.appendChild(card);
+      }
+    } else {
+      for (const player of room.players || []) {
+        const card = document.createElement('article');
+        card.className = 'score-player-card';
+        card.innerHTML = '<h3>' + escapeHtml(player.name) + '</h3>'
+          + '<div class="score-metric-grid">'
+          + '<span>Острова</span><strong>' + metricValue(player.islandCount) + '</strong>'
+          + '<span>Богатство</span><strong>' + projectedWealthLabel(player) + '</strong>'
+          + '<span>Army points</span><strong>' + metricValue(player.armyPoints) + '</strong>'
+          + '<span>Fleet points</span><strong>' + metricValue(player.fleetPoints) + '</strong>'
+          + '<span>Престиж</span><strong>скрыто</strong>'
+          + '<span>Легендарные места</span><strong>скрыто</strong></div>';
+        body.appendChild(card);
+      }
+    }
+    $('scoreOverlay').classList.remove('hidden');
+    document.body.classList.add('score-overlay-open');
+  }
+
+  function closeScoreOverlay() {
+    $('scoreOverlay')?.classList.add('hidden');
+    document.body.classList.remove('score-overlay-open');
+  }
+
   function openMenuInfoSheet(kind) {
     const room = state.room;
     if (!room) return;
@@ -863,13 +929,7 @@
     const actions = $('objectSheetActions');
     actions.innerHTML = '';
   
-    if (kind === 'metrics') {
-      $('objectSheetTitle').textContent = 'Показатели партии';
-      body.innerHTML = (room.players || []).map(player =>
-        '<div class="menu-metric-row"><strong>' + escapeHtml(player.name) + '</strong><span>Острова '
-        + (player.islandCount ?? 0) + ' · слава ' + (player.glory ?? 0) + '</span></div>'
-      ).join('') || '<div class="menu-note">Показатели появятся после начала партии.</div>';
-    } else if (kind === 'holdings') {
+    if (kind === 'holdings') {
       $('objectSheetTitle').textContent = 'Мои владения';
       const islands = (room.islands || []).filter(island => island.ownerId === state.myId);
       body.innerHTML = islands.map(island =>
@@ -909,6 +969,10 @@
   }
 
   function handleGameMenuAction(kind) {
+    if (kind === 'metrics') {
+      renderScoreOverlay();
+      return;
+    }
     if (kind === 'diplomacy') {
       closeGameMenu();
       renderDiplomacyObjectSheet(null);

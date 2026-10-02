@@ -3282,3 +3282,88 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   body.game-active .game-menu-grid { grid-template-columns: 1fr; }
   body.game-active .game-menu-grid > button { min-height: 72px; }
 }
+
+
+/* UI-26 — party metrics overlay */
+.score-overlay { display: none; }
+
+@media (max-width: 900px) {
+  body.game-active .score-overlay {
+    position: absolute;
+    z-index: 112;
+    inset: 0;
+    display: grid;
+    align-items: end;
+    pointer-events: none;
+  }
+
+  body.game-active .score-overlay.hidden { display: none !important; }
+
+  body.game-active .score-overlay-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(2,15,20,.62);
+    backdrop-filter: blur(2px);
+    pointer-events: auto;
+  }
+
+  body.game-active .score-overlay-card {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-height: min(84dvh, 760px);
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: auto minmax(0,1fr);
+    gap: 10px;
+    padding: 16px 14px calc(18px + env(safe-area-inset-bottom, 0px));
+    border: 1px solid rgba(240,196,91,.42);
+    border-bottom: 0;
+    border-radius: 18px 18px 0 0;
+    background: rgba(8,37,44,.985);
+    box-shadow: 0 -16px 42px rgba(0,0,0,.48);
+    pointer-events: auto;
+  }
+
+  body.game-active .score-overlay-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: start;
+  }
+
+  body.game-active .score-overlay-head > div { display: grid; gap: 3px; }
+  body.game-active .score-overlay-head span { color: var(--accent); font-size: 9px; font-weight: 900; letter-spacing: .09em; }
+  body.game-active .score-overlay-head h2 { margin: 0; font-size: 20px; }
+  body.game-active .score-overlay-head small { color: var(--muted); font-size: 10px; line-height: 1.35; }
+
+  body.game-active .score-overlay-body {
+    min-height: 0;
+    overflow-y: auto;
+    display: grid;
+    gap: 9px;
+  }
+
+  body.game-active .score-player-card {
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(255,255,255,.03);
+  }
+
+  body.game-active .score-player-card h3 { margin: 0 0 8px; font-size: 14px; }
+
+  body.game-active .score-metric-grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 5px 12px;
+    align-items: baseline;
+  }
+
+  body.game-active .score-metric-grid span { color: var(--muted); font-size: 10px; }
+  body.game-active .score-metric-grid strong { font-size: 11px; text-align: right; }
+
+  body.game-active.score-overlay-open .game-action-bar,
+  body.game-active.score-overlay-open .mobile-game-nav,
+  body.game-active.score-overlay-open .map-toolbar { pointer-events: none; }
+}

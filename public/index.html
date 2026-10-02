@@ -434,6 +434,21 @@
         <button id="targetingCancelBtn" type="button">Отмена</button>
       </section>
 
+      <section id="scoreOverlay" class="score-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="scoreOverlayTitle">
+        <div class="score-overlay-backdrop" aria-hidden="true"></div>
+        <div class="score-overlay-card">
+          <div class="score-overlay-head">
+            <div>
+              <span>ПОКАЗАТЕЛИ ПАРТИИ</span>
+              <h2 id="scoreOverlayTitle">Текущие показатели</h2>
+              <small id="scoreOverlayNote">Показываются только данные, доступные вам по текущей server-side visibility.</small>
+            </div>
+            <button id="scoreOverlayCloseBtn" class="small" type="button" aria-label="Закрыть показатели">✕</button>
+          </div>
+          <div id="scoreOverlayBody" class="score-overlay-body"></div>
+        </div>
+      </section>
+
       <section id="objectSheet" class="object-sheet hidden" role="dialog" aria-modal="false" aria-labelledby="objectSheetTitle">
         <div class="object-sheet-handle" aria-hidden="true"></div>
         <div class="object-sheet-head">

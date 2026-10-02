@@ -1288,3 +1288,47 @@ test('UI-25 keeps ordinary turn actions outside the secondary menu', () => {
   const code = index.slice(start, end);
   assert.doesNotMatch(code, /Бросить|Остаться на месте|Завершить ход|Штурм|Морской бой/);
 });
+
+
+test('UI-26 provides a dedicated party metrics overlay', () => {
+  assert.match(index, /id="scoreOverlay" class="score-overlay hidden"/);
+  assert.match(index, /id="scoreOverlayBody"/);
+  assert.match(app, /function renderScoreOverlay\(\)/);
+  assert.match(app, /function closeScoreOverlay\(\)/);
+  assert.match(styles, /UI-26 — party metrics overlay/);
+});
+
+test('UI-26 pre-finish metrics use only projected player fields and never derive hidden scoring', () => {
+  const start = app.indexOf('  function metricValue(');
+  const end = app.indexOf('\n  function openMenuInfoSheet(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /player\.islandCount/);
+  assert.match(code, /player\.armyPoints/);
+  assert.match(code, /player\.fleetPoints/);
+  assert.match(code, /Object\.hasOwn\(player, 'ducats'\)/);
+  assert.match(code, /Престиж<\/span><strong>скрыто/);
+  assert.match(code, /Легендарные места<\/span><strong>скрыто/);
+  assert.doesNotMatch(code, /calculateFinalScoring|islandPrestige|legendaryPlaceCount/);
+});
+
+test('UI-26 finished metrics come only from canonical finalResult', () => {
+  const start = app.indexOf('  function renderScoreOverlay()');
+  const end = app.indexOf('\n  function closeScoreOverlay()', start);
+  const code = app.slice(start, end);
+  assert.match(code, /room\.finalResult\?\.playerMetrics/);
+  assert.match(code, /metrics\.islands/);
+  assert.match(code, /metrics\.wealth/);
+  assert.match(code, /metrics\.army/);
+  assert.match(code, /metrics\.fleet/);
+  assert.match(code, /metrics\.prestige/);
+  assert.match(code, /metrics\.legendaryPlaces/);
+});
+
+test('UI-26 menu metrics entry opens the dedicated overlay', () => {
+  const start = app.indexOf('  function handleGameMenuAction(kind)');
+  const end = app.indexOf('\n  const MOBILE_TAB_TITLES', start);
+  const code = app.slice(start, end);
+  assert.match(code, /kind === 'metrics'/);
+  assert.match(code, /renderScoreOverlay\(\)/);
+});
