@@ -9,7 +9,7 @@ Scope: presentation and interaction only. Game rules, scoring, visibility policy
 
 Desktop is a later expansion of the same UX system, not a second product architecture.
 
-The map is the permanent gameplay space. It is not a panel inside a larger interface. HUD, actions, notifications, bottom sheets, overlays and temporary flows are layered over the map.
+The map is the permanent gameplay space. It is not a panel inside a larger interface. HUD, actions, notifications, floating information windows, overlays and temporary flows are layered over the map.
 
 Core player loop:
 
@@ -38,7 +38,7 @@ Primary gameplay surface:
 - compact top HUD over the map;
 - context-sensitive bottom action bar;
 - compact entry points for Cards, Goals and Menu;
-- object bottom sheets;
+- floating object/information windows;
 - Decision Layer for mandatory choices;
 - Result Cards for meaningful outcomes;
 - lightweight toasts/ambient notifications for minor outcomes.
@@ -109,35 +109,38 @@ The client must not duplicate backend legality rules as a second authority.
 Primary interactions start from map objects.
 
 Tap:
-- own island -> own island sheet;
-- other player's island -> visible island sheet;
-- state island -> political/context sheet;
-- own ship -> fleet/player sheet;
-- other ship -> public player sheet;
-- anchor -> sea encounter sheet;
-- legendary place -> legendary-place sheet;
-- Citadel -> service sheet.
+- own island -> own island window;
+- other player's island -> visible island window;
+- state island -> political/context window;
+- own ship -> fleet/player window;
+- other ship -> public player window;
+- anchor -> sea encounter window;
+- legendary place -> legendary-place window;
+- Citadel -> service window.
 
 The player should not need to open a general mechanic tab to interact with an object already visible on the map.
 
-## 7. Bottom sheet framework
+## 7. Floating information window framework
 
-Bottom sheets are the default secondary-information pattern on mobile.
+Floating windows are the default secondary-information pattern on mobile.
 
 Required behavior:
-- collapsed and expanded states;
-- drag/swipe down to dismiss where safe;
-- explicit close fallback;
-- preserve map context behind the sheet;
+- compact window layered over the permanent map;
+- consistent title bar with context label, title and explicit close button;
+- internal scrolling when content exceeds the window height;
+- optional tabs or secondary controls inside the same window when a view has several information groups;
+- no bottom-edge attachment or drag-handle metaphor;
+- preserve visible map context around the window;
 - optional map centering on the selected object;
 - contextual actions based on current server state;
-- safe-area support.
+- safe-area support;
+- one shared visual language for object information, metrics, journal and secondary menu surfaces.
 
-Desktop may later render the same conceptual sheet as a side panel.
+Mandatory choices are not information windows: they continue to use the separate Decision Layer. Desktop may later render the same conceptual window as a larger floating window or side panel.
 
 ## 8. Own islands
 
-Compact sheet:
+Compact window:
 - name;
 - ownership;
 - settlement/city/major-port state;
@@ -147,7 +150,7 @@ Compact sheet:
 - concise building list;
 - immediately legal contextual actions.
 
-Expanded management:
+Detailed management view inside the same window:
 - all buildings and levels;
 - next upgrades;
 - costs;
@@ -160,7 +163,7 @@ Expanded management:
 
 A separate “My holdings” overview is secondary navigation, not a primary gameplay tab.
 
-Selecting an island from that overview centers the map and opens its sheet.
+Selecting an island from that overview centers the map and opens its window.
 
 ## 9. Other islands and privacy
 
@@ -223,14 +226,14 @@ Character details remain accessible through HUD/fleet information.
 
 Citadel is a map service hub.
 
-Its sheet may provide:
+Its window may provide:
 - cargo selling;
 - ship level development;
 - upgrades;
 - escorts;
 - other canonical Citadel services.
 
-Detailed ship development opens an expanded sheet/flow rather than a permanent global panel.
+Detailed ship development opens a detailed window/flow rather than a permanent global panel.
 
 ## 14. Cards UX
 
