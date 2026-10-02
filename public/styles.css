@@ -4902,7 +4902,7 @@ body.game-active .game-hud .hud-politics-chip > span:first-child { font-size: 90
 
 /* UI-40 map token correction — circular marker centered on authoritative grid cell */
 body.game-active .token {
-  width: calc(100% / var(--map-cols, 28) * .72);
+  width: calc(100% / var(--map-cols, 28) * .576);
   height: auto;
   aspect-ratio: 1 / 1;
   min-height: 0;
