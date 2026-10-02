@@ -80,9 +80,12 @@ main { width: min(1480px, 100%); margin: 0 auto; padding: 14px; }
   pointer-events: none;
 }
 .map-ocean-canvas.ocean-fallback {
-  background:
-    radial-gradient(circle at 65% 36%, rgba(155,230,232,.12), transparent 24%),
-    linear-gradient(145deg, #087d8c, #075e73 52%, #06495e);
+  background-color: #0799a7;
+  background-image:
+    radial-gradient(ellipse at 18% 24%, transparent 0 11%, rgba(185,242,235,.48) 12%, transparent 14%),
+    radial-gradient(ellipse at 62% 68%, transparent 0 13%, rgba(185,242,235,.42) 14%, transparent 16%),
+    radial-gradient(ellipse at 82% 30%, transparent 0 9%, rgba(220,250,242,.34) 10%, transparent 12%);
+  background-size: 118px 92px, 146px 116px, 104px 128px;
 }
 .map-board { position: relative; z-index: 1; width: 980px; aspect-ratio: 1 / 1; transform-origin: top left; }
 .map-art-layer { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
