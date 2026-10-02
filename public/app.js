@@ -1890,6 +1890,7 @@
     }
 
     bar.classList.remove('hidden');
+    bar.removeAttribute('data-mode');
     buttons.innerHTML = '';
     progress.innerHTML = '';
     progress.classList.add('hidden');
@@ -1908,7 +1909,7 @@
     const addButton = (label, onClick, className = '') => {
       const button = document.createElement('button');
       button.type = 'button';
-      if (className) button.className = className;
+      button.className = `game-action-button${className ? ` ${className}` : ''}`;
       button.textContent = label;
       button.addEventListener('click', onClick);
       buttons.appendChild(button);
@@ -1940,13 +1941,15 @@
     }
 
     if (mine.phase === 'navigation' && mine.roll === null) {
-      setCopy('НАВИГАЦИЯ', 'Куда отправится корабль?', 'Бросьте навигацию или останьтесь на месте.');
-      addButton('🎲 Бросить', () => socket.emit('rollMove', {}, handleGameAck), 'primary');
+      bar.dataset.mode = 'navigation';
+      setCopy('НАВИГАЦИЯ', '', 'Бросьте навигацию или останьтесь на месте.');
       addButton('Остаться', () => socket.emit('skipNavigation', {}, handleGameAck));
+      addButton('🎲 Бросить', () => socket.emit('rollMove', {}, handleGameAck), 'primary');
       return;
     }
 
     if (mine.phase === 'navigation') {
+      bar.dataset.mode = 'navigation';
       const destinations = (r.reachableCells || []).filter(cell => cell.row !== mine.row || cell.col !== mine.col);
       setCopy('НАВИГАЦИЯ', `Выпало ${mine.roll} · дальность ${mine.movePoints}`,
         destinations.length ? `Выберите подсвеченную клетку · доступно: ${destinations.length}` : 'Доступных клеток нет.');
@@ -1955,9 +1958,11 @@
     }
 
     if (mine.phase === 'actions') {
+      bar.dataset.mode = 'actions';
       const left = Math.max(0, Number(mine.actionsLeft) || 0);
-      setCopy('ДЕЙСТВИЯ', left > 0 ? `Осталось действий: ${left}` : 'Действия закончились',
-        left > 0 ? 'Выберите объект на карте или откройте доступные действия.' : 'Завершите ход.');
+      const actionLabel = left === 1 ? '1 действие' : left > 1 ? `${left} действия` : 'Нет действий';
+      setCopy('', actionLabel,
+        left > 0 ? 'Выберите объект на карте или доступное действие.' : 'Завершите ход.');
       progress.classList.remove('hidden');
       const total = Number(r.balanceCatalog?.session?.actionsPerTurn) || 3;
       for (let i = 0; i < total; i += 1) {
@@ -1965,7 +1970,6 @@
         dot.className = i < left ? 'active' : '';
         progress.appendChild(dot);
       }
-      if (left > 0) addButton('Действия', () => closeMapInfo(), 'primary');
       addButton('Завершить ход', () => socket.emit('endTurn', {}, handleGameAck), left > 0 ? 'danger-soft' : 'primary');
       return;
     }
