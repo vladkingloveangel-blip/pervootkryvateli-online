@@ -68,6 +68,10 @@ test('mobile turn controller is compact and keeps canonical turn commands', () =
 
   assert.match(css, /button:not\(\.map-object-hit\):not\(\.navigation-hit\):not\(\.targeting-hit\):not\(\.targeting-marker\):not\(\.cell-hit\):not\(\.token\):not\(\.game-action-button\)/);
   assert.match(css, /\.game-action-buttons \.game-action-button \{[\s\S]*?min-height:\s*36px;[\s\S]*?height:\s*36px/);
-  assert.match(css, /\.game-action-bar\[data-mode="actions"\][\s\S]*?width:\s*min\(270px, calc\(100% - 20px\)\)/);
-  assert.match(css, /grid-template-areas:\s*\n\s*"progress title"\s*\n\s*"detail detail"/);
+  assert.match(block, /bar\.dataset\.mode = 'navigation-result'/);
+  assert.match(block, /Выберите объект или действие\./);
+  assert.match(block, /Выберите клетку · доступно:/);
+  assert.match(css, /\.game-action-bar\[data-mode="actions"\],\s*\n\s*body\.game-active \.game-action-bar\[data-mode="navigation-result"\] \{[\s\S]*?width:\s*min\(188px, calc\(100% - 20px\)\)/);
+  assert.match(css, /grid-template-areas:\s*\n\s*"progress title"\s*\n\s*"buttons buttons"\s*\n\s*"detail detail"/);
+  assert.match(css, /\.game-action-bar\[data-mode="actions"\] \.game-action-copy \{\s*\n\s*display:\s*contents/);
 });
