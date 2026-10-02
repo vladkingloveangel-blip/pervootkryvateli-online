@@ -123,6 +123,13 @@ test('mobile HUD uses one square tile system', () => {
   assert.match(css, /\.quick-access-btn > strong \{\s*\n\s*display:\s*block !important/);
   assert.doesNotMatch(css, /--hud-row-size:\s*40px/);
   assert.doesNotMatch(css, /--quick-access-size:\s*40px/);
+  assert.equal((css.match(/--hud-tile:\s*44px/g) || []).length, 1);
+  assert.doesNotMatch(css, /body\.game-active \.game-hud\s*\{[^}]*grid-template-columns:[^}]*(?:92px|112px|82px|76px|74px|36px|38px|40px)/s);
+  assert.doesNotMatch(css, /\.game-hud\s*\{[^}]*grid-template-columns:[^}]*(?:95px|90px|112px)/s);
+  assert.doesNotMatch(css, /body\.game-active \.hud-menu-btn\s*\{[^}]*(?:width|min-width|min-height):\s*(?:36|38|40)px/s);
+  assert.doesNotMatch(css, /\.game-hud button\s*\{[^}]*min-height:\s*(?:40|42)px/s);
+  assert.doesNotMatch(css, /body\.game-active \.hud-chip\s*\{[^}]*(?:min-width:\s*48px|min-height:\s*38px)/s);
+  assert.doesNotMatch(css, /\.hud-chip\s*\{[^}]*min-width:\s*(?:52|58)px/s);
 
   assert.doesNotMatch(app, /hudTurnBtn/);
   assert.doesNotMatch(app, /hudPhaseLabel/);

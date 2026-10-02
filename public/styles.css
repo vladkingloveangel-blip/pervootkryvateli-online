@@ -339,39 +339,18 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   .game { gap: 8px; }
   .legacy-status { display: none; }
 
-  .game-hud {
-    display: grid;
-    grid-template-columns: minmax(112px, auto) 1fr minmax(100px, auto);
-    gap: 7px;
-    align-items: center;
-    position: sticky;
-    top: 58px;
-    z-index: 42;
-    margin: 0 -8px;
-    padding: 7px 8px;
-    background: rgba(8,37,44,.97);
-    border-bottom: 1px solid var(--line);
-    box-shadow: 0 5px 18px rgba(0,0,0,.2);
-  }
-  .game-hud button { min-height: 42px; }
   .hud-player, .hud-turn, .hud-chip {
     border: 1px solid var(--line);
     background: var(--panel-2);
     color: var(--text);
   }
-  .hud-player {
-    display: flex; align-items: center; gap: 7px; min-width: 0; padding: 5px 8px; text-align: left;
-  }
-  .hud-player > span:last-child { min-width: 0; display: grid; }
   .hud-player strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
   .hud-player small, .hud-turn small { color: var(--muted); font-size: 10px; }
   .hud-ship-icon { font-size: 21px; }
   .hud-resources { display: flex; gap: 5px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   .hud-resources::-webkit-scrollbar { display: none; }
-  .hud-chip { flex: 0 0 auto; min-width: 58px; padding: 5px 7px; border-radius: 999px; display: flex; justify-content: center; gap: 5px; align-items: center; }
   .hud-chip strong { font-size: 13px; }
   .hud-debt { border-color: rgba(239,119,119,.55); }
-  .hud-turn { padding: 5px 8px; display: grid; text-align: right; }
   .hud-turn strong { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .layout { display: block; }
@@ -408,11 +387,7 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 }
 
 @media (max-width: 520px) {
-  .game-hud { grid-template-columns: 95px 1fr 90px; }
-  .hud-player { padding-left: 6px; padding-right: 6px; }
   .hud-ship-icon { display: none; }
-  .hud-chip { min-width: 52px; }
-  .hud-turn { padding-left: 5px; padding-right: 5px; }
 }
 
 /* v0.24 — фиксированный мобильный экран партии и компактное меню аккаунта */
@@ -503,34 +478,13 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     margin: 5px 0;
   }
 
-  body.game-active .game-hud {
-    position: relative;
-    top: auto;
-    flex: 0 0 54px;
-    min-height: 54px;
-    margin: 0 -8px;
-    padding: 5px 8px;
-    grid-template-columns: minmax(92px, 112px) minmax(0, 1fr) minmax(82px, 100px);
-    gap: 5px;
-    box-shadow: 0 3px 12px rgba(0,0,0,.18);
-  }
-
-  body.game-active .game-hud button { min-height: 40px; }
-  body.game-active .hud-player { gap: 5px; padding: 4px 6px; }
   body.game-active .hud-player strong { font-size: 12px; }
   body.game-active .hud-player small,
   body.game-active .hud-turn small { font-size: 9px; }
   body.game-active .hud-ship-icon { font-size: 17px; }
   .hud-menu-chevron { margin-left: auto; font-size: 12px; color: var(--muted); }
 
-  body.game-active .hud-chip {
-    min-width: 48px;
-    min-height: 38px;
-    padding: 4px 6px;
-    gap: 4px;
-  }
   body.game-active .hud-chip strong { font-size: 12px; }
-  body.game-active .hud-turn { padding: 4px 6px; }
   body.game-active .hud-turn strong { font-size: 11px; }
 
   body.game-active .layout {
@@ -564,11 +518,7 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 }
 
 @media (max-width: 420px) {
-  body.game-active .game-hud {
-    grid-template-columns: 88px minmax(0,1fr) 82px;
-  }
   body.game-active .hud-ship-icon { display: none; }
-  body.game-active .hud-chip { min-width: 44px; }
   body.game-active.game-account-open #accountBar { top: 102px; }
 }
 
@@ -1051,16 +1001,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     overscroll-behavior: contain;
   }
 
-  body.game-active .game-hud {
-    position: absolute;
-    z-index: 50;
-    top: 0;
-    left: 0;
-    right: 0;
-    width: auto;
-    margin: 0;
-  }
-
   body.game-active #gameSidePanel {
     z-index: 80;
   }
@@ -1098,8 +1038,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 }
 .hud-menu-btn {
   display: none;
-  width: 40px;
-  min-width: 40px;
   padding: 0;
   font-size: 19px;
   border: 1px solid var(--line);
@@ -1107,29 +1045,11 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   color: var(--text);
 }
 @media (max-width: 900px) {
-  body.game-active .game-hud {
-    grid-template-columns: minmax(92px, 112px) minmax(0, 1fr) minmax(92px, 108px) 40px;
-  }
-  body.game-active .hud-menu-btn {
-    display: grid;
-    place-items: center;
-    min-height: 40px;
-  }
-  body.game-active .hud-turn {
-    gap: 1px;
-  }
   body.game-active .hud-resources {
     overscroll-behavior-x: contain;
   }
 }
 @media (max-width: 420px) {
-  body.game-active .game-hud {
-    grid-template-columns: 82px minmax(0, 1fr) 82px 38px;
-  }
-  body.game-active .hud-menu-btn {
-    width: 38px;
-    min-width: 38px;
-  }
   body.game-active .hud-phase {
     font-size: 8px;
   }
@@ -3720,11 +3640,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     height: calc(100dvh - 48px - env(safe-area-inset-top, 0px));
   }
 
-  body.game-active .game-hud {
-    padding-left: max(8px, env(safe-area-inset-left, 0px));
-    padding-right: max(8px, env(safe-area-inset-right, 0px));
-  }
-
   body.game-active .game-action-bar,
   body.game-active .targeting-bar {
     left: max(8px, env(safe-area-inset-left, 0px));
@@ -3770,17 +3685,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 /* Small Android / compact iPhone portrait: preserve the map and keep the
    mandatory interaction surface scrollable above browser chrome. */
 @media (max-width: 380px), (max-height: 700px) and (max-width: 900px) {
-  body.game-active .game-hud {
-    grid-template-columns: 76px minmax(0, 1fr) 74px 36px;
-    gap: 4px;
-    min-height: 50px;
-  }
-
-  body.game-active .hud-menu-btn {
-    width: 36px;
-    min-width: 36px;
-  }
-
   body.game-active .game-roster {
     top: calc(52px + env(safe-area-inset-top, 0px));
   }
@@ -3815,10 +3719,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 /* Landscape is secondary: keep gameplay usable rather than introducing a
    separate desktop/mobile architecture. */
 @media (max-width: 900px) and (orientation: landscape) and (max-height: 520px) {
-  body.game-active .game-hud {
-    min-height: 48px;
-  }
-
   body.game-active .game-roster {
     display: none;
   }
@@ -4389,8 +4289,20 @@ body.game-active .final-results-art {
   }
   body.game-active .game-hud {
     --hud-tile: 44px;
+    position: absolute;
+    z-index: 50;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    margin: 0;
+    display: grid;
     flex-basis: 54px;
     min-height: 54px;
+    padding-top: 5px;
+    padding-right: max(8px, env(safe-area-inset-right, 0px));
+    padding-bottom: 5px;
+    padding-left: max(8px, env(safe-area-inset-left, 0px));
     align-items: center;
     grid-template-columns: calc(var(--hud-tile) * 2) minmax(0,1fr) var(--hud-tile) var(--hud-tile);
     gap: 5px;
