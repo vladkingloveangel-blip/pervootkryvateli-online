@@ -527,10 +527,12 @@
 
       <section id="gameActionBar" class="game-action-bar hidden" role="status" aria-live="polite" aria-atomic="true" aria-label="Текущее действие">
         <div class="game-action-copy">
-          <span id="gameActionKicker" class="game-action-kicker">Ожидание</span>
-          <strong id="gameActionTitle">—</strong>
+          <div id="gameActionStatus" class="game-action-status">
+            <span id="gameActionKicker" class="game-action-kicker">Ожидание</span>
+            <div id="gameActionProgress" class="game-action-progress hidden" aria-label="Оставшиеся действия"></div>
+            <strong id="gameActionTitle">—</strong>
+          </div>
           <span id="gameActionDetail" class="game-action-detail">—</span>
-          <div id="gameActionProgress" class="game-action-progress hidden" aria-label="Оставшиеся действия"></div>
         </div>
         <div id="gameActionButtons" class="game-action-buttons"></div>
       </section>
