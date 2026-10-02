@@ -434,6 +434,18 @@
         <button id="targetingCancelBtn" type="button">Отмена</button>
       </section>
 
+      <section id="endGameVoteOverlay" class="end-game-vote-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="endGameVoteTitle">
+        <div class="end-game-vote-backdrop" aria-hidden="true"></div>
+        <div class="end-game-vote-card">
+          <div class="end-game-vote-head">
+            <div><span>ЗАВЕРШЕНИЕ ПАРТИИ</span><h2 id="endGameVoteTitle">Завершение игры</h2><small id="endGameVoteSummary">Решение принимается единогласно.</small></div>
+            <button id="endGameVoteCloseBtn" class="small" type="button" aria-label="Закрыть голосование">✕</button>
+          </div>
+          <div id="endGameVotePlayers" class="end-game-vote-players"></div>
+          <div id="endGameVoteActions" class="end-game-vote-actions"></div>
+        </div>
+      </section>
+
       <section id="journalOverlay" class="journal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="journalOverlayTitle">
         <div class="journal-overlay-backdrop" aria-hidden="true"></div>
         <div class="journal-overlay-card">

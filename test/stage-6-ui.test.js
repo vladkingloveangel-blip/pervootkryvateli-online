@@ -1373,3 +1373,56 @@ test('UI-27 menu journal entry opens the dedicated journal overlay', () => {
   assert.match(code, /kind === 'journal'/);
   assert.match(code, /renderJournalOverlay\(\)/);
 });
+
+
+test('UI-28 adds a global end-game voting card driven by endGameConsensus', () => {
+  assert.match(index, /id="endGameVoteOverlay" class="end-game-vote-overlay hidden"/);
+  assert.match(index, /id="endGameVotePlayers"/);
+  assert.match(index, /id="endGameVoteActions"/);
+  assert.match(app, /function renderEndGameVoteOverlay\(forceOpen = false\)/);
+  assert.match(app, /consensus\?\.status === 'proposed'/);
+  assert.match(app, /consensus\?\.status === 'accepted'/);
+  assert.match(styles, /UI-28 — global end-game consensus card/);
+});
+
+test('UI-28 voting card reuses canonical consensus socket commands without client-side voting rules', () => {
+  const start = app.indexOf('  function openEndGameVoteOverlay()');
+  const end = app.indexOf('\n  function renderEndGame()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /emitEndGameCommand\('proposeEndGame'\)/);
+  assert.match(code, /emitEndGameCommand\('confirmEndGame'\)/);
+  assert.match(code, /emitEndGameCommand\('rejectEndGame'\)/);
+  assert.doesNotMatch(code, /socket\.emit\('proposeEndGame'/);
+  assert.doesNotMatch(code, /finishAfterRound\s*=/);
+});
+
+test('UI-28 proposed consensus automatically presents all player vote states', () => {
+  const start = app.indexOf('  function renderEndGameVoteOverlay(');
+  const end = app.indexOf('\n  function renderEndGame()', start);
+  const code = app.slice(start, end);
+  assert.match(code, /for \(const player of room\.players \|\| \[\]\)/);
+  assert.match(code, /confirmed\.has\(String\(player\.id\)\)/);
+  assert.match(code, /Согласился/);
+  assert.match(code, /Ожидается ответ/);
+  assert.match(code, /overlay\.classList\.remove\('hidden'\)/);
+});
+
+test('UI-28 accepted consensus marks the HUD as the last round and leaves finalization server-authoritative', () => {
+  assert.match(app, /const lastRound = r\.endGameConsensus\?\.status === 'accepted'/);
+  assert.match(app, /Последний раунд/);
+  const start = app.indexOf('  function renderEndGameVoteOverlay(');
+  const end = app.indexOf('\n  function renderEndGame()', start);
+  const code = app.slice(start, end);
+  assert.match(code, /accepted/);
+  assert.match(code, /overlay\.classList\.add\('hidden'\)/);
+  assert.doesNotMatch(code, /room\.finished\s*=|room\.phase\s*=\s*['"]finished/);
+});
+
+test('UI-28 menu end-game entry opens the consensus card instead of hiding the action in Players', () => {
+  const start = app.indexOf('  function handleGameMenuAction(kind)');
+  const end = app.indexOf('\n  const MOBILE_TAB_TITLES', start);
+  const code = app.slice(start, end);
+  assert.match(code, /kind === 'endgame'/);
+  assert.match(code, /openEndGameVoteOverlay\(\)/);
+});

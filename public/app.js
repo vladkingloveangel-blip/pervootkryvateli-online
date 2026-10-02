@@ -74,6 +74,7 @@
 
   function openGameMenu() {
     if (!document.body.classList.contains('game-active') || !state.room) return;
+    closeEndGameVoteOverlay();
     closeScoreOverlay();
     closeJournalOverlay();
     closeGameAccountMenu();
@@ -782,6 +783,8 @@
   $('scoreOverlay').querySelector('.score-overlay-backdrop').addEventListener('click', closeScoreOverlay);
   $('journalOverlayCloseBtn').addEventListener('click', closeJournalOverlay);
   $('journalOverlay').querySelector('.journal-overlay-backdrop').addEventListener('click', closeJournalOverlay);
+  $('endGameVoteCloseBtn').addEventListener('click', closeEndGameVoteOverlay);
+  $('endGameVoteOverlay').querySelector('.end-game-vote-backdrop').addEventListener('click', closeEndGameVoteOverlay);
 
   $('startBtn').addEventListener('click', () => {
     $('startBtn').disabled = true;
@@ -977,6 +980,10 @@
       renderJournalOverlay();
       return;
     }
+    if (kind === 'endgame') {
+      openEndGameVoteOverlay();
+      return;
+    }
     if (kind === 'diplomacy') {
       closeGameMenu();
       renderDiplomacyObjectSheet(null);
@@ -1081,9 +1088,12 @@
       $('hudPoliticsBtn').title = 'Дипломатия';
     }
 
+    const lastRound = r.endGameConsensus?.status === 'accepted';
     $('hudRound').textContent = !r.started
       ? `Лобби · ${r.players.length}/${r.balanceCatalog.session.players.max}`
-      : `Раунд ${r.round} · круг ${r.circle}/${r.balanceCatalog.session.circlesPerRound}`;
+      : lastRound
+        ? `Последний раунд · ${r.round} · круг ${r.circle}/${r.balanceCatalog.session.circlesPerRound}`
+        : `Раунд ${r.round} · круг ${r.circle}/${r.balanceCatalog.session.circlesPerRound}`;
     $('hudTurn').textContent = !r.started
       ? 'Ожидание старта'
       : r.eventPhase?.active
@@ -1138,8 +1148,93 @@
     actionNav.setAttribute('aria-label', visible.length > 1 ? `Действия, доступно разделов: ${visible.length}` : 'Действия');
   }
 
+  function openEndGameVoteOverlay() {
+    if (!state.room?.started || state.room.finished || state.room.phase === 'finished') return;
+    closeGameMenu();
+    closeMapInfo();
+    renderEndGameVoteOverlay(true);
+  }
+
+  function closeEndGameVoteOverlay() {
+    const consensus = state.room?.endGameConsensus;
+    const confirmed = new Set((consensus?.confirmedPlayerIds || []).map(String));
+    const mustRespond = consensus?.status === 'proposed' && !state.spectating && !confirmed.has(String(state.myId));
+    if (mustRespond) return;
+    $('endGameVoteOverlay')?.classList.add('hidden');
+    document.body.classList.remove('end-game-vote-open');
+  }
+
+  function renderEndGameVoteOverlay(forceOpen = false) {
+    const room = state.room;
+    const overlay = $('endGameVoteOverlay');
+    if (!overlay) return;
+    const consensus = room?.endGameConsensus;
+    const proposed = consensus?.status === 'proposed';
+    const accepted = consensus?.status === 'accepted';
+    if (!room?.started || room.finished || room.phase === 'finished' || accepted) {
+      overlay.classList.add('hidden');
+      document.body.classList.remove('end-game-vote-open');
+      return;
+    }
+
+    const confirmed = new Set((consensus?.confirmedPlayerIds || []).map(String));
+    const mineConfirmed = confirmed.has(String(state.myId));
+    const shouldOpen = forceOpen || proposed;
+    if (!shouldOpen) return;
+
+    $('endGameVoteTitle').textContent = proposed ? 'Завершить партию после этого раунда?' : 'Завершение игры';
+    $('endGameVoteSummary').textContent = proposed
+      ? `Предложил: ${playerName(consensus.proposedById)}. Нужно согласие всех игроков.`
+      : 'Если все игроки согласятся, партия завершится после полного текущего раунда.';
+
+    const players = $('endGameVotePlayers');
+    players.innerHTML = '';
+    if (proposed) {
+      for (const player of room.players || []) {
+        const row = document.createElement('div');
+        row.className = 'end-game-vote-player';
+        const yes = confirmed.has(String(player.id));
+        row.innerHTML = `<span>${escapeHtml(player.name)}</span><strong>${yes ? 'Согласился' : 'Ожидается ответ'}</strong>`;
+        players.appendChild(row);
+      }
+    }
+
+    const actions = $('endGameVoteActions');
+    actions.innerHTML = '';
+    if (!state.spectating && !proposed) {
+      const propose = document.createElement('button');
+      propose.type = 'button';
+      propose.className = 'primary';
+      propose.textContent = 'Предложить завершение партии';
+      propose.addEventListener('click', () => emitEndGameCommand('proposeEndGame'));
+      actions.appendChild(propose);
+    } else if (!state.spectating && proposed && !mineConfirmed) {
+      const confirmButton = document.createElement('button');
+      confirmButton.type = 'button';
+      confirmButton.className = 'primary';
+      confirmButton.textContent = 'Согласиться';
+      confirmButton.addEventListener('click', () => emitEndGameCommand('confirmEndGame'));
+      const rejectButton = document.createElement('button');
+      rejectButton.type = 'button';
+      rejectButton.className = 'danger-soft';
+      rejectButton.textContent = 'Отклонить';
+      rejectButton.addEventListener('click', () => emitEndGameCommand('rejectEndGame'));
+      actions.append(confirmButton, rejectButton);
+    } else if (proposed) {
+      const waiting = document.createElement('div');
+      waiting.className = 'end-game-vote-waiting';
+      waiting.textContent = state.spectating ? 'Ожидается решение игроков.' : 'Ваш голос учтён. Ожидаем остальных игроков.';
+      actions.appendChild(waiting);
+    }
+
+    $('endGameVoteCloseBtn').classList.toggle('hidden', proposed && !state.spectating && !mineConfirmed);
+    overlay.classList.remove('hidden');
+    document.body.classList.add('end-game-vote-open');
+  }
+
   function renderEndGame() {
     const r = state.room;
+    renderEndGameVoteOverlay();
     const panel = $('endGamePanel');
     const finalPanel = $('finalResultsPanel');
     const finished = Boolean(r?.finished || r?.phase === 'finished');
