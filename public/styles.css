@@ -3896,11 +3896,7 @@ button[aria-disabled="true"] {
 }
 
 @media (max-width: 900px) {
-  body.game-active button:not(.map-object-hit):not(.navigation-hit):not(.targeting-hit):not(.targeting-marker):not(.cell-hit):not(.token):not(.game-action-button) {
-    min-height: 44px;
-  }
-
-  body.game-active .map-object-hit,
+    body.game-active .map-object-hit,
   body.game-active .navigation-hit,
   body.game-active .targeting-hit {
     touch-action: manipulation;
