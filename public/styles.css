@@ -4765,6 +4765,122 @@ body.game-active .final-results-art {
     height: 6px;
   }
 
+  /* Canonical floating information windows. Voluntary information stays over the
+     permanent map; mandatory decisions continue to use Decision Layer. */
+  body.game-active .object-sheet {
+    position: absolute;
+    z-index: 96;
+    inset: auto;
+    top: calc(72px + env(safe-area-inset-top, 0px));
+    left: 50%;
+    width: min(390px, calc(100vw - 24px));
+    max-height: min(64dvh, 560px);
+    padding: 12px;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 9px;
+    transform: translateX(-50%);
+    border: 1px solid rgba(240,196,91,.38);
+    border-radius: 16px;
+    background: rgba(8,37,44,.965);
+    box-shadow: 0 14px 38px rgba(0,0,0,.42);
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+  }
+  body.game-active .object-sheet.expanded {
+    max-height: min(74dvh, 680px);
+  }
+  body.game-active .object-sheet-handle,
+  body.game-active #objectSheetExpand {
+    display: none !important;
+  }
+  body.game-active .object-sheet-head {
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,.09);
+  }
+  body.game-active .object-sheet-heading strong {
+    font-size: 17px;
+  }
+  body.game-active .object-sheet-head-actions {
+    margin-left: auto;
+  }
+  body.game-active .object-sheet-head-actions #objectSheetClose {
+    box-sizing: border-box;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0;
+    border-radius: 10px;
+  }
+  body.game-active .object-sheet-body {
+    min-height: 0;
+    padding-right: 2px;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+  body.game-active .object-sheet-actions {
+    max-height: min(30dvh, 230px);
+    overflow-y: auto;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,.09);
+    scrollbar-gutter: stable;
+  }
+  body.game-active.object-sheet-open .game-action-bar {
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+  body.game-active .object-sheet.expanded ~ .game-action-bar {
+    display: grid !important;
+  }
+
+  body.game-active .score-overlay-card,
+  body.game-active .journal-overlay-card,
+  body.game-active.game-menu-open .game-menu-panel {
+    border: 1px solid rgba(240,196,91,.38);
+    border-radius: 16px;
+    background: rgba(8,37,44,.965);
+    box-shadow: 0 14px 38px rgba(0,0,0,.42);
+    backdrop-filter: blur(10px);
+  }
+  body.game-active .score-overlay-card,
+  body.game-active .journal-overlay-card {
+    width: min(390px, calc(100vw - 24px));
+    max-height: min(74dvh, 680px);
+  }
+  body.game-active .score-overlay-head,
+  body.game-active .journal-overlay-head,
+  body.game-active .game-menu-head {
+    padding-bottom: 9px;
+    border-bottom: 1px solid rgba(255,255,255,.09);
+  }
+  body.game-active .score-overlay-head > button,
+  body.game-active .journal-overlay-head > button,
+  body.game-active .game-menu-head > button {
+    box-sizing: border-box;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0;
+    border-radius: 10px;
+  }
+  body.game-active.game-menu-open .game-menu-panel {
+    inset: auto;
+    top: calc(72px + env(safe-area-inset-top, 0px));
+    left: 50%;
+    width: min(390px, calc(100vw - 24px));
+    max-height: min(74dvh, 680px);
+    padding: 12px;
+    transform: translateX(-50%);
+    overflow-y: auto;
+  }
+  body.game-active.game-menu-open .game-menu-backdrop,
+  body.game-active.score-overlay-open .score-overlay-backdrop,
+  body.game-active.journal-overlay-open .journal-overlay-backdrop {
+    background: rgba(2,15,20,.34);
+    backdrop-filter: blur(1px);
+  }
+
   body.game-active .game-quick-access {
     position: absolute;
     z-index: 67;
