@@ -3273,7 +3273,19 @@ function islandLoadingLimit() {
   return Math.max(1, Math.floor(Number(BALANCE.loadingLimitPerIslandPerRound) || 1));
 }
 
-function canLoadCargo(room, player, island, goodId, holdId = 'main') {
+function fleetCargoHolds(room, player) {
+  const holds = [holdFor(room, player, 'main')].filter(Boolean);
+  for (const status of escortStatuses(room, player)) {
+    if (!status.active) continue;
+    const def = ESCORTS[status.type];
+    if (!def || def.cargo <= 0) continue;
+    const hold = holdFor(room, player, status.id);
+    if (hold) holds.push(hold);
+  }
+  return holds;
+}
+
+function canLoadCargo(room, player, island, goodId) {
   const good = GOODS[goodId];
   if (!good) return { ok: false, error: 'Неизвестный товар.' };
   if (!island) return { ok: false, error: 'Остров не найден.' };
@@ -3282,24 +3294,28 @@ function canLoadCargo(room, player, island, goodId, holdId = 'main') {
   if (!here) return { ok: false, error: 'Основной корабль должен находиться на клетке этого острова.' };
   if (islandLoadingLimit() === 1 && island.loadedRound === room.round) return { ok: false, error: 'С этого острова уже выполнялась погрузка в текущем раунде.' };
   if (!availableGoodsOnIsland(island).includes(goodId)) return { ok: false, error: `На острове нет действующего источника товара «${good.name}».` };
-  const hold = holdFor(room, player, holdId);
-  if (!hold) return { ok: false, error: 'Выбранный трюм недоступен.' };
-  if (hold.blockedByLandCompany) return { ok: false, error: 'Основной трюм занят ротой ландскнехтов.' };
-  if (hold.cargo) return { ok: false, error: 'Выбранный трюм уже занят.' };
-  if (hold.capacity <= 0) return { ok: false, error: 'У выбранного судна нет грузового трюма.' };
-  return { ok: true, good, hold, capacity: hold.capacity };
+  const holds = fleetCargoHolds(room, player).filter(hold => !hold.blockedByLandCompany && !hold.cargo && hold.capacity > 0);
+  if (!holds.length) return { ok: false, error: 'Во флотилии нет свободных доступных грузовых трюмов.' };
+  return { ok: true, good, holds };
 }
 
-function loadCargo(room, player, islandId, goodId, holdId = 'main') {
+function loadCargo(room, player, islandId, goodId) {
   const island = room.islands.find(i => i.id === islandId);
-  const allowed = canLoadCargo(room, player, island, goodId, holdId);
+  const allowed = canLoadCargo(room, player, island, goodId);
   if (!allowed.ok) return allowed;
-  const cargo = { goodId, quantity: allowed.capacity };
   const activeTask = getActiveAssignmentTask(player);
-  if (activeTask?.id) cargo.assignmentInstanceId = activeTask.id;
-  allowed.hold.setCargo(cargo);
+  const assignmentInstanceId = activeTask?.id || null;
+  const loaded = allowed.holds.map(hold => {
+    const cargo = { goodId, quantity: hold.capacity };
+    if (assignmentInstanceId) cargo.assignmentInstanceId = assignmentInstanceId;
+    hold.setCargo(cargo);
+    return { holdId: hold.id, holdName: hold.name, quantity: hold.capacity };
+  });
   island.loadedRound = room.round;
-  return { ok: true, island, good: allowed.good, quantity: allowed.capacity, holdId: allowed.hold.id, holdName: allowed.hold.name };
+  return {
+    ok: true, island, good: allowed.good, loaded,
+    quantity: loaded.reduce((sum, item) => sum + item.quantity, 0),
+  };
 }
 
 function cargoForHold(player, holdId = 'main') {
@@ -3315,26 +3331,34 @@ function cargoSaleValue(player, holdId = 'main') {
   return good.price * cargo.quantity;
 }
 
-function canSellCargo(room, player, holdId = 'main') {
+function canSellCargo(room, player) {
   if (!isCitadelCell(player.row, player.col)) return { ok: false, error: 'Продать груз можно только в Цитадели.' };
-  const hold = holdFor(room, player, holdId);
-  if (!hold) return { ok: false, error: 'Выбранный трюм недоступен.' };
-  if (!hold.cargo) return { ok: false, error: 'Выбранный трюм пуст.' };
-  const good = GOODS[hold.cargo.goodId];
-  if (!good) return { ok: false, error: 'Неизвестный товар в трюме.' };
-  return { ok: true, good, hold, revenue: good.price * hold.cargo.quantity, quantity: hold.cargo.quantity };
+  const holds = fleetCargoHolds(room, player).filter(hold => hold.cargo && GOODS[hold.cargo.goodId]);
+  if (!holds.length) return { ok: false, error: 'Во флотилии нет груза для продажи.' };
+  return { ok: true, holds };
 }
 
-function sellCargo(room, player, holdId = 'main') {
-  const allowed = canSellCargo(room, player, holdId);
+function sellCargo(room, player) {
+  const allowed = canSellCargo(room, player);
   if (!allowed.ok) return allowed;
-  const assignmentInstanceId = allowed.hold.cargo?.assignmentInstanceId || null;
-  const capacity = Math.max(0, Number(allowed.hold.capacity) || 0);
-  const credit = creditDucats(player, allowed.revenue);
-  allowed.hold.setCargo(null);
-  return { ok: true, good: allowed.good, revenue: allowed.revenue, credit, quantity: allowed.quantity, capacity, holdId: allowed.hold.id, holdName: allowed.hold.name, assignmentInstanceId };
+  const sales = [];
+  let revenue = 0;
+  for (const hold of allowed.holds) {
+    const cargo = hold.cargo;
+    const good = GOODS[cargo.goodId];
+    const itemRevenue = good.price * cargo.quantity;
+    sales.push({
+      good, revenue: itemRevenue, quantity: cargo.quantity,
+      capacity: Math.max(0, Number(hold.capacity) || 0),
+      holdId: hold.id, holdName: hold.name,
+      assignmentInstanceId: cargo.assignmentInstanceId || null,
+    });
+    revenue += itemRevenue;
+    hold.setCargo(null);
+  }
+  const credit = creditDucats(player, revenue);
+  return { ok: true, sales, revenue, credit };
 }
-
 
 function playerOnIsland(player, island) {
   return Boolean(player && island?.cells?.some(([r, c]) => r === player.row && c === player.col));
