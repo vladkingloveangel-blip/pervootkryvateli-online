@@ -5248,9 +5248,22 @@
     setIslandSheetHeader(island, definition[0], { back: true });
 
     const body = $('objectSheetBody');
-    body.innerHTML = islandActionIntroHtml(island, definition[0], definition[1]);
     const actions = $('objectSheetActions');
     actions.innerHTML = '';
+
+    if (view === 'cargo') {
+      body.innerHTML = `
+        <div class="island-action-hint">${escapeHtml(definition[1])}</div>
+        <div id="islandCargoPrimaryActions" class="island-cargo-primary-actions"></div>
+        <div class="island-action-context">
+          <span>Казна <strong>${mine?.ducats ?? 0}</strong></span>
+          <span>Действия <strong>${mine?.actionsLeft ?? 0}</strong></span>
+          <span>Площадь <strong>${island.usedArea ?? 0}/${island.effectiveArea ?? island.area ?? 0}</strong></span>
+        </div>
+      `;
+    } else {
+      body.innerHTML = islandActionIntroHtml(island, definition[0], definition[1]);
+    }
 
     const here = islandIsHere(island);
     if (!here) {
@@ -5268,7 +5281,8 @@
         military: 'Военная инфраструктура',
         palace: 'Дворец',
       };
-      moved += moveCanonicalActionGroup($('islandActions'), labels[view], actions);
+      const canonicalTarget = view === 'cargo' ? $('islandCargoPrimaryActions') : actions;
+      moved += moveCanonicalActionGroup($('islandActions'), labels[view], canonicalTarget);
     }
 
     if (view === 'military' && mine.landCompany) {
@@ -5312,7 +5326,8 @@
         admiralty: 'Сейчас через это Адмиралтейство нет доступного действия с персонажем.',
         build: 'Сейчас строительство на этом острове недоступно.',
       };
-      actions.appendChild(islandNoActionNote(messages[view] || 'Сейчас здесь нет доступного действия.'));
+      const target = view === 'cargo' ? $('islandCargoPrimaryActions') : actions;
+      target.appendChild(islandNoActionNote(messages[view] || 'Сейчас здесь нет доступного действия.'));
     }
   }
 
@@ -5390,15 +5405,6 @@
     $('objectSheetBody').innerHTML = foreignIslandCompactHtml(island);
 
     const politicalFaction = !island.ownerId ? factionForIsland(island) : null;
-    if (politicalFaction) {
-      $('objectSheetBody').insertAdjacentHTML('beforeend', `
-        <section class="state-island-politics">
-          <span>ГОСУДАРСТВО</span>
-          <strong>${escapeHtml(politicalFaction.name)}</strong>
-          <small>${escapeHtml(factionRelationLabel(politicalFaction))}</small>
-        </section>
-      `);
-    }
 
     const actions = $('objectSheetActions');
     actions.innerHTML = '';
