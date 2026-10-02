@@ -1056,6 +1056,7 @@
       $('youStatus').innerHTML = `<strong>${escapeHtml(mine.name)}</strong><br><span class="muted">${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level} · ${mine.ducats} дукатов${mine.debt ? ` · долг ${mine.debt}` : ''} · очки армии ${mine.armyPoints || 0} · очки флота ${mine.fleetPoints || 0} · слава ${mine.glory || 0} · островов ${mine.islandCount} · клетка ${mine.col + 1}:${mine.row + 1}${escapeHtml(cargo)}${escapeHtml(cards)}${escapeHtml(eventHand)}${escapeHtml(legendary)}${escapeHtml(skip)}${escapeHtml(politics)}</span>`;
     }
 
+    renderGameRoster();
     renderPlayers();
     renderControls();
     renderGameActionBar();
@@ -1079,6 +1080,55 @@
     renderToastStack();
     renderMap();
     updateContextualActionPanels();
+  }
+
+  function renderGameRoster() {
+    const roster = $('gameRoster');
+    const r = state.room;
+    if (!roster || !r?.started || r.finished || r.phase === 'finished') {
+      roster?.classList.add('hidden');
+      if (roster) roster.innerHTML = '';
+      return;
+    }
+
+    roster.innerHTML = '';
+    roster.classList.remove('hidden');
+    const orderedIds = Array.isArray(r.order) && r.order.length ? r.order : r.players.map(player => player.id);
+    for (const id of orderedIds) {
+      const player = r.players.find(item => item.id === id);
+      if (!player) continue;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'roster-player';
+      if (player.id === state.myId) button.classList.add('you');
+      if (player.id === r.activePlayerId) button.classList.add('active');
+      if (!player.connected) button.classList.add('offline');
+      if (player.id !== state.myId && areAlliesClient(state.myId, player.id)) button.classList.add('ally');
+      button.setAttribute('aria-label', `${player.name}: ${playerRelationLabel(player)}`);
+
+      const token = document.createElement('span');
+      token.className = 'roster-token';
+      token.style.background = player.color;
+      token.textContent = String(player.name || '?').trim().slice(0, 1).toUpperCase() || '?';
+
+      const name = document.createElement('span');
+      name.className = 'roster-name';
+      name.textContent = player.id === state.myId ? 'Вы' : player.name;
+
+      const status = document.createElement('span');
+      status.className = 'roster-status';
+      status.textContent = player.id === r.activePlayerId ? 'ход'
+        : !player.connected ? 'офлайн'
+        : areAlliesClient(state.myId, player.id) ? 'союз'
+        : '';
+
+      button.append(token, name, status);
+      button.addEventListener('click', () => {
+        if (isDecisionPending()) return;
+        showPlayerMapInfo(player);
+      });
+      roster.appendChild(button);
+    }
   }
 
   function renderPlayers() {
@@ -3682,6 +3732,10 @@
       renderForeignIslandObjectSheet(data);
       return;
     }
+    if (kind === 'player') {
+      renderPlayerObjectSheet(data);
+      return;
+    }
 
     $('objectSheetKind').textContent = mapObjectKindLabel(kind, data);
     $('objectSheetTitle').textContent = $('mapInfoTitle').textContent || data.name || 'Объект';
@@ -3719,17 +3773,122 @@
     if (!expanded && selectedOwnIsland) renderOwnIslandObjectSheet(selectedOwnIsland);
   }
 
-  function showPlayerMapInfo(player) {
-    const publicStats = [];
-    publicStats.push(`<span>Корабль: <strong>${escapeHtml(shipName(player.shipClass))} ${ROMAN[player.level] || player.level}</strong></span>`);
-    if (player.fleetArtillery != null) publicStats.push(`<span>Артиллерия: <strong>${player.fleetArtillery}</strong></span>`);
-    if (player.assaultArmy != null) publicStats.push(`<span>Войско: <strong>${player.assaultArmy}</strong></span>`);
-    if (player.totalCargoCapacity != null) publicStats.push(`<span>Груз: <strong>${player.totalCargoCapacity}</strong> вместимость</span>`);
-    publicStats.push(`<span>Статус: <strong>${player.connected ? 'в сети' : 'отключён'}</strong></span>`);
+  function playerRelationLabel(player) {
+    if (!player || player.id === state.myId) return 'Вы';
+    const mine = me();
+    if ((mine?.allyIds || []).includes(player.id)) return 'Союзник';
+    if ((mine?.brokenAlliesThisTurn || []).includes(player.id)) return 'Бывший союзник';
+    if (player.suzerainId) {
+      const faction = state.room?.factions?.find(item => item.id === player.suzerainId);
+      if (faction) return `Вассал · ${faction.name}`;
+    }
+    return 'Другой игрок';
+  }
 
+  function playerPublicSheetHtml(player) {
+    const rows = [];
+    rows.push(`<div class="player-sheet-stat"><span>Корабль</span><strong>${escapeHtml(shipName(player.shipClass))} ${ROMAN[player.level] || player.level}</strong></div>`);
+    if (player.fleetArtillery != null) rows.push(`<div class="player-sheet-stat"><span>Артиллерия</span><strong>${player.fleetArtillery}</strong></div>`);
+    if (player.assaultArmy != null) rows.push(`<div class="player-sheet-stat"><span>Войско</span><strong>${player.assaultArmy}</strong></div>`);
+    if (player.islandCount != null) rows.push(`<div class="player-sheet-stat"><span>Острова</span><strong>${player.islandCount}</strong></div>`);
+    if (player.glory != null) rows.push(`<div class="player-sheet-stat"><span>Слава</span><strong>${player.glory}</strong></div>`);
+    rows.push(`<div class="player-sheet-stat"><span>Связь</span><strong>${player.connected ? 'в сети' : 'отключён'}</strong></div>`);
+
+    const scoutedMoney = player.id !== state.myId && Object.hasOwn(player, 'ducats');
+    const money = scoutedMoney
+      ? `<div class="player-scout-money"><span>РАЗВЕДАНО · до конца вашего хода</span><strong>Казна: ${player.ducats} дукатов</strong></div>`
+      : '';
+
+    const veil = Number(player.legendaryStatus?.shipVeilTurns) > 0
+      ? `<div class="player-sheet-status">Покров моря: ${player.legendaryStatus.shipVeilTurns} ход.</div>`
+      : '';
+    const skip = Number(player.skipTurns) > 0
+      ? `<div class="player-sheet-status">Пропуск ходов: ${player.skipTurns}</div>`
+      : '';
+
+    return `
+      <div class="player-sheet-relation">${escapeHtml(playerRelationLabel(player))}</div>
+      <div class="player-sheet-grid">${rows.join('')}</div>
+      ${money}
+      ${veil}
+      ${skip}
+    `;
+  }
+
+  function renderPlayerObjectSheet(player) {
+    const sheet = $('objectSheet');
+    $('objectSheetKind').textContent = player.id === state.myId ? 'ВАША ФЛОТИЛИЯ' : 'ФЛОТИЛИЯ ИГРОКА';
+    $('objectSheetTitle').textContent = player.name;
+    $('objectSheetBody').innerHTML = playerPublicSheetHtml(player);
+
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    const mine = me();
+
+    if (player.id === state.myId) {
+      const fleet = document.createElement('button');
+      fleet.type = 'button';
+      fleet.className = 'primary';
+      fleet.textContent = 'Корабль и флотилия';
+      fleet.addEventListener('click', () => { closeMapInfo(); openMobileTab('ship'); });
+      actions.appendChild(fleet);
+    } else if (mine && !state.spectating && state.room?.started) {
+      const myTurn = state.room.activePlayerId === state.myId;
+      const blocked = isDecisionPending();
+      const allies = areAlliesClient(state.myId, player.id);
+      const sameCell = Number(mine.row) === Number(player.row) && Number(mine.col) === Number(player.col);
+      const canProposeAlliance = myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0
+        && !blocked && !state.room.pendingAlliance && !state.room.pendingBattle
+        && !allies && !(mine.allyIds || []).length && !(player.allyIds || []).length
+        && sameCell && player.connected;
+      const canBreakAlliance = allies && myTurn && mine.phase === 'navigation' && mine.roll === null
+        && !blocked && !state.room.pendingBattle;
+
+      if (canProposeAlliance) {
+        const alliance = document.createElement('button');
+        alliance.type = 'button';
+        alliance.className = 'primary';
+        alliance.textContent = 'Предложить союз';
+        alliance.addEventListener('click', () => socket.emit('requestAlliance', { targetPlayerId: player.id }, handleGameAck));
+        actions.appendChild(alliance);
+      }
+
+      if (canBreakAlliance) {
+        const breakButton = document.createElement('button');
+        breakButton.type = 'button';
+        breakButton.className = 'danger-soft';
+        breakButton.textContent = 'Разорвать союз';
+        breakButton.addEventListener('click', () => socket.emit('breakAlliance', { targetPlayerId: player.id }, handleGameAck));
+        actions.appendChild(breakButton);
+      }
+
+      const canReachForSeaBattle = seaAttackPositionClient(mine, player) && !allies;
+      if (canReachForSeaBattle) {
+        const combat = document.createElement('button');
+        combat.type = 'button';
+        combat.className = 'danger-soft';
+        combat.textContent = 'Морской бой';
+        combat.disabled = !(myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 && !blocked);
+        combat.addEventListener('click', () => { closeMapInfo(); openMobileTab('actions'); });
+        actions.appendChild(combat);
+      }
+
+      const relations = document.createElement('button');
+      relations.type = 'button';
+      relations.textContent = 'Игроки и отношения';
+      relations.addEventListener('click', () => { closeMapInfo(); openMobileTab('players'); });
+      actions.appendChild(relations);
+    }
+
+    sheet.classList.remove('hidden');
+    sheet.classList.remove('expanded');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function showPlayerMapInfo(player) {
     state.mapSelection = { kind: 'player', id: player.id, anchor: { row: player.row, col: player.col } };
     $('mapInfoTitle').textContent = player.name;
-    $('mapInfoMeta').innerHTML = publicStats.join('');
+    $('mapInfoMeta').innerHTML = playerPublicSheetHtml(player);
     const action = $('mapInfoAction');
     action.classList.add('hidden');
     action.onclick = null;
@@ -3747,7 +3906,7 @@
     const mobile = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
     if (mobile) {
       $('mapInfoCard').classList.add('hidden');
-      renderObjectSheetFromMapInfo('player', player);
+      renderPlayerObjectSheet(player);
     } else {
       const card = $('mapInfoCard');
       card.classList.remove('hidden');

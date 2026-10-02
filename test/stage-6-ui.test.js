@@ -513,3 +513,47 @@ test('UI-11 Scout reveal is inferred only from viewer-projected private island f
   assert.match(app, /Разведан гарнизон: .*Откройте остров на карте/);
   assert.match(styles, /UI-11 — foreign island privacy and Scout reveal/);
 });
+
+
+test('UI-12 adds a compact mobile roster and public player/ship object sheets', () => {
+  assert.match(index, /id="gameRoster" class="game-roster hidden"/);
+
+  const rosterStart = app.indexOf('  function renderGameRoster()');
+  const rosterEnd = app.indexOf('\n  function renderPlayers()', rosterStart);
+  assert.ok(rosterStart >= 0 && rosterEnd > rosterStart);
+  const rosterCode = app.slice(rosterStart, rosterEnd);
+  assert.match(rosterCode, /r\.activePlayerId/);
+  assert.match(rosterCode, /player\.connected/);
+  assert.match(rosterCode, /areAlliesClient/);
+  assert.match(rosterCode, /showPlayerMapInfo\(player\)/);
+
+  const playerStart = app.indexOf('  function playerRelationLabel(');
+  const playerEnd = app.indexOf('\n  function showPlayerMapInfo(', playerStart);
+  assert.ok(playerStart >= 0 && playerEnd > playerStart);
+  const playerCode = app.slice(playerStart, playerEnd);
+  assert.match(playerCode, /playerPublicSheetHtml/);
+  assert.match(playerCode, /renderPlayerObjectSheet/);
+  assert.match(playerCode, /fleetArtillery/);
+  assert.match(playerCode, /assaultArmy/);
+  assert.match(playerCode, /Object\.hasOwn\(player, 'ducats'\)/);
+  assert.match(playerCode, /РАЗВЕДАНО · до конца вашего хода/);
+  assert.doesNotMatch(playerCode, /player\.character/);
+  assert.doesNotMatch(playerCode, /activeAssignment|activeExpedition|player\.debt/);
+
+  assert.match(app, /renderGameRoster\(\);\s*renderPlayers\(\);\s*renderControls\(\);/);
+  assert.match(styles, /UI-12 — compact player roster and public player\/ship sheets/);
+});
+
+test('UI-12 player sheet only exposes direct alliance commands and delegates combat to existing flow', () => {
+  const start = app.indexOf('  function renderPlayerObjectSheet(');
+  const end = app.indexOf('\n  function showPlayerMapInfo(', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+
+  assert.match(code, /socket\.emit\('requestAlliance'/);
+  assert.match(code, /socket\.emit\('breakAlliance'/);
+  assert.match(code, /openMobileTab\('actions'\)/);
+  assert.doesNotMatch(code, /socket\.emit\('attackShip'/);
+  assert.match(code, /sameCell/);
+  assert.match(code, /mine\.phase === 'navigation' && mine\.roll === null/);
+});
