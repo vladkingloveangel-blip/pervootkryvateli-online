@@ -1243,6 +1243,21 @@
 
     if (finished) {
       panel.classList.add('hidden');
+      closeGameMenu();
+      closeGameAccountMenu();
+      closeScoreOverlay();
+      closeJournalOverlay();
+      closeEndGameVoteOverlay();
+      closeMapInfo();
+      state.targeting = null;
+      state.activeResult = null;
+      state.resultQueue = [];
+      state.toastQueue = [];
+      $('decisionLayer')?.classList.add('hidden');
+      $('resultLayer')?.classList.add('hidden');
+      $('targetingBar')?.classList.add('hidden');
+      $('eventFlowOverlay')?.classList.add('hidden');
+      document.body.classList.remove('decision-layer-open', 'result-layer-open', 'object-sheet-open', 'mobile-sheet-open', 'score-overlay-open', 'journal-overlay-open', 'end-game-vote-open');
       const result = r.finalResult || { titles: [], playerMetrics: [] };
       $('finalResultsRound').textContent = result.finishedRound == null ? '' : `Финальная граница: раунд ${result.finishedRound}`;
 

@@ -1426,3 +1426,44 @@ test('UI-28 menu end-game entry opens the consensus card instead of hiding the a
   assert.match(code, /kind === 'endgame'/);
   assert.match(code, /openEndGameVoteOverlay\(\)/);
 });
+
+
+test('UI-29 uses a dedicated full-screen final results surface', () => {
+  assert.match(index, /id="finalResultsPanel" class="final-results-panel final-results-screen hidden"/);
+  assert.match(index, /id="finalResultsTitle"/);
+  assert.match(index, /Общего победителя нет/);
+  assert.match(styles, /UI-29 — dedicated final results screen/);
+  assert.match(styles, /\.game\.finished-state > :not\(#finalResultsPanel\)/);
+  assert.match(styles, /#finalResultsPanel\.final-results-screen/);
+});
+
+test('UI-29 preserves six canonical titles, shared holders and player metrics without a podium', () => {
+  const start = app.indexOf('  function renderEndGame()');
+  const end = app.indexOf('\n  function render()', start);
+  const code = app.slice(start, end);
+  assert.match(code, /for \(const title of result\.titles \|\| \[\]\)/);
+  assert.match(code, /\(title\.winnerIds \|\| \[\]\)\.map\(playerName\)\.join\(', '\)/);
+  assert.match(code, /for \(const row of result\.playerMetrics \|\| \[\]\)/);
+  assert.doesNotMatch(code, /overallWinner|winnerOverall|podium|firstPlace|secondPlace|thirdPlace/);
+  assert.doesNotMatch(index, /1 место|2 место|3 место|Общий победитель/i);
+});
+
+test('UI-29 finished render clears gameplay overlays before returning from render', () => {
+  const start = app.indexOf('  function renderEndGame()');
+  const end = app.indexOf('\n  function render()', start);
+  const code = app.slice(start, end);
+  assert.match(code, /closeGameMenu\(\)/);
+  assert.match(code, /closeScoreOverlay\(\)/);
+  assert.match(code, /closeJournalOverlay\(\)/);
+  assert.match(code, /closeEndGameVoteOverlay\(\)/);
+  assert.match(code, /state\.targeting = null/);
+  assert.match(app, /renderEndGame\(\);\s*if \(r\.finished \|\| r\.phase === 'finished'\) return;/);
+});
+
+test('UI-29 reconnect to a finished room renders directly from server finalResult', () => {
+  assert.match(app, /socket\.on\('roomState', room =>[\s\S]*?state\.room = room;[\s\S]*?render\(\)/);
+  const start = app.indexOf('  function renderEndGame()');
+  const end = app.indexOf('\n  function render()', start);
+  const code = app.slice(start, end);
+  assert.match(code, /const result = r\.finalResult \|\| \{ titles: \[\], playerMetrics: \[\] \}/);
+});

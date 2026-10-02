@@ -3567,3 +3567,92 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     pointer-events: none;
   }
 }
+
+
+/* UI-29 — dedicated final results screen */
+.final-results-rule {
+  max-width: 680px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.game.finished-state {
+  position: relative;
+  overflow: hidden;
+  background: #071f25;
+}
+
+.game.finished-state > :not(#finalResultsPanel) {
+  display: none !important;
+}
+
+.game.finished-state > #finalResultsPanel.final-results-screen {
+  position: absolute;
+  z-index: 200;
+  inset: 0;
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: max(18px, env(safe-area-inset-top, 0px)) 18px max(20px, env(safe-area-inset-bottom, 0px));
+  border: 0;
+  border-radius: 0;
+  background:
+    radial-gradient(circle at top right, rgba(240,196,91,.08), transparent 34%),
+    linear-gradient(180deg, #0a2c34 0%, #071f25 100%);
+  overflow-y: auto;
+}
+
+.game.finished-state .final-results-head {
+  position: static;
+  max-width: 980px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 0 12px;
+  border-bottom: 1px solid rgba(240,196,91,.22);
+  background: transparent;
+}
+
+.game.finished-state .final-title-grid,
+.game.finished-state .final-metrics-section {
+  width: min(980px, 100%);
+  margin: 0 auto;
+}
+
+.game.finished-state .final-title-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.game.finished-state .final-player-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  body.game-active .game.finished-state > #finalResultsPanel.final-results-screen {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    min-height: 0;
+    padding: calc(16px + env(safe-area-inset-top, 0px)) 12px calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+
+  body.game-active .game.finished-state .final-results-head {
+    position: static;
+    top: auto;
+    padding: 0 0 10px;
+    background: transparent;
+  }
+
+  body.game-active .game.finished-state .final-title-grid,
+  body.game-active .game.finished-state .final-player-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.game-active .game.finished-state .final-results-rule {
+    font-size: 11px;
+  }
+}
