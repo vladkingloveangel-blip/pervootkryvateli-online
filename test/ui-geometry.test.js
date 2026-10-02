@@ -154,3 +154,13 @@ test('HUD metrics use canonical scoring concepts and compact explanations', () =
   const publicPlayerBlock = projection.slice(projection.indexOf('const publicPlayer'), projection.indexOf('const ownerPlayer'));
   assert.doesNotMatch(publicPlayerBlock, /prestige/);
 });
+
+
+test('quick access buttons flank the action bar horizontally', () => {
+  assert.match(css, /\.game-quick-access \{[\s\S]*?left:\s*0;[\s\S]*?right:\s*0;[\s\S]*?bottom:\s*calc\(19px \+ env\(safe-area-inset-bottom, 0px\)\);[\s\S]*?height:\s*44px;[\s\S]*?display:\s*block/);
+  assert.match(css, /#hudCharacterBtn \{ left:\s*calc\(50% - 176\.5px\); \}/);
+  assert.match(css, /#hudPoliticsBtn \{ left:\s*calc\(50% - 129\.5px\); \}/);
+  assert.match(css, /#hudGoalsBtn \{ left:\s*calc\(50% \+ 85\.5px\); \}/);
+  assert.match(css, /#hudCardsBtn \{ left:\s*calc\(50% \+ 132\.5px\); \}/);
+  assert.doesNotMatch(css, /\.game-quick-access \{\s*\n\s*bottom:\s*calc\(64px/);
+});
