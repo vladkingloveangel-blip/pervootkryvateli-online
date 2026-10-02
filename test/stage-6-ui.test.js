@@ -397,13 +397,13 @@ test('UI-8 result acknowledgement is presentation-only', () => {
 });
 
 
-test('UI-9 replaces the mobile map info popup with one reusable object bottom sheet', () => {
+
+test('UI-9 keeps one reusable object inspection sheet without duplicating map actions', () => {
   assert.match(index, /id="objectSheet" class="object-sheet hidden"/);
   assert.match(index, /id="objectSheetKind"/);
   assert.match(index, /id="objectSheetTitle"/);
   assert.match(index, /id="objectSheetBody"/);
   assert.match(index, /id="objectSheetActions"/);
-  assert.match(index, /id="objectSheetExpand"/);
   assert.match(index, /id="objectSheetClose"/);
 
   const start = app.indexOf('  function mapObjectKindLabel(');
@@ -411,7 +411,6 @@ test('UI-9 replaces the mobile map info popup with one reusable object bottom sh
   assert.ok(start >= 0 && end > start);
   const code = app.slice(start, end);
   assert.match(code, /renderObjectSheetFromMapInfo/);
-  assert.match(code, /toggleObjectSheetExpanded/);
   assert.match(code, /showPlayerMapInfo/);
   assert.match(code, /mapInfoMeta/);
   assert.match(code, /legacyAction\.onclick/);
@@ -425,10 +424,7 @@ test('UI-9 replaces the mobile map info popup with one reusable object bottom sh
 
   assert.match(app, /document\.createElement\('button'\);[\s\S]*?showPlayerMapInfo\(p\)/);
   assert.match(app, /\$\('objectSheetClose'\)\.addEventListener\('click', closeMapInfo\)/);
-  assert.match(app, /\$\('objectSheetExpand'\)\.addEventListener\('click', toggleObjectSheetExpanded\)/);
-  assert.match(styles, /UI-9 — reusable map object bottom sheet/);
   assert.match(styles, /body\.game-active \.map-info-card \{\s*display: none !important;/);
-  assert.match(styles, /body\.game-active \.object-sheet\.expanded/);
 });
 
 test('UI-9 mandatory decisions close voluntary object selection', () => {
@@ -440,26 +436,28 @@ test('UI-9 mandatory decisions close voluntary object selection', () => {
 });
 
 
-test('UI-10 own islands use compact map sheet plus expanded canonical management actions', () => {
+
+test('UI-10 own islands use one canonical overview-to-management workflow', () => {
   const start = app.indexOf('  function ownIslandCompactHtml(');
   const end = app.indexOf('\n  function showPlayerMapInfo(', start);
   assert.ok(start >= 0 && end > start);
   const code = app.slice(start, end);
 
   assert.match(code, /ownIslandCompactHtml/);
-  assert.match(code, /ownIslandQuickActions/);
+  assert.doesNotMatch(code, /ownIslandQuickActions/);
   assert.match(code, /renderOwnIslandObjectSheet/);
-  assert.match(code, /expandOwnIslandManagement/);
+  assert.match(code, /renderOwnIslandManagement/);
+  assert.match(code, /renderOwnIslandActionView/);
   assert.match(code, /ВАШ ОСТРОВ/);
   assert.match(code, /Управлять островом/);
-  assert.match(code, /Погрузить/);
-  assert.match(code, /Улучшить/);
+  assert.match(code, /Погрузка/);
+  assert.match(code, /Улучшение построек/);
   assert.match(code, /Построить/);
 
-  // Expanded mobile management reuses the existing canonical renderer instead
-  // of rebuilding legality/cost/socket payload rules in a second path.
+  // Management views reuse existing canonical renderers/action nodes instead
+  // of rebuilding legality, costs or socket payloads in a parallel UI path.
   assert.match(code, /renderIsland\(\);/);
-  assert.match(code, /while \(sourceActions\.firstChild\) actions\.appendChild\(sourceActions\.firstChild\);/);
+  assert.match(code, /moveCanonicalActionGroup/);
   assert.doesNotMatch(code, /socket\.emit\('build'/);
   assert.doesNotMatch(code, /socket\.emit\('upgradeBuilding'/);
   assert.doesNotMatch(code, /socket\.emit\('loadCargo'/);
@@ -467,7 +465,6 @@ test('UI-10 own islands use compact map sheet plus expanded canonical management
   assert.match(code, /defenseBreakdown/);
   assert.match(code, /building\.nextUpgrade/);
   assert.match(code, /loadedRound === state\.room\.round/);
-  assert.match(styles, /UI-10 — own island compact and expanded management/);
 });
 
 test('UI-10 does not remove legacy island renderer before parity cleanup', () => {
@@ -1991,51 +1988,48 @@ test('UI-39 expands the map-first shell on desktop without creating a second UX 
 });
 
 
-test('UI-40 staging playtest keeps compact mobile map controls and clips long HUD identity', () => {
+
+test('UI-40 canonical mobile map controls stay compact and HUD identity clips safely', () => {
   assert.match(index, /id="zoomToggle"[^>]*aria-controls="zoomPopover"/);
   assert.match(index, /id="zoomPopover" class="map-zoom-popover hidden"/);
   assert.match(index, /id="centerMe" class="map-tool-icon map-center-me"/);
   assert.match(index, /class="hud-player-copy"/);
   assert.match(app, /\$\('zoomToggle'\)\.addEventListener\('click'/);
-  const start = styles.indexOf('/* UI-40 staging playtest');
+  const start = styles.indexOf('/* UI-40 — staging visual normalization.');
   assert.ok(start >= 0);
   const code = styles.slice(start);
   assert.match(code, /\.hud-player-copy strong,[\s\S]*?text-overflow: ellipsis/);
-  assert.match(code, /\.roster-player \{[\s\S]*?min-height: 42px/);
-  assert.match(code, /\.map-toolbar \.map-tool-icon \{[\s\S]*?width: 38px/);
+  assert.match(code, /\.map-toolbar \.map-tool-icon \{[\s\S]*?width: 30px;[\s\S]*?height: 30px/);
   assert.match(code, /\.map-zoom-popover\.hidden \{ display: none; \}/);
+  assert.match(code, /\.game-world-shell \.map-toolbar \{[\s\S]*?gap: 6px/);
 });
 
 
-test('UI-40 staging patch removes old mobile map-control plate and hides gameplay title bar', () => {
-  const start = styles.indexOf('/* UI-40 staging patch');
+test('UI-40 canonical mobile shell hides the gameplay title bar without a map-control plate', () => {
+  const start = styles.indexOf('/* UI-40 — staging visual normalization.');
   assert.ok(start >= 0);
   const code = styles.slice(start);
   assert.match(code, /body\.game-active \.topbar[\s\S]*?height: 0;[\s\S]*?background: transparent/);
-  assert.match(code, /\.topbar > div:first-child \{ display: none; \}/);
-  assert.match(code, /\.game-world-shell \.map-toolbar[\s\S]*?right: 8px;[\s\S]*?width: 30px;[\s\S]*?background: transparent;[\s\S]*?box-shadow: none/);
-  assert.match(code, /\.map-toolbar \.map-tool-icon[\s\S]*?width: 30px;[\s\S]*?height: 30px/);
-  assert.match(code, /\.map-center-me \.ui-icon[\s\S]*?width: 15px;[\s\S]*?height: 15px/);
+  assert.match(code, /\.topbar > div:first-child,[\s\S]*?\.topbar \.connection[\s\S]*?display: none/);
+  assert.match(code, /\.game-world-shell \.map-toolbar[\s\S]*?width: 30px;[\s\S]*?background: transparent;[\s\S]*?box-shadow: none/);
 });
 
 
-test('UI-40 map tool micro-patch forces circular controls below the HUD', () => {
-  const start = styles.indexOf('/* UI-40 staging micro-patch');
+test('UI-40 canonical map tools are circular 30px controls ordered beneath the menu', () => {
+  const start = styles.indexOf('/* UI-40 — staging visual normalization.');
   assert.ok(start >= 0);
   const code = styles.slice(start);
-  assert.match(code, /\.map-toolbar[\s\S]*?top: calc\(72px/);
-  assert.match(code, /\.map-tool-icon[\s\S]*?flex: 0 0 30px/);
-  assert.match(code, /width: 30px !important/);
-  assert.match(code, /height: 30px !important/);
-  assert.match(code, /aspect-ratio: 1 \/ 1/);
+  assert.match(code, /\.map-toolbar \.map-tool-icon \{[\s\S]*?width: 30px;[\s\S]*?height: 30px;[\s\S]*?border-radius: 50%;[\s\S]*?aspect-ratio: 1 \/ 1/);
+  assert.match(code, /\.map-center-me \{\s*order: 1;/);
+  assert.match(code, /\.map-zoom-control \{ order: 2; \}/);
 });
 
 
 test('UI-40 anchor markers render without a translucent backing plate', () => {
-  const start = styles.indexOf('/* UI-40 staging micro-patch — anchor glyphs');
-  assert.ok(start >= 0);
-  const code = styles.slice(start);
-  assert.match(code, /\.canonical-map-art \.anchor-marker[\s\S]*?background: transparent/);
+  const anchorBlocks = [...styles.matchAll(/\.canonical-map-art \.anchor-marker \{([\s\S]*?)\n\}/g)];
+  assert.ok(anchorBlocks.length > 0);
+  const code = anchorBlocks.at(-1)[0];
+  assert.match(code, /background: transparent/);
   assert.match(code, /box-shadow: none/);
   assert.match(code, /backdrop-filter: none/);
 });
@@ -2055,7 +2049,7 @@ test('UI-40 roster uses authoritative turn order for active next and waiting sta
   assert.match(code, /shipName\(player\.shipClass\)/);
   assert.doesNotMatch(code, /status\.textContent = player\.id === r\.activePlayerId/);
 
-  const cssStart = styles.indexOf('/* UI-40 staging roster pass');
+  const cssStart = styles.indexOf('/* UI-40 — staging visual normalization.');
   assert.ok(cssStart >= 0);
   const css = styles.slice(cssStart);
   assert.match(css, /\.roster-player[\s\S]*?background: transparent;[\s\S]*?box-shadow: none/);
@@ -2066,11 +2060,11 @@ test('UI-40 roster uses authoritative turn order for active next and waiting sta
 });
 
 
-test('UI-40 mobile HUD integrates connection status and aligns turn/menu controls', () => {
+test('UI-40 mobile HUD integrates connection status and uses the canonical tile size', () => {
   assert.match(index, /id="hudConnection" class="hud-connection"/);
   assert.match(app, /hudConnection\.textContent = yes \? '● онлайн' : '○ нет связи'/);
-  assert.match(styles, /body\.game-active \.topbar \.connection \{\s*display: none;/);
-  assert.match(styles, /--hud-row-size: 44px/);
-  assert.match(styles, /height: var\(--hud-row-size\) !important/);
-  assert.match(styles, /body\.game-active \.hud-menu-btn[\s\S]*?aspect-ratio: 1 \/ 1/);
+  assert.match(styles, /body\.game-active \.topbar \.connection[\s\S]*?display: none;/);
+  assert.match(styles, /--hud-tile: 44px/);
+  assert.match(styles, /body\.game-active \.hud-menu-btn[\s\S]*?width: var\(--hud-tile\) !important;[\s\S]*?height: var\(--hud-tile\) !important/);
 });
+
