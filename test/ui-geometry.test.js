@@ -170,3 +170,20 @@ test('quick access buttons flank the action bar horizontally', () => {
   assert.match(css, /#hudCardsBtn \{ left:\s*calc\(50% \+ 132\.5px\); \}/);
   assert.doesNotMatch(css, /\.game-quick-access \{\s*\n\s*bottom:\s*calc\(64px/);
 });
+
+
+test('anchor and public player UI use canonical glory metrics only', () => {
+  const renderMapStart = app.indexOf('  function renderMap()');
+  const renderMapEnd = app.indexOf('\n  function ', renderMapStart + 1);
+  const renderMapCode = app.slice(renderMapStart, renderMapEnd);
+  assert.match(renderMapCode, /a\.fleetPoints \?\? 0/);
+  assert.match(renderMapCode, /морской славы/);
+  assert.doesNotMatch(renderMapCode, /a\.glory/);
+  assert.doesNotMatch(renderMapCode, /undefined.*слав/i);
+
+  const publicStart = app.indexOf('  function playerPublicSheetHtml(');
+  const publicEnd = app.indexOf('\n  function renderFleetOverviewObjectSheet(', publicStart);
+  const publicCode = app.slice(publicStart, publicEnd);
+  assert.doesNotMatch(publicCode, /player\.glory/);
+  assert.doesNotMatch(publicCode, /<span>Слава<\/span>/);
+});

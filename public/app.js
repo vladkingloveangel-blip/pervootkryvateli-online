@@ -5824,7 +5824,6 @@
     if (player.fleetArtillery != null) rows.push(`<div class="player-sheet-stat"><span>Артиллерия</span><strong>${player.fleetArtillery}</strong></div>`);
     if (player.assaultArmy != null) rows.push(`<div class="player-sheet-stat"><span>Войско</span><strong>${player.assaultArmy}</strong></div>`);
     if (player.islandCount != null) rows.push(`<div class="player-sheet-stat"><span>Острова</span><strong>${player.islandCount}</strong></div>`);
-    if (player.glory != null) rows.push(`<div class="player-sheet-stat"><span>Слава</span><strong>${player.glory}</strong></div>`);
     rows.push(`<div class="player-sheet-stat"><span>Связь</span><strong>${player.connected ? 'в сети' : 'отключён'}</strong></div>`);
 
     const scoutedMoney = player.id !== state.myId && Object.hasOwn(player, 'ducats');
@@ -6432,7 +6431,7 @@
     for (const a of r.anchorCells || []) {
       const d = document.createElement('div');
       d.className = `anchor-cell anchor-${a.color}`;
-      d.title = `${a.name} · победа +${a.glory} славы`;
+      d.title = `${a.name} · победа +${a.fleetPoints ?? 0} морской славы`;
       placeCell(d, a.row, a.col);
       ownershipLayer.appendChild(d);
     }
