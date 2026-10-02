@@ -1206,6 +1206,7 @@
         ? `Сюзерен: ${suzerain.name}`
         : ((mine.enemyFactionIds || []).length ? `Вражда с государствами: ${(mine.enemyFactionIds || []).length}` : 'Дипломатия');
     } else {
+      closeHudMetricPopover();
       $('hudPlayerName').textContent = state.spectating ? 'Наблюдение' : 'Игрок';
       $('hudShipLevel').textContent = state.spectating ? `Комната ${r.code}` : '—';
       $('hudCharacter').textContent = '—';
