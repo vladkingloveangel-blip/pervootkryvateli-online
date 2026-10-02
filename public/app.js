@@ -591,7 +591,7 @@
       resetTransientPresentationState();
       state.rehydrateOnNextRoomState = false;
     }
-    processAmbientRoomState(room);
+    processAmbientRoomState(room, { silent: rehydrating });
     state.room = room;
     if (room?.shipCatalog) state.shipCatalog = room.shipCatalog;
     const incomingMine = room?.players?.find(p => p.id === state.myId);
@@ -1995,7 +1995,7 @@
     document.body.classList.remove('journal-overlay-open');
   }
 
-  function processAmbientRoomState(room) {
+  function processAmbientRoomState(room, { silent = false } = {}) {
     if (!room?.started || room.finished || room.phase === 'finished') {
       state.ambientSnapshot = room ? { round: room.round, circle: room.circle, activePlayerId: room.activePlayerId, eventActive: Boolean(room.eventPhase?.active), eventPlayerId: room.eventPhase?.currentPlayerId || null } : null;
       return;
@@ -2003,11 +2003,12 @@
     const next = { round: room.round, circle: room.circle, activePlayerId: room.activePlayerId, eventActive: Boolean(room.eventPhase?.active), eventPlayerId: room.eventPhase?.currentPlayerId || null };
     const prev = state.ambientSnapshot;
     state.ambientSnapshot = next;
-    if (!prev) return;
+    if (!prev || silent) return;
     if (next.round !== prev.round) {
       const message = `Начался раунд ${next.round}`;
       recordJournal(message);
       enqueueToast(message, 'neutral', false);
+      playSoundCue('round');
       return;
     }
     if (next.circle !== prev.circle) {
@@ -2020,22 +2021,52 @@
       const message = player ? `События: ${player.name}` : 'Фаза событий';
       recordJournal(message);
       enqueueToast(message, 'neutral', false);
+      playSoundCue('event');
     } else if (!next.eventActive && next.activePlayerId && next.activePlayerId !== prev.activePlayerId) {
       const player = room.players?.find(item => item.id === next.activePlayerId);
       const message = player ? `Ход: ${player.name}` : 'Следующий ход';
       recordJournal(message);
       enqueueToast(message, 'neutral', false);
+      if (next.activePlayerId === state.myId) playSoundCue('turn');
     }
   }
 
   let uiAudioContext = null;
   let lastUiCueKey = '';
+  const SOUND_STORAGE_KEY = 'pervo:sound';
+  const soundState = (() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SOUND_STORAGE_KEY) || 'null');
+      return { muted: Boolean(saved?.muted), volume: Math.max(0, Math.min(1, Number(saved?.volume ?? .72))) };
+    } catch {
+      return { muted: false, volume: .72 };
+    }
+  })();
+  const soundCooldowns = new Map();
+
+  function playSoundCue(kind = 'confirm') {
+    if (soundState.muted || soundState.volume <= 0 || document.visibilityState === 'hidden' || state.spectating) return;
+    const now = performance.now();
+    const cooldown = kind === 'turn' || kind === 'round' ? 700 : 180;
+    if (now - (soundCooldowns.get(kind) || 0) < cooldown) return;
+    soundCooldowns.set(kind, now);
+    const map = {
+      turn: 'turn',
+      round: 'turn',
+      event: 'event',
+      battle: 'battle',
+      danger: 'danger',
+      reward: 'reward',
+      confirm: 'confirm',
+    };
+    playUiCue(map[kind] || 'confirm', soundState.volume);
+  }
 
   function motionReduced() {
     return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
   }
 
-  function playUiCue(kind = 'confirm') {
+  function playUiCue(kind = 'confirm', masterVolume = 1) {
     if (document.visibilityState === 'hidden' || state.spectating) return;
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return;
@@ -2048,6 +2079,7 @@
         reward: [[523, .04, .045], [659, .055, .035], [784, .075, .03]],
         battle: [[130, .055, .05], [98, .08, .04]],
         danger: [[196, .05, .04], [147, .08, .035]],
+        turn: [[392, .07, .04], [523, .11, .035]],
       };
       let offset = 0;
       for (const [frequency, duration, gain] of profiles[kind] || profiles.confirm) {
@@ -2056,7 +2088,7 @@
         oscillator.type = kind === 'battle' || kind === 'danger' ? 'triangle' : 'sine';
         oscillator.frequency.value = frequency;
         volume.gain.setValueAtTime(0.0001, uiAudioContext.currentTime + offset);
-        volume.gain.exponentialRampToValueAtTime(gain, uiAudioContext.currentTime + offset + .008);
+        volume.gain.exponentialRampToValueAtTime(Math.max(.0001, gain * masterVolume), uiAudioContext.currentTime + offset + .008);
         volume.gain.exponentialRampToValueAtTime(0.0001, uiAudioContext.currentTime + offset + duration);
         oscillator.connect(volume).connect(uiAudioContext.destination);
         oscillator.start(uiAudioContext.currentTime + offset);
