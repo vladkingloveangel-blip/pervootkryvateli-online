@@ -601,7 +601,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 // Уровни II–VI: новые характеристики без бонуса движения; VII читается для старых комнат.
 {
   const p = { shipClass: 'frigate', level: 4, upgrades: [] };
-  assert.deepEqual(shipStats(p), { artillery: 8, army: 6, cargo: 5, moveMod: 0 });
+  assert.deepEqual(shipStats(p), { artillery: 8, army: 6, cargo: 5, moveMod: 0, actionsPerTurn: 5 });
   p.shipClass = 'carrack';
   p.level = 7;
   p.upgrades = ['orlop', 'sternStores'];
