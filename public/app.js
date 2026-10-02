@@ -1,7 +1,7 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '', resultQueue: [], activeResult: null, toastQueue: [], journalEntries: [], ambientSnapshot: null, targeting: null, rehydrateOnNextRoomState: false };
+  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mapMovePending: false, lastAutoCenterSignature: '', resultQueue: [], activeResult: null, toastQueue: [], journalEntries: [], ambientSnapshot: null, targeting: null, rehydrateOnNextRoomState: false };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
   const shipName = id => state.room?.shipCatalog?.[id]?.name || state.shipCatalog?.[id]?.name || $('shipSelect').querySelector(`option[value="${id}"]`)?.textContent || 'Корабль';
   fetch('/api/rules').then(response => response.ok ? response.json() : null).then(rules => {
@@ -511,7 +511,7 @@
     state.targeting = null;
     state.rehydrateOnNextRoomState = false;
     closeMapInfo();
-    openMobileTab('map');
+    closeMapInfo();
     setGameScreenActive(false);
     $('game').classList.add('hidden');
     $('entry').classList.remove('hidden');
@@ -626,7 +626,7 @@
     state.code = res.code;
     state.myId = res.playerId;
     state.playerToken = res.playerToken;
-    openMobileTab('map');
+    closeMapInfo();
     setGameScreenActive(true);
     saveSession();
     if (state.room && !state.rehydrateOnNextRoomState) render();
@@ -794,41 +794,38 @@
     showAuth('Вы вышли из аккаунта.');
   });
 
-  document.querySelectorAll('[data-mobile-nav]').forEach(btn => {
-    btn.addEventListener('click', () => openMobileTab(btn.dataset.mobileNav));
-  });
-  $('mobileSheetClose').addEventListener('click', () => openMobileTab('map'));
   $('resultContinueBtn').addEventListener('click', dismissResultCard);
   $('objectSheetClose').addEventListener('click', closeMapInfo);
   $('objectSheetExpand').addEventListener('click', toggleObjectSheetExpanded);
   $('targetingCancelBtn').addEventListener('click', cancelTargeting);
-  $('hudPlayerBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : openMobileTab('ship'));
-  $('hudDucatsBtn').addEventListener('click', () => openMobileTab('ship'));
-  $('hudGloryBtn').addEventListener('click', () => openMobileTab('players'));
-  $('hudArmyBtn').addEventListener('click', () => openMobileTab('ship'));
-  $('hudArtilleryBtn').addEventListener('click', () => openMobileTab('ship'));
+  $('hudPlayerBtn').addEventListener('click', () => { if (!state.spectating) renderFleetOverviewObjectSheet(); });
+  $('hudDucatsBtn').addEventListener('click', renderFleetOverviewObjectSheet);
+  $('hudGloryBtn').addEventListener('click', () => renderScoreOverlay());
+  $('hudArmyBtn').addEventListener('click', renderFleetOverviewObjectSheet);
+  $('hudArtilleryBtn').addEventListener('click', renderFleetOverviewObjectSheet);
   $('hudCharacterBtn').addEventListener('click', () => {
     if (state.spectating) return;
     if (isMobileGameplayUi()) renderCharacterObjectSheet();
-    else openMobileTab('ship');
+    else renderFleetOverviewObjectSheet();
   });
   $('hudCardsBtn').addEventListener('click', () => {
     if (state.spectating) return;
     if (isMobileGameplayUi()) renderCardsObjectSheet();
-    else openMobileTab('actions');
+    else renderCardsObjectSheet();
   });
   $('hudGoalsBtn').addEventListener('click', () => {
-    if (state.spectating) return;
-    if (isMobileGameplayUi()) renderGoalsObjectSheet();
-    else openMobileTab('actions');
+    if (!state.spectating) renderGoalsObjectSheet();
   });
   $('hudPoliticsBtn').addEventListener('click', () => {
     if (state.spectating) return;
     if (isMobileGameplayUi()) renderDiplomacyObjectSheet(me()?.suzerainId || null);
-    else openMobileTab('players');
+    else renderDiplomacyObjectSheet(me()?.suzerainId || null);
   });
-  $('hudCargoBtn').addEventListener('click', () => openMobileTab('ship'));
-  $('hudTurnBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : openMobileTab('actions'));
+  $('hudCargoBtn').addEventListener('click', renderFleetOverviewObjectSheet);
+  $('hudTurnBtn').addEventListener('click', () => {
+    if (isDecisionPending()) renderDecisionLayer();
+    else if (!state.spectating) renderFleetOverviewObjectSheet();
+  });
   $('hudMenuBtn').addEventListener('click', toggleGameMenu);
   $('gameMenuCloseBtn').addEventListener('click', closeGameMenu);
   $('gameMenuBackdrop').addEventListener('click', closeGameMenu);
@@ -866,9 +863,6 @@
   $('rollBtn').addEventListener('click', () => socket.emit('rollMove', {}, handleGameAck));
   $('skipBtn').addEventListener('click', () => socket.emit('skipNavigation', {}, handleGameAck));
   $('endTurnBtn').addEventListener('click', () => socket.emit('endTurn', {}, handleGameAck));
-  $('dockRollBtn').addEventListener('click', () => socket.emit('rollMove', {}, handleGameAck));
-  $('dockSkipBtn').addEventListener('click', () => socket.emit('skipNavigation', {}, handleGameAck));
-  $('dockEndTurnBtn').addEventListener('click', () => socket.emit('endTurn', {}, handleGameAck));
   $('mapNavRollBtn').addEventListener('click', () => socket.emit('rollMove', {}, handleGameAck));
   $('mapNavStayBtn').addEventListener('click', () => socket.emit('skipNavigation', {}, handleGameAck));
   $('sellCargoBtn').addEventListener('click', () => socket.emit('sellCargo', {}, handleGameAck));
@@ -1016,7 +1010,7 @@
       openLegacy.type = 'button';
       openLegacy.className = 'primary';
       openLegacy.textContent = 'Открыть согласование';
-      openLegacy.addEventListener('click', () => { closeMapInfo(); openMobileTab('players'); });
+      openLegacy.addEventListener('click', () => { closeMapInfo(); closeMapInfo(); });
       actions.appendChild(openLegacy);
     }
   
@@ -1058,32 +1052,6 @@
     openMenuInfoSheet(kind);
   }
 
-  const MOBILE_TAB_TITLES = {
-    actions: 'Действия',
-    ship: 'Корабль и имущество',
-    players: 'Игроки и отношения',
-  };
-
-  function openMobileTab(tab = 'map') {
-    closeGameMenu();
-    closeGameAccountMenu();
-    if (tab !== 'map' && state.mapSelection) closeMapInfo();
-    state.mobileTab = tab;
-    const side = $('gameSidePanel');
-    const isMap = tab === 'map';
-    side.classList.toggle('mobile-open', !isMap);
-    document.body.classList.toggle('mobile-sheet-open', !isMap);
-    if (!isMap) {
-      side.dataset.mobileTab = tab;
-      $('mobileSheetTitle').textContent = MOBILE_TAB_TITLES[tab] || 'Раздел';
-      side.scrollTop = 0;
-    } else {
-      delete side.dataset.mobileTab;
-    }
-    document.querySelectorAll('[data-mobile-nav]').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.mobileNav === tab);
-    });
-  }
 
   function cargoSummary(player, room) {
     if (!player) return { quantity: 0, capacity: 0 };
@@ -1113,8 +1081,6 @@
     const mine = me();
     const activePlayer = active();
     $('hudResources').classList.toggle('hidden', !mine);
-    $('mobileNavActions').classList.toggle('hidden', state.spectating);
-    $('mobileNavShip').classList.toggle('hidden', state.spectating);
 
     if (mine) {
       const cargo = cargoSummary(mine, r);
@@ -1158,7 +1124,6 @@
           ? (activePlayer.id === state.myId ? 'Ваш ход' : `Ход: ${activePlayer.name}`)
           : 'Ожидание';
     $('hudPhase').textContent = hudPhaseLabel(r, activePlayer);
-    $('mobileNavActions').classList.toggle('attention', Boolean(isDecisionPending()));
   }
 
 
@@ -1198,10 +1163,6 @@
     set('.island-panel', onIsland, 25);
     set('.combat-panel', combatRelevant, pendingCombat ? 3 : 27);
 
-    const visible = [...document.querySelectorAll('#gameSidePanel [data-ui-tab="actions"]:not(.context-hidden)')];
-    const actionNav = $('mobileNavActions');
-    actionNav.dataset.count = String(Math.max(0, visible.length - 1));
-    actionNav.setAttribute('aria-label', visible.length > 1 ? `Действия, доступно разделов: ${visible.length}` : 'Действия');
   }
 
   function openEndGameVoteOverlay() {
@@ -1758,12 +1719,12 @@
       return;
     }
 
-    const addAction = (label, tab, className = '') => {
+    const addAction = (label, handler, className = '') => {
       const b = document.createElement('button');
       b.type = 'button';
       if (className) b.className = className;
       b.textContent = label;
-      b.addEventListener('click', () => openMobileTab(tab));
+      b.addEventListener('click', handler);
       actions.appendChild(b);
     };
 
@@ -1778,7 +1739,7 @@
       else if (r.pendingLegendaryReaction) label = 'Решение по легендарной карте';
       title.textContent = label;
       text.textContent = 'Продолжение хода ждёт вашего выбора.';
-      addAction('Открыть решение', 'actions', 'primary');
+      addAction('Открыть решение', renderDecisionLayer, 'primary');
       overlay.classList.remove('hidden');
       return;
     }
@@ -1793,7 +1754,7 @@
     if (mine.atCitadel) {
       title.textContent = 'Цитадель';
       text.textContent = `Торговля, улучшения и сопровождение · действий осталось: ${mine.actionsLeft ?? 0}`;
-      addAction('Корабль и торговля', 'ship', 'primary');
+      addAction('Открыть Цитадель', () => renderCitadelObjectSheet(r.map?.citadel || { name: 'Цитадель' }), 'primary');
       overlay.classList.remove('hidden');
       return;
     }
@@ -1807,14 +1768,14 @@
         : '';
       if (hereIsland.ownerId === state.myId) {
         text.textContent = `Ваш остров · действий осталось: ${mine.actionsLeft ?? 0}${legendarySuffix}`;
-        addAction('Управление островом', 'actions', 'primary');
+        addAction('Управление островом', () => renderOwnIslandObjectSheet(hereIsland), 'primary');
       } else {
         const owner = islandOwnerLabel(hereIsland);
         text.textContent = `${owner} · защита ${hereIsland.defenseArmy ?? hereIsland.army ?? 0} · действий: ${mine.actionsLeft ?? 0}${legendarySuffix}`;
-        if (islandTargets.length && !mine.inPeaceZone) addAction('Штурм и действия', 'actions', 'danger-soft');
-        else addAction('Информация', 'actions');
+        if (islandTargets.length && !mine.inPeaceZone) addAction('Штурм и действия', () => renderForeignIslandObjectSheet(hereIsland), 'danger-soft');
+        else addAction('Информация', () => renderForeignIslandObjectSheet(hereIsland));
       }
-      if (seaTargets.length && !mine.inPeaceZone) addAction('Морской бой', 'actions', 'danger-soft');
+      if (seaTargets.length && !mine.inPeaceZone) addAction('Морской бой', () => renderPlayerObjectSheet(seaTargets[0]), 'danger-soft');
       overlay.classList.remove('hidden');
       return;
     }
@@ -1822,7 +1783,7 @@
     if (seaTargets.length && !mine.inPeaceZone) {
       title.textContent = 'Корабль противника рядом';
       text.textContent = `Целей: ${seaTargets.length} · ваша артиллерия: ${mine.fleetArtillery ?? 0}`;
-      addAction('Открыть морской бой', 'actions', 'danger-soft');
+      addAction('Открыть морской бой', () => renderPlayerObjectSheet(seaTargets[0]), 'danger-soft');
       overlay.classList.remove('hidden');
       return;
     }
@@ -1839,13 +1800,13 @@
       if (encounter) {
         const outcome = encounter.outcome === 'win' ? 'Победа' : encounter.outcome === 'loss' ? 'Поражение' : encounter.outcome === 'tie' ? 'Ничья' : 'Тихое море';
         text.textContent = `${outcome} · карта этой клетки уже разыграна в текущем раунде`;
-        addAction('Посмотреть результат', 'actions');
+        addAction('Посмотреть результат', () => renderAnchorEncounterSheet(hereAnchor));
       } else if (visitedHere) {
         text.textContent = 'Эта клетка якоря уже дала вам карту в текущем раунде.';
-        addAction('Открыть морские якоря', 'actions');
+        addAction('Открыть морские якоря', () => renderAnchorEncounterSheet(hereAnchor));
       } else {
         text.textContent = 'Бой на якоре добровольный и объявляется в фазе действий.';
-        addAction('Открыть морские якоря', 'actions', 'danger-soft');
+        addAction('Открыть морские якоря', () => renderAnchorEncounterSheet(hereAnchor), 'danger-soft');
       }
       overlay.classList.remove('hidden');
       return;
@@ -1920,7 +1881,7 @@
 
     if (decisionLabel) {
       setCopy('ТРЕБУЕТСЯ РЕШЕНИЕ', decisionLabel, 'Продолжение партии ждёт вашего выбора.');
-      addButton('Открыть решение', () => openMobileTab('actions'), 'primary');
+      addButton('Открыть решение', () => closeMapInfo(), 'primary');
       return;
     }
 
@@ -1968,7 +1929,7 @@
         dot.className = i < left ? 'active' : '';
         progress.appendChild(dot);
       }
-      if (left > 0) addButton('Действия', () => openMobileTab('actions'), 'primary');
+      if (left > 0) addButton('Действия', () => closeMapInfo(), 'primary');
       addButton('Завершить ход', () => socket.emit('endTurn', {}, handleGameAck), left > 0 ? 'danger-soft' : 'primary');
       return;
     }
@@ -2442,12 +2403,6 @@
       return;
     }
 
-    state.mobileTab = 'map';
-    $('gameSidePanel').classList.remove('mobile-open');
-    document.body.classList.remove('mobile-sheet-open');
-    document.querySelectorAll('[data-mobile-nav]').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.mobileNav === 'map');
-    });
 
     $('decisionKicker').textContent = descriptor.kicker;
     $('decisionTitle').textContent = descriptor.title;
@@ -2482,15 +2437,6 @@
     $('skipBtn').disabled = !myTurn || phase !== 'navigation' || blocked;
     $('endTurnBtn').disabled = !myTurn || blocked;
 
-    const dock = $('mobileActionDock');
-    const mapNavigationActive = myTurn && phase === 'navigation' && !blocked;
-    dock.classList.toggle('hidden', state.spectating || !r.started || !myTurn || mapNavigationActive || blocked);
-    $('dockRollBtn').disabled = $('rollBtn').disabled;
-    $('dockSkipBtn').disabled = $('skipBtn').disabled;
-    $('dockEndTurnBtn').disabled = $('endTurnBtn').disabled;
-    $('dockRollBtn').classList.add('hidden');
-    $('dockSkipBtn').classList.add('hidden');
-    $('dockEndTurnBtn').classList.toggle('hidden', !myTurn || phase !== 'actions' || blocked);
 
     if (!r.started) $('moveResult').textContent = 'Выберите корабль. Организатор назначает ведущего и порядок мест; затем все нажимают «Готов».';
     else if (r.pendingDecision?.waiting) $('moveResult').textContent = `Ожидается обязательное решение игрока ${playerName(r.pendingDecision.actorPlayerId)}.`;
@@ -3813,7 +3759,7 @@
     if (!canStartTargeting(mode)) return;
     closeMapInfo();
     state.targeting = { mode };
-    openMobileTab('map');
+    closeMapInfo();
     render();
   }
 
@@ -5133,7 +5079,7 @@
       action.textContent = attackable ? 'Штурм острова' : 'Действия на острове';
       action.addEventListener('click', () => {
         if (attackable) renderAssaultFlowSheet(island.id);
-        else { closeMapInfo(); openMobileTab('actions'); }
+        else { closeMapInfo(); }
       });
       actions.appendChild(action);
     }
@@ -5754,6 +5700,46 @@
     return '';
   }
 
+  function renderFleetOverviewObjectSheet() {
+    const mine = me();
+    if (!mine || state.spectating) return;
+    closeMapInfo();
+    state.mapSelection = { kind: 'fleet', id: state.myId };
+    $('objectSheetKind').textContent = 'ВАША ФЛОТИЛИЯ';
+    $('objectSheetTitle').textContent = mine.name;
+    const cargo = cargoSummary(mine, state.room);
+    $('objectSheetBody').innerHTML = playerPublicSheetHtml(mine)
+      + `<div class="player-sheet-stat"><span>Казна</span><strong>${mine.ducats ?? 0} дук.</strong></div>`
+      + `<div class="player-sheet-stat"><span>Груз</span><strong>${cargo.quantity}/${cargo.capacity}</strong></div>`
+      + `<div class="player-sheet-stat"><span>Персонаж</span><strong>${escapeHtml(mine.character?.name || 'нет')}</strong></div>`;
+
+    renderFleet();
+    renderTrade();
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+
+    const character = document.createElement('button');
+    character.type = 'button';
+    character.textContent = 'Персонаж';
+    character.addEventListener('click', renderCharacterObjectSheet);
+    actions.appendChild(character);
+
+    if (mine.atCitadel) {
+      const citadel = document.createElement('button');
+      citadel.type = 'button';
+      citadel.className = 'primary';
+      citadel.textContent = 'Услуги Цитадели';
+      citadel.addEventListener('click', () => renderCitadelObjectSheet(state.room?.map?.citadel || { name: 'Цитадель' }));
+      actions.appendChild(citadel);
+    }
+
+    $('objectSheet').classList.remove('hidden');
+    $('objectSheet').classList.add('expanded');
+    $('objectSheetExpand').textContent = '⌄';
+    $('objectSheetExpand').setAttribute('aria-label', 'Свернуть карточку');
+    document.body.classList.add('object-sheet-open');
+  }
+
   function renderPlayerObjectSheet(player) {
     const sheet = $('objectSheet');
     $('objectSheetKind').textContent = player.id === state.myId ? 'ВАША ФЛОТИЛИЯ' : 'ФЛОТИЛИЯ ИГРОКА';
@@ -5769,7 +5755,7 @@
       fleet.type = 'button';
       fleet.className = 'primary';
       fleet.textContent = 'Корабль и флотилия';
-      fleet.addEventListener('click', () => { closeMapInfo(); openMobileTab('ship'); });
+      fleet.addEventListener('click', renderFleetOverviewObjectSheet);
       actions.appendChild(fleet);
     } else if (mine && !state.spectating && state.room?.started) {
       const myTurn = state.room.activePlayerId === state.myId;
@@ -5792,7 +5778,7 @@
       const relations = document.createElement('button');
       relations.type = 'button';
       relations.textContent = 'Игроки и отношения';
-      relations.addEventListener('click', () => { closeMapInfo(); openMobileTab('players'); });
+      relations.addEventListener('click', () => renderPlayerObjectSheet(player));
       actions.appendChild(relations);
     }
 
@@ -5812,11 +5798,11 @@
     if (player.id === state.myId) {
       action.textContent = 'Открыть флотилию';
       action.classList.remove('hidden');
-      action.onclick = () => { closeMapInfo(); openMobileTab('ship'); };
+      action.onclick = () => { closeMapInfo(); renderFleetOverviewObjectSheet(); };
     } else {
       action.textContent = 'Открыть игрока';
       action.classList.remove('hidden');
-      action.onclick = () => { closeMapInfo(); openMobileTab('players'); };
+      action.onclick = () => { closeMapInfo(); renderPlayerObjectSheet(player); };
     }
 
     const mobile = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
@@ -5859,7 +5845,7 @@
         state.selectedIslandId = data.id;
         action.textContent = data.ownerId === state.myId ? 'Управлять островом' : 'Действия на острове';
         action.classList.remove('hidden');
-        action.onclick = () => { closeMapInfo(); openMobileTab('actions'); };
+        action.onclick = () => { closeMapInfo(); closeMapInfo(); };
       }
     } else if (kind === 'citadel') {
       meta.innerHTML = '<span>Нейтральный торговый хаб</span><span>Продажа грузов · уровень корабля · улучшения · сопровождение</span><span>Городская стража · постоянные гарнизоны</span><span>Владеть Цитаделью нельзя · бои запрещены</span>';
@@ -5868,7 +5854,7 @@
         action.classList.remove('hidden');
         action.onclick = () => {
           if (isMobileGameplayUi()) renderCitadelObjectSheet(data);
-          else { closeMapInfo(); openMobileTab('ship'); }
+          else { closeMapInfo(); renderFleetOverviewObjectSheet(); }
         };
       }
     } else if (kind === 'anchor') {
@@ -5881,7 +5867,7 @@
         action.classList.remove('hidden');
         action.onclick = () => {
           if (isMobileGameplayUi()) renderAnchorEncounterSheet(data);
-          else { closeMapInfo(); openMobileTab('actions'); }
+          else { closeMapInfo(); }
         };
       }
     } else if (kind === 'legendary') {

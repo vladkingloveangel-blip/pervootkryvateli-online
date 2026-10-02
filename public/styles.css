@@ -317,11 +317,11 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 
 /* v0.23 — мобильный игровой каркас */
 .game-hud { display: none; }
-.mobile-game-nav, .mobile-action-dock, .mobile-sheet-head { display: none; }
+.mobile-sheet-head { display: none; }
 
 @media (max-width: 900px) {
   body { overscroll-behavior: none; }
-  main { padding: 0 8px 88px; }
+  main { padding: 0 8px 16px; }
   .game { gap: 8px; }
   .legacy-status { display: none; }
 
@@ -361,7 +361,7 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   .hud-turn strong { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .layout { display: block; }
-  .map-column { height: calc(100dvh - 58px - 58px - 78px); min-height: 420px; display: flex; flex-direction: column; }
+  .map-column { height: calc(100dvh - 58px - 58px); min-height: 420px; display: flex; flex-direction: column; }
   .map-toolbar {
     flex: 0 0 auto;
     padding: 6px 8px;
@@ -392,87 +392,11 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     gap: 9px;
     overscroll-behavior: contain;
   }
-  #gameSidePanel.mobile-open { display: grid; }
-  #gameSidePanel.mobile-open [data-ui-tab] { display: none; }
-  #gameSidePanel.mobile-open[data-mobile-tab="actions"] [data-ui-tab="actions"],
-  #gameSidePanel.mobile-open[data-mobile-tab="ship"] [data-ui-tab="ship"],
-  #gameSidePanel.mobile-open[data-mobile-tab="players"] [data-ui-tab="players"],
-  #gameSidePanel.mobile-open[data-mobile-tab="log"] [data-ui-tab="log"] { display: block; }
-
-  .mobile-sheet-head {
-    display: flex;
-    position: sticky;
-    top: -10px;
-    z-index: 2;
-    align-items: center;
-    justify-content: space-between;
-    min-height: 48px;
-    padding: 8px 4px;
-    background: rgba(7,31,37,.98);
-    border-bottom: 1px solid var(--line);
-  }
-  .mobile-sheet-head strong { font-size: 18px; }
-
-  .mobile-game-nav {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    position: fixed;
-    z-index: 100;
-    left: 0; right: 0; bottom: 0;
-    min-height: 68px;
-    padding: 5px max(5px, env(safe-area-inset-right)) max(5px, env(safe-area-inset-bottom)) max(5px, env(safe-area-inset-left));
-    background: rgba(8,37,44,.99);
-    border-top: 1px solid var(--line);
-    box-shadow: 0 -5px 20px rgba(0,0,0,.28);
-  }
-  .mobile-game-nav button {
-    position: relative;
-    min-height: 56px;
-    border: 0;
-    background: transparent;
-    padding: 4px 2px;
-    display: grid;
-    place-items: center;
-    gap: 1px;
-    color: var(--muted);
-  }
-  .mobile-game-nav button span { font-size: 20px; line-height: 1; }
-  .mobile-game-nav button small { font-size: 10px; }
-  .mobile-game-nav button.active { color: var(--accent); }
-  .mobile-game-nav button.attention::after {
-    content: '';
-    position: absolute;
-    top: 5px;
-    right: calc(50% - 17px);
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: var(--danger);
-    box-shadow: 0 0 0 2px #08252c;
-  }
-
-  .mobile-action-dock {
-    display: flex;
-    position: fixed;
-    z-index: 70;
-    left: 8px; right: 8px;
-    bottom: 76px;
-    gap: 7px;
-    padding: 7px;
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    background: rgba(15,48,56,.96);
-    box-shadow: 0 5px 22px rgba(0,0,0,.32);
-  }
-  .mobile-action-dock > button { flex: 1 1 0; min-width: 0; padding: 7px 8px; font-size: 12px; }
-  body.mobile-sheet-open .mobile-action-dock { display: none !important; }
 
   .side-column .panel { border-radius: 12px; }
   .side-column .panel > h2,
   .side-column .section-head h2 { font-size: 16px; }
 
-  body.spectator-mode #gameSidePanel.mobile-open [data-ui-tab] { display: none; }
-  body.spectator-mode #gameSidePanel.mobile-open[data-mobile-tab="players"] [data-ui-tab="players"],
-  body.spectator-mode #gameSidePanel.mobile-open[data-mobile-tab="log"] [data-ui-tab="log"] { display: block; }
 }
 
 @media (max-width: 520px) {
@@ -643,23 +567,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     bottom: 66px;
   }
 
-  body.game-active .mobile-game-nav {
-    min-height: 62px;
-    height: 62px;
-    padding-top: 3px;
-    padding-bottom: max(3px, env(safe-area-inset-bottom));
-  }
-  body.game-active .mobile-game-nav button {
-    min-height: 50px;
-    padding: 2px;
-  }
-  body.game-active .mobile-game-nav button span { font-size: 17px; }
-  body.game-active .mobile-game-nav button small { font-size: 9px; }
-
-  body.game-active .mobile-action-dock {
-    bottom: 68px;
-    padding: 5px;
-  }
 }
 
 @media (max-width: 420px) {
@@ -673,31 +580,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 
 /* v0.25 — контекстные игровые действия */
 @media (max-width: 900px) {
-  body.game-active #gameSidePanel[data-mobile-tab="actions"] .context-hidden {
-    display: none !important;
-  }
-
-  body.game-active #gameSidePanel[data-mobile-tab="actions"] .you-status {
-    display: none;
-  }
-
-  body.game-active #gameSidePanel[data-mobile-tab="actions"] .controls {
-    padding-top: 12px;
-  }
-
-  body.game-active #gameSidePanel[data-mobile-tab="actions"] .controls h2 {
-    margin-bottom: 7px;
-  }
-
-  body.game-active #gameSidePanel[data-mobile-tab="actions"] .move-result {
-    margin-bottom: 9px;
-    font-size: 13px;
-    line-height: 1.35;
-  }
-
-  body.game-active #gameSidePanel[data-mobile-tab="actions"] .panel {
-    animation: panel-in .12s ease-out;
-  }
 
   @keyframes panel-in {
     from { opacity: .65; transform: translateY(3px); }
@@ -1130,9 +1012,7 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 
 .game.finished-state > .game-hud,
 .game.finished-state > .status,
-.game.finished-state > .layout,
-.game.finished-state > .mobile-game-nav,
-.game.finished-state > .mobile-action-dock { display: none !important; }
+.game.finished-state > .layout { display: none !important; }
 
 @media (max-width: 900px) {
   body.game-active .end-game-panel { margin: 6px 0; padding: 10px; }
@@ -1235,14 +1115,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     z-index: 80;
   }
 
-  body.game-active .mobile-game-nav {
-    z-index: 90;
-  }
-
-  body.game-active .mobile-action-dock {
-    z-index: 70;
-  }
-
   body.game-active .map-nav-overlay {
     top: 104px;
   }
@@ -1260,9 +1132,7 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     display: none;
   }
 
-  body.game-active .finished-state .game-hud,
-  body.game-active .finished-state .mobile-game-nav,
-  body.game-active .finished-state .mobile-action-dock {
+  body.game-active .finished-state .game-hud {
     display: none !important;
   }
 }
@@ -1406,10 +1276,7 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 
   /* The new action bar is the mobile turn controller. Legacy controls remain
      reachable in the Actions sheet until their mechanics migrate. */
-  body.game-active .mobile-action-dock,
-  body.game-active .map-nav-overlay {
-    display: none !important;
-  }
+
 }
 
 @media (max-width: 430px) {
@@ -1525,8 +1392,7 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   }
 
   body.game-active.decision-layer-open .game-action-bar,
-  body.game-active.decision-layer-open .map-toolbar,
-  body.game-active.decision-layer-open .mobile-game-nav {
+  body.game-active.decision-layer-open .map-toolbar {
     pointer-events: none;
   }
 }
@@ -1633,8 +1499,7 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   }
 
   body.game-active.result-layer-open .game-action-bar,
-  body.game-active.result-layer-open .map-toolbar,
-  body.game-active.result-layer-open .mobile-game-nav {
+  body.game-active.result-layer-open .map-toolbar {
     pointer-events: none;
   }
 
@@ -3272,8 +3137,7 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     border-bottom: 1px solid rgba(255,255,255,.06);
   }
 
-  body.game-active.game-menu-open .game-action-bar,
-  body.game-active.game-menu-open .mobile-game-nav {
+  body.game-active.game-menu-open .game-action-bar {
     pointer-events: none;
   }
 }
@@ -3364,7 +3228,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   body.game-active .score-metric-grid strong { font-size: 11px; text-align: right; }
 
   body.game-active.score-overlay-open .game-action-bar,
-  body.game-active.score-overlay-open .mobile-game-nav,
   body.game-active.score-overlay-open .map-toolbar { pointer-events: none; }
 }
 
@@ -3452,7 +3315,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   body.game-active .journal-empty { color: var(--muted); font-size: 11px; padding: 12px 2px; }
 
   body.game-active.journal-overlay-open .game-action-bar,
-  body.game-active.journal-overlay-open .mobile-game-nav,
   body.game-active.journal-overlay-open .map-toolbar { pointer-events: none; }
 
   body.game-active .game-toast {
@@ -3562,7 +3424,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   }
 
   body.game-active.end-game-vote-open .game-action-bar,
-  body.game-active.end-game-vote-open .mobile-game-nav,
   body.game-active.end-game-vote-open .map-toolbar {
     pointer-events: none;
   }
@@ -3671,8 +3532,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
   body.game-active .game.lobby-state > .status,
   body.game-active .game.lobby-state > .game-roster,
   body.game-active .game.lobby-state > .event-flow-overlay,
-  body.game-active .game.lobby-state > .mobile-game-nav,
-  body.game-active .game.lobby-state > .mobile-action-dock,
   body.game-active .game.lobby-state > .game-action-bar {
     display: none !important;
   }

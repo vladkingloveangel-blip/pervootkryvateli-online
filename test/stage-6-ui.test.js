@@ -245,7 +245,7 @@ test('UI-4 mobile shell makes the map the permanent gameplay surface without del
   assert.match(index, /id="gameWorldShell" class="layout game-world-shell"/);
   assert.match(index, /id="mapViewport" class="map-viewport"/);
   assert.match(index, /id="gameSidePanel"/);
-  assert.match(index, /id="mobileGameNav"/);
+  assert.doesNotMatch(index, /id="mobileGameNav"/);
 
   assert.match(styles, /UI-4 — mobile-first fullscreen map shell/);
   assert.match(styles, /body\.game-active \.game-world-shell \{[\s\S]*?position: absolute;[\s\S]*?inset: 0;/);
@@ -280,8 +280,8 @@ test('UI-5 HUD separates live combat stats from scoring metrics and exposes phas
   assert.match(hudCode, /ДЕЙСТВИЯ/);
   assert.match(hudCode, /СОБЫТИЯ/);
 
-  assert.match(app, /\$\('hudPlayerBtn'\)\.addEventListener\('click',[\s\S]*?openMobileTab\('ship'\)/);
-  assert.match(app, /\$\('hudCargoBtn'\)\.addEventListener\('click',[\s\S]*?openMobileTab\('ship'\)/);
+  assert.match(app, /\$\('hudPlayerBtn'\)\.addEventListener\('click',[\s\S]*?renderFleetOverviewObjectSheet/);
+  assert.match(app, /\$\('hudCargoBtn'\)\.addEventListener\('click', renderFleetOverviewObjectSheet\)/);
   assert.match(app, /\$\('hudMenuBtn'\)\.addEventListener\('click', toggleGameMenu\)/);
   assert.match(styles, /UI-5 — canonical mobile gameplay HUD/);
 });
@@ -311,11 +311,11 @@ test('UI-6 provides one state-driven mobile action bar over the map', () => {
 
   assert.match(app, /renderControls\(\);\s*renderGameActionBar\(\);\s*renderMapNavigation\(\);/);
   assert.match(styles, /UI-6 — state-driven mobile action bar/);
-  assert.match(styles, /body\.game-active \.mobile-action-dock,[\s\S]*?body\.game-active \.map-nav-overlay \{\s*display: none !important;/);
+  assert.match(styles, /body\.game-active \.map-nav-overlay \{\s*display: none !important;/);
 
-  // Legacy mechanic panels are intentionally retained as fallback until their dedicated migrations.
+  // Canonical action hosts remain internal, but the obsolete mobile dock/nav are gone.
   assert.match(index, /class="panel controls" data-ui-tab="actions"/);
-  assert.match(index, /id="mobileActionDock"/);
+  assert.doesNotMatch(index, /id="mobileActionDock"|id="mobileGameNav"/);
 });
 
 
@@ -1272,13 +1272,13 @@ test('UI-25 HUD menu opens the game menu rather than the old account popover', (
 
 test('UI-25 menu routes to existing secondary surfaces without adding gameplay socket logic', () => {
   const start = app.indexOf('  function openMenuInfoSheet(');
-  const end = app.indexOf('\n  const MOBILE_TAB_TITLES', start);
+  const end = app.indexOf('\n  function cargoSummary', start);
   assert.ok(start >= 0 && end > start);
   const code = app.slice(start, end);
   assert.match(code, /renderDiplomacyObjectSheet\(null\)/);
   assert.match(code, /openGameAccountMenu\(\)/);
   assert.match(code, /\$\('logoutBtn'\)\.click\(\)/);
-  assert.match(code, /openMobileTab\('players'\)/);
+  assert.doesNotMatch(code, /openMobileTab|data-mobile-nav/);
   assert.doesNotMatch(code, /socket\.emit\(/);
 });
 
@@ -1327,7 +1327,7 @@ test('UI-26 finished metrics come only from canonical finalResult', () => {
 
 test('UI-26 menu metrics entry opens the dedicated overlay', () => {
   const start = app.indexOf('  function handleGameMenuAction(kind)');
-  const end = app.indexOf('\n  const MOBILE_TAB_TITLES', start);
+  const end = app.indexOf('\n  function cargoSummary', start);
   const code = app.slice(start, end);
   assert.match(code, /kind === 'metrics'/);
   assert.match(code, /renderScoreOverlay\(\)/);
@@ -1368,7 +1368,7 @@ test('UI-27 ambient notifications use only public projected turn state and do no
 
 test('UI-27 menu journal entry opens the dedicated journal overlay', () => {
   const start = app.indexOf('  function handleGameMenuAction(kind)');
-  const end = app.indexOf('\n  const MOBILE_TAB_TITLES', start);
+  const end = app.indexOf('\n  function cargoSummary', start);
   const code = app.slice(start, end);
   assert.match(code, /kind === 'journal'/);
   assert.match(code, /renderJournalOverlay\(\)/);
@@ -1421,7 +1421,7 @@ test('UI-28 accepted consensus marks the HUD as the last round and leaves finali
 
 test('UI-28 menu end-game entry opens the consensus card instead of hiding the action in Players', () => {
   const start = app.indexOf('  function handleGameMenuAction(kind)');
-  const end = app.indexOf('\n  const MOBILE_TAB_TITLES', start);
+  const end = app.indexOf('\n  function cargoSummary', start);
   const code = app.slice(start, end);
   assert.match(code, /kind === 'endgame'/);
   assert.match(code, /openEndGameVoteOverlay\(\)/);
@@ -1575,4 +1575,35 @@ test('UI-31 refresh does not attempt to restore voluntary targeting or object sh
     assert.equal(app.includes(`localStorage.getItem('pervo:${key}'`), false, key);
     assert.equal(app.includes(`localStorage.setItem('pervo:${key}'`), false, key);
   }
+});
+
+
+test('UI-32 removes the obsolete mobile tab and duplicate action-dock architecture', () => {
+  assert.doesNotMatch(index, /id="mobileGameNav"|data-mobile-nav=|id="mobileActionDock"|id="mobileSheetClose"|id="mobileSheetTitle"/);
+  assert.doesNotMatch(app, /openMobileTab\(|MOBILE_TAB_TITLES|state\.mobileTab|mobileNavActions|mobileNavShip|dockRollBtn|dockSkipBtn|dockEndTurnBtn/);
+  assert.doesNotMatch(styles, /\.mobile-game-nav|\.mobile-action-dock|#gameSidePanel\.mobile-open|data-mobile-tab=/);
+});
+
+test('UI-32 routes HUD and map context into map-first object sheets instead of mechanic tabs', () => {
+  assert.match(app, /function renderFleetOverviewObjectSheet\(\)/);
+  assert.match(app, /hudPlayerBtn'[\s\S]*?renderFleetOverviewObjectSheet/);
+  assert.match(app, /hudCargoBtn'\)\.addEventListener\('click', renderFleetOverviewObjectSheet\)/);
+  const start = app.indexOf('  function renderMapContext() {');
+  const end = app.indexOf('\n  function actionBarDecisionLabel', start);
+  const code = app.slice(start, end);
+  assert.match(code, /renderCitadelObjectSheet/);
+  assert.match(code, /renderOwnIslandObjectSheet/);
+  assert.match(code, /renderForeignIslandObjectSheet/);
+  assert.match(code, /renderPlayerObjectSheet/);
+  assert.match(code, /renderAnchorEncounterSheet/);
+  assert.match(code, /renderDecisionLayer/);
+  assert.doesNotMatch(code, /openMobileTab|mobile-open|data-mobile-tab/);
+});
+
+test('UI-32 retains legacy panel DOM only as internal canonical action hosts', () => {
+  for (const id of ['eventActions','politicsActions','fleetActions','escortCargoActions','islandActions','combatActions','allianceActions']) {
+    assert.match(index, new RegExp(`id="${id}"`), id);
+  }
+  assert.match(app, /Existing renderers remain authoritative for legality, prices and socket payloads/);
+  assert.match(app, /Existing event\/legendary renderers remain authoritative for all legality and payloads/);
 });

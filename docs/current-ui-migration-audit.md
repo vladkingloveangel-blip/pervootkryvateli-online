@@ -460,3 +460,16 @@ UI-1 is complete when:
 - pre-game/admin surfaces are explicitly protected from accidental early removal.
 
 This document is the migration checklist used by later UI stages.
+
+
+## UI-32 cleanup status
+
+The obsolete mobile mechanic-tab architecture is removed from the player-facing runtime:
+
+- no bottom Map / Actions / Ship / Players navigation;
+- no duplicate mobile action dock;
+- HUD and map context open map-first object sheets, overlays, targeting, or the Decision Layer;
+- mandatory decisions remain server-state driven;
+- the pre-game lobby remains a dedicated state rather than a gameplay tab.
+
+The legacy side-panel DOM is intentionally retained only as an internal canonical action host where migrated object sheets still reuse existing legality checks and socket payloads. It is no longer a mobile navigation surface. Removing those internal hosts before extracting their canonical action builders would duplicate rule logic, so that internal refactor is outside UI-32 and must not change mechanics.
