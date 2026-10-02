@@ -38,9 +38,12 @@ test('mobile information surfaces use the floating-window architecture', () => {
   const canonical = css.slice(css.indexOf('/* UI-40 — staging visual normalization.'));
   const objectWindow = canonical.match(/body\.game-active \.object-sheet \{([\s\S]*?)\n  \}/)?.[0] || '';
   assert.match(objectWindow, /top:\s*calc\(72px \+ env\(safe-area-inset-top, 0px\)\)/);
-  assert.match(objectWindow, /left:\s*50%/);
-  assert.match(objectWindow, /width:\s*min\(390px, calc\(100vw - 24px\)\)/);
-  assert.match(objectWindow, /transform:\s*translateX\(-50%\)/);
+  assert.match(objectWindow, /left:\s*max\(12px, env\(safe-area-inset-left, 0px\)\)/);
+  assert.match(objectWindow, /right:\s*max\(12px, env\(safe-area-inset-right, 0px\)\)/);
+  assert.match(objectWindow, /width:\s*auto/);
+  assert.match(objectWindow, /max-width:\s*390px/);
+  assert.match(objectWindow, /margin-inline:\s*auto/);
+  assert.doesNotMatch(objectWindow, /transform:/);
   assert.match(objectWindow, /border-radius:\s*16px/);
   assert.doesNotMatch(objectWindow, /bottom:\s*0/);
   assert.match(canonical, /body\.game-active \.object-sheet-handle,\s*\n\s*body\.game-active #objectSheetExpand \{\s*\n\s*display:\s*none !important/);
