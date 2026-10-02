@@ -2265,7 +2265,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const firstPlayer = { id:'p1', name:'One', row, col, shipClass:'brigantine', level:1, upgrades:[], escorts:[], ducats:0, debt:0, armyPoints:0, attackCountsThisRound:{}, namedPlaceCards:[], legendaryCards:[] };
   const room = { round:2, islands, players:[firstPlayer], alliances:[], factionState:{}, legendaryPlacesExplored:{} };
 
-  const first = jointAssaultIsland(room, firstPlayer, atlantia, [], [], { rng:()=>0.25 });
+  const first = jointAssaultIsland(room, firstPlayer, atlantia, [], [], { rng:()=>0.30 });
   assert.equal(first.ok, true);
   assert.equal(first.outcome, 'attacker');
   assert.equal(first.legendaryDiscovery.first, true);
