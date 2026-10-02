@@ -21,7 +21,7 @@ test('map player marker is centered on the authoritative cell center', () => {
   assert.match(tokenBlock, /aspect-ratio:\s*1 \/ 1/);
   assert.match(tokenBlock, /transform:\s*translate\(-50%, -50%\)/);
   assert.match(tokenBlock, /min-height:\s*0/);
-  assert.match(css, /body\.game-active button:not\(\.map-object-hit\):not\(\.navigation-hit\):not\(\.targeting-hit\):not\(\.targeting-marker\):not\(\.cell-hit\):not\(\.token\):not\(\.game-action-button\) \{[\s\S]*?min-height:\s*44px/);
+  assert.doesNotMatch(css, /body\.game-active button[^\{]*\{[\s\S]*?min-height:\s*44px/);
 });
 
 test('compact map tools have explicit square geometry', () => {
@@ -67,7 +67,7 @@ test('mobile turn controller is compact and keeps canonical turn commands', () =
   assert.match(block, /addButton\('Остаться'.*skipNavigation/);
   assert.match(block, /addButton\('🎲 Бросить'.*rollMove/);
 
-  assert.match(css, /button:not\(\.map-object-hit\):not\(\.navigation-hit\):not\(\.targeting-hit\):not\(\.targeting-marker\):not\(\.cell-hit\):not\(\.token\):not\(\.game-action-button\)/);
+  assert.doesNotMatch(css, /button:not\(\.map-object-hit\):not\(\.navigation-hit\):not\(\.targeting-hit\):not\(\.targeting-marker\):not\(\.cell-hit\):not\(\.token\):not\(\.game-action-button\)/);
   assert.match(css, /\.game-action-buttons \.game-action-button \{[\s\S]*?min-height:\s*36px;[\s\S]*?height:\s*36px/);
   assert.match(block, /bar\.dataset\.mode = 'navigation-result'/);
   assert.match(block, /Выберите объект или действие\./);
