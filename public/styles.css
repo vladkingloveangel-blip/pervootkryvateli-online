@@ -4641,9 +4641,9 @@ body.game-active .final-results-art {
   }
 
   body.game-active .game-world-shell .map-toolbar {
-    top: calc(72px + env(safe-area-inset-top, 0px));
+    top: 55px;
     left: auto;
-    right: 8px;
+    right: 15px;
     width: 30px;
     min-width: 30px;
     min-height: 0;
@@ -4679,7 +4679,11 @@ body.game-active .final-results-art {
     box-shadow: 0 3px 9px rgba(0,0,0,.24);
     backdrop-filter: none;
   }
-  body.game-active .map-center-me { margin: 0 !important; }
+  body.game-active .map-center-me {
+    order: 1;
+    margin: 0 !important;
+  }
+  body.game-active .map-zoom-control { order: 2; }
   body.game-active .map-center-me .ui-icon {
     width: 15px;
     height: 15px;
