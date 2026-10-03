@@ -46,3 +46,23 @@ body.home-active .play-choice.primary{border-color:rgba(232,194,104,.78);backgro
 body.home-active .play-choice strong{font-family:Georgia,'Times New Roman',serif;font-size:21px}
 body.home-active .play-choice small{font-size:12px;color:rgba(226,221,197,.7)}
 @media(max-width:520px){body.home-active #playFlow{width:calc(100% - 8px);margin-top:clamp(34px,8dvh,80px);padding:14px}}
+
+/* Step 6: Create and Join */
+body.home-active #entry.entry-panel{position:relative;z-index:2;width:min(100%,560px);margin:clamp(36px,8dvh,96px) auto 0;padding:18px;border:1px solid rgba(222,187,105,.55);border-radius:20px;background:linear-gradient(180deg,rgba(7,37,45,.92),rgba(4,24,31,.97));box-shadow:0 18px 48px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,238,190,.06);backdrop-filter:blur(8px)}
+body.home-active #entry.entry-panel.hidden{display:none}
+body.home-active .entry-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:18px}
+body.home-active .entry-head>div{min-width:0}
+body.home-active .entry-head span{display:block;font-size:10px;font-weight:700;letter-spacing:.2em;color:rgba(235,207,139,.72)}
+body.home-active .entry-head h1{margin:3px 0 4px;font-family:Georgia,'Times New Roman',serif;font-size:clamp(24px,7vw,34px);color:#f0dda8}
+body.home-active .entry-head p{margin:0;font-size:12px}
+body.home-active .entry-captain-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+body.home-active #entry label{display:grid;gap:6px;color:rgba(239,224,183,.82);font-size:12px;font-weight:700;letter-spacing:.03em}
+body.home-active #entry input,body.home-active #entry select{width:100%;box-sizing:border-box;min-height:48px;border:1px solid rgba(198,165,91,.42);border-radius:11px;background:rgba(3,25,32,.88);color:#f2e7c8}
+body.home-active #entry .entry-actions{display:block}
+body.home-active #entry .entry-submit{width:100%;min-height:52px;margin-top:2px;border-color:rgba(232,194,104,.76);background:linear-gradient(180deg,rgba(39,82,80,.96),rgba(11,47,54,.98));color:#f2dfa7;font-family:Georgia,'Times New Roman',serif;font-size:18px}
+body.home-active #entry .join-entry-actions{display:grid;gap:12px}
+body.home-active #entry .join-entry-actions.hidden,body.home-active #entry #createEntryActions.hidden{display:none}
+body.home-active #entry[data-entry-mode="join"] .entry-captain-fields{margin-bottom:12px}
+body.home-active #entry #codeInput{text-transform:uppercase;text-align:center;font-size:24px;font-weight:800;letter-spacing:.22em}
+body.home-active #entry #entryError{min-height:18px;margin:10px 0 0}
+@media(max-width:520px){body.home-active #entry.entry-panel{width:calc(100% - 8px);margin-top:clamp(28px,6dvh,60px);padding:14px}body.home-active .entry-captain-fields{grid-template-columns:1fr}}
