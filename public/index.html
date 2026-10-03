@@ -30,22 +30,33 @@
   <div id="connectionBanner" class="connection-banner hidden" role="status" aria-live="polite"></div>
 
   <main>
-    <section id="authPanel" class="panel entry-panel hidden">
-      <h1>Аккаунт игрока</h1>
-      <p class="muted">Войди в свой аккаунт или создай новый. Один аккаунт — одно место игрока в комнате.</p>
-      <label>Логин
-        <input id="authUsername" maxlength="24" autocomplete="username" placeholder="Капитан" />
-      </label>
-      <label>Пароль
-        <input id="authPassword" type="password" minlength="6" autocomplete="current-password" placeholder="Минимум 6 символов" />
-      </label>
-      <label>Имя в игре <span class="muted">(для регистрации)</span>
-        <input id="authDisplayName" maxlength="24" autocomplete="nickname" placeholder="Капитан" />
-      </label>
-      <div class="entry-actions auth-actions">
-        <button id="loginBtn" class="primary">Войти</button>
-        <button id="registerBtn">Создать аккаунт</button>
+    <section id="authPanel" class="panel auth-panel entry-panel hidden" data-auth-mode="login" aria-labelledby="authTitle">
+      <div class="auth-intro">
+        <span>ДОБРО ПОЖАЛОВАТЬ НА БОРТ</span>
+        <h1 id="authTitle">Войти в игру</h1>
+        <p id="authSubtitle" class="muted">Продолжите путешествие под своим аккаунтом капитана.</p>
       </div>
+      <div class="auth-mode-tabs" role="tablist" aria-label="Режим аккаунта">
+        <button id="authLoginTab" class="active" type="button" role="tab" aria-selected="true">Вход</button>
+        <button id="authRegisterTab" type="button" role="tab" aria-selected="false">Регистрация</button>
+      </div>
+      <div class="auth-fields">
+        <label>Логин
+          <input id="authUsername" maxlength="24" autocomplete="username" placeholder="Логин капитана" />
+        </label>
+        <label>Пароль
+          <input id="authPassword" type="password" minlength="6" autocomplete="current-password" placeholder="Минимум 6 символов" />
+        </label>
+        <label id="authDisplayNameField" class="hidden">Имя в игре
+          <input id="authDisplayName" maxlength="24" autocomplete="nickname" placeholder="Имя капитана" />
+        </label>
+      </div>
+      <div class="entry-actions auth-actions">
+        <button id="authSubmitBtn" class="primary" type="button">Войти</button>
+        <button id="loginBtn" class="hidden" type="button" tabindex="-1" aria-hidden="true">Войти</button>
+        <button id="registerBtn" class="hidden" type="button" tabindex="-1" aria-hidden="true">Создать аккаунт</button>
+      </div>
+      <p id="authModeHint" class="auth-mode-hint">Нет аккаунта? Выберите «Регистрация».</p>
       <p id="authError" class="error" role="alert"></p>
     </section>
 
