@@ -5334,8 +5334,8 @@
     if (view === 'build' || view === 'upgrade' || view === 'cargo' || view === 'military' || view === 'palace') {
       renderIsland();
       const labels = {
-        build: 'Строительство',
-        upgrade: 'Улучшение построек',
+        build: 'Можно построить',
+        upgrade: 'Построено',
         cargo: 'Погрузка',
         military: 'Военная инфраструктура',
         palace: 'Дворец',
