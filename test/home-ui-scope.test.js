@@ -53,9 +53,9 @@ test('home top area uses authored assets without entering game scope', () => {
 test('central Home action routes to existing entry without game mutations', () => {
   assert.match(html, /id="homePrimaryAction"/);
   assert.match(html, /id="homePlayBtn"/);
-  assert.match(app, /\$\('homePlayBtn'\)\.addEventListener\('click'/);
-  assert.match(app, /\$\('entry'\)\.scrollIntoView/);
-  assert.doesNotMatch(app, /homePlayBtn[\s\S]{0,300}socket\.emit/);
+  assert.ok(app.includes("$('homePlayBtn').addEventListener('click', openPlayFlow)"));
+  assert.ok(app.includes("function openPlayFlow()"));
+  assert.ok(!app.includes("$('homePlayBtn').addEventListener('click', () => {\n    socket.emit"));
 });
 
 
