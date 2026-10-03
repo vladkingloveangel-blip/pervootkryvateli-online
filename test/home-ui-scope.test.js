@@ -126,7 +126,7 @@ test('How to Play is a dedicated Home guide without changing game help', () => {
   assert.ok(html.includes('data-home-menu="how-to"'));
   assert.ok(html.includes('id="howToRulesBtn"'));
   assert.ok(app.includes('function openHowToPlay()'));
-  assert.ok(app.includes("$('howToPlayOpenBtn').addEventListener('click', openHowToPlay)"));
+  assert.ok(app.includes("if (action === 'how-to') return openHowToPlay()"));
   assert.ok(app.includes("$('howToRulesBtn').addEventListener('click', () => openRules('how-to'))"));
   assert.ok(html.includes('data-game-menu="help"'));
 });
