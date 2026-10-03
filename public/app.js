@@ -1149,8 +1149,8 @@
     if (!document.body.classList.contains('home-active')) return;
     const control = event.target.closest?.('button, [role="tab"], input[type="checkbox"], input[type="range"]');
     if (!control || control.disabled || control.classList.contains('hidden')) return;
-    playSoundCue('confirm');
-    scheduleHomeMusic();
+    playHomeConfirmSound();
+    syncHomeMusic();
   });
   document.addEventListener('visibilitychange', syncHomeMusic);
 
@@ -2609,6 +2609,7 @@
 
   let uiAudioContext = null;
   let uiAudioUnlocked = false;
+  let mediaAudioUnlocked = false;
   let lastUiCueKey = '';
   const SOUND_STORAGE_KEY = 'pervo:sound';
   const soundState = (() => {
@@ -2620,13 +2621,25 @@
     }
   })();
   const soundCooldowns = new Map();
-  let homeMusicTimer = null;
-  let homeMusicStep = 0;
+  const HOME_MUSIC_GAIN = .34;
+  const HOME_UI_GAIN = .82;
+  const homeMusicAudio = typeof Audio === 'function' ? new Audio('/assets/audio/home-pirate-loop.ogg') : null;
+  const homeConfirmAudio = typeof Audio === 'function' ? new Audio('/assets/audio/ui-confirm.wav') : null;
+
+  if (homeMusicAudio) {
+    homeMusicAudio.loop = true;
+    homeMusicAudio.preload = 'auto';
+  }
+  if (homeConfirmAudio) homeConfirmAudio.preload = 'auto';
+
+  function updateHomeMediaVolumes() {
+    if (homeMusicAudio) homeMusicAudio.volume = Math.max(0, Math.min(1, soundState.volume * HOME_MUSIC_GAIN));
+    if (homeConfirmAudio) homeConfirmAudio.volume = Math.max(0, Math.min(1, soundState.volume * HOME_UI_GAIN));
+  }
 
   function homeAudioAllowed() {
     return document.body.classList.contains('home-active')
-      && uiAudioUnlocked
-      && uiAudioContext?.state === 'running'
+      && mediaAudioUnlocked
       && !soundState.muted
       && soundState.volume > 0
       && document.visibilityState !== 'hidden';
@@ -2639,7 +2652,6 @@
       uiAudioContext ||= new AudioCtx();
       if (uiAudioContext.state === 'suspended') await uiAudioContext.resume();
       uiAudioUnlocked = uiAudioContext.state === 'running';
-      if (uiAudioUnlocked) syncHomeMusic();
       return uiAudioUnlocked;
     } catch (_) {
       uiAudioUnlocked = false;
@@ -2647,59 +2659,57 @@
     }
   }
 
-  async function unlockUiAudioFromGesture() {
-    if (!(await ensureUiAudioUnlocked())) return;
-    document.removeEventListener('pointerdown', unlockUiAudioFromGesture, true);
-    document.removeEventListener('keydown', unlockUiAudioFromGesture, true);
-  }
-
-  document.addEventListener('pointerdown', unlockUiAudioFromGesture, true);
-  document.addEventListener('keydown', unlockUiAudioFromGesture, true);
-
-  function playHomeMusicNote(frequency, duration = 1.7, gain = .026, type = 'triangle') {
-    if (!homeAudioAllowed()) return;
-    try {
-      const oscillator = uiAudioContext.createOscillator();
-      const volume = uiAudioContext.createGain();
-      oscillator.type = type;
-      oscillator.frequency.value = frequency;
-      const now = uiAudioContext.currentTime;
-      volume.gain.setValueAtTime(.0001, now);
-      volume.gain.exponentialRampToValueAtTime(Math.max(.0001, gain * soundState.volume), now + .22);
-      volume.gain.exponentialRampToValueAtTime(.0001, now + duration);
-      oscillator.connect(volume).connect(uiAudioContext.destination);
-      oscillator.start(now);
-      oscillator.stop(now + duration + .05);
-    } catch (_) {}
-  }
-
-  function scheduleHomeMusic() {
-    if (homeMusicTimer || !homeAudioAllowed()) return;
-    // Keep the ambient motif in a phone-speaker-friendly range. The previous
-    // 73–220 Hz sine-only pattern was effectively inaudible on many mobiles.
-    const notes = [293.66, 349.23, 392, 440, 392, 349.23, 329.63, 293.66];
-    const tick = () => {
-      if (!homeAudioAllowed()) {
-        homeMusicTimer = null;
-        return;
-      }
-      const note = notes[homeMusicStep % notes.length];
-      playHomeMusicNote(note);
-      if (homeMusicStep % 4 === 0) playHomeMusicNote(note / 2, 2.2, .014, 'sine');
-      homeMusicStep += 1;
-      homeMusicTimer = setTimeout(tick, 2100);
-    };
-    tick();
+  function startHomeMusic() {
+    if (!homeMusicAudio || !homeAudioAllowed()) return;
+    updateHomeMediaVolumes();
+    if (!homeMusicAudio.paused) return;
+    const playback = homeMusicAudio.play();
+    if (playback?.catch) {
+      playback.catch(() => {
+        mediaAudioUnlocked = false;
+      });
+    }
   }
 
   function stopHomeMusic() {
-    if (homeMusicTimer) clearTimeout(homeMusicTimer);
-    homeMusicTimer = null;
+    if (!homeMusicAudio || homeMusicAudio.paused) return;
+    homeMusicAudio.pause();
   }
 
   function syncHomeMusic() {
-    if (homeAudioAllowed()) scheduleHomeMusic();
+    updateHomeMediaVolumes();
+    if (homeAudioAllowed()) startHomeMusic();
     else stopHomeMusic();
+  }
+
+  function unlockAudioFromGesture() {
+    mediaAudioUnlocked = true;
+    updateHomeMediaVolumes();
+    ensureUiAudioUnlocked();
+    syncHomeMusic();
+    document.removeEventListener('pointerdown', unlockAudioFromGesture, true);
+    document.removeEventListener('keydown', unlockAudioFromGesture, true);
+  }
+
+  document.addEventListener('pointerdown', unlockAudioFromGesture, true);
+  document.addEventListener('keydown', unlockAudioFromGesture, true);
+
+  function playHomeConfirmSound() {
+    if (soundState.muted || soundState.volume <= 0 || document.visibilityState === 'hidden' || state.spectating) return;
+    mediaAudioUnlocked = true;
+    updateHomeMediaVolumes();
+    if (!homeConfirmAudio) {
+      playSoundCue('confirm');
+      return;
+    }
+    try {
+      homeConfirmAudio.pause();
+      homeConfirmAudio.currentTime = 0;
+      const playback = homeConfirmAudio.play();
+      if (playback?.catch) playback.catch(() => playSoundCue('confirm'));
+    } catch (_) {
+      playSoundCue('confirm');
+    }
   }
 
   // Compatibility marker for the canonical UI-38 fallback: playUiCue('confirm')
