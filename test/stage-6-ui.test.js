@@ -941,8 +941,8 @@ test('UI-18 keeps hidden encounter contents out of pre-fight anchor presentation
 
 test('UI-18 existing Result Card remains the authoritative post-encounter feedback', () => {
   assert.match(app, /function anchorResultCard\(res\)/);
-  assert.match(app, /function handleAnchorResultAck\(res\)/);
-  assert.match(app, /fightAnchor', \{\}, handleAnchorResultAck/);
+  assert.match(app, /function handleAnchorResultAck\(res, issuedRoomStateSeq\)/);
+  assert.match(app, /fightAnchor', \{\}, res => handleAnchorResultAck\(res, issuedRoomStateSeq\)/);
 
   const start = app.indexOf('  function dismissResultCard()');
   const end = app.indexOf('\n\n  function renderResultLayer()', start);
