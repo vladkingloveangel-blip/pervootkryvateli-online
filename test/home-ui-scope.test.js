@@ -233,3 +233,17 @@ test('Legacy Home shell controls are removed after navigation migration', () => 
   assert.ok(html.includes('id="gameMenuPanel"'));
   assert.ok(html.includes('id="gameAccountBackdrop"'));
 });
+
+
+test('Final Home redesign contract keeps the new shell clean and party UI isolated', () => {
+  assert.equal(html.includes('\\n  <link rel="stylesheet" href="/home-shell.css"'), false);
+  assert.ok(html.includes('id="homeShell" class="home-shell" data-ui-scope="home"'));
+  assert.ok(html.indexOf('<!-- /#homeShell: non-party UI only -->') < html.indexOf('id="game" class="game hidden" data-ui-scope="game"'));
+  for (const legacyId of ['accountBar', 'myGamesOpenBtn', 'profileOpenBtn', 'howToPlayOpenBtn', 'adminOpenBtn', 'logoutBtn', 'loginBtn', 'registerBtn', 'installAppBtn']) {
+    assert.equal(html.includes(`id="${legacyId}"`), false);
+  }
+  assert.ok(homeCss.includes('min-width:33px;min-height:33px'));
+  assert.ok(homeCss.includes('@media(min-width:901px)'));
+  assert.ok(homeCss.includes('/assets/home-background.webp'));
+  assert.ok(html.includes('/assets/home-logo.png'));
+});
