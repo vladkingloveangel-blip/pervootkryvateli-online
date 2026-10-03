@@ -213,7 +213,7 @@ body.home-active #authPanel #authError{margin-bottom:0;text-align:center}
   body.home-active #homeShell{min-height:100svh;height:100dvh;padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right));padding-bottom:max(10px,env(safe-area-inset-bottom))}
   body.home-active #homeShell button,body.home-active #homeShell input,body.home-active #homeShell select{font-size:max(16px,1em)}
   body.home-active #homeShell button{touch-action:manipulation}
-  body.home-active .home-icon-button,body.home-active .play-flow-back,body.home-active .my-games-refresh{min-width:44px;min-height:44px}
+  body.home-active .home-icon-button,body.home-active .play-flow-back,body.home-active .my-games-refresh{min-width:33px;min-height:33px}
   body.home-active .home-topbar{padding-top:max(8px,env(safe-area-inset-top));gap:8px}
   body.home-active .home-logo{max-width:min(54vw,230px)}
   body.home-active .home-top-actions{gap:7px}
