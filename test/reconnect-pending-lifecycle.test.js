@@ -247,13 +247,19 @@ test('mandatory assault Sea Veil decision survives disconnect and resumes before
 
 test('disconnect policy keeps optional alliance and battle invitation behavior separate from mandatory legendary pending', () => {
   const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
-  const start = server.indexOf("onSocketEvent(socket, 'disconnect'");
-  const end = server.indexOf('\n  });\n});', start);
-  assert.ok(start >= 0 && end > start);
-  const handler = server.slice(start, end);
+  const helperStart = server.indexOf('function mandatoryPendingKindsForPlayer(room, playerId)');
+  const helperEnd = server.indexOf('\nfunction fleetAdjustmentOptions(', helperStart);
+  assert.ok(helperStart >= 0 && helperEnd > helperStart);
+  const helper = server.slice(helperStart, helperEnd);
 
-  assert.match(handler, /room\.pendingAlliance = null/);
-  assert.match(handler, /invite\.response = false/);
-  assert.match(handler, /pendingLegacy\(room, 'legendary-reaction'\)/);
-  assert.doesNotMatch(handler, /resolvePendingLegendaryReaction\(room, false, null\)/);
+  assert.match(helper, /room\.pendingAlliance = null/);
+  assert.match(helper, /invite\.response = false/);
+  assert.match(helper, /pendingLegacy\(room, 'legendary-reaction'\)/);
+  assert.doesNotMatch(helper, /resolvePendingLegendaryReaction\(room, false, null\)/);
+
+  const disconnectStart = server.indexOf("onSocketEvent(socket, 'disconnect'");
+  const disconnectEnd = server.indexOf('\n  });\n});', disconnectStart);
+  assert.ok(disconnectStart >= 0 && disconnectEnd > disconnectStart);
+  const handler = server.slice(disconnectStart, disconnectEnd);
+  assert.match(handler, /settleOptionalPendingOnPlayerDetach\(room, p, 'отключения'\)/);
 });
