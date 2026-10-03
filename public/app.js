@@ -16,18 +16,24 @@
   }).catch(() => {});
   let deferredInstallPrompt = null;
   const pendingDataActions = new Set();
-  function emitDataAction(button, event, payload) {
+  function emitDataAction(button, event, payload, onResult = handleGameAck) {
     const key = `${event}:${JSON.stringify(payload)}`;
     if (pendingDataActions.has(key) || button.disabled) return;
     pendingDataActions.add(key);
+    const label = button.textContent;
     button.disabled = true;
     button.setAttribute('aria-busy', 'true');
+    button.textContent = `${label} · …`;
     socket.timeout(10000).emit(event, payload, (error, result) => {
       pendingDataActions.delete(key);
       button.removeAttribute('aria-busy');
-      // A fresh server snapshot decides availability; never blindly re-enable.
-      handleGameAck(error ? { ok: false, error: 'Не удалось подтвердить действие. Дождитесь обновления игры.' } : result);
-      if (!error && result?.ok === false) render();
+      const resolved = error
+        ? { ok: false, error: 'Не удалось подтвердить действие. Дождитесь обновления игры.' }
+        : result;
+      onResult(resolved);
+      // A rejected authoritative response may not emit a new room snapshot.
+      // Re-render from the latest snapshot so the button becomes available again.
+      if (!error && resolved?.ok === false) render();
     });
   }
 
@@ -896,18 +902,45 @@
   $('endTurnBtn').addEventListener('click', () => socket.emit('endTurn', {}, handleGameAck));
   $('mapNavRollBtn').addEventListener('click', () => socket.emit('rollMove', {}, res => handleSoundAck(res, 'dice')));
   $('mapNavStayBtn').addEventListener('click', () => socket.emit('skipNavigation', {}, handleGameAck));
-  $('sellCargoBtn').addEventListener('click', () => socket.emit('sellCargo', {}, res => handleSoundAck(res, 'coins')));
+  $('sellCargoBtn').addEventListener('click', () => emitDataAction(
+    $('sellCargoBtn'),
+    'sellCargo',
+    {},
+    res => handleRoutineActionAck(res, result => `Груз продан: +${result.revenue || 0} дук.`, 'coins')
+  ));
 
   function emitEndGameCommand(event) {
     setError('gameError');
     socket.emit(event, {}, handleGameAck);
   }
 
-  function handleGameAck(res) { setError('gameError', res?.ok ? '' : (res?.error || 'Действие отклонено.')); }
+  function handleGameAck(res) {
+    const error = res?.ok ? '' : (res?.error || 'Действие отклонено.');
+    setError('gameError', error);
+    if (error && state.room?.started && !state.spectating) enqueueToast(error, 'danger');
+  }
   function handleAllianceAck(res, successMessage = '') {
     handleGameAck(res);
     if (res?.ok && successMessage) enqueueToast(successMessage, 'success');
-    else if (res && res.ok === false) enqueueToast(res.error || 'Действие с союзом отклонено.', 'danger');
+  }
+  function handleRoutineActionAck(res, successMessage = '', cue = 'confirm') {
+    handleGameAck(res);
+    if (res?.ok) {
+      const message = typeof successMessage === 'function' ? successMessage(res) : successMessage;
+      if (message) enqueueToast(message, 'success');
+      if (cue) playSoundCue(cue);
+    } else if (res && res.ok === false) {
+      playSoundCue('error');
+    }
+  }
+  function handlePoliticalActionAck(res, card) {
+    handleGameAck(res);
+    if (!res?.ok) {
+      if (res && res.ok === false) playSoundCue('error');
+      return;
+    }
+    enqueueResultCard(card);
+    renderResultLayer();
   }
   function handleSoundAck(res, cue) {
     handleGameAck(res);
@@ -3040,13 +3073,40 @@
       const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
       b.textContent = `Вступить: ${f.name} · 1 действие`;
       b.disabled = blocked;
-      b.addEventListener('click', () => socket.emit('enterVassalage', { factionId: f.id }, handleGameAck));
+      b.addEventListener('click', () => emitDataAction(
+        b,
+        'enterVassalage',
+        { factionId: f.id },
+        res => handlePoliticalActionAck(res, {
+          kicker: 'ПОЛИТИКА',
+          title: `Вы вступили в подданство: ${f.name}`,
+          body: f.giftIslandName
+            ? `Государство передало вам остров ${f.giftIslandName}.`
+            : 'Подданство вступило в силу.',
+          details: [{ label: 'Цена', value: '1 действие' }],
+          tone: 'success',
+        })
+      ));
       actions.appendChild(b);
     }
     if (suzerain && r.activePlayerId === state.myId && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn danger-soft'; b.textContent = `Объявить мятеж против ${suzerain.name} · 1 действие`;
       b.disabled = blocked;
-      b.addEventListener('click', () => socket.emit('rebelVassalage', {}, handleGameAck));
+      const giftIslandName = mine.vassalGiftIslandId
+        ? r.islands?.find(island => island.id === mine.vassalGiftIslandId)?.name
+        : null;
+      b.addEventListener('click', () => emitDataAction(
+        b,
+        'rebelVassalage',
+        {},
+        res => handlePoliticalActionAck(res, {
+          kicker: 'ПОЛИТИКА',
+          title: `Мятеж против ${suzerain.name}`,
+          body: `Подданство прекращено. ${suzerain.name} становится вашим врагом.${giftIslandName ? ` Остров ${giftIslandName} возвращён сюзерену.` : ''}`,
+          details: [{ label: 'Цена', value: '1 действие' }],
+          tone: 'danger',
+        })
+      ));
       actions.appendChild(b);
     }
   }
@@ -4128,7 +4188,12 @@
         button.type = 'button'; button.className = 'build-btn';
         button.textContent = `Взять «${option.name}» · 1 действие`;
         button.disabled = !canAct;
-        button.addEventListener('click', () => socket.emit('takeCharacter', { characterId: option.id }, handleGameAck));
+        button.addEventListener('click', () => emitDataAction(
+          button,
+          'takeCharacter',
+          { characterId: option.id },
+          res => handleRoutineActionAck(res, `Получен персонаж: ${option.name}.`, 'confirm')
+        ));
         actions.appendChild(button);
       }
     } else if (!character && mine.admiraltyLevelHere) {
@@ -4274,7 +4339,12 @@
           const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn';
           b.textContent = `Заменить на «${option.name}» · 1 действие`;
           b.disabled = !canAct;
-          b.addEventListener('click', () => socket.emit('replaceCharacter', { characterId: option.id }, handleGameAck));
+          b.addEventListener('click', () => emitDataAction(
+            b,
+            'replaceCharacter',
+            { characterId: option.id },
+            res => handleRoutineActionAck(res, `Персонаж заменён: ${option.name}.`, 'confirm')
+          ));
           actions.appendChild(b);
         }
       }
@@ -4291,7 +4361,12 @@
       dismiss.textContent = `Вернуть роту +${mine.landCompany.army} у своего Арсенала · бесплатно`;
       dismiss.disabled = !myTurnAnyPhase || !mine.canDismissLandCompanyHere;
       dismiss.title = mine.canDismissLandCompanyHere ? '' : 'Нужно находиться у своего острова с Арсеналом.';
-      dismiss.addEventListener('click', () => socket.emit('dismissLandCompany', {}, handleGameAck));
+      dismiss.addEventListener('click', () => emitDataAction(
+        dismiss,
+        'dismissLandCompany',
+        {},
+        res => handleRoutineActionAck(res, 'Рота возвращена.', 'confirm')
+      ));
       actions.appendChild(dismiss);
     }
 
@@ -4313,7 +4388,13 @@
     if (mine.nextLevel) {
       levelBtn.textContent = `Повысить до ${ROMAN[mine.nextLevel.level] || mine.nextLevel.level} · ${mine.nextLevel.price} дук.`;
       levelBtn.disabled = !canBuyHere || mine.ducats < mine.nextLevel.price;
-      levelBtn.addEventListener('click', () => emitDataAction(levelBtn, 'buyShipLevel', {}));
+      const nextLevelLabel = ROMAN[mine.nextLevel.level] || mine.nextLevel.level;
+      levelBtn.addEventListener('click', () => emitDataAction(
+        levelBtn,
+        'buyShipLevel',
+        {},
+        res => handleRoutineActionAck(res, `Корабль повышен до уровня ${nextLevelLabel}.`, 'ship')
+      ));
     } else {
       levelBtn.textContent = `Достигнут ${ROMAN[state.room.balanceCatalog.maxShipLevel]} уровень`;
       levelBtn.disabled = true;
@@ -4340,7 +4421,12 @@
       const slotOk = upgrades.length < mine.upgradeSlots;
       const redundantPassability = Boolean(u.passability && state.room.shipCatalog?.[mine.shipClass]?.passability === u.passability);
       b.disabled = !canBuyHere || mine.ducats < u.price || !dependencyOk || !slotOk || redundantPassability;
-      b.addEventListener('click', () => emitDataAction(b, 'buyShipUpgrade', { upgradeId: id }));
+      b.addEventListener('click', () => emitDataAction(
+        b,
+        'buyShipUpgrade',
+        { upgradeId: id },
+        res => handleRoutineActionAck(res, `Установлено улучшение: ${u.name}.`, 'ship')
+      ));
       actions.appendChild(b);
     }
 
@@ -4350,7 +4436,12 @@
       b.className = 'build-btn danger-soft';
       b.textContent = `Снять «${u.name}»`;
       b.disabled = !canBuyHere;
-      b.addEventListener('click', () => socket.emit('removeShipUpgrade', { upgradeId: u.id }, handleGameAck));
+      b.addEventListener('click', () => emitDataAction(
+        b,
+        'removeShipUpgrade',
+        { upgradeId: u.id },
+        res => handleRoutineActionAck(res, `Снято улучшение: ${u.name}.`, 'ship')
+      ));
       actions.appendChild(b);
     }
 
@@ -4370,7 +4461,12 @@
       const spec = type === 'cargo' ? `трюм ${e.cargo}` : `арт. ${e.artillery}`;
       b.textContent = price == null ? `${e.name} · лимит` : `${e.name} · ${price} дук. · ${spec}`;
       b.disabled = !canBuyHere || price == null || mine.ducats < price || !escortRoom;
-      b.addEventListener('click', () => emitDataAction(b, 'buyEscort', { escortType: type }));
+      b.addEventListener('click', () => emitDataAction(
+        b,
+        'buyEscort',
+        { escortType: type },
+        res => handleRoutineActionAck(res, `Куплено сопровождение: ${e.name}.`, 'ship')
+      ));
       actions.appendChild(b);
     }
 
@@ -4387,7 +4483,12 @@
         b.type = 'button'; b.className = 'build-btn';
         b.textContent = `Городская стража → ${island.name} · ${state.room.balanceCatalog.garrisons.guard.price} дук. · +${state.room.balanceCatalog.garrisons.guard.defense} защиты`;
         b.disabled = !canBuyHere || mine.ducats < state.room.balanceCatalog.garrisons.guard.price;
-        b.addEventListener('click', () => emitDataAction(b, 'buyCityGuard', { islandId: island.id }));
+        b.addEventListener('click', () => emitDataAction(
+          b,
+          'buyCityGuard',
+          { islandId: island.id },
+          res => handleRoutineActionAck(res, `Куплена городская стража: ${island.name}.`, 'coins')
+        ));
         actions.appendChild(b);
       }
       for (const island of permanentTargets) {
@@ -4397,7 +4498,12 @@
         b.type = 'button'; b.className = 'build-btn';
         b.textContent = `${upgrading ? 'Постоянный гарнизон вместо стражи' : 'Постоянный гарнизон напрямую'} → ${island.name} · ${spec.price} дук. · +${spec.defense} защиты`;
         b.disabled = !canBuyHere || mine.ducats < spec.price;
-        b.addEventListener('click', () => emitDataAction(b, 'buyPermanentGarrison', { islandId: island.id }));
+        b.addEventListener('click', () => emitDataAction(
+          b,
+          'buyPermanentGarrison',
+          { islandId: island.id },
+          res => handleRoutineActionAck(res, `Постоянный гарнизон: ${island.name}.`, 'coins')
+        ));
         actions.appendChild(b);
       }
     }
@@ -4607,10 +4713,12 @@
         button.className = 'build-btn cargo-btn';
         button.textContent = 'Погрузить ' + good.name + ' × ' + freeFleetCapacity + ' во флотилию';
         button.disabled = !canAct || freeFleetCapacity <= 0 || loadedThisRound;
-        button.addEventListener('click', () => {
-          setError('gameError');
-          socket.emit('loadCargo', { islandId: island.id, goodId }, res => handleSoundAck(res, 'cargo'));
-        });
+        button.addEventListener('click', () => emitDataAction(
+          button,
+          'loadCargo',
+          { islandId: island.id, goodId },
+          res => handleRoutineActionAck(res, `Погружено: ${good.name}.`, 'cargo')
+        ));
         actions.appendChild(button);
       }
     }
@@ -4629,7 +4737,12 @@
         const cargoWarning = mine?.cargo ? ' · текущий груз будет сброшен' : '';
         companyBtn.textContent = mine?.landCompany ? `Рота уже снаряжена · +${mine.landCompany.army}` : `Снарядить роту · Арсенал ${ROMAN[arsenal.level] || arsenal.level} · +${r.balanceCatalog.landCompany.armyByArsenalLevel[arsenal.level]} войска${cargoWarning}`;
         companyBtn.disabled = !canAct || Boolean(mine?.landCompany);
-        companyBtn.addEventListener('click', () => socket.emit('formLandCompany', { islandId: island.id }, handleGameAck));
+        companyBtn.addEventListener('click', () => emitDataAction(
+          companyBtn,
+          'formLandCompany',
+          { islandId: island.id },
+          res => handleRoutineActionAck(res, 'Рота ландскнехтов снаряжена.', 'confirm')
+        ));
         actions.appendChild(companyBtn);
       }
       if (!bastion) {
@@ -4638,7 +4751,12 @@
           bastionBtn.type = 'button'; bastionBtn.className = 'build-btn';
           bastionBtn.textContent = `Крепость III → Бастион · ${state.room.balanceCatalog.bastion.price} дук. · +${state.room.balanceCatalog.bastion.defense} защиты`;
           bastionBtn.disabled = !canAct || mine.ducats < state.room.balanceCatalog.bastion.price || (mine.bastionCount || 0) >= (mine.bastionSupportCapacity || 0);
-          bastionBtn.addEventListener('click', () => emitDataAction(bastionBtn, 'buildBastion', { islandId: island.id, buildingIndex: fortress.index }));
+          bastionBtn.addEventListener('click', () => emitDataAction(
+            bastionBtn,
+            'buildBastion',
+            { islandId: island.id, buildingIndex: fortress.index },
+            res => handleRoutineActionAck(res, `Построен бастион: ${island.name}.`, 'construction')
+          ));
           actions.appendChild(bastionBtn);
         }
       }
@@ -4657,7 +4775,12 @@
         button.type = 'button'; button.className = 'build-btn';
         button.textContent = mine.palaceUsed ? 'Дворец уже использован в этой партии' : `Прекратить вражду: ${faction.name} · 1 действие`;
         button.disabled = !canAct || Boolean(mine.palaceUsed);
-        button.addEventListener('click', () => socket.emit('usePalace', { islandId: island.id, factionId }, handleGameAck));
+        button.addEventListener('click', () => emitDataAction(
+          button,
+          'usePalace',
+          { islandId: island.id, factionId },
+          res => handleRoutineActionAck(res, `Вражда прекращена: ${faction.name}.`, 'confirm')
+        ));
         actions.appendChild(button);
       }
     }
@@ -4707,10 +4830,12 @@
       const button = document.createElement('button');
       button.type = 'button'; button.className = 'build-btn primary'; button.textContent = 'Построить';
       button.disabled = !canAct || mine.ducats < def.price;
-      button.addEventListener('click', () => {
-        setError('gameError');
-        socket.emit('build', { islandId: island.id, buildingType: id }, res => handleSoundAck(res, 'construction'));
-      });
+      button.addEventListener('click', () => emitDataAction(
+        button,
+        'build',
+        { islandId: island.id, buildingType: id },
+        res => handleRoutineActionAck(res, `Построено: ${def.name}.`, 'construction')
+      ));
       card.appendChild(button); actions.appendChild(card);
     }
 
@@ -4728,10 +4853,12 @@
         const button = document.createElement('button');
         button.type = 'button'; button.className = 'build-btn upgrade-building-btn'; button.textContent = `Улучшить · ${b.nextUpgrade.price} дук.`;
         button.disabled = !canAct || mine.ducats < b.nextUpgrade.price;
-        button.addEventListener('click', () => {
-          setError('gameError');
-          socket.emit('upgradeBuilding', { islandId: island.id, buildingIndex: b.index }, res => handleSoundAck(res, 'construction'));
-        });
+        button.addEventListener('click', () => emitDataAction(
+          button,
+          'upgradeBuilding',
+          { islandId: island.id, buildingIndex: b.index },
+          res => handleRoutineActionAck(res, `Улучшено: ${b.nextUpgrade.name}.`, 'construction')
+        ));
         card.appendChild(button);
       }
       actions.appendChild(card);
@@ -4773,19 +4900,34 @@
         yes.type = 'button';
         yes.className = 'primary';
         yes.textContent = 'Принять союз';
-        yes.addEventListener('click', () => socket.emit('respondAlliance', { requestId: pending.id, accept: true }, res => handleAllianceAck(res)));
+        yes.addEventListener('click', () => emitDataAction(
+          yes,
+          'respondAlliance',
+          { requestId: pending.id, accept: true },
+          res => handleAllianceAck(res)
+        ));
         const no = document.createElement('button');
         no.type = 'button';
         no.className = 'danger-soft';
         no.textContent = 'Отклонить';
-        no.addEventListener('click', () => socket.emit('respondAlliance', { requestId: pending.id, accept: false }, res => handleAllianceAck(res)));
+        no.addEventListener('click', () => emitDataAction(
+          no,
+          'respondAlliance',
+          { requestId: pending.id, accept: false },
+          res => handleAllianceAck(res)
+        ));
         actions.appendChild(yes); actions.appendChild(no);
       } else if (pending.viewerRole === 'sender') {
         const cancel = document.createElement('button');
         cancel.type = 'button';
         cancel.className = 'danger-soft';
         cancel.textContent = 'Отменить предложение';
-        cancel.addEventListener('click', () => socket.emit('cancelAllianceRequest', { requestId: pending.id }, res => handleAllianceAck(res)));
+        cancel.addEventListener('click', () => emitDataAction(
+          cancel,
+          'cancelAllianceRequest',
+          { requestId: pending.id },
+          res => handleAllianceAck(res)
+        ));
         actions.appendChild(cancel);
       }
       return;
@@ -4804,7 +4946,12 @@
         b.type = 'button';
         b.textContent = `Предложить союз · ${p.name}`;
         b.disabled = !canPropose || !p.connected;
-        b.addEventListener('click', () => socket.emit('requestAlliance', { targetPlayerId: p.id }, res => handleAllianceAck(res, `Предложение союза отправлено: ${p.name}.`)));
+        b.addEventListener('click', () => emitDataAction(
+          b,
+          'requestAlliance',
+          { targetPlayerId: p.id },
+          res => handleAllianceAck(res, `Предложение союза отправлено: ${p.name}.`)
+        ));
         actions.appendChild(b);
       }
     }
@@ -4821,7 +4968,12 @@
         b.className = 'danger-soft';
         b.textContent = `Разорвать союз · ${ally.name}`;
         b.disabled = !canBreak;
-        b.addEventListener('click', () => socket.emit('breakAlliance', { targetPlayerId: ally.id }, handleGameAck));
+        b.addEventListener('click', () => emitDataAction(
+          b,
+          'breakAlliance',
+          { targetPlayerId: ally.id },
+          res => handleAllianceAck(res, `Союз разорван: ${ally.name}.`)
+        ));
         actions.appendChild(b);
       }
     }

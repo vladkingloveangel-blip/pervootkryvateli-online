@@ -386,6 +386,32 @@ test('UI-8 adds queued Result Cards without turning client diffs into game autho
   assert.match(styles, /UI-8 — result cards and lightweight feedback/);
 });
 
+test('UI-8 routine action feedback reuses Toasts and the existing pending submit guard', () => {
+  const pendingStart = app.indexOf('  const pendingDataActions = new Set();');
+  const pendingEnd = app.indexOf('\n\n  const roomFromUrl', pendingStart);
+  const pending = app.slice(pendingStart, pendingEnd);
+  assert.match(pending, /function emitDataAction\(button, event, payload, onResult = handleGameAck\)/);
+  assert.match(pending, /pendingDataActions\.has\(key\)/);
+  assert.match(pending, /button\.disabled = true/);
+  assert.match(pending, /aria-busy/);
+  assert.match(pending, /button\.textContent = `\$\{label\} · …`/);
+  assert.match(pending, /socket\.timeout\(10000\)\.emit/);
+
+  const ackStart = app.indexOf('  function handleGameAck(');
+  const ackEnd = app.indexOf('\n  function me()', ackStart);
+  const ack = app.slice(ackStart, ackEnd);
+  assert.match(ack, /enqueueToast\(error, 'danger'\)/);
+  assert.match(ack, /function handleRoutineActionAck/);
+  assert.match(ack, /enqueueToast\(message, 'success'\)/);
+
+  for (const text of [
+    'Построено:', 'Улучшено:', 'Погружено:', 'Груз продан:',
+    'Корабль повышен до уровня', 'Установлено улучшение:',
+    'Куплено сопровождение:', 'Куплена городская стража:',
+    'Постоянный гарнизон:', 'Рота ландскнехтов снаряжена.'
+  ]) assert.match(app, new RegExp(text));
+});
+
 test('UI-8 result acknowledgement is presentation-only', () => {
   const start = app.indexOf('  function dismissResultCard()');
   const end = app.indexOf('\n\n  function renderResultLayer()', start);
@@ -1208,12 +1234,18 @@ test('UI-23 diplomacy reuses canonical renderPolitics buttons for vassalage and 
   assert.match(diplomacy, /appendCanonicalPoliticsActions\(actions, selectedFaction\?\.id \|\| null\)/);
 });
 
-test('UI-23 keeps the legacy politics renderer as canonical fallback until UI-32', () => {
+test('UI-23 keeps the legacy politics renderer canonical while political outcomes use Result Cards', () => {
   const start = app.indexOf('  function renderPolitics()');
   const end = app.indexOf('\n\n\n  function renderIslandCorrection()', start);
   const code = app.slice(start, end);
-  assert.match(code, /socket\.emit\('enterVassalage'/);
-  assert.match(code, /socket\.emit\('rebelVassalage'/);
+  assert.match(code, /emitDataAction\([\s\S]*?'enterVassalage'/);
+  assert.match(code, /emitDataAction\([\s\S]*?'rebelVassalage'/);
+  assert.match(code, /handlePoliticalActionAck/);
+  assert.match(code, /Вы вступили в подданство:/);
+  assert.match(code, /Мятеж против/);
+  assert.match(code, /kicker: 'ПОЛИТИКА'/);
+  assert.match(code, /tone: 'success'/);
+  assert.match(code, /tone: 'danger'/);
   assert.match(styles, /UI-23 — politics and state diplomacy/);
 });
 
@@ -1253,15 +1285,20 @@ test('UI-24 alliance proposals list eligible players regardless of map position 
   assert.match(code, /Предложение союза отправлено/);
 });
 
-test('UI-24 alliance resolution notifications are explicit and server errors surface as toasts', () => {
+test('UI-24 alliance resolution notifications are explicit and alliance buttons share the pending guard', () => {
   assert.match(app, /socket\.on\('allianceResolved'/);
   assert.match(app, /Союз заключён:/);
   assert.match(app, /Предложение союза отклонено:/);
   assert.match(app, /Предложение союза отменено:/);
-  const ackStart = app.indexOf('  function handleAllianceAck(');
-  const ackEnd = app.indexOf('\n  function handleSoundAck', ackStart);
-  const ack = app.slice(ackStart, ackEnd);
-  assert.match(ack, /enqueueToast\(res\.error \|\| 'Действие с союзом отклонено\.', 'danger'\)/);
+  const start = app.indexOf('  function renderAlliances()');
+  const end = app.indexOf('\n  function renderCombat()', start);
+  const code = app.slice(start, end);
+  for (const command of ['requestAlliance','respondAlliance','cancelAllianceRequest','breakAlliance']) {
+    assert.match(code, new RegExp("emitDataAction\\([\\s\\S]*?'" + command + "'"));
+  }
+  const gameAckStart = app.indexOf('  function handleGameAck(');
+  const gameAckEnd = app.indexOf('\n  function handleAllianceAck', gameAckStart);
+  assert.match(app.slice(gameAckStart, gameAckEnd), /enqueueToast\(error, 'danger'\)/);
 });
 
 test('UI-24 keeps incoming alliance response in the mandatory Decision Layer', () => {
