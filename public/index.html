@@ -19,7 +19,7 @@
     <img class="home-logo" src="/assets/home-logo.png" alt="Первооткрыватели" />
     <div class="home-top-actions">
       <button id="homeProfileBtn" class="home-icon-button home-profile-button hidden" type="button" aria-label="Открыть профиль">
-        <span class="home-avatar" aria-hidden="true"><span id="homeAvatarInitial">?</span></span>
+        <span class="home-avatar" aria-hidden="true"><img id="homeAvatarImage" alt="" /><span id="homeAvatarInitial">?</span></span>
       </button>
       <button id="homeMenuBtn" class="home-icon-button home-menu-button hidden" type="button" aria-label="Открыть меню" aria-expanded="false" aria-controls="homeSecondaryMenu">
         <span aria-hidden="true">☰</span>
@@ -98,8 +98,15 @@
       </div>
 
       <div class="profile-identity">
-        <div class="profile-avatar-preview" aria-hidden="true"><span id="profileAvatarInitial">?</span></div>
+        <div class="profile-avatar-preview"><img id="profileAvatarImage" alt="" /><span id="profileAvatarInitial">?</span></div>
         <div><strong id="profileIdentityName">Капитан</strong><small id="profileIdentityLogin">—</small></div>
+      </div>
+
+      <div class="profile-section profile-avatar-section">
+        <div class="profile-section-heading"><div><h2>Аватар капитана</h2><p class="muted">Выберите портрет, который будет отображаться в меню.</p></div></div>
+        <div id="profileAvatarGrid" class="profile-avatar-grid" role="radiogroup" aria-label="Выбор аватара"></div>
+        <button id="profileAvatarSaveBtn" class="primary profile-submit" type="button">Сохранить аватар</button>
+        <p id="profileAvatarStatus" class="profile-status" role="status"></p>
       </div>
 
       <div class="profile-section">
