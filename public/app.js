@@ -140,6 +140,7 @@
     $('profilePanel').classList.add('hidden');
     $('settingsPanel').classList.add('hidden');
     $('howToPlayPanel').classList.add('hidden');
+    $('rulesPanel').classList.add('hidden');
     $('authPanel').classList.remove('hidden');
     $('accountBar').classList.add('hidden');
     $('homeProfileBtn')?.classList.add('hidden');
@@ -189,6 +190,31 @@
     if (!el) return;
     clearTimeout(showConnectionBanner.timer);
     el.classList.add('hidden');
+  }
+
+  function openRules(returnTo = 'home') {
+    if (!state.accountUser) return;
+    setGameScreenActive(false);
+    state.profileOpen = false;
+    $('profilePanel').classList.add('hidden');
+    $('settingsPanel').classList.add('hidden');
+    $('howToPlayPanel').classList.add('hidden');
+    $('homePrimaryAction').classList.add('hidden');
+    $('playFlow').classList.add('hidden');
+    $('entry').classList.add('hidden');
+    $('myGamesPanel').classList.add('hidden');
+    $('adminPanel').classList.add('hidden');
+    $('authPanel').classList.add('hidden');
+    $('rulesPanel').dataset.returnTo = returnTo;
+    $('rulesPanel').classList.remove('hidden');
+    $('rulesPanel').scrollTop = 0;
+  }
+
+  function closeRules() {
+    const returnTo = $('rulesPanel').dataset.returnTo;
+    $('rulesPanel').classList.add('hidden');
+    if (returnTo === 'how-to') openHowToPlay();
+    else showHomePrimary();
   }
 
   function openHowToPlay() {
@@ -863,6 +889,7 @@
     $('myGamesPanel').classList.add('hidden');
     $('settingsPanel').classList.add('hidden');
     $('howToPlayPanel').classList.add('hidden');
+    $('rulesPanel').classList.add('hidden');
     $('homePrimaryAction').classList.remove('hidden');
   }
 
@@ -915,10 +942,15 @@
   $('homeSettingsBtn').addEventListener('click', openSettings);
   $('settingsBackBtn').addEventListener('click', closeSettings);
   $('howToPlayBackBtn').addEventListener('click', closeHowToPlay);
-  $('howToRulesBtn').addEventListener('click', () => {
-    closeHowToPlay();
-    document.dispatchEvent(new CustomEvent('home:open-rules'));
-  });
+  $('howToRulesBtn').addEventListener('click', () => openRules('how-to'));
+  $('rulesBackBtn').addEventListener('click', closeRules);
+  document.addEventListener('home:open-rules', () => openRules('home'));
+  for (const button of document.querySelectorAll('[data-rules-target]')) {
+    button.addEventListener('click', () => {
+      const target = $(button.dataset.rulesTarget);
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
   $('settingsSoundEnabled').addEventListener('change', event => {
     soundState.muted = !event.currentTarget.checked;
     saveSoundSettings();
