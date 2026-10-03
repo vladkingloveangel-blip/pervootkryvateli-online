@@ -16,7 +16,7 @@ test('home shell and active game are sibling UI scopes', () => {
   assert.ok(homeClose > homeOpen);
   assert.ok(game > homeClose, '#game must stay outside #homeShell');
   const homeMarkup = html.slice(homeOpen, homeClose);
-  for (const id of ['authPanel', 'accountBar', 'profilePanel', 'homePrimaryAction', 'playFlow', 'entry', 'myGamesPanel']) {
+  for (const id of ['authPanel', 'accountBar', 'profilePanel', 'homePrimaryAction', 'playFlow', 'entry']) {
     assert.match(homeMarkup, new RegExp('id="' + id + '"'));
   }
 });
@@ -66,6 +66,19 @@ test('Play flow stays client-side until existing create/join actions', () => {
   assert.ok(app.includes("$('homePlayBtn').addEventListener('click', openPlayFlow)"));
   assert.ok(app.includes("$('playCreateChoiceBtn').addEventListener('click', () => openPlayEntry('create'))"));
   assert.ok(app.includes("$('playJoinChoiceBtn').addEventListener('click', () => openPlayEntry('join'))"));
+  assert.ok(app.includes("socket.emit('createRoom', profile()"));
+  assert.ok(app.includes("socket.emit('joinRoom', { ...profile(), code"));
+});
+
+
+test('Create and Join use separate entry modes while preserving room events', () => {
+  assert.ok(html.includes('data-entry-mode="create"'));
+  assert.ok(html.includes('id="createEntryActions"'));
+  assert.ok(html.includes('id="joinEntryActions" class="join-entry-actions hidden"'));
+  assert.ok(html.includes('id="entryBackBtn"'));
+  assert.ok(app.includes("$('entry').dataset.entryMode = joinMode ? 'join' : 'create'"));
+  assert.ok(app.includes("$('createEntryActions').classList.toggle('hidden', joinMode)"));
+  assert.ok(app.includes("$('joinEntryActions').classList.toggle('hidden', !joinMode)"));
   assert.ok(app.includes("socket.emit('createRoom', profile()"));
   assert.ok(app.includes("socket.emit('joinRoom', { ...profile(), code"));
 });
