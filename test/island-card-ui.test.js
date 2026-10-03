@@ -19,8 +19,8 @@ test('own island management is split into canonical action screens', () => {
   for (const view of ['build', 'upgrade', 'cargo', 'military', 'palace', 'expedition', 'admiralty']) {
     assert.ok(app.includes(view + ": ["), 'missing view ' + view);
   }
-  assert.ok(app.includes("build: 'Строительство'"));
-  assert.ok(app.includes("upgrade: 'Улучшение построек'"));
+  assert.ok(app.includes("build: 'Можно построить'"));
+  assert.ok(app.includes("upgrade: 'Построено'"));
   assert.ok(app.includes("cargo: 'Погрузка'"));
   assert.ok(app.includes("military: 'Военная инфраструктура'"));
   assert.ok(app.includes("palace: 'Дворец'"));
