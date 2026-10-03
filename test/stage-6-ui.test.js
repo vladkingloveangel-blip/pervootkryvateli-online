@@ -1241,6 +1241,29 @@ test('UI-24 removes duplicated alliance legality from the player object sheet', 
   assert.equal(code.includes("socket.emit('breakAlliance'"), false);
 });
 
+test('UI-24 alliance proposals list eligible players regardless of map position and explain remaining restrictions', () => {
+  const start = app.indexOf('  function renderAlliances()');
+  const end = app.indexOf('\n  function renderCombat()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = app.slice(start, end);
+  assert.match(code, /const eligiblePlayers =/);
+  assert.doesNotMatch(code, /p\.row === mine\.row|p\.col === mine\.col|sameCellPlayers/);
+  assert.match(code, /Союз можно предложить с любой точки карты/);
+  assert.match(code, /handleAllianceAck/);
+  assert.match(code, /Предложение союза отправлено/);
+});
+
+test('UI-24 alliance resolution notifications are explicit and server errors surface as toasts', () => {
+  assert.match(app, /socket\.on\('allianceResolved'/);
+  assert.match(app, /Союз заключён:/);
+  assert.match(app, /Предложение союза отклонено:/);
+  assert.match(app, /Предложение союза отменено:/);
+  const ackStart = app.indexOf('  function handleAllianceAck(');
+  const ackEnd = app.indexOf('\n  function handleSoundAck', ackStart);
+  const ack = app.slice(ackStart, ackEnd);
+  assert.match(ack, /enqueueToast\(res\.error \|\| 'Действие с союзом отклонено\.', 'danger'\)/);
+});
+
 test('UI-24 keeps incoming alliance response in the mandatory Decision Layer', () => {
   const start = app.indexOf('  function mobileDecisionDescriptor(');
   const end = app.indexOf('\n  function renderDecisionLayer()', start);

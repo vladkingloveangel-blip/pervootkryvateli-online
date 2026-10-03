@@ -1352,6 +1352,20 @@ function sameCell(a, b) {
   return Boolean(a && b && a.row === b.row && a.col === b.col);
 }
 
+function emitAllianceResolution(room, request, status, reason = null) {
+  if (!room || !request) return;
+  const payload = {
+    status,
+    fromId: request.fromId,
+    toId: request.toId,
+    ...(reason ? { reason } : {}),
+  };
+  for (const playerId of new Set([request.fromId, request.toId])) {
+    const player = playerById(room, playerId);
+    if (player?.socketId) io.to(player.socketId).emit('allianceResolved', payload);
+  }
+}
+
 function eligibleSeaBattleInvites(room, attacker, defender, inviteAttackers = true) {
   const attackerInvites = [];
   const defenderInvites = [];
@@ -4239,13 +4253,12 @@ io.on('connection', socket => {
     const target = playerById(room, data?.targetPlayerId);
     if (!target || target.id === p.id) return ackSafe(ack, { ok: false, error: 'Игрок для союза не найден.' });
     if (!target.connected) return ackSafe(ack, { ok: false, error: 'Этот игрок сейчас не подключён.' });
-    if (!sameCell(p, target)) return ackSafe(ack, { ok: false, error: 'Для заключения союза основные корабли должны стоять на одной клетке.' });
     if (areAllies(room, p, target)) return ackSafe(ack, { ok: false, error: 'Вы уже союзники.' });
     if (alliancePartnerId(room, p.id)) return ackSafe(ack, { ok: false, error: 'У вас уже есть союзник. Одновременно разрешён только один союз.' });
     if (alliancePartnerId(room, target.id)) return ackSafe(ack, { ok: false, error: 'У этого игрока уже есть союзник.' });
     room.pendingAlliance = { id: crypto.randomUUID(), fromId: p.id, toId: target.id };
     log(room, `${p.name} предлагает союз игроку ${target.name}. Действие будет потрачено только при согласии.`);
-    ackSafe(ack, { ok: true, pending: true });
+    ackSafe(ack, { ok: true, pending: true, targetPlayerId: target.id, targetName: target.name });
     emitRoom(room);
   });
 
@@ -4260,15 +4273,19 @@ io.on('connection', socket => {
     const accept = Boolean(data?.accept);
     if (accept) {
       const active = currentPlayer(room);
-      if (!active || active.id !== from.id || room.phase !== 'actions' || room.actionsLeft <= 0 || !sameCell(from, to) || alliancePartnerId(room, from.id) || alliancePartnerId(room, to.id)) {
+      if (!active || active.id !== from.id || room.phase !== 'actions' || room.actionsLeft <= 0 || alliancePartnerId(room, from.id) || alliancePartnerId(room, to.id)) {
+        const error = 'Условия заключения союза изменились: ход или действие уже недоступны либо у одного из игроков появился союзник.';
         room.pendingAlliance = null;
-        ackSafe(ack, { ok: false, error: 'Условия заключения союза изменились или у одного из игроков уже появился союзник.' });
+        ackSafe(ack, { ok: false, error });
+        emitAllianceResolution(room, request, 'invalid', error);
         emitRoom(room);
         return;
       }
       if (!addAlliance(room, from.id, to.id)) {
+        const error = 'Заключить союз не удалось: одновременно разрешён только один союзник.';
         room.pendingAlliance = null;
-        ackSafe(ack, { ok: false, error: 'Заключить союз не удалось: одновременно разрешён только один союзник.' });
+        ackSafe(ack, { ok: false, error });
+        emitAllianceResolution(room, request, 'invalid', error);
         emitRoom(room);
         return;
       }
@@ -4279,6 +4296,7 @@ io.on('connection', socket => {
     }
     room.pendingAlliance = null;
     ackSafe(ack, { ok: true, accepted: accept });
+    emitAllianceResolution(room, request, accept ? 'accepted' : 'rejected');
     emitRoom(room);
   });
 
@@ -4292,6 +4310,7 @@ io.on('connection', socket => {
     room.pendingAlliance = null;
     log(room, `${from?.name || 'Игрок'} отменяет предложение союза${to ? ` игроку ${to.name}` : ''}.`);
     ackSafe(ack, { ok: true });
+    emitAllianceResolution(room, request, 'cancelled');
     emitRoom(room);
   });
 

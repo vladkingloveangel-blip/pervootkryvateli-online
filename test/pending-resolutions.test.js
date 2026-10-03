@@ -215,6 +215,23 @@ test('server source routes four pending families through facade and leaves other
   assert.match(domain, /const RESOLUTION_QUEUE_FIELD = 'resolutionQueue'/);
 });
 
+test('alliance proposals are map-distance independent while remaining server conditions are revalidated', () => {
+  const server = source('server.js');
+  const start = server.indexOf("onSocketEvent(socket, 'requestAlliance'");
+  const end = server.indexOf("onSocketEvent(socket, 'breakAlliance'", start);
+  assert.ok(start >= 0 && end > start);
+  const block = server.slice(start, end);
+
+  assert.doesNotMatch(block, /sameCell\(/);
+  assert.doesNotMatch(block, /одной клетке|общей клетке/);
+  assert.match(block, /!target\.connected/);
+  assert.match(block, /alliancePartnerId\(room, p\.id\)/);
+  assert.match(block, /alliancePartnerId\(room, target\.id\)/);
+  assert.match(block, /room\.phase !== 'actions'/);
+  assert.match(block, /room\.actionsLeft <= 0/);
+  assert.match(block, /emitAllianceResolution\(room, request, accept \? 'accepted' : 'rejected'\)/);
+});
+
 test('Treasure Hunter server flow uses persisted candidates only after activation and never drains expedition rewards for its origin', () => {
   const server = source('server.js');
   const activationStart = server.indexOf("onSocketEvent(socket, 'useTreasureHunter'");

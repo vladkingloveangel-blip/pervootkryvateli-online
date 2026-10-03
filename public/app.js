@@ -554,6 +554,16 @@
   socket.on('connect_error', () => {
     if (state.everConnected) showConnectionBanner('Сервер пока недоступен. Продолжаем переподключение…', 'warning');
   });
+  socket.on('allianceResolved', data => {
+    if (state.spectating || !data) return;
+    const otherId = data.fromId === state.myId ? data.toId : data.fromId;
+    const other = playerName(otherId);
+    if (data.status === 'accepted') enqueueToast(`Союз заключён: ${other}.`, 'success');
+    else if (data.status === 'rejected') enqueueToast(`Предложение союза отклонено: ${other}.`, 'neutral');
+    else if (data.status === 'cancelled') enqueueToast(`Предложение союза отменено: ${other}.`, 'neutral');
+    else if (data.status === 'invalid') enqueueToast(data.reason || 'Условия заключения союза изменились.', 'danger');
+  });
+
   socket.on('assignmentPenalty', data => {
     if (state.spectating) return;
     const due = Math.max(0, Number(data?.due) || 0);
@@ -894,6 +904,11 @@
   }
 
   function handleGameAck(res) { setError('gameError', res?.ok ? '' : (res?.error || 'Действие отклонено.')); }
+  function handleAllianceAck(res, successMessage = '') {
+    handleGameAck(res);
+    if (res?.ok && successMessage) enqueueToast(successMessage, 'success');
+    else if (res && res.ok === false) enqueueToast(res.error || 'Действие с союзом отклонено.', 'danger');
+  }
   function handleSoundAck(res, cue) {
     handleGameAck(res);
     if (res?.ok) playSoundCue(cue);
@@ -4742,6 +4757,7 @@
     const lines = [];
     if (allies.length) lines.push(`Союзники: ${allies.map(p => p.name).join(', ')}.`);
     else lines.push('Действующих союзов нет.');
+    lines.push('Союз можно предложить с любой точки карты. Нужны ваш ход, фаза действий, 1 действие, свободный слот союза у обоих игроков и подключённый адресат.');
 
     if (pending) {
       const from = playerName(pending.fromId);
@@ -4757,38 +4773,38 @@
         yes.type = 'button';
         yes.className = 'primary';
         yes.textContent = 'Принять союз';
-        yes.addEventListener('click', () => socket.emit('respondAlliance', { requestId: pending.id, accept: true }, handleGameAck));
+        yes.addEventListener('click', () => socket.emit('respondAlliance', { requestId: pending.id, accept: true }, res => handleAllianceAck(res)));
         const no = document.createElement('button');
         no.type = 'button';
         no.className = 'danger-soft';
         no.textContent = 'Отклонить';
-        no.addEventListener('click', () => socket.emit('respondAlliance', { requestId: pending.id, accept: false }, handleGameAck));
+        no.addEventListener('click', () => socket.emit('respondAlliance', { requestId: pending.id, accept: false }, res => handleAllianceAck(res)));
         actions.appendChild(yes); actions.appendChild(no);
       } else if (pending.viewerRole === 'sender') {
         const cancel = document.createElement('button');
         cancel.type = 'button';
         cancel.className = 'danger-soft';
         cancel.textContent = 'Отменить предложение';
-        cancel.addEventListener('click', () => socket.emit('cancelAllianceRequest', { requestId: pending.id }, handleGameAck));
+        cancel.addEventListener('click', () => socket.emit('cancelAllianceRequest', { requestId: pending.id }, res => handleAllianceAck(res)));
         actions.appendChild(cancel);
       }
       return;
     }
 
     const myTurn = r.activePlayerId === state.myId;
-    const canPropose = myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 && !r.pendingBattle;
-    const sameCellPlayers = allies.length ? [] : r.players.filter(p => p.id !== state.myId && p.row === mine.row && p.col === mine.col && !areAlliesClient(state.myId, p.id) && !(p.allyIds || []).length);
-    if (sameCellPlayers.length) {
+    const canPropose = myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending();
+    const eligiblePlayers = allies.length ? [] : r.players.filter(p => p.id !== state.myId && !areAlliesClient(state.myId, p.id) && !(p.allyIds || []).length);
+    if (eligiblePlayers.length) {
       const label = document.createElement('div');
       label.className = 'action-group-label';
       label.textContent = 'Заключить союз';
       actions.appendChild(label);
-      for (const p of sameCellPlayers) {
+      for (const p of eligiblePlayers) {
         const b = document.createElement('button');
         b.type = 'button';
         b.textContent = `Предложить союз · ${p.name}`;
         b.disabled = !canPropose || !p.connected;
-        b.addEventListener('click', () => socket.emit('requestAlliance', { targetPlayerId: p.id }, handleGameAck));
+        b.addEventListener('click', () => socket.emit('requestAlliance', { targetPlayerId: p.id }, res => handleAllianceAck(res, `Предложение союза отправлено: ${p.name}.`)));
         actions.appendChild(b);
       }
     }
