@@ -204,3 +204,15 @@ test('Mobile Home polish preserves safe areas, scrolling, and compact touch targ
   assert.ok(homeCss.includes('@media(max-height:620px) and (max-width:520px)'));
   assert.ok(html.includes('viewport-fit=cover'));
 });
+
+
+test('Desktop Home adaptation keeps the scene layout without touching game UI', () => {
+  assert.ok(homeCss.includes('/* Step 16: Desktop adaptation */'));
+  assert.ok(homeCss.includes('@media(min-width:901px)'));
+  assert.ok(homeCss.includes('width:min(100%,1280px)'));
+  assert.ok(homeCss.includes('.how-to-play-steps{grid-template-columns:repeat(2,minmax(0,1fr))}'));
+  assert.ok(homeCss.includes('.rules-content{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}'));
+  assert.ok(homeCss.includes('@media(min-width:1400px)'));
+  const step16 = homeCss.slice(homeCss.indexOf('/* Step 16: Desktop adaptation */'));
+  assert.equal(step16.includes('body.game-active'), false);
+});
