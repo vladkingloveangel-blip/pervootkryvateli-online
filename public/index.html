@@ -126,7 +126,18 @@
       </button>
     </section>
 
-    <section id="entry" class="panel entry-panel">
+    <section id="playFlow" class="play-flow hidden" aria-labelledby="playFlowTitle">
+      <div class="play-flow-head">
+        <button id="playFlowBackBtn" class="play-flow-back" type="button" aria-label="Назад на главную">←</button>
+        <div><span>ПУТЕШЕСТВИЕ</span><h1 id="playFlowTitle">Выберите путь</h1></div>
+      </div>
+      <div class="play-flow-actions">
+        <button id="playCreateChoiceBtn" class="play-choice primary" type="button"><strong>Создать игру</strong><small>Открыть новую комнату</small></button>
+        <button id="playJoinChoiceBtn" class="play-choice" type="button"><strong>Присоединиться</strong><small>Войти по коду комнаты</small></button>
+      </div>
+    </section>
+
+    <section id="entry" class="panel entry-panel hidden">
       <div id="myGamesPanel" class="my-games hidden">
         <div class="section-head"><h2>Мои игры</h2><button id="myGamesRefreshBtn" class="small">Обновить</button></div>
         <div id="myGamesList" class="admin-room-list" aria-live="polite"></div>
