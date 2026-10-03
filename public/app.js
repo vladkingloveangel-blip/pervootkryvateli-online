@@ -1,7 +1,7 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mapMovePending: false, lastAutoCenterSignature: '', resultQueue: [], activeResult: null, toastQueue: [], journalEntries: [], ambientSnapshot: null, targeting: null, rehydrateOnNextRoomState: false, islandSheetView: null, roomStateSeq: 0 };
+  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mapMovePending: false, lastAutoCenterSignature: '', resultQueue: [], activeResult: null, toastQueue: [], journalEntries: [], ambientSnapshot: null, targeting: null, rehydrateOnNextRoomState: false, islandSheetView: null, roomStateSeq: 0, homeAvailableRooms: [], authStartupMessage: '' };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
   const shipName = id => state.room?.shipCatalog?.[id]?.name || state.shipCatalog?.[id]?.name || $('shipSelect').querySelector(`option[value="${id}"]`)?.textContent || 'Корабль';
   fetch('/api/rules').then(response => response.ok ? response.json() : null).then(rules => {
@@ -458,6 +458,7 @@
     const request = ++myGamesRequest;
     const enabled = Boolean(state.accountUser && token);
     if (!enabled) {
+      syncHomeContinue([]);
       $('myGamesPanel').classList.add('hidden');
       $('myGamesList').replaceChildren();
       return;
@@ -467,6 +468,7 @@
       const result = await apiJson('/api/my-games', { cache: 'no-store' });
       if (request !== myGamesRequest || token !== state.accountToken) return;
       if (!result?.ok) throw new Error(result?.error || 'Не удалось загрузить игры.');
+      syncHomeContinue(result.rooms);
       const box = $('myGamesList');
       box.replaceChildren();
       if (!result.rooms.length) {
@@ -490,22 +492,15 @@
         const button = document.createElement('button');
         button.className = 'small primary';
         button.textContent = 'Вернуться в игру';
-        button.addEventListener('click', () => {
-          if (!state.socketConnected) return setError('myGamesError', 'Нет связи с сервером. Дождись подключения.');
-          button.disabled = true;
-          state.rehydrateOnNextRoomState = true;
-          socket.timeout(15000).emit('resumeRoom', { code: room.code, accountToken: state.accountToken }, (err, res) => {
-            button.disabled = false;
-            if (token !== state.accountToken) return;
-            if (err || !res?.ok) return setError('myGamesError', res?.error || 'Сервер не ответил. Попробуй ещё раз.');
-            acceptSession(res);
-          });
-        });
+        button.addEventListener('click', () => resumeAvailableRoom(room, button, 'myGamesError'));
         card.append(info, button);
         box.append(card);
       }
     } catch (err) {
-      if (request === myGamesRequest && token === state.accountToken) setError('myGamesError', err.message || 'Не удалось загрузить игры.');
+      if (request === myGamesRequest && token === state.accountToken) {
+        syncHomeContinue([]);
+        setError('myGamesError', err.message || 'Не удалось загрузить игры.');
+      }
     }
   }
 
@@ -1029,7 +1024,9 @@
     state.profileOpen = false;
     $('authPanel').classList.add('hidden');
     $('adminPanel').classList.add('hidden');
+    setError('homeDashboardError');
     showHomeScreen('homeDashboard');
+    if (state.accountUser) loadMyGames();
   }
 
   function openWelcomeAction() {
@@ -1038,6 +1035,64 @@
       return;
     }
     showHomeDashboard();
+  }
+
+  function syncHomeContinue(rooms) {
+    const available = Array.isArray(rooms) ? rooms : [];
+    state.homeAvailableRooms = available;
+    const button = $('homeContinueBtn');
+    const detail = $('homeContinueDetail');
+    const hasRooms = available.length > 0;
+    button.classList.toggle('hidden', !hasRooms);
+    $('homeNewGameBtn').classList.toggle('primary', !hasRooms);
+    if (!hasRooms) {
+      detail.textContent = 'Вернуться в незавершённую партию';
+      return;
+    }
+    if (available.length > 1) {
+      detail.textContent = 'Несколько незавершённых партий · выбрать';
+      return;
+    }
+    const room = available[0];
+    detail.textContent = room.started
+      ? 'Комната ' + room.code + ' · раунд ' + room.round + ', круг ' + room.circle + (room.isYourTurn ? ' · твой ход' : '')
+      : 'Комната ' + room.code + ' · лобби';
+  }
+
+  function resumeAvailableRoom(room, button, errorId) {
+    if (!room?.code) return;
+    if (!state.socketConnected) {
+      setError(errorId, 'Нет связи с сервером. Дождись подключения.');
+      return;
+    }
+    const token = state.accountToken;
+    button.disabled = true;
+    state.rehydrateOnNextRoomState = true;
+    socket.timeout(15000).emit('resumeRoom', { code: room.code, accountToken: token }, (err, res) => {
+      button.disabled = false;
+      if (token !== state.accountToken) return;
+      if (err || !res?.ok) {
+        state.rehydrateOnNextRoomState = false;
+        setError(errorId, res?.error || 'Сервер не ответил. Попробуй ещё раз.');
+        loadMyGames();
+        return;
+      }
+      acceptSession(res);
+    });
+  }
+
+  function continueFromHome() {
+    const rooms = state.homeAvailableRooms;
+    if (!rooms.length) {
+      loadMyGames();
+      return;
+    }
+    setError('homeDashboardError');
+    if (rooms.length > 1) {
+      openMyGames();
+      return;
+    }
+    resumeAvailableRoom(rooms[0], $('homeContinueBtn'), 'homeDashboardError');
   }
 
   function openMyGames() {
@@ -1068,6 +1123,7 @@
   }
 
   $('homePlayBtn').addEventListener('click', openWelcomeAction);
+  $('homeContinueBtn').addEventListener('click', continueFromHome);
   $('homeNewGameBtn').addEventListener('click', () => openPlayEntry('create'));
   $('homeJoinGameBtn').addEventListener('click', () => openPlayEntry('join'));
   $('homeDashboardGamesBtn').addEventListener('click', openMyGames);
