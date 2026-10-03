@@ -81,21 +81,6 @@ body.home-active .home-dashboard-links>button:active{transform:translateY(1px)}
   body.home-active .home-dashboard-links>button{min-height:68px}
 }
 
-/* Step 5: Play flow */
-body.home-active #playFlow{position:relative;z-index:2;width:min(100%,560px);margin:clamp(48px,12dvh,140px) auto 0;padding:18px;box-sizing:border-box;border:1px solid rgba(222,187,105,.55);border-radius:20px;background:linear-gradient(180deg,rgba(7,37,45,.9),rgba(4,24,31,.95));box-shadow:0 18px 48px rgba(0,0,0,.38),inset 0 0 0 1px rgba(255,238,190,.06);backdrop-filter:blur(8px)}
-body.home-active #playFlow.hidden{display:none}
-body.home-active .play-flow-head{display:flex;align-items:center;gap:14px;margin-bottom:18px}
-body.home-active .play-flow-head>div{min-width:0}
-body.home-active .play-flow-head span{display:block;font-size:10px;font-weight:700;letter-spacing:.2em;color:rgba(235,207,139,.72)}
-body.home-active .play-flow-head h1{margin:3px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:clamp(24px,7vw,34px);color:#f0dda8}
-body.home-active .play-flow-back{display:grid;place-items:center;width:42px;height:42px;min-width:42px;padding:0;border:1px solid rgba(220,183,96,.52);border-radius:50%;background:rgba(7,32,40,.86);color:#ecd79e;font-size:22px}
-body.home-active .play-flow-actions{display:grid;gap:10px}
-body.home-active .play-choice{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:100%;min-height:78px;padding:15px 18px;border:1px solid rgba(198,165,91,.42);border-radius:14px;background:rgba(11,47,55,.84);color:#e9ddb8;text-align:left}
-body.home-active .play-choice.primary{border-color:rgba(232,194,104,.78);background:linear-gradient(180deg,rgba(39,82,80,.94),rgba(11,47,54,.96))}
-body.home-active .play-choice strong{font-family:Georgia,'Times New Roman',serif;font-size:21px}
-body.home-active .play-choice small{font-size:12px;color:rgba(226,221,197,.7)}
-@media(max-width:520px){body.home-active #playFlow{width:calc(100% - 8px);margin-top:clamp(34px,8dvh,80px);padding:14px}}
-
 /* Step 6: Create and Join */
 body.home-active #entry.entry-panel{position:relative;z-index:2;width:min(100%,560px);margin:clamp(36px,8dvh,96px) auto 0;padding:18px;border:1px solid rgba(222,187,105,.55);border-radius:20px;background:linear-gradient(180deg,rgba(7,37,45,.92),rgba(4,24,31,.97));box-shadow:0 18px 48px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,238,190,.06);backdrop-filter:blur(8px)}
 body.home-active #entry.entry-panel.hidden{display:none}
@@ -126,13 +111,13 @@ body.home-active .my-games-head h1{margin:3px 0 4px;font-family:Georgia,'Times N
 body.home-active .my-games-head p{margin:0;font-size:12px}
 body.home-active .my-games-refresh{display:grid;place-items:center;width:42px;height:42px;padding:0;border:1px solid rgba(220,183,96,.52);border-radius:50%;background:rgba(7,32,40,.86);color:#ecd79e;font-size:22px}
 body.home-active .my-games-list{display:grid;gap:10px;min-height:56px}
-body.home-active .my-games-list>.admin-room-card{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:14px;padding:14px;border:1px solid rgba(198,165,91,.34);border-radius:14px;background:rgba(8,39,47,.82)}
-body.home-active .my-games-list>.admin-room-card>div{min-width:0}
-body.home-active .my-games-list>.admin-room-card strong{color:#f0dda8;font-family:Georgia,'Times New Roman',serif;font-size:18px}
-body.home-active .my-games-list>.admin-room-card .muted{margin-top:3px;font-size:11px;overflow-wrap:anywhere}
-body.home-active .my-games-list>.admin-room-card button{min-height:42px;white-space:nowrap}
+body.home-active .my-games-list>.home-game-card{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:14px;padding:14px;border:1px solid rgba(198,165,91,.34);border-radius:14px;background:rgba(8,39,47,.82)}
+body.home-active .my-games-list>.home-game-card>div{min-width:0}
+body.home-active .my-games-list>.home-game-card strong{color:#f0dda8;font-family:Georgia,'Times New Roman',serif;font-size:18px}
+body.home-active .my-games-list>.home-game-card .muted{margin-top:3px;font-size:11px;overflow-wrap:anywhere}
+body.home-active .my-games-list>.home-game-card button{min-height:42px;white-space:nowrap}
 body.home-active #myGamesError{min-height:18px;margin:10px 0 0}
-@media(max-width:520px){body.home-active #myGamesPanel{width:calc(100% - 8px);margin-top:clamp(24px,5dvh,52px);padding:14px}body.home-active .my-games-head{gap:9px}body.home-active .my-games-list>.admin-room-card{grid-template-columns:1fr}body.home-active .my-games-list>.admin-room-card button{width:100%}}
+@media(max-width:520px){body.home-active #myGamesPanel{width:calc(100% - 8px);margin-top:clamp(24px,5dvh,52px);padding:14px}body.home-active .my-games-head{gap:9px}body.home-active .my-games-list>.home-game-card{grid-template-columns:1fr}body.home-active .my-games-list>.home-game-card button{width:100%}}
 
 /* Step 8: Profile */
 body.home-active #profilePanel.profile-panel{position:relative;z-index:2;width:min(100%,680px);margin:clamp(24px,5dvh,64px) auto 0;padding:18px;border:1px solid rgba(222,187,105,.55);border-radius:20px;background:linear-gradient(180deg,rgba(7,37,45,.94),rgba(4,24,31,.98));box-shadow:0 18px 48px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,238,190,.06);backdrop-filter:blur(8px)}
@@ -262,16 +247,16 @@ body.home-active #authPanel #authError{margin-bottom:0;text-align:center}
   body.home-active #homeShell{min-height:100svh;height:100dvh;padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right));padding-bottom:max(10px,env(safe-area-inset-bottom))}
   body.home-active #homeShell button,body.home-active #homeShell input,body.home-active #homeShell select{font-size:max(16px,1em)}
   body.home-active #homeShell button{touch-action:manipulation}
-  body.home-active .home-icon-button,body.home-active .play-flow-back,body.home-active .my-games-refresh{min-width:33px;min-height:33px}
+  body.home-active .home-icon-button,body.home-active .home-screen-back,body.home-active .my-games-refresh{min-width:33px;min-height:33px}
   body.home-active .home-topbar{padding-top:max(8px,env(safe-area-inset-top));gap:8px}
   body.home-active .home-logo{max-width:min(54vw,230px)}
   body.home-active .home-top-actions{gap:7px}
   body.home-active .connection{max-width:34vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   body.home-active #homePrimaryAction{padding-bottom:max(8dvh,env(safe-area-inset-bottom))}
   body.home-active .home-play-button{width:min(88vw,340px);min-height:68px}
-  body.home-active #playFlow.play-flow,body.home-active #entry.entry-panel,body.home-active #myGamesPanel.my-games-panel,body.home-active #profilePanel.profile-panel,body.home-active #settingsPanel.settings-panel,body.home-active #howToPlayPanel.how-to-play-panel,body.home-active #rulesPanel.rules-panel,body.home-active #authPanel.auth-panel{max-height:calc(100dvh - max(82px,env(safe-area-inset-top)) - max(12px,env(safe-area-inset-bottom)));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
-  body.home-active #playFlow.play-flow,body.home-active #entry.entry-panel,body.home-active #myGamesPanel.my-games-panel,body.home-active #profilePanel.profile-panel,body.home-active #settingsPanel.settings-panel{margin-top:12px}
-  body.home-active .play-flow-head,body.home-active .entry-head,body.home-active .my-games-head,body.home-active .profile-home-head,body.home-active .settings-home-head,body.home-active .how-to-play-head,body.home-active .rules-head{gap:10px}
+  body.home-active #entry.entry-panel,body.home-active #myGamesPanel.my-games-panel,body.home-active #profilePanel.profile-panel,body.home-active #settingsPanel.settings-panel,body.home-active #howToPlayPanel.how-to-play-panel,body.home-active #rulesPanel.rules-panel,body.home-active #authPanel.auth-panel{max-height:calc(100dvh - max(82px,env(safe-area-inset-top)) - max(12px,env(safe-area-inset-bottom)));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  body.home-active #entry.entry-panel,body.home-active #myGamesPanel.my-games-panel,body.home-active #profilePanel.profile-panel,body.home-active #settingsPanel.settings-panel{margin-top:12px}
+  body.home-active .entry-head,body.home-active .my-games-head,body.home-active .profile-home-head,body.home-active .settings-home-head,body.home-active .how-to-play-head,body.home-active .rules-head{gap:10px}
   body.home-active .entry-captain-fields,body.home-active #profilePanel .profile-grid,body.home-active #profilePanel .profile-password-grid{grid-template-columns:minmax(0,1fr)}
   body.home-active input,body.home-active select{max-width:100%}
   body.home-active .settings-row{align-items:flex-start}
@@ -308,9 +293,8 @@ body.home-active #authPanel #authError{margin-bottom:0;text-align:center}
   body.home-active #homePrimaryAction{min-height:clamp(320px,52dvh,570px);align-items:flex-end;padding-bottom:clamp(48px,8dvh,96px)}
   body.home-active .home-play-button{width:380px;min-height:108px}
   body.home-active .home-play-button strong{font-size:46px}
-  body.home-active #playFlow,body.home-active #entry.entry-panel,body.home-active #settingsPanel.settings-panel,body.home-active #authPanel.auth-panel{margin-left:clamp(3vw,8vw,110px);margin-right:auto}
+  body.home-active #entry.entry-panel,body.home-active #settingsPanel.settings-panel,body.home-active #authPanel.auth-panel{margin-left:clamp(3vw,8vw,110px);margin-right:auto}
   body.home-active #myGamesPanel.my-games-panel,body.home-active #profilePanel.profile-panel,body.home-active #howToPlayPanel.how-to-play-panel,body.home-active #rulesPanel.rules-panel{margin-left:auto;margin-right:auto}
-  body.home-active #playFlow{width:min(48vw,600px);margin-top:clamp(60px,11dvh,120px)}
   body.home-active #entry.entry-panel{width:min(52vw,640px);margin-top:clamp(48px,8dvh,92px)}
   body.home-active #authPanel.auth-panel{width:min(40vw,470px);margin-top:clamp(64px,11dvh,120px)}
   body.home-active #settingsPanel.settings-panel{width:min(52vw,650px);margin-top:clamp(48px,8dvh,86px)}
@@ -343,3 +327,116 @@ body.home-active .profile-avatar-option img{width:100%;height:100%;display:block
 body.home-active .profile-avatar-option.selected{border-color:#e2c27d;box-shadow:0 0 0 2px rgba(226,194,125,.32),0 0 18px rgba(226,194,125,.2)}
 body.home-active .profile-avatar-option.selected::after{content:'✓';position:absolute;right:2px;bottom:2px;width:20px;height:20px;display:grid;place-items:center;border-radius:50%;background:#d5b46c;color:#071a21;font-weight:900;font-size:13px}
 @media(max-width:420px){body.home-active .profile-avatar-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}}
+
+
+/* Home v2: unified internal screen system */
+body.home-active .home-screen{
+  position:relative;z-index:2;box-sizing:border-box;
+  width:min(100%,760px);
+  max-height:calc(100dvh - max(112px,env(safe-area-inset-top)) - max(14px,env(safe-area-inset-bottom)));
+  margin:clamp(12px,3dvh,30px) auto 0;padding:18px;
+  overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  border:1px solid rgba(222,187,105,.55);border-radius:20px;
+  background:linear-gradient(180deg,rgba(7,37,45,.95),rgba(4,24,31,.985));
+  box-shadow:0 18px 48px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,238,190,.06);
+  backdrop-filter:blur(8px)
+}
+body.home-active .home-screen.hidden{display:none}
+body.home-active #entry.home-screen{width:min(100%,620px)}
+body.home-active #settingsPanel.home-screen{width:min(100%,650px)}
+body.home-active #myGamesPanel.home-screen{width:min(100%,760px)}
+body.home-active #profilePanel.home-screen{width:min(100%,780px)}
+body.home-active #howToPlayPanel.home-screen{width:min(100%,800px)}
+body.home-active #rulesPanel.home-screen{width:min(100%,920px)}
+body.home-active .home-screen-head{
+  display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:12px;
+  margin:0 0 16px
+}
+body.home-active .home-screen-head.my-games-head{grid-template-columns:auto minmax(0,1fr) auto}
+body.home-active .home-screen-head>div{min-width:0}
+body.home-active .home-screen-head span{
+  display:block;margin:0 0 3px;font-size:10px;font-weight:700;letter-spacing:.2em;
+  color:rgba(235,207,139,.72)
+}
+body.home-active .home-screen-head h1{
+  margin:0 0 4px;font-family:Georgia,'Times New Roman',serif;
+  font-size:clamp(25px,7vw,35px);line-height:1.05;color:#f0dda8
+}
+body.home-active .home-screen-head p{margin:0;font-size:12px;line-height:1.35;color:rgba(226,221,197,.68)}
+body.home-active .home-screen-back,
+body.home-active .my-games-refresh{
+  display:grid;place-items:center;width:42px;height:42px;min-width:42px;min-height:42px;padding:0;
+  border:1px solid rgba(220,183,96,.52);border-radius:50%;
+  background:rgba(7,32,40,.86);color:#ecd79e;font-size:22px
+}
+body.home-active .home-screen-back:active,
+body.home-active .my-games-refresh:active{transform:translateY(1px)}
+body.home-active .profile-section,
+body.home-active .settings-section,
+body.home-active .how-to-play-steps article,
+body.home-active .rules-content section{
+  border-color:rgba(198,165,91,.24);
+  background:rgba(3,25,32,.62)
+}
+body.home-active .my-games-list>.home-game-card{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:14px;
+  padding:14px;border:1px solid rgba(198,165,91,.34);border-radius:15px;
+  background:linear-gradient(180deg,rgba(10,45,53,.86),rgba(5,29,36,.9));
+  box-shadow:0 8px 22px rgba(0,0,0,.2)
+}
+body.home-active .my-games-list>.home-game-card>div{min-width:0}
+body.home-active .my-games-list>.home-game-card strong{
+  color:#f0dda8;font-family:Georgia,'Times New Roman',serif;font-size:18px
+}
+body.home-active .my-games-list>.home-game-card .muted{margin-top:4px;font-size:11px;line-height:1.35;overflow-wrap:anywhere}
+body.home-active .my-games-list>.home-game-card button{min-height:42px;white-space:nowrap}
+body.home-active #entry input,
+body.home-active #entry select,
+body.home-active #profilePanel input{min-height:46px}
+body.home-active #entry .entry-submit,
+body.home-active #profilePanel .profile-submit,
+body.home-active .how-to-rules-link,
+body.home-active #settingsInstallBtn{min-height:42px}
+@media(max-width:520px){
+  body.home-active .home-screen{
+    width:calc(100% - 4px)!important;
+    max-height:calc(100dvh - max(88px,env(safe-area-inset-top)) - max(10px,env(safe-area-inset-bottom)));
+    margin-top:8px!important;padding:14px
+  }
+  body.home-active .home-screen-head{gap:10px;margin-bottom:13px}
+  body.home-active .home-screen-head h1{font-size:clamp(24px,8vw,32px)}
+  body.home-active .home-screen-head p{font-size:11px}
+  body.home-active .home-screen-back,
+  body.home-active .my-games-refresh{width:38px;height:38px;min-width:38px;min-height:38px}
+  body.home-active .my-games-list>.home-game-card{grid-template-columns:minmax(0,1fr);gap:10px;padding:12px}
+  body.home-active .my-games-list>.home-game-card button{width:100%}
+  body.home-active .profile-section,
+  body.home-active .settings-section,
+  body.home-active .rules-content section{padding:12px}
+}
+@media(max-width:360px){
+  body.home-active .home-screen{padding:12px}
+  body.home-active .home-screen-head{gap:8px}
+  body.home-active .home-screen-back,
+  body.home-active .my-games-refresh{width:35px;height:35px;min-width:35px;min-height:35px}
+}
+@media(max-height:620px) and (max-width:520px){
+  body.home-active .home-screen{
+    max-height:calc(100dvh - max(76px,env(safe-area-inset-top)) - max(8px,env(safe-area-inset-bottom)));
+    margin-top:4px!important
+  }
+  body.home-active .home-screen-head{margin-bottom:10px}
+}
+@media(min-width:901px){
+  body.home-active .home-screen{
+    margin:clamp(18px,3dvh,34px) auto 0!important;
+    max-height:calc(100dvh - 154px);padding:20px
+  }
+  body.home-active #entry.home-screen{width:min(52vw,650px)}
+  body.home-active #settingsPanel.home-screen{width:min(52vw,680px)}
+  body.home-active #myGamesPanel.home-screen{width:min(72vw,880px)}
+  body.home-active #profilePanel.home-screen{width:min(72vw,840px)}
+  body.home-active #howToPlayPanel.home-screen{width:min(74vw,860px)}
+  body.home-active #rulesPanel.home-screen{width:min(80vw,980px)}
+  body.home-active .home-screen-head h1{font-size:34px}
+}
