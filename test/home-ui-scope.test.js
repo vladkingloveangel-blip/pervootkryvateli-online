@@ -16,7 +16,7 @@ test('home shell and active game are sibling UI scopes', () => {
   assert.ok(homeClose > homeOpen);
   assert.ok(game > homeClose, '#game must stay outside #homeShell');
   const homeMarkup = html.slice(homeOpen, homeClose);
-  for (const id of ['authPanel', 'accountBar', 'profilePanel', 'homePrimaryAction', 'myGamesPanel', 'playFlow', 'entry']) {
+  for (const id of ['authPanel', 'accountBar', 'profilePanel', 'settingsPanel', 'homePrimaryAction', 'myGamesPanel', 'playFlow', 'entry']) {
     assert.match(homeMarkup, new RegExp('id="' + id + '"'));
   }
 });
@@ -46,7 +46,7 @@ test('home top area uses authored assets without entering game scope', () => {
   assert.match(html, /id="homeSettingsBtn"/);
   assert.ok(html.includes('src="/assets/settings-icon.png"'));
   assert.ok(app.includes("$('homeProfileBtn').addEventListener('click', openProfile)"));
-  assert.ok(app.includes("$('homeSettingsBtn').addEventListener('click', openProfile)"));
+  assert.ok(app.includes("$('homeSettingsBtn').addEventListener('click', openSettings)"));
 });
 
 
@@ -107,4 +107,16 @@ test('Profile is a dedicated Home screen and preserves account APIs', () => {
   assert.ok(app.includes("$('homeAvatarInitial').textContent"));
   assert.ok(app.includes("apiJson('/api/auth/profile'"));
   assert.ok(app.includes("apiJson('/api/auth/change-password'"));
+});
+
+
+test('Settings is separate from Profile and persists real sound controls', () => {
+  assert.ok(html.includes('id="settingsPanel" class="panel settings-panel hidden"'));
+  assert.ok(html.includes('id="settingsSoundEnabled"'));
+  assert.ok(html.includes('id="settingsSoundVolume"'));
+  assert.ok(html.includes('id="settingsInstallSection"'));
+  assert.ok(app.includes("$('homeSettingsBtn').addEventListener('click', openSettings)"));
+  assert.ok(app.includes('function syncSettingsControls()'));
+  assert.ok(app.includes('localStorage.setItem(SOUND_STORAGE_KEY, JSON.stringify(soundState))'));
+  assert.ok(app.includes("$('settingsInstallBtn').addEventListener('click'"));
 });
