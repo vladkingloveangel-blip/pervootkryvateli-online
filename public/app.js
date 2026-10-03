@@ -777,10 +777,31 @@
   $('loginBtn').addEventListener('click', () => submitAuth('login'));
   $('registerBtn').addEventListener('click', () => submitAuth('register'));
   $('authPassword').addEventListener('keydown', e => { if (e.key === 'Enter') submitAuth('login'); });
-  $('homePlayBtn').addEventListener('click', () => {
-    $('entry').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    $('createBtn').focus({ preventScroll: true });
-  });
+  function showHomePrimary() {
+    $('playFlow').classList.add('hidden');
+    $('entry').classList.add('hidden');
+    $('homePrimaryAction').classList.remove('hidden');
+  }
+
+  function openPlayFlow() {
+    $('homePrimaryAction').classList.add('hidden');
+    $('entry').classList.add('hidden');
+    $('playFlow').classList.remove('hidden');
+    $('playCreateChoiceBtn').focus({ preventScroll: true });
+  }
+
+  function openPlayEntry(mode) {
+    $('homePrimaryAction').classList.add('hidden');
+    $('playFlow').classList.add('hidden');
+    $('entry').classList.remove('hidden');
+    if (mode === 'join') $('codeInput').focus({ preventScroll: true });
+    else $('createBtn').focus({ preventScroll: true });
+  }
+
+  $('homePlayBtn').addEventListener('click', openPlayFlow);
+  $('playFlowBackBtn').addEventListener('click', showHomePrimary);
+  $('playCreateChoiceBtn').addEventListener('click', () => openPlayEntry('create'));
+  $('playJoinChoiceBtn').addEventListener('click', () => openPlayEntry('join'));
   $('profileOpenBtn').addEventListener('click', openProfile);
   $('homeProfileBtn').addEventListener('click', openProfile);
   $('homeSettingsBtn').addEventListener('click', openProfile);
