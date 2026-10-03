@@ -318,14 +318,22 @@ test('Final Home redesign contract keeps the new shell clean and party UI isolat
 });
 
 
-test('Home audio stays outside the active party and shares sound settings', () => {
+test('Home audio unlocks from a user gesture and stays outside the active party', () => {
   assert.ok(app.includes("function homeAudioAllowed()"));
   assert.ok(app.includes("document.body.classList.contains('home-active')"));
+  assert.ok(app.includes("&& uiAudioUnlocked"));
+  assert.ok(app.includes("uiAudioContext?.state === 'running'"));
+  assert.ok(app.includes("async function ensureUiAudioUnlocked()"));
+  assert.ok(app.includes("if (uiAudioContext.state === 'suspended') await uiAudioContext.resume()"));
+  assert.ok(app.includes("document.addEventListener('pointerdown', unlockUiAudioFromGesture, true)"));
+  assert.ok(app.includes("document.addEventListener('keydown', unlockUiAudioFromGesture, true)"));
   assert.ok(app.includes("function scheduleHomeMusic()"));
   assert.ok(app.includes("function stopHomeMusic()"));
   assert.ok(app.includes("$('homeShell').addEventListener('click'"));
   assert.ok(app.includes("playSoundCue('confirm')"));
   assert.ok(app.includes("document.addEventListener('visibilitychange', syncHomeMusic)"));
+  assert.ok(app.includes("const notes = [293.66, 349.23, 392, 440"));
+  assert.ok(app.includes("confirm: [[520, .065, .09]]"));
   const musicStart = app.indexOf('  function homeAudioAllowed()');
   const musicEnd = app.indexOf('  // Compatibility marker', musicStart);
   const homeAudio = app.slice(musicStart, musicEnd);
