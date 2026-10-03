@@ -16,7 +16,7 @@ test('home shell and active game are sibling UI scopes', () => {
   assert.ok(homeClose > homeOpen);
   assert.ok(game > homeClose, '#game must stay outside #homeShell');
   const homeMarkup = html.slice(homeOpen, homeClose);
-  for (const id of ['authPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel', 'homePrimaryAction', 'homeDashboard', 'myGamesPanel', 'playFlow', 'entry']) {
+  for (const id of ['authPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel', 'homePrimaryAction', 'homeDashboard', 'myGamesPanel', 'entry']) {
     assert.match(homeMarkup, new RegExp('id="' + id + '"'));
   }
 });
@@ -104,14 +104,23 @@ test('Continue is shown only from authoritative unfinished room data', () => {
 
 
 
-test('Play flow stays client-side until existing create/join actions', () => {
-  assert.ok(html.includes('id="playFlow"'));
-  assert.ok(html.includes('id="playCreateChoiceBtn"'));
-  assert.ok(html.includes('id="playJoinChoiceBtn"'));
-  assert.ok(app.includes("$('playCreateChoiceBtn').addEventListener('click', () => openPlayEntry('create'))"));
-  assert.ok(app.includes("$('playJoinChoiceBtn').addEventListener('click', () => openPlayEntry('join'))"));
-  assert.ok(app.includes("socket.emit('createRoom', profile()"));
-  assert.ok(app.includes("socket.emit('joinRoom', { ...profile(), code"));
+test('Internal Home screens share one shell and legacy play chooser is removed', () => {
+  for (const id of ['entry', 'myGamesPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel']) {
+    assert.match(html, new RegExp('id="' + id + '" class="[^"]*home-screen'));
+  }
+  for (const headClass of ['entry-head', 'my-games-head', 'profile-home-head', 'settings-home-head', 'how-to-play-head', 'rules-head']) {
+    assert.match(html, new RegExp('class="[^"]*home-screen-head[^"]*' + headClass));
+  }
+  assert.equal(html.includes('id="playFlow"'), false);
+  assert.equal(app.includes('function openPlayFlow()'), false);
+  assert.equal(app.includes("showHomeScreen('playFlow')"), false);
+  assert.equal(homeCss.includes('#playFlow'), false);
+  assert.ok(homeCss.includes('/* Home v2: unified internal screen system */'));
+  assert.ok(homeCss.includes('body.home-active .home-screen{'));
+  assert.ok(homeCss.includes('body.home-active .home-screen-head{'));
+  assert.ok(homeCss.includes('body.home-active .home-screen-back,'));
+  assert.ok(app.includes("card.className = 'home-game-card'"));
+  assert.ok(homeCss.includes('.my-games-list>.home-game-card'));
 });
 
 
@@ -119,7 +128,8 @@ test('Create and Join use separate entry modes while preserving room events', ()
   assert.ok(html.includes('data-entry-mode="create"'));
   assert.ok(html.includes('id="createEntryActions"'));
   assert.ok(html.includes('id="joinEntryActions" class="join-entry-actions hidden"'));
-  assert.ok(html.includes('id="entryBackBtn"'));
+  assert.ok(html.includes('id="entry" class="panel home-screen entry-panel hidden"'));
+  assert.ok(html.includes('id="entryBackBtn" class="home-screen-back"'));
   assert.ok(app.includes("$('entry').dataset.entryMode = joinMode ? 'join' : 'create'"));
   assert.ok(app.includes("$('createEntryActions').classList.toggle('hidden', joinMode)"));
   assert.ok(app.includes("$('joinEntryActions').classList.toggle('hidden', !joinMode)"));
@@ -130,7 +140,7 @@ test('Create and Join use separate entry modes while preserving room events', ()
 
 
 test('My Games is a dedicated Home state and preserves resume flow', () => {
-  assert.ok(html.includes('id="myGamesPanel" class="my-games-panel hidden"'));
+  assert.ok(html.includes('id="myGamesPanel" class="home-screen my-games-panel hidden"'));
   assert.ok(html.includes('id="myGamesBackBtn"'));
   assert.ok(html.includes('id="myGamesRefreshBtn"'));
   assert.ok(html.includes('id="myGamesList" class="my-games-list"'));
@@ -143,7 +153,7 @@ test('My Games is a dedicated Home state and preserves resume flow', () => {
 
 
 test('Profile is a dedicated Home screen and preserves account APIs', () => {
-  assert.ok(html.includes('id="profilePanel" class="panel profile-panel hidden"'));
+  assert.ok(html.includes('id="profilePanel" class="panel home-screen profile-panel hidden"'));
   assert.ok(html.includes('id="profileAvatarInitial"'));
   assert.ok(html.includes('id="profileIdentityName"'));
   assert.ok(html.includes('id="profileIdentityLogin"'));
@@ -156,7 +166,7 @@ test('Profile is a dedicated Home screen and preserves account APIs', () => {
 
 
 test('Settings is separate from Profile and persists real sound controls', () => {
-  assert.ok(html.includes('id="settingsPanel" class="panel settings-panel hidden"'));
+  assert.ok(html.includes('id="settingsPanel" class="panel home-screen settings-panel hidden"'));
   assert.ok(html.includes('id="settingsSoundEnabled"'));
   assert.ok(html.includes('id="settingsSoundVolume"'));
   assert.ok(html.includes('id="settingsInstallSection"'));
@@ -168,7 +178,7 @@ test('Settings is separate from Profile and persists real sound controls', () =>
 
 
 test('How to Play is a dedicated Home guide without changing game help', () => {
-  assert.ok(html.includes('id="howToPlayPanel" class="panel how-to-play-panel hidden"'));
+  assert.ok(html.includes('id="howToPlayPanel" class="panel home-screen how-to-play-panel hidden"'));
   assert.ok(html.includes('data-home-menu="how-to"'));
   assert.ok(html.includes('id="howToRulesBtn"'));
   assert.ok(app.includes('function openHowToPlay()'));
@@ -179,7 +189,7 @@ test('How to Play is a dedicated Home guide without changing game help', () => {
 
 
 test('Rules is a dedicated Home reader linked from How to Play', () => {
-  assert.ok(html.includes('id="rulesPanel" class="panel rules-panel hidden"'));
+  assert.ok(html.includes('id="rulesPanel" class="panel home-screen rules-panel hidden"'));
   assert.ok(html.includes('data-rules-target="rulesBasics"'));
   assert.ok(html.includes('data-rules-target="rulesFleet"'));
   assert.ok(html.includes('data-rules-target="rulesIslands"'));
@@ -225,7 +235,7 @@ test('Authentication has separate login and registration modes without changing 
 
 test('Welcome is structurally separate from internal Home screens', () => {
   assert.ok(app.includes("const WELCOME_SCREEN_ID = 'homePrimaryAction'"));
-  assert.ok(app.includes("const HOME_SCREEN_IDS = ['homeDashboard', 'playFlow', 'entry', 'myGamesPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel']"));
+  assert.ok(app.includes("const HOME_SCREEN_IDS = ['homeDashboard', 'entry', 'myGamesPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel']"));
   assert.ok(app.includes('function hideWelcomeScreen()'));
   assert.ok(app.includes('function hideHomeScreens()'));
   assert.ok(app.includes('function showHomeScreen(id)'));
@@ -235,7 +245,6 @@ test('Welcome is structurally separate from internal Home screens', () => {
   assert.ok(app.includes('function showHomePrimary()'));
   assert.ok(app.includes('showWelcomeScreen();'));
   assert.ok(app.includes("showHomeScreen('homeDashboard')"));
-  assert.ok(app.includes("showHomeScreen('playFlow')"));
   assert.ok(app.includes("showHomeScreen('entry')"));
   assert.ok(app.includes("showHomeScreen('myGamesPanel')"));
   assert.ok(app.includes("showHomeScreen('profilePanel')"));
@@ -252,6 +261,10 @@ test('Mobile Home polish preserves safe areas, scrolling, and compact touch targ
   assert.ok(homeCss.includes('height:100dvh'));
   assert.ok(homeCss.includes('env(safe-area-inset-bottom)'));
   assert.ok(homeCss.includes('min-width:33px;min-height:33px'));
+  assert.ok(homeCss.includes('body.home-active .home-screen{'));
+  assert.ok(homeCss.includes('max-height:calc(100dvh - max(88px,env(safe-area-inset-top))'));
+  assert.ok(homeCss.includes('body.home-active .home-screen-back,'));
+  assert.ok(homeCss.includes('min-width:38px;min-height:38px'));
   assert.ok(homeCss.includes('overscroll-behavior:contain'));
   assert.ok(homeCss.includes('-webkit-overflow-scrolling:touch'));
   assert.ok(homeCss.includes('@media(max-height:620px) and (max-width:520px)'));
@@ -262,6 +275,9 @@ test('Mobile Home polish preserves safe areas, scrolling, and compact touch targ
 test('Desktop Home adaptation keeps the scene layout without touching game UI', () => {
   assert.ok(homeCss.includes('/* Step 16: Desktop adaptation */'));
   assert.ok(homeCss.includes('@media(min-width:901px)'));
+  assert.ok(homeCss.includes('body.home-active .home-screen{'));
+  assert.ok(homeCss.includes('body.home-active #rulesPanel.home-screen{width:min(80vw,980px)}'));
+  assert.ok(homeCss.includes('margin:clamp(18px,3dvh,34px) auto 0!important'));
   assert.ok(homeCss.includes('width:min(100%,1280px)'));
   assert.ok(homeCss.includes('.how-to-play-steps{grid-template-columns:repeat(2,minmax(0,1fr))}'));
   assert.ok(homeCss.includes('.rules-content{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}'));
