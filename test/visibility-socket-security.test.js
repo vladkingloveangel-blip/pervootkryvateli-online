@@ -427,7 +427,8 @@ test('4.7 real sockets isolate owner/opponent/admin state and Scout grants acros
   const turnNo = restartA.personalTurnNo;
   restartB.ducats = 919;
   restartB.debt = 929;
-  restartA.character = 'scout'; // test-fixture rearm so a second real use can replace the current grant.
+  restartA.character = 'scout'; // emulate a newly replaced Scout, which resets once-per-round usage.
+  restartA.characterUsedRound = null;
   room.actionsLeft = 4;
   h.writeDatabase(db);
   await h.start();

@@ -833,7 +833,7 @@ test('finished persisted room restart resume projects identical public result wi
 
 test('navigation die is uniformly limited to 2 through 5', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
-  const match = source.match(/function rollD6\\(\\) \\{([\\s\\S]*?)\\}/);
+  const match = source.match(/function rollD6\(\) \{([\s\S]*?)\}/);
   assert.ok(match, 'rollD6 source');
   const evaluate = new Function('Math', 'BALANCE', match[1]);
   const BALANCE = { session: { dieSides: 6 } };

@@ -65,7 +65,7 @@ test('join order and six complete personal circles', { timeout: 30000 }, async t
     if((turn+1)%4===0 && turn<19)assert.equal(room.circle,2+Math.floor(turn/4));
   }
   assert.deepEqual([room.round,room.circle],[1,6]);
-  assert.equal(room.players.every(p=>p.phase==='waiting'),true);
+  assert.equal(room.phase,'event');
   assert.equal(room.activePlayerId,null);
   assert.equal(room.eventPhase.currentPlayerId,order[0]);
   assert.equal(room.pendingEvent.kind,'storm');

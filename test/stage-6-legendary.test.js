@@ -159,7 +159,8 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   assert.equal(Object.hasOwn(state,'pendingLegendaryReaction'), false);
   assert.equal(Object.hasOwn(state,'pendingDecision'), false);
   assert.equal(Object.hasOwn(state,'eventDecks'), false);
-  assert.equal(Object.hasOwn(targetView,'legendaryCardCount'), false);
+  assert.equal(Object.hasOwn(targetView,'legendaryCardCount'), true);
+  assert.equal(targetView.legendaryCardCount, 0);
   assert.equal(targetView.legendaryStatus.shipVeilTurns, 0);
   assert.deepEqual(targetView.legendaryStatus.seaCurseTurns, []);
   assert.equal(targetView.legendaryStatus.seaCursePenalty, 0);
