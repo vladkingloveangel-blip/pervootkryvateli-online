@@ -28,7 +28,27 @@ test('surface switch owns only the home/game boundary', () => {
   assert.match(app, /\$\('game'\)\?\.setAttribute\('aria-hidden'/);
   assert.match(app, /function setGameScreenActive\(active\) \{\s*syncAppSurface\(active\);/);
 });
-\n\ntest('home shell stylesheet is isolated and mobile fullscreen', () => {\n  assert.match(html, /href="\\/home-shell\\.css"/);\n  assert.match(homeCss, /body\\.home-active #homeShell/);\n  assert.match(homeCss, /100dvh/);\n  assert.match(homeCss, /safe-area-inset-top/);\n  assert.match(homeCss, /home-background\\.webp/);\n  assert.doesNotMatch(homeCss, /body\\.game-active/);\n});\n\n\ntest('home top area uses authored assets without entering game scope', () => {\n  assert.match(html, /class="home-logo" src="\\/assets\\/home-logo\\.png"/);\n  assert.match(html, /id="homeProfileBtn"/);\n  assert.match(html, /id="homeSettingsBtn"/);\n  assert.match(html, /src="\\/assets\\/settings-icon\\.png"/);\n  assert.match(app, /\\$\\('homeProfileBtn'\\)\\.addEventListener\\('click', openProfile\\)/);\n  assert.match(app, /\\$\\('homeSettingsBtn'\\)\\.addEventListener\\('click', openProfile\\)/);\n});\n
+
+
+test('home shell stylesheet is isolated and mobile fullscreen', () => {
+  assert.match(html, /href="\\/home-shell\\.css"/);
+  assert.match(homeCss, /body\\.home-active #homeShell/);
+  assert.match(homeCss, /100dvh/);
+  assert.match(homeCss, /safe-area-inset-top/);
+  assert.match(homeCss, /home-background\\.webp/);
+  assert.doesNotMatch(homeCss, /body\\.game-active/);
+});
+
+
+test('home top area uses authored assets without entering game scope', () => {
+  assert.match(html, /class="home-logo" src="\\/assets\\/home-logo\\.png"/);
+  assert.match(html, /id="homeProfileBtn"/);
+  assert.match(html, /id="homeSettingsBtn"/);
+  assert.match(html, /src="\\/assets\\/settings-icon\\.png"/);
+  assert.match(app, /\\$\\('homeProfileBtn'\\)\\.addEventListener\\('click', openProfile\\)/);
+  assert.match(app, /\\$\\('homeSettingsBtn'\\)\\.addEventListener\\('click', openProfile\\)/);
+});
+
 
 test('central Home action routes to existing entry without game mutations', () => {
   assert.match(html, /id="homePrimaryAction"/);
