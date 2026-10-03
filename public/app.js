@@ -216,7 +216,7 @@
     if (action === 'how-to') return openHowToPlay();
     if (action === 'rules') return openRules('home');
     if (action === 'admin') return $('adminOpenBtn').click();
-    if (action === 'logout') return $('logoutBtn').click();
+    if (action === 'logout') return logoutAccount();
   }
 
   function openRules(returnTo = 'home') {
@@ -1063,8 +1063,9 @@
     socket.emit('adminStopWatching', {}, () => {});
     showAdminPanel();
   });
-  $('logoutBtn').addEventListener('click', () => {
+  function logoutAccount() {
     closeGameAccountMenu();
+    closeHomeMenu();
     if (!confirm('Выйти из аккаунта на этом устройстве?')) return;
     localStorage.removeItem('pervo:accountToken');
     state.accountToken = '';
@@ -1084,7 +1085,9 @@
     $('adminPanel').classList.add('hidden');
     $('accountBar').classList.add('hidden');
     showAuth('Вы вышли из аккаунта.');
-  });
+  }
+
+  $('logoutBtn').addEventListener('click', logoutAccount);
 
   $('resultContinueBtn').addEventListener('click', dismissResultCard);
   $('objectSheetClose').addEventListener('click', closeMapInfo);
