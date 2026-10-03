@@ -502,8 +502,7 @@
       if (!state.accountsEnabled) {
         state.authResolved = true;
         $('authPanel').classList.add('hidden');
-        $('accountBar').classList.add('hidden');
-        $('entry').classList.remove('hidden');
+        showHomePrimary();
         maybeResumeLastRoom();
         return;
       }
