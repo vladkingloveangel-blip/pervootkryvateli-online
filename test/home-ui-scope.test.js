@@ -5,7 +5,7 @@ const path = require('node:path');
 
 const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
-const app = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
+const app = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');\nconst homeCss = fs.readFileSync(path.join(root, 'public', 'home-shell.css'), 'utf8');
 
 test('home shell and active game are sibling UI scopes', () => {
   const homeOpen = html.indexOf('<div id="homeShell"');
@@ -27,3 +27,4 @@ test('surface switch owns only the home/game boundary', () => {
   assert.match(app, /\$\('game'\)\?\.setAttribute\('aria-hidden'/);
   assert.match(app, /function setGameScreenActive\(active\) \{\s*syncAppSurface\(active\);/);
 });
+\n\ntest('home shell stylesheet is isolated and mobile fullscreen', () => {\n  assert.match(html, /href="\\/home-shell\\.css"/);\n  assert.match(homeCss, /body\\.home-active #homeShell/);\n  assert.match(homeCss, /100dvh/);\n  assert.match(homeCss, /safe-area-inset-top/);\n  assert.match(homeCss, /home-background\\.webp/);\n  assert.doesNotMatch(homeCss, /body\\.game-active/);\n});\n
