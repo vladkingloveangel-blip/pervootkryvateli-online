@@ -76,6 +76,50 @@
       </div>
     </section>
 
+    <section id="profilePanel" class="panel profile-panel hidden" aria-labelledby="profileTitle">
+      <div class="profile-home-head">
+        <button id="profileBackBtn" class="play-flow-back" type="button" aria-label="Назад">←</button>
+        <div><span>КАПИТАН</span><h1 id="profileTitle">Профиль</h1><p class="muted">Личные данные аккаунта игрока.</p></div>
+      </div>
+
+      <div class="profile-identity">
+        <div class="profile-avatar-preview" aria-hidden="true"><span id="profileAvatarInitial">?</span></div>
+        <div><strong id="profileIdentityName">Капитан</strong><small id="profileIdentityLogin">—</small></div>
+      </div>
+
+      <div class="profile-section">
+        <h2>Данные капитана</h2>
+        <div class="profile-grid">
+          <label>Логин
+            <input id="profileUsername" disabled />
+          </label>
+          <label>Имя игрока
+            <input id="profileDisplayName" maxlength="24" autocomplete="nickname" />
+          </label>
+        </div>
+        <p class="muted profile-note">Это имя будет подставляться по умолчанию при создании новых партий.</p>
+        <button id="profileSaveBtn" class="primary profile-submit">Сохранить имя</button>
+        <p id="profileSaveStatus" class="profile-status" role="status"></p>
+      </div>
+
+      <div class="profile-section">
+        <h2>Безопасность</h2>
+        <div class="profile-grid profile-password-grid">
+          <label>Текущий пароль
+            <input id="profileOldPassword" type="password" autocomplete="current-password" />
+          </label>
+          <label>Новый пароль
+            <input id="profileNewPassword" type="password" minlength="6" autocomplete="new-password" />
+          </label>
+          <label>Повторите новый пароль
+            <input id="profileNewPassword2" type="password" minlength="6" autocomplete="new-password" />
+          </label>
+        </div>
+        <button id="profilePasswordBtn" class="profile-submit">Сменить пароль</button>
+        <p id="profilePasswordStatus" class="profile-status" role="status"></p>
+      </div>
+    </section>
+
 
 
     <section id="rulesPanel" class="panel rules-panel hidden" aria-labelledby="rulesTitle">
@@ -141,49 +185,7 @@
       </div>
     </section>
 
-    <section id="profilePanel" class="panel profile-panel hidden" aria-labelledby="profileTitle">
-      <div class="profile-home-head">
-        <button id="profileBackBtn" class="play-flow-back" type="button" aria-label="Назад">←</button>
-        <div><span>КАПИТАН</span><h1 id="profileTitle">Профиль</h1><p class="muted">Личные данные аккаунта игрока.</p></div>
-      </div>
 
-      <div class="profile-identity">
-        <div class="profile-avatar-preview" aria-hidden="true"><span id="profileAvatarInitial">?</span></div>
-        <div><strong id="profileIdentityName">Капитан</strong><small id="profileIdentityLogin">—</small></div>
-      </div>
-
-      <div class="profile-section">
-        <h2>Данные капитана</h2>
-        <div class="profile-grid">
-          <label>Логин
-            <input id="profileUsername" disabled />
-          </label>
-          <label>Имя игрока
-            <input id="profileDisplayName" maxlength="24" autocomplete="nickname" />
-          </label>
-        </div>
-        <p class="muted profile-note">Это имя будет подставляться по умолчанию при создании новых партий.</p>
-        <button id="profileSaveBtn" class="primary profile-submit">Сохранить имя</button>
-        <p id="profileSaveStatus" class="profile-status" role="status"></p>
-      </div>
-
-      <div class="profile-section">
-        <h2>Безопасность</h2>
-        <div class="profile-grid profile-password-grid">
-          <label>Текущий пароль
-            <input id="profileOldPassword" type="password" autocomplete="current-password" />
-          </label>
-          <label>Новый пароль
-            <input id="profileNewPassword" type="password" minlength="6" autocomplete="new-password" />
-          </label>
-          <label>Повторите новый пароль
-            <input id="profileNewPassword2" type="password" minlength="6" autocomplete="new-password" />
-          </label>
-        </div>
-        <button id="profilePasswordBtn" class="profile-submit">Сменить пароль</button>
-        <p id="profilePasswordStatus" class="profile-status" role="status"></p>
-      </div>
-    </section>
 
     <section id="adminPanel" class="panel admin-panel hidden">
       <div class="section-head">
