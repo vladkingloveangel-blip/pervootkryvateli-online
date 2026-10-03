@@ -4661,8 +4661,10 @@
       card.className = 'island-building-card';
       const head = document.createElement('div'); head.className = 'island-building-card__head'; head.textContent = title;
       const desc = document.createElement('div'); desc.className = 'island-building-card__desc'; desc.textContent = purpose;
-      card.appendChild(head); card.appendChild(desc);
-      if (meta) { const info = document.createElement('div'); info.className = 'island-building-card__meta'; info.textContent = meta; card.appendChild(info); }
+      const copy = document.createElement('div'); copy.className = 'island-building-card__copy';
+      copy.appendChild(head); copy.appendChild(desc);
+      if (meta) { const info = document.createElement('div'); info.className = 'island-building-card__meta'; info.textContent = meta; copy.appendChild(info); }
+      card.appendChild(copy);
       return card;
     };
 
@@ -5293,7 +5295,7 @@
     if (!island || !mine) return;
 
     const definitions = {
-      build: ['ПОСТРОИТЬ', 'Выберите новую постройку. Улучшения существующих зданий находятся в отдельном разделе.'],
+      build: ['ПОСТРОИТЬ', 'Выберите постройку.'],
       upgrade: ['УЛУЧШИТЬ ПОСТРОЙКИ', 'Здесь показаны только существующие здания, у которых есть следующая ступень.'],
       cargo: ['ПОГРУЗИТЬ ФЛОТИЛИЮ', 'Выберите производимый товар. Одно действие заполнит им все свободные доступные трюмы флотилии.'],
       military: ['ВОЕННАЯ ИНФРАСТРУКТУРА', 'Арсенал, рота ландскнехтов и превращение Крепости III в Бастион.'],
