@@ -124,10 +124,9 @@ test('server applies one central guard before socket handlers and keeps finished
   const socketEnd = source.indexOf('\nfunction makeCode', socketStart);
   const socketBody = source.slice(socketStart, socketEnd);
   const guardAt = socketBody.indexOf('finishedGameEventError(');
-  const priorityAt = socketBody.indexOf('assignmentPriorityError(');
   const handlerAt = socketBody.indexOf('handler(...args');
   assert.ok(guardAt > 0, 'central finished-game guard is present in onSocketEvent');
-  assert.ok(priorityAt > guardAt, 'finished-game guard runs before gameplay priority logic');
+  assert.equal(socketBody.includes('assignmentPriorityError('), false, 'assignment availability no longer blocks socket commands');
   assert.ok(handlerAt > guardAt, 'finished-game guard runs before the event handler');
 
   const emitStart = source.indexOf('function emitRoom(room)');

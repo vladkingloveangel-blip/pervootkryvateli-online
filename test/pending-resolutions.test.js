@@ -248,8 +248,7 @@ test('Treasure Hunter server flow uses persisted candidates only after activatio
   assert.match(finish, /if \(origin === 'expedition'\) drainExpeditionTreasureRewards\(room\)/);
   assert.doesNotMatch(finish, /origin !== 'treasure-hunter'/);
 
-  const priority = server.slice(server.indexOf('const ASSIGNMENT_PRIORITY_EVENTS'), server.indexOf('function sameAssignmentOption'));
-  assert.match(priority, /useTreasureHunter/);
+  assert.doesNotMatch(server, /ASSIGNMENT_PRIORITY_EVENTS|assignmentPriorityError/);
 });
 
 test('Treasure Hunter UI exposes activation and two positional choice buttons without candidate state client-side', () => {

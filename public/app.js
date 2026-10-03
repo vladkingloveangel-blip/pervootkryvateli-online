@@ -3188,7 +3188,7 @@
     const suzerain = mine.suzerainId ? r.factions?.find(f => f.id === mine.suzerainId) : null;
     const assignmentFaction = assignment ? (r.factions?.find(f => f.id === assignment.factionId) || suzerain) : suzerain;
     const priority = mine.assignmentPriority || null;
-    badge.textContent = pending?.viewerCanRespond ? 'выбор' : (priority ? 'обязательно' : assignment ? 'активно' : (suzerain ? 'ожидание' : 'нет'));
+    badge.textContent = pending?.viewerCanRespond ? 'выбор' : (priority ? 'доступно' : assignment ? 'активно' : (suzerain ? 'ожидание' : 'нет'));
     let html = '';
     if (!suzerain && !assignment) {
       html = '<div class="event-current">Вы не состоите в подданстве. Поручения получают вассалы Лионии, Кадингира, Мори, Вольной Суниксии и пиратов.</div>';
@@ -3199,7 +3199,7 @@
       html = `<div class="event-current"><strong>${escapeHtml(assignmentFaction?.name || assignment.factionId || 'Сюзерен')}</strong><br>«${escapeHtml(assignment.text)}»</div><div class="event-effect">Награда: ${assignment.reward} дукатов${withheld ? ` · сюзерен удержит ${withheld}, вам ${net}` : ' · выплачивается полностью'}.</div>`;
       if (priority) {
         const priorityLabels = { building: 'строительство или улучшение', 'ship-level': 'повышение уровня корабля', 'ship-upgrade': 'улучшение корабля', anchor: 'бой на морском якоре', delivery: 'доставка груза', assault: 'штурм острова', treasure: 'разрешение сокровища' };
-        html += `<div class="assignment-priority"><strong>Поручение имеет приоритет.</strong><br>Сейчас доступно обязательное действие: ${escapeHtml(priorityLabels[priority.kind] || priority.kind || 'выполнение условия')}.</div>`;
+        html += `<div class="assignment-priority"><strong>Поручение можно выполнить сейчас.</strong><br>Доступный способ: ${escapeHtml(priorityLabels[priority.kind] || priority.kind || 'выполнение условия')}. Другие действия не блокируются.</div>`;
       }
       const progress = assignment.progress;
       if (progress?.kind === 'mori-service') {
@@ -3487,7 +3487,7 @@
 
     const priority = mine.assignmentPriority;
     const priorityText = priority
-      ? `<div class="goal-priority">Поручение сейчас имеет приоритет: ${escapeHtml(priority.kind || 'обязательное действие')}.</div>`
+      ? `<div class="goal-priority">Поручение можно выполнить сейчас: ${escapeHtml(priority.kind || 'выполнение условия')}.</div>`
       : '';
 
     return `

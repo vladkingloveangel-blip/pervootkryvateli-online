@@ -469,8 +469,6 @@ function onSocketEvent(socket, event, handler) {
     const eventRoom = getRoom(socket.data.roomCode) || getRoom(args[0]?.code);
     const finishedError = finishedGameEventError(eventRoom, event, args[0]);
     if (finishedError) return ackSafe(ack, { ok: false, error: finishedError });
-    const priorityError = assignmentPriorityError(socket, event, args[0]);
-    if (priorityError) return ackSafe(ack, { ok: false, error: priorityError });
     const writes = [];
     const responses = [];
     eventWrites = writes;
@@ -1067,84 +1065,6 @@ function deliveryAssignmentMatch(player, result) {
     assignmentInstanceId: result.assignmentInstanceId || null,
     fullHold: Number(result.quantity) === Number(result.capacity),
   });
-}
-
-const ASSIGNMENT_PRIORITY_EVENTS = new Set([
-  'fightAnchor', 'takeCharacter', 'replaceCharacter', 'usePalace',
-  'build', 'upgradeBuilding', 'buildBastion', 'formLandCompany',
-  'buyCityGuard', 'buyPermanentGarrison', 'buyShipLevel', 'buyShipUpgrade',
-  'removeShipUpgrade', 'buyEscort', 'loadCargo', 'sellCargo',
-  'useSavedCargo', 'useShipMaster', 'useBlueprint', 'playLegendary', 'takeExpedition', 'useTreasureHunter',
-  'requestAlliance', 'enterVassalage', 'rebelVassalage',
-  'attackShip', 'assaultIsland', 'endTurn',
-]);
-
-function sameAssignmentOption(option, data, fields) {
-  return fields.every(field => String(option?.[field] ?? '') === String(data?.[field] ?? ''));
-}
-
-function assignmentPriorityAllows(requirement, event, data = {}) {
-  if (!requirement) return true;
-
-  if (requirement.kind === 'building') {
-    if (event === 'build') {
-      return (requirement.buildOptions || []).some(option =>
-        sameAssignmentOption(option, { islandId: data?.islandId, buildingType: data?.buildingType }, ['islandId', 'buildingType']));
-    }
-    if (event === 'upgradeBuilding') {
-      return (requirement.upgradeOptions || []).some(option =>
-        option.islandId === String(data?.islandId || '') && option.buildingIndex === Number(data?.buildingIndex));
-    }
-    if (event === 'buildBastion') {
-      const islandId = String(data?.islandId || '');
-      const rawIndex = data?.buildingIndex;
-      return (requirement.bastionOptions || []).some(option =>
-        option.islandId === islandId && (rawIndex == null || rawIndex === '' || option.buildingIndex === Number(rawIndex)));
-    }
-    if (event === 'useBlueprint') {
-      return (requirement.blueprintOptions || []).some(option =>
-        option.islandId === String(data?.islandId || '') && option.savedCardId === String(data?.savedCardId || ''));
-    }
-    return false;
-  }
-
-  if (requirement.kind === 'ship-level') return event === 'buyShipLevel';
-
-  if (requirement.kind === 'ship-upgrade') {
-    if (event === 'buyShipUpgrade') return (requirement.upgradeIds || []).includes(String(data?.upgradeId || ''));
-    if (event === 'useShipMaster') {
-      return (requirement.shipMasterIds || []).includes(String(data?.savedCardId || ''))
-        && (requirement.freeUpgradeIds || []).includes(String(data?.upgradeId || ''));
-    }
-    return false;
-  }
-
-  if (requirement.kind === 'anchor') return event === 'fightAnchor';
-
-  if (requirement.kind === 'delivery') {
-    return event === 'sellCargo' && (requirement.holdIds || []).length > 0;
-  }
-
-  if (requirement.kind === 'assault') {
-    return event === 'assaultIsland' && (requirement.islandIds || []).includes(String(data?.islandId || ''));
-  }
-
-  if (requirement.kind === 'treasure') {
-    return event === 'useSavedCargo' && (requirement.savedCardIds || []).includes(String(data?.savedCardId || ''));
-  }
-
-  return true;
-}
-
-function assignmentPriorityError(socket, event, data) {
-  if (!ASSIGNMENT_PRIORITY_EVENTS.has(event)) return null;
-  const room = getRoom(socket.data.roomCode);
-  const player = currentPlayer(room);
-  if (!room || !player || player.id !== socket.data.playerId || room.phase !== 'actions') return null;
-  if (hasPendingDecision(room)) return null;
-  const requirement = assignmentRequiredAction(room, player, room.actionsLeft);
-  if (!requirement || assignmentPriorityAllows(requirement, event, data)) return null;
-  return 'Сначала выполните доступное активное поручение «' + requirement.text + '». По правилам поручение имеет приоритет перед другими добровольными действиями.';
 }
 
 function buildAssignmentQueue(room, snapshot) {

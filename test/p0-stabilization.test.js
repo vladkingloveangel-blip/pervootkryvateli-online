@@ -155,13 +155,10 @@ function makeDeliveryState({ main = true, escort = false, escortActive = true, l
   return { room, player, goodId };
 }
 
-test('P0 fleet-wide delivery priority accepts any sellable matching active hold without restoring holdId API', () => {
+test('P0 fleet-wide delivery hint detects any sellable matching active hold without restoring holdId API', () => {
   const server = sourceFile('server.js');
-  const priority = between(server, 'function assignmentPriorityAllows(', 'function assignmentPriorityError(');
-  const deliveryBranch = between(priority, "if (requirement.kind === 'delivery')", "if (requirement.kind === 'assault')");
-  assert.match(deliveryBranch, /event === 'sellCargo'/);
-  assert.match(deliveryBranch, /\(requirement\.holdIds \|\| \[\]\)\.length > 0/);
-  assert.doesNotMatch(deliveryBranch, /data\?\.holdId|includes\(holdId\)|'main'/);
+  assert.doesNotMatch(server, /function assignmentPriorityError\(/);
+  assert.doesNotMatch(server, /ASSIGNMENT_PRIORITY_EVENTS/);
 
   const sellHandler = between(server, "onSocketEvent(socket, 'sellCargo'", "onSocketEvent(socket, 'respondEvent'");
   assert.doesNotMatch(sellHandler, /data\?\.holdId/);

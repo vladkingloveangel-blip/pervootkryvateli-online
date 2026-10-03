@@ -88,7 +88,8 @@ test('stage 5.8 assignment UI exposes current rules and contains no paid-replace
   const app = fs.readFileSync(path.join(__dirname,'..','public','app.js'),'utf8');
   const html = fs.readFileSync(path.join(__dirname,'..','public','index.html'),'utf8');
   assert.match(app,/Лионии, Кадингира, Мори, Вольной Суниксии и пиратов/);
-  assert.match(app,/Поручение имеет приоритет/);
+  assert.match(app,/Поручение можно выполнить сейчас/);
+  assert.doesNotMatch(app,/Поручение имеет приоритет|доступно обязательное действие/);
   assert.match(app,/Маршрут Мори/);
   assert.match(app,/Посольство: выберите одно из допустимых поручений/);
   assert.doesNotMatch(app,/Колода поручений:|убрано как невыполнимые/);
