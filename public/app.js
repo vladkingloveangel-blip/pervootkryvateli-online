@@ -210,7 +210,7 @@
 
   function handleHomeMenuAction(action) {
     closeHomeMenu();
-    if (action === 'games') return showMyGamesPanel();
+    if (action === 'games') return openMyGames();
     if (action === 'profile') return openProfile();
     if (action === 'settings') return openSettings();
     if (action === 'how-to') return openHowToPlay();
