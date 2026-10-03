@@ -49,6 +49,16 @@ test('home top area uses authored assets without entering game scope', () => {
 });
 
 
+test('Welcome hides Home controls and keeps only the authored scene controls', () => {
+  assert.ok(app.includes("document.body.classList.add('welcome-active')"));
+  assert.ok(app.includes("document.body.classList.remove('welcome-active')"));
+  assert.ok(homeCss.includes('body.home-active.welcome-active .home-top-actions{display:none}'));
+  assert.ok(homeCss.includes('body.home-active.welcome-active .home-topbar>.connection{display:none}'));
+  assert.ok(html.includes('class="home-logo" src="/assets/home-logo.png"'));
+  assert.ok(html.includes('id="homePlayBtn"'));
+});
+
+
 test('Welcome action routes to the existing play flow without game mutations', () => {
   assert.match(html, /id="homePrimaryAction"/);
   assert.match(html, /id="homePlayBtn"/);
