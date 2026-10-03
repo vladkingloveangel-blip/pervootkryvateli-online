@@ -910,6 +910,7 @@
   $('playCreateChoiceBtn').addEventListener('click', () => openPlayEntry('create'));
   $('playJoinChoiceBtn').addEventListener('click', () => openPlayEntry('join'));
   $('profileOpenBtn').addEventListener('click', openProfile);
+  $('howToPlayOpenBtn').addEventListener('click', openHowToPlay);
   $('homeProfileBtn').addEventListener('click', openProfile);
   $('homeSettingsBtn').addEventListener('click', openSettings);
   $('settingsBackBtn').addEventListener('click', closeSettings);
