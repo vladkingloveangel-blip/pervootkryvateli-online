@@ -151,6 +151,7 @@
     $('myGamesPanel').classList.add('hidden');
     $('adminPanel').classList.add('hidden');
     if (!state.spectating) $('game').classList.add('hidden');
+    setAuthMode('login');
     setError('authError', message);
   }
 
@@ -494,6 +495,26 @@
       state.authResolved = true;
       maybeResumeLastRoom();
     }
+  }
+
+  function setAuthMode(mode) {
+    const registerMode = mode === 'register';
+    $('authPanel').dataset.authMode = registerMode ? 'register' : 'login';
+    $('authTitle').textContent = registerMode ? 'Создать аккаунт' : 'Войти в игру';
+    $('authSubtitle').textContent = registerMode
+      ? 'Создайте капитана, чтобы сохранять партии и возвращаться к ним.'
+      : 'Продолжите путешествие под своим аккаунтом капитана.';
+    $('authDisplayNameField').classList.toggle('hidden', !registerMode);
+    $('authSubmitBtn').textContent = registerMode ? 'Создать аккаунт' : 'Войти';
+    $('authModeHint').textContent = registerMode
+      ? 'Уже есть аккаунт? Выберите «Вход».'
+      : 'Нет аккаунта? Выберите «Регистрация».';
+    $('authLoginTab').classList.toggle('active', !registerMode);
+    $('authRegisterTab').classList.toggle('active', registerMode);
+    $('authLoginTab').setAttribute('aria-selected', registerMode ? 'false' : 'true');
+    $('authRegisterTab').setAttribute('aria-selected', registerMode ? 'true' : 'false');
+    $('authPassword').setAttribute('autocomplete', registerMode ? 'new-password' : 'current-password');
+    setError('authError');
   }
 
   async function submitAuth(mode) {
@@ -909,7 +930,15 @@
 
   $('loginBtn').addEventListener('click', () => submitAuth('login'));
   $('registerBtn').addEventListener('click', () => submitAuth('register'));
-  $('authPassword').addEventListener('keydown', e => { if (e.key === 'Enter') submitAuth('login'); });
+  $('authLoginTab').addEventListener('click', () => setAuthMode('login'));
+  $('authRegisterTab').addEventListener('click', () => setAuthMode('register'));
+  $('authSubmitBtn').addEventListener('click', () => submitAuth($('authPanel').dataset.authMode || 'login'));
+  $('authPassword').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitAuth($('authPanel').dataset.authMode || 'login');
+  });
+  $('authDisplayName').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitAuth('register');
+  });
   function showHomePrimary() {
     $('playFlow').classList.add('hidden');
     $('entry').classList.add('hidden');
