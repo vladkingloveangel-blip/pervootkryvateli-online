@@ -375,9 +375,9 @@ test('UI-8 adds queued Result Cards without turning client diffs into game autho
   assert.match(code, /assaultResultCard/);
   assert.doesNotMatch(code, /previousRoom|diffRoom|inferEventResult/);
 
-  assert.match(app, /fightAnchor', \{\}, handleAnchorResultAck/);
-  assert.match(app, /handleSeaBattleResultAck\(res, target\.name\)/);
-  assert.match(app, /handleAssaultResultAck\(res, island\.name\)/);
+  assert.match(app, /fightAnchor', \{\}, res => handleAnchorResultAck\(res, issuedRoomStateSeq\)/);
+  assert.match(app, /handleSeaBattleResultAck\(res, target\.name, issuedRoomStateSeq\)/);
+  assert.match(app, /handleAssaultResultAck\(res, island\.name, issuedRoomStateSeq\)/);
   assert.match(app, /kicker: 'КАРТОГРАФ'/);
   assert.match(app, /Разведан гарнизон:/);
   assert.match(app, /Разведана казна:/);
@@ -411,6 +411,33 @@ test('UI-8 routine action feedback reuses Toasts and the existing pending submit
     'Куплено сопровождение:', 'Куплена городская стража:',
     'Постоянный гарнизон:', 'Рота ландскнехтов снаряжена.'
   ]) assert.match(app, new RegExp(text));
+});
+
+test('UI-8 combat Result Cards present immediately after the authoritative roomState regardless of ack ordering', () => {
+  assert.match(app, /roomStateSeq: 0/);
+  assert.match(app, /state\.roomStateSeq = \(Number\(state\.roomStateSeq\) \|\| 0\) \+ 1/);
+
+  const helperStart = app.indexOf('  function presentResultAfterAuthoritativeState(');
+  const helperEnd = app.indexOf('\n\n  function enqueueToast(', helperStart);
+  assert.ok(helperStart >= 0 && helperEnd > helperStart);
+  const helper = app.slice(helperStart, helperEnd);
+  assert.match(helper, /enqueueResultCard\(result\)/);
+  assert.match(helper, /state\.roomStateSeq/);
+  assert.match(helper, /issuedRoomStateSeq/);
+  assert.match(helper, /renderResultLayer\(\)/);
+
+  const handlerStart = app.indexOf('  function handleAnchorResultAck(');
+  const handlerEnd = app.indexOf('\n\n  function eventFlowStageKey', handlerStart);
+  const handlers = app.slice(handlerStart, handlerEnd);
+  assert.match(handlers, /presentResultAfterAuthoritativeState\(card, issuedRoomStateSeq\)/);
+  assert.doesNotMatch(handlers, /if \(card\) enqueueResultCard\(card\)/);
+
+  // The existing Result Layer remains subordinate to mandatory decisions.
+  const resultStart = app.indexOf('  function renderResultLayer()');
+  const resultEnd = app.indexOf('\n  function anchorResultCard(', resultStart);
+  const resultCode = app.slice(resultStart, resultEnd);
+  assert.match(resultCode, /const decision = mobileDecisionDescriptor\(state\.room\)/);
+  assert.match(resultCode, /\|\| decision\)/);
 });
 
 test('UI-8 result acknowledgement is presentation-only', () => {

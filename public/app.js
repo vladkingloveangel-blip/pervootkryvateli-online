@@ -1,7 +1,7 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mapMovePending: false, lastAutoCenterSignature: '', resultQueue: [], activeResult: null, toastQueue: [], journalEntries: [], ambientSnapshot: null, targeting: null, rehydrateOnNextRoomState: false, islandSheetView: null };
+  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mapMovePending: false, lastAutoCenterSignature: '', resultQueue: [], activeResult: null, toastQueue: [], journalEntries: [], ambientSnapshot: null, targeting: null, rehydrateOnNextRoomState: false, islandSheetView: null, roomStateSeq: 0 };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
   const shipName = id => state.room?.shipCatalog?.[id]?.name || state.shipCatalog?.[id]?.name || $('shipSelect').querySelector(`option[value="${id}"]`)?.textContent || 'Корабль';
   fetch('/api/rules').then(response => response.ok ? response.json() : null).then(rules => {
@@ -617,6 +617,7 @@
       state.rehydrateOnNextRoomState = false;
     }
     processAmbientRoomState(room, { silent: rehydrating });
+    state.roomStateSeq = (Number(state.roomStateSeq) || 0) + 1;
     state.room = room;
     if (room?.shipCatalog) state.shipCatalog = room.shipCatalog;
     const incomingMine = room?.players?.find(p => p.id === state.myId);
@@ -2262,8 +2263,16 @@
     state.resultQueue.push(entry);
     recordJournal(entry.title, entry.tone, entry.body);
     if (state.resultQueue.length > 5) state.resultQueue.splice(0, state.resultQueue.length - 5);
-    // Do not render immediately from the ack callback. The next authoritative
-    // roomState render gets first chance to expose a higher-priority Decision Layer.
+  }
+
+  function presentResultAfterAuthoritativeState(result, issuedRoomStateSeq) {
+    if (!result) return;
+    enqueueResultCard(result);
+    // Successful combat handlers always emit an authoritative roomState.
+    // If that snapshot already arrived before the ack callback, render now.
+    // Otherwise the next roomState render will present the card. Decision Layer
+    // remains authoritative because renderResultLayer() refuses to present over it.
+    if ((Number(state.roomStateSeq) || 0) > (Number(issuedRoomStateSeq) || 0)) renderResultLayer();
   }
 
   function enqueueToast(message, tone = 'neutral', journal = true) {
@@ -2417,22 +2426,22 @@
     };
   }
 
-  function handleAnchorResultAck(res) {
+  function handleAnchorResultAck(res, issuedRoomStateSeq) {
     handleGameAck(res);
     const card = anchorResultCard(res);
-    if (card) enqueueResultCard(card);
+    if (card) presentResultAfterAuthoritativeState(card, issuedRoomStateSeq);
   }
 
-  function handleSeaBattleResultAck(res, targetName) {
+  function handleSeaBattleResultAck(res, targetName, issuedRoomStateSeq) {
     handleGameAck(res);
     const card = seaBattleResultCard(res, targetName);
-    if (card) enqueueResultCard(card);
+    if (card) presentResultAfterAuthoritativeState(card, issuedRoomStateSeq);
   }
 
-  function handleAssaultResultAck(res, islandName) {
+  function handleAssaultResultAck(res, islandName, issuedRoomStateSeq) {
     handleGameAck(res);
     const card = assaultResultCard(res, islandName);
-    if (card) enqueueResultCard(card);
+    if (card) presentResultAfterAuthoritativeState(card, issuedRoomStateSeq);
   }
 
   function eventFlowStageKey(phase) {
@@ -4619,7 +4628,10 @@
       button.textContent = 'Вступить в бой · 1 действие';
       button.title = 'Если открыта карта «На море тихо», действие не расходуется.';
       button.disabled = !canFight;
-      button.addEventListener('click', () => socket.emit('fightAnchor', {}, handleAnchorResultAck));
+      button.addEventListener('click', () => {
+        const issuedRoomStateSeq = state.roomStateSeq;
+        socket.emit('fightAnchor', {}, res => handleAnchorResultAck(res, issuedRoomStateSeq));
+      });
       actions.appendChild(button);
     }
   }
@@ -5070,12 +5082,18 @@
         solo.textContent = `Атаковать · ${mine.fleetArtillery}:${target.fleetArtillery}`;
         solo.disabled = !canAct || firstRound || mine.inPeaceZone || target.inPeaceZone || usedAttackTargets.has(target.id) || (mine.brokenAlliesThisTurn || []).includes(target.id) || Boolean(target.legendaryStatus?.shipVeilTurns);
         if (usedAttackTargets.has(target.id)) solo.title = 'Лимит нападения на этого игрока в текущем раунде уже использован.';
-        solo.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, res => handleSeaBattleResultAck(res, target.name)));
+        solo.addEventListener('click', () => {
+          const issuedRoomStateSeq = state.roomStateSeq;
+          socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, res => handleSeaBattleResultAck(res, target.name, issuedRoomStateSeq));
+        });
         const together = document.createElement('button');
         together.type = 'button';
         together.textContent = `Позвать союзника (${attackAllies.length})`;
         together.disabled = solo.disabled || attackAllies.length === 0;
-        together.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, res => handleSeaBattleResultAck(res, target.name)));
+        together.addEventListener('click', () => {
+          const issuedRoomStateSeq = state.roomStateSeq;
+          socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, res => handleSeaBattleResultAck(res, target.name, issuedRoomStateSeq));
+        });
         row.appendChild(solo); row.appendChild(together);
         const hellfireRef = (mine.playableLegendaryCards || []).find(ref => ref.kind === 'hellfire');
         if (hellfireRef && !island.ownerId && ['state', 'independent'].includes(island.kind)) {
@@ -5083,7 +5101,10 @@
           fire.type = 'button'; fire.className = 'danger-soft'; fire.textContent = 'Захватить 🔥';
           fire.disabled = !canAct || mine.inPeaceZone;
           fire.title = 'Захватить остров «Пламенем Ада» независимо от силы обороны.';
-          fire.addEventListener('click', () => socket.emit('hellfireCapture', { islandId: island.id }, res => handleAssaultResultAck(res, island.name)));
+          fire.addEventListener('click', () => {
+            const issuedRoomStateSeq = state.roomStateSeq;
+            socket.emit('hellfireCapture', { islandId: island.id }, res => handleAssaultResultAck(res, island.name, issuedRoomStateSeq));
+          });
           row.appendChild(fire);
         }
         card.appendChild(row);
@@ -5127,12 +5148,18 @@
         solo.textContent = 'Штурмовать · одному';
         solo.disabled = !canAct || mine.inPeaceZone || (firstRound && pvpIsland) || (island.ownerId && usedAttackTargets.has(island.ownerId)) || (island.ownerId && (mine.brokenAlliesThisTurn || []).includes(island.ownerId)) || Boolean(island.legendaryVeil?.remaining);
         if (island.ownerId && usedAttackTargets.has(island.ownerId)) solo.title = 'Лимит нападения на владельца этого острова в текущем раунде уже использован.';
-        solo.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, res => handleAssaultResultAck(res, island.name)));
+        solo.addEventListener('click', () => {
+          const issuedRoomStateSeq = state.roomStateSeq;
+          socket.emit('assaultIsland', { islandId: island.id, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, res => handleAssaultResultAck(res, island.name, issuedRoomStateSeq));
+        });
         const together = document.createElement('button');
         together.type = 'button';
         together.textContent = `Штурмовать · союз (${attackAllies.length})`;
         together.disabled = solo.disabled || attackAllies.length === 0;
-        together.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, res => handleAssaultResultAck(res, island.name)));
+        together.addEventListener('click', () => {
+          const issuedRoomStateSeq = state.roomStateSeq;
+          socket.emit('assaultIsland', { islandId: island.id, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, res => handleAssaultResultAck(res, island.name, issuedRoomStateSeq));
+        });
         row.appendChild(solo); row.appendChild(together);
         card.appendChild(row);
         actions.appendChild(card);
