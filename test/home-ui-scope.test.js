@@ -49,7 +49,7 @@ test('home top area uses authored assets without entering game scope', () => {
 });
 
 
-test('central Home action routes to existing entry without game mutations', () => {
+test('Welcome action routes to the existing play flow without game mutations', () => {
   assert.match(html, /id="homePrimaryAction"/);
   assert.match(html, /id="homePlayBtn"/);
   assert.ok(app.includes("$('homePlayBtn').addEventListener('click', openPlayFlow)"));
@@ -177,11 +177,17 @@ test('Authentication has separate login and registration modes without changing 
 });
 
 
-test('Home navigation keeps exactly one non-party screen active', () => {
-  assert.ok(app.includes("const HOME_SCREEN_IDS = ['homePrimaryAction', 'playFlow', 'entry', 'myGamesPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel']"));
+test('Welcome is structurally separate from internal Home screens', () => {
+  assert.ok(app.includes("const WELCOME_SCREEN_ID = 'homePrimaryAction'"));
+  assert.ok(app.includes("const HOME_SCREEN_IDS = ['playFlow', 'entry', 'myGamesPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel']"));
+  assert.ok(app.includes('function hideWelcomeScreen()'));
   assert.ok(app.includes('function hideHomeScreens()'));
   assert.ok(app.includes('function showHomeScreen(id)'));
-  assert.ok(app.includes("showHomeScreen('homePrimaryAction')"));
+  assert.ok(app.includes('function showWelcomeScreen()'));
+  assert.ok(app.includes('hideWelcomeScreen();'));
+  assert.ok(app.includes("$(WELCOME_SCREEN_ID)?.classList.remove('hidden')"));
+  assert.ok(app.includes('function showHomePrimary()'));
+  assert.ok(app.includes('showWelcomeScreen();'));
   assert.ok(app.includes("showHomeScreen('playFlow')"));
   assert.ok(app.includes("showHomeScreen('entry')"));
   assert.ok(app.includes("showHomeScreen('myGamesPanel')"));
