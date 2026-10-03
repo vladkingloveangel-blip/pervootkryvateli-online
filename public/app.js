@@ -939,40 +939,38 @@
   $('authDisplayName').addEventListener('keydown', e => {
     if (e.key === 'Enter') submitAuth('register');
   });
+  const HOME_SCREEN_IDS = ['homePrimaryAction', 'playFlow', 'entry', 'myGamesPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel'];
+
+  function hideHomeScreens() {
+    for (const id of HOME_SCREEN_IDS) $(id)?.classList.add('hidden');
+  }
+
+  function showHomeScreen(id) {
+    closeHomeMenu();
+    hideHomeScreens();
+    $(id)?.classList.remove('hidden');
+  }
+
   function showHomePrimary() {
-    $('playFlow').classList.add('hidden');
-    $('entry').classList.add('hidden');
-    $('myGamesPanel').classList.add('hidden');
-    $('settingsPanel').classList.add('hidden');
-    $('howToPlayPanel').classList.add('hidden');
-    $('rulesPanel').classList.add('hidden');
-    $('homePrimaryAction').classList.remove('hidden');
+    state.profileOpen = false;
+    showHomeScreen('homePrimaryAction');
   }
 
   function openMyGames() {
     if (!state.accountUser) return;
     setGameScreenActive(false);
-    $('homePrimaryAction').classList.add('hidden');
-    $('playFlow').classList.add('hidden');
-    $('entry').classList.add('hidden');
-    $('profilePanel').classList.add('hidden');
-    $('myGamesPanel').classList.remove('hidden');
+    showHomeScreen('myGamesPanel');
     loadMyGames();
   }
 
   function openPlayFlow() {
-    $('homePrimaryAction').classList.add('hidden');
-    $('entry').classList.add('hidden');
-    $('myGamesPanel').classList.add('hidden');
-    $('playFlow').classList.remove('hidden');
+    showHomeScreen('playFlow');
     $('playCreateChoiceBtn').focus({ preventScroll: true });
   }
 
   function openPlayEntry(mode) {
     const joinMode = mode === 'join';
-    $('homePrimaryAction').classList.add('hidden');
-    $('playFlow').classList.add('hidden');
-    $('entry').classList.remove('hidden');
+    showHomeScreen('entry');
     $('entry').dataset.entryMode = joinMode ? 'join' : 'create';
     $('entryTitle').textContent = joinMode ? 'Присоединиться' : 'Создать игру';
     $('entrySubtitle').textContent = joinMode
