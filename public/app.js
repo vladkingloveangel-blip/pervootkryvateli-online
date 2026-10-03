@@ -85,6 +85,7 @@
     document.body.classList.toggle('home-active', !gameActive);
     $('homeShell')?.setAttribute('aria-hidden', gameActive ? 'true' : 'false');
     $('game')?.setAttribute('aria-hidden', gameActive ? 'false' : 'true');
+    syncHomeMusic();
   }
 
   function setGameScreenActive(active) {
@@ -255,6 +256,7 @@
   function saveSoundSettings() {
     localStorage.setItem(SOUND_STORAGE_KEY, JSON.stringify(soundState));
     syncSettingsControls();
+    syncHomeMusic();
   }
 
   function openSettings() {
@@ -980,6 +982,15 @@
       target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }
+  $('homeShell').addEventListener('click', event => {
+    if (!document.body.classList.contains('home-active')) return;
+    const control = event.target.closest?.('button, [role="tab"], input[type="checkbox"], input[type="range"]');
+    if (!control || control.disabled || control.classList.contains('hidden')) return;
+    playSoundCue('confirm');
+    scheduleHomeMusic();
+  });
+  document.addEventListener('visibilitychange', syncHomeMusic);
+
   $('settingsSoundEnabled').addEventListener('change', event => {
     soundState.muted = !event.currentTarget.checked;
     saveSoundSettings();
@@ -2427,6 +2438,59 @@
     }
   })();
   const soundCooldowns = new Map();
+  let homeMusicTimer = null;
+  let homeMusicStep = 0;
+
+  function homeAudioAllowed() {
+    return document.body.classList.contains('home-active') && !soundState.muted && soundState.volume > 0 && document.visibilityState !== 'hidden';
+  }
+
+  function playHomeMusicNote(frequency, duration = 1.8, gain = .012) {
+    if (!homeAudioAllowed()) return;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    try {
+      uiAudioContext ||= new AudioCtx();
+      if (uiAudioContext.state === 'suspended') uiAudioContext.resume().catch(() => {});
+      const oscillator = uiAudioContext.createOscillator();
+      const volume = uiAudioContext.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = frequency;
+      const now = uiAudioContext.currentTime;
+      volume.gain.setValueAtTime(.0001, now);
+      volume.gain.exponentialRampToValueAtTime(Math.max(.0001, gain * soundState.volume), now + .35);
+      volume.gain.exponentialRampToValueAtTime(.0001, now + duration);
+      oscillator.connect(volume).connect(uiAudioContext.destination);
+      oscillator.start(now);
+      oscillator.stop(now + duration + .05);
+    } catch (_) {}
+  }
+
+  function scheduleHomeMusic() {
+    if (homeMusicTimer || !homeAudioAllowed()) return;
+    const notes = [146.83, 174.61, 196, 220, 196, 174.61, 164.81, 146.83];
+    const tick = () => {
+      if (!homeAudioAllowed()) {
+        homeMusicTimer = null;
+        return;
+      }
+      playHomeMusicNote(notes[homeMusicStep % notes.length]);
+      if (homeMusicStep % 4 === 0) playHomeMusicNote(notes[homeMusicStep % notes.length] / 2, 2.5, .008);
+      homeMusicStep += 1;
+      homeMusicTimer = setTimeout(tick, 2200);
+    };
+    tick();
+  }
+
+  function stopHomeMusic() {
+    if (homeMusicTimer) clearTimeout(homeMusicTimer);
+    homeMusicTimer = null;
+  }
+
+  function syncHomeMusic() {
+    if (homeAudioAllowed()) scheduleHomeMusic();
+    else stopHomeMusic();
+  }
 
   // Compatibility marker for the canonical UI-38 fallback: playUiCue('confirm')
   function playSoundCue(kind = 'confirm') {
