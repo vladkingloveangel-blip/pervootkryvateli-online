@@ -44,6 +44,10 @@ body.home-active .home-dashboard-intro p{margin:5px 0 0;font-size:12px;color:rgb
 body.home-active .home-dashboard-primary{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;margin-top:16px}
 body.home-active .home-dashboard-action{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;width:100%;min-height:76px;padding:13px 18px;border:1px solid rgba(213,180,101,.62);border-radius:17px;background:linear-gradient(180deg,rgba(9,46,55,.88),rgba(5,28,35,.94));box-shadow:0 10px 28px rgba(0,0,0,.3),inset 0 0 0 1px rgba(255,239,195,.05);color:#f0dfae;text-align:left}
 body.home-active .home-dashboard-action.primary{border-color:rgba(238,201,116,.92);background:linear-gradient(180deg,rgba(31,78,78,.94),rgba(8,40,48,.97));box-shadow:0 13px 34px rgba(0,0,0,.36),inset 0 0 0 2px rgba(255,232,169,.07)}
+body.home-active .home-dashboard-continue{grid-column:1/-1;min-height:86px}
+body.home-active .home-dashboard-continue.hidden{display:none}
+body.home-active .home-dashboard-continue strong{font-size:25px}
+body.home-active .home-dashboard-error{min-height:0;margin:7px 4px 0;text-align:center}
 body.home-active .home-dashboard-action strong{font-family:Georgia,'Times New Roman',serif;font-size:22px;line-height:1.05;letter-spacing:.025em}
 body.home-active .home-dashboard-action small{margin-top:5px;font-size:10px;letter-spacing:.04em;color:rgba(229,224,200,.72)}
 body.home-active .home-dashboard-action:active{transform:translateY(1px)}
@@ -56,6 +60,8 @@ body.home-active .home-dashboard-links>button:active{transform:translateY(1px)}
   body.home-active #homeDashboard{width:min(100%,430px);margin-top:clamp(8px,2dvh,20px)}
   body.home-active .home-dashboard-primary{margin-top:12px}
   body.home-active .home-dashboard-action{min-height:68px;padding:11px 15px}
+  body.home-active .home-dashboard-continue{min-height:76px}
+  body.home-active .home-dashboard-continue strong{font-size:23px}
   body.home-active .home-dashboard-action strong{font-size:20px}
   body.home-active .home-dashboard-links>button{min-height:56px;padding:9px 10px}
 }
@@ -64,6 +70,7 @@ body.home-active .home-dashboard-links>button:active{transform:translateY(1px)}
   body.home-active .home-dashboard-intro p{display:none}
   body.home-active .home-dashboard-primary{margin-top:8px;gap:7px}
   body.home-active .home-dashboard-action{min-height:58px}
+  body.home-active .home-dashboard-continue{min-height:64px}
   body.home-active .home-dashboard-links{gap:7px;margin-top:7px}
   body.home-active .home-dashboard-links>button{min-height:50px}
 }
