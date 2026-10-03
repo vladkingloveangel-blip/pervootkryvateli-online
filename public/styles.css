@@ -467,9 +467,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
 
 }
 
-@media (max-width: 420px) {
-  body.game-active.game-account-open #accountBar { top: 102px; }
-}
 
 /* v0.25 — контекстные игровые действия */
 @media (max-width: 900px) {
