@@ -206,3 +206,44 @@ body.home-active #authPanel #authSubmitBtn{width:100%;min-height:50px;font-famil
 body.home-active .auth-mode-hint{margin:11px 0 0;text-align:center;color:rgba(226,221,197,.55);font-size:10px}
 body.home-active #authPanel #authError{margin-bottom:0;text-align:center}
 @media(max-width:520px){body.home-active #authPanel.auth-panel{width:calc(100% - 12px);margin-top:clamp(36px,9dvh,86px);padding:17px}}
+
+/* Step 15: Mobile polish */
+@media(max-width:520px){
+  body.home-active{overflow:hidden}
+  body.home-active #homeShell{min-height:100svh;height:100dvh;padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right));padding-bottom:max(10px,env(safe-area-inset-bottom))}
+  body.home-active #homeShell button,body.home-active #homeShell input,body.home-active #homeShell select{font-size:max(16px,1em)}
+  body.home-active #homeShell button{touch-action:manipulation}
+  body.home-active .home-icon-button,body.home-active .play-flow-back,body.home-active .my-games-refresh{min-width:44px;min-height:44px}
+  body.home-active .home-topbar{padding-top:max(8px,env(safe-area-inset-top));gap:8px}
+  body.home-active .home-logo{max-width:min(54vw,230px)}
+  body.home-active .home-top-actions{gap:7px}
+  body.home-active .connection{max-width:34vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  body.home-active #homePrimaryAction{padding-bottom:max(8dvh,env(safe-area-inset-bottom))}
+  body.home-active .home-play-button{width:min(88vw,340px);min-height:68px}
+  body.home-active #playFlow.play-flow,body.home-active #entry.entry-panel,body.home-active #myGamesPanel.my-games-panel,body.home-active #profilePanel.profile-panel,body.home-active #settingsPanel.settings-panel,body.home-active #howToPlayPanel.how-to-play-panel,body.home-active #rulesPanel.rules-panel,body.home-active #authPanel.auth-panel{max-height:calc(100dvh - max(82px,env(safe-area-inset-top)) - max(12px,env(safe-area-inset-bottom)));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  body.home-active #playFlow.play-flow,body.home-active #entry.entry-panel,body.home-active #myGamesPanel.my-games-panel,body.home-active #profilePanel.profile-panel,body.home-active #settingsPanel.settings-panel{margin-top:12px}
+  body.home-active .play-flow-head,body.home-active .entry-head,body.home-active .my-games-head,body.home-active .profile-home-head,body.home-active .settings-home-head,body.home-active .how-to-play-head,body.home-active .rules-head{gap:10px}
+  body.home-active .entry-captain-fields,body.home-active #profilePanel .profile-grid,body.home-active #profilePanel .profile-password-grid{grid-template-columns:minmax(0,1fr)}
+  body.home-active input,body.home-active select{max-width:100%}
+  body.home-active .settings-row{align-items:flex-start}
+  body.home-active .settings-row>div{min-width:0}
+  body.home-active .settings-row small{overflow-wrap:anywhere}
+  body.home-active .rules-tabs{scroll-snap-type:x proximity}
+  body.home-active .rules-tabs button{min-height:44px;scroll-snap-align:start}
+  body.home-active .home-secondary-menu{left:8px;right:8px;width:auto;max-height:calc(100dvh - max(16px,env(safe-area-inset-top)) - max(8px,env(safe-area-inset-bottom)));padding-bottom:max(14px,env(safe-area-inset-bottom))}
+}
+@media(max-width:360px){
+  body.home-active .home-logo{max-width:49vw}
+  body.home-active .home-secondary-grid>button{min-height:54px;padding:7px 9px}
+  body.home-active .home-secondary-grid>button>small{font-size:9px}
+  body.home-active .how-to-play-steps article{grid-template-columns:32px 1fr;padding:10px}
+  body.home-active .how-to-play-steps article>b{width:30px;height:30px}
+}
+@media(max-height:620px) and (max-width:520px){
+  body.home-active .home-logo{max-height:72px;width:auto}
+  body.home-active #homePrimaryAction{padding-bottom:3dvh}
+  body.home-active #authPanel.auth-panel{margin-top:8px}
+  body.home-active .auth-mode-tabs{margin:10px 0}
+  body.home-active .auth-fields{gap:8px}
+  body.home-active #authPanel .auth-actions{margin-top:10px}
+}
