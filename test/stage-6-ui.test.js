@@ -696,7 +696,8 @@ test('UI-15 Citadel sheet does not duplicate purchase or sale socket payloads', 
   }
   assert.doesNotMatch(code, /emitDataAction\([^\n]*buyShip/);
   assert.match(code, /target\.appendChild\(children\[i\]\)/);
-  assert.match(code, /while \(escortSource\.firstChild\) target\.appendChild\(escortSource\.firstChild\);/);
+  assert.match(code, /legacySell\.click\(\)/);
+  assert.doesNotMatch(code, /escortCargoActions|holdId/);
 });
 
 test('UI-15 remote Citadel inspection never enables commerce away from Citadel', () => {
@@ -1615,9 +1616,10 @@ test('UI-32 routes HUD and map context into map-first object sheets instead of m
 });
 
 test('UI-32 retains legacy panel DOM only as internal canonical action hosts', () => {
-  for (const id of ['eventActions','politicsActions','fleetActions','escortCargoActions','islandActions','combatActions','allianceActions']) {
+  for (const id of ['eventActions','politicsActions','fleetActions','sellCargoBtn','islandActions','combatActions','allianceActions']) {
     assert.match(index, new RegExp(`id="${id}"`), id);
   }
+  assert.doesNotMatch(index, /id="escortCargoActions"/);
   assert.match(app, /Existing renderers remain authoritative for legality, prices and socket payloads/);
   assert.match(app, /Existing event\/legendary renderers remain authoritative for all legality and payloads/);
 });
