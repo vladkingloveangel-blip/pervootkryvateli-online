@@ -141,6 +141,9 @@
     $('homeProfileBtn')?.classList.add('hidden');
     $('homeSettingsBtn')?.classList.add('hidden');
     $('entry').classList.add('hidden');
+    $('homePrimaryAction').classList.add('hidden');
+    $('playFlow').classList.add('hidden');
+    $('myGamesPanel').classList.add('hidden');
     $('adminPanel').classList.add('hidden');
     if (!state.spectating) $('game').classList.add('hidden');
     setError('authError', message);
@@ -192,6 +195,10 @@
     state.profileOpen = true;
     $('profileUsername').value = state.accountUser.username || '';
     $('profileDisplayName').value = state.accountUser.displayName || '';
+    const profileName = state.accountUser.displayName || state.accountUser.username || 'Капитан';
+    $('profileIdentityName').textContent = profileName;
+    $('profileIdentityLogin').textContent = '@' + (state.accountUser.username || '—');
+    $('profileAvatarInitial').textContent = profileName.trim().charAt(0).toUpperCase() || '?';
     $('profileOldPassword').value = '';
     $('profileNewPassword').value = '';
     $('profileNewPassword2').value = '';
@@ -234,6 +241,10 @@
       $('accountName').textContent = result.user.displayName || result.user.username;
       $('nameInput').value = result.user.displayName || result.user.username;
       $('profileDisplayName').value = result.user.displayName || '';
+      const profileName = result.user.displayName || result.user.username || 'Капитан';
+      $('profileIdentityName').textContent = profileName;
+      $('profileAvatarInitial').textContent = profileName.trim().charAt(0).toUpperCase() || '?';
+      $('homeAvatarInitial').textContent = profileName.trim().charAt(0).toUpperCase() || '?';
       $('profileSaveStatus').textContent = 'Имя сохранено.';
     } catch (err) {
       $('profileSaveStatus').textContent = err.message || 'Не удалось сохранить имя.';
