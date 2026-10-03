@@ -110,3 +110,29 @@ body.home-active #profilePanel .profile-note{margin:9px 0 12px;font-size:11px}
 body.home-active #profilePanel .profile-submit{min-height:44px}
 body.home-active #profilePanel .profile-status{min-height:18px;margin:8px 0 0}
 @media(max-width:520px){body.home-active #profilePanel.profile-panel{width:calc(100% - 8px);margin-top:20px;padding:14px}body.home-active #profilePanel .profile-grid,body.home-active #profilePanel .profile-password-grid{grid-template-columns:1fr}body.home-active #profilePanel .profile-password-grid label:first-child{grid-column:auto}}
+
+/* Step 9: Settings */
+body.home-active #settingsPanel.settings-panel{position:relative;z-index:2;width:min(100%,620px);margin:clamp(28px,7dvh,82px) auto 0;padding:18px;border:1px solid rgba(222,187,105,.55);border-radius:20px;background:linear-gradient(180deg,rgba(7,37,45,.94),rgba(4,24,31,.98));box-shadow:0 18px 48px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,238,190,.06);backdrop-filter:blur(8px)}
+body.home-active #settingsPanel.hidden{display:none}
+body.home-active .settings-home-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:16px}
+body.home-active .settings-home-head span{display:block;font-size:10px;font-weight:700;letter-spacing:.2em;color:rgba(235,207,139,.72)}
+body.home-active .settings-home-head h1{margin:3px 0 4px;font-family:Georgia,'Times New Roman',serif;font-size:clamp(24px,7vw,34px);color:#f0dda8}
+body.home-active .settings-home-head p{margin:0;font-size:12px}
+body.home-active .settings-section{padding:14px;margin-top:10px;border:1px solid rgba(198,165,91,.25);border-radius:14px;background:rgba(3,25,32,.6)}
+body.home-active .settings-section.hidden{display:none}
+body.home-active .settings-row{display:flex;align-items:center;justify-content:space-between;gap:16px}
+body.home-active .settings-row>div{display:grid;gap:4px}
+body.home-active .settings-row strong{color:#ead69e;font-family:Georgia,'Times New Roman',serif;font-size:18px}
+body.home-active .settings-row small{max-width:390px;color:rgba(226,221,197,.64);font-size:11px}
+body.home-active .settings-switch{position:relative;display:block;width:52px;min-width:52px;height:30px}
+body.home-active .settings-switch input{position:absolute;opacity:0;pointer-events:none}
+body.home-active .settings-switch span{position:absolute;inset:0;border:1px solid rgba(198,165,91,.4);border-radius:999px;background:rgba(2,21,28,.9);transition:.18s}
+body.home-active .settings-switch span::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#8c8f82;transition:.18s}
+body.home-active .settings-switch input:checked+span{background:rgba(45,91,82,.92);border-color:rgba(232,194,104,.72)}
+body.home-active .settings-switch input:checked+span::after{transform:translateX(22px);background:#ead69e}
+body.home-active .settings-volume{display:grid;gap:8px;margin-top:16px;color:rgba(239,224,183,.82);font-size:12px;font-weight:700}
+body.home-active .settings-volume>div{display:grid;grid-template-columns:1fr 48px;align-items:center;gap:12px}
+body.home-active .settings-volume input{width:100%;accent-color:#caa75c}
+body.home-active .settings-volume output{text-align:right;color:#ead69e;font-variant-numeric:tabular-nums}
+body.home-active #settingsInstallBtn{min-height:42px;white-space:nowrap}
+@media(max-width:520px){body.home-active #settingsPanel.settings-panel{width:calc(100% - 8px);margin-top:24px;padding:14px}body.home-active .settings-row{gap:10px}}
