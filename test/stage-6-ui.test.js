@@ -70,6 +70,7 @@ function uiHarness(legacy, renderer) {
     $:id=>{if(!nodes.has(id))nodes.set(id,node());return nodes.get(id);},
     me:()=>room.players.find(p=>p.id==='p1'), playerName:id=>id,
     escapeHtml:value=>String(value), handleGameAck:()=>{},
+    emitDataAction:(button,event,payload)=>calls.push({event,payload}),
     isDecisionPending:()=>false, currentIslands:()=>room.islands || [],
     areAlliesClient:()=>false, socket:{emit:(event,payload)=>calls.push({event,payload})},
   });
@@ -2157,5 +2158,5 @@ test('stabilization UI copy reflects global Sea Curse and fleet-wide ordinary ca
   assert.match(app, /ПОГРУЗИТЬ ФЛОТИЛИЮ/);
   assert.match(app, /Одно действие заполнит им все свободные доступные трюмы флотилии/);
   assert.doesNotMatch(app, /Выберите производимый товар и свободный активный трюм/);
-  assert.match(app, /socket\.emit\('loadCargo', \{ islandId: island\.id, goodId \}/);
+  assert.match(app, /emitDataAction\([\s\S]*?'loadCargo',[\s\S]*?\{ islandId: island\.id, goodId \}/);
 });
