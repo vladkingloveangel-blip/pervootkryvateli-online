@@ -137,35 +137,37 @@
       </div>
     </section>
 
-    <section id="entry" class="panel entry-panel hidden">
-      <div id="myGamesPanel" class="my-games hidden">
-        <div class="section-head"><h2>Мои игры</h2><button id="myGamesRefreshBtn" class="small">Обновить</button></div>
-        <div id="myGamesList" class="admin-room-list" aria-live="polite"></div>
-        <p id="myGamesError" class="error" role="alert"></p>
+    <section id="entry" class="panel entry-panel hidden" data-entry-mode="create">
+      <div class="entry-head">
+        <button id="entryBackBtn" class="play-flow-back" type="button" aria-label="Назад к выбору">←</button>
+        <div><span>ИГРА</span><h1 id="entryTitle">Создать игру</h1><p id="entrySubtitle" class="muted">Подготовьте капитана и откройте новую комнату.</p></div>
       </div>
-      <h1>Морская партия онлайн</h1>
-      <p class="muted">Создай комнату или введи код друга. </p>
 
-      <label>Имя
-        <input id="nameInput" maxlength="24" autocomplete="nickname" placeholder="Капитан" />
-      </label>
-
-      <label>Класс корабля
-        <select id="shipSelect">
-          <option value="brigantine">Бригантина</option>
-          <option value="frigate">Фрегат</option>
-          <option value="caravel">Каравелла</option>
-          <option value="carrack">Каракка</option>
-        </select>
-      </label>
+      <div id="entryCaptainFields" class="entry-captain-fields">
+        <label>Имя капитана
+          <input id="nameInput" maxlength="24" autocomplete="nickname" placeholder="Капитан" />
+        </label>
+        <label>Класс корабля
+          <select id="shipSelect">
+            <option value="brigantine">Бригантина</option>
+            <option value="frigate">Фрегат</option>
+            <option value="caravel">Каравелла</option>
+            <option value="carrack">Каракка</option>
+          </select>
+        </label>
+      </div>
 
       <div class="entry-actions">
-        <button id="createBtn" class="primary">Создать комнату</button>
-        <div class="join-row">
-          <input id="codeInput" maxlength="5" autocapitalize="characters" placeholder="КОД" />
-          <button id="joinBtn">Войти</button>
-          <button id="installAppBtn" class="hidden">Установить на телефон</button>
+        <div id="createEntryActions">
+          <button id="createBtn" class="primary entry-submit">Создать комнату</button>
         </div>
+        <div id="joinEntryActions" class="join-entry-actions hidden">
+          <label>Код комнаты
+            <input id="codeInput" maxlength="5" autocapitalize="characters" autocomplete="off" inputmode="text" placeholder="КОД" />
+          </label>
+          <button id="joinBtn" class="primary entry-submit">Войти в игру</button>
+        </div>
+        <button id="installAppBtn" class="hidden">Установить на телефон</button>
       </div>
       <p id="entryError" class="error" role="alert"></p>
     </section>
