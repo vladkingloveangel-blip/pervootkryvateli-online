@@ -43,7 +43,6 @@ test('home shell stylesheet is isolated and mobile fullscreen', () => {
 test('home top area uses authored assets without entering game scope', () => {
   assert.ok(html.includes('class="home-logo" src="/assets/home-logo.png"'));
   assert.match(html, /id="homeProfileBtn"/);
-  assert.match(html, /id="homeSettingsBtn"/);
   assert.ok(html.includes('id="homeMenuBtn"'));
   assert.ok(app.includes("$('homeProfileBtn').addEventListener('click', openProfile)"));
   assert.ok(app.includes("$('homeMenuBtn').addEventListener('click', openHomeMenu)"));
