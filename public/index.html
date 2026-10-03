@@ -91,9 +91,9 @@
       </div>
     </section>
 
-    <section id="profilePanel" class="panel profile-panel hidden" aria-labelledby="profileTitle">
-      <div class="profile-home-head">
-        <button id="profileBackBtn" class="play-flow-back" type="button" aria-label="Назад">←</button>
+    <section id="profilePanel" class="panel home-screen profile-panel hidden" aria-labelledby="profileTitle">
+      <div class="home-screen-head profile-home-head">
+        <button id="profileBackBtn" class="home-screen-back" type="button" aria-label="Назад">←</button>
         <div><span>КАПИТАН</span><h1 id="profileTitle">Профиль</h1><p class="muted">Личные данные аккаунта игрока.</p></div>
       </div>
 
@@ -144,9 +144,9 @@
 
 
 
-    <section id="rulesPanel" class="panel rules-panel hidden" aria-labelledby="rulesTitle">
-      <div class="rules-head">
-        <button id="rulesBackBtn" class="play-flow-back" type="button" aria-label="Назад">←</button>
+    <section id="rulesPanel" class="panel home-screen rules-panel hidden" aria-labelledby="rulesTitle">
+      <div class="home-screen-head rules-head">
+        <button id="rulesBackBtn" class="home-screen-back" type="button" aria-label="Назад">←</button>
         <div><span>КНИГА КАПИТАНА</span><h1 id="rulesTitle">Правила</h1><p class="muted">Свод основных правил текущей цифровой редакции.</p></div>
       </div>
       <nav class="rules-tabs" aria-label="Разделы правил">
@@ -167,9 +167,9 @@
       </div>
     </section>
 
-    <section id="howToPlayPanel" class="panel how-to-play-panel hidden" aria-labelledby="howToPlayTitle">
-      <div class="how-to-play-head">
-        <button id="howToPlayBackBtn" class="play-flow-back" type="button" aria-label="Назад на главную">←</button>
+    <section id="howToPlayPanel" class="panel home-screen how-to-play-panel hidden" aria-labelledby="howToPlayTitle">
+      <div class="home-screen-head how-to-play-head">
+        <button id="howToPlayBackBtn" class="home-screen-back" type="button" aria-label="Назад на главную">←</button>
         <div><span>ПЕРВЫЙ ВЫХОД В МОРЕ</span><h1 id="howToPlayTitle">Как играть</h1><p class="muted">Короткий маршрут по партии без полного свода правил.</p></div>
       </div>
       <div class="how-to-play-steps">
@@ -183,9 +183,9 @@
       <button id="howToRulesBtn" class="how-to-rules-link" type="button">Полные правила</button>
     </section>
 
-    <section id="settingsPanel" class="panel settings-panel hidden" aria-labelledby="settingsTitle">
-      <div class="settings-home-head">
-        <button id="settingsBackBtn" class="play-flow-back" type="button" aria-label="Назад на главную">←</button>
+    <section id="settingsPanel" class="panel home-screen settings-panel hidden" aria-labelledby="settingsTitle">
+      <div class="home-screen-head settings-home-head">
+        <button id="settingsBackBtn" class="home-screen-back" type="button" aria-label="Назад на главную">←</button>
         <div><span>ПАРАМЕТРЫ</span><h1 id="settingsTitle">Настройки</h1><p class="muted">Настройки этого устройства.</p></div>
       </div>
 
@@ -197,6 +197,7 @@
         <label class="settings-volume">Громкость
           <div><input id="settingsSoundVolume" type="range" min="0" max="100" step="1" /><output id="settingsSoundVolumeValue">72%</output></div>
         </label>
+        <p class="settings-audio-credit">Музыка: <a href="https://opengameart.org/content/loop-pirates-ahoy" target="_blank" rel="noopener noreferrer">Loop Pirates Ahoy</a> — Morten Barfod Søegaard (Little Robot Sound Factory), CC BY 3.0.</p>
       </div>
 
       <div id="settingsInstallSection" class="settings-section hidden">
@@ -225,30 +226,50 @@
       </button>
     </section>
 
-    <section id="myGamesPanel" class="my-games-panel hidden" aria-labelledby="myGamesTitle">
-      <div class="my-games-head">
-        <button id="myGamesBackBtn" class="play-flow-back" type="button" aria-label="Назад на главную">←</button>
-        <div><span>КАПИТАНСКИЙ ЖУРНАЛ</span><h1 id="myGamesTitle">Мои игры</h1><p class="muted">Продолжите сохранённую партию или вернитесь на главную.</p></div>
+    <section id="homeDashboard" class="home-dashboard hidden" aria-labelledby="homeDashboardTitle">
+      <div class="home-dashboard-intro">
+        <span>КАПИТАНСКИЙ МОСТИК</span>
+        <h1 id="homeDashboardTitle">Главная</h1>
+        <p>Выберите следующий шаг путешествия.</p>
+      </div>
+
+      <div class="home-dashboard-primary">
+        <button id="homeContinueBtn" class="home-dashboard-action home-dashboard-continue primary hidden" type="button">
+          <strong>Продолжить</strong>
+          <small id="homeContinueDetail">Вернуться в незавершённую партию</small>
+        </button>
+        <button id="homeNewGameBtn" class="home-dashboard-action primary" type="button">
+          <strong>Новая игра</strong>
+          <small>Создать новую комнату</small>
+        </button>
+        <button id="homeJoinGameBtn" class="home-dashboard-action" type="button">
+          <strong>Присоединиться</strong>
+          <small>Войти по коду комнаты</small>
+        </button>
+      </div>
+      <p id="homeDashboardError" class="error home-dashboard-error" role="alert"></p>
+
+      <div class="home-dashboard-links" aria-label="Разделы игры">
+        <button id="homeDashboardGamesBtn" type="button"><strong>Мои партии</strong><small>Сохранённые игры</small></button>
+        <button id="homeDashboardHowToBtn" type="button"><strong>Как играть</strong><small>Короткое обучение</small></button>
+        <button id="homeDashboardRulesBtn" type="button"><strong>Правила</strong><small>Игровая энциклопедия</small></button>
+        <button id="homeDashboardSettingsBtn" type="button"><strong>Настройки</strong><small>Звук и устройство</small></button>
+      </div>
+    </section>
+
+    <section id="myGamesPanel" class="home-screen my-games-panel hidden" aria-labelledby="myGamesTitle">
+      <div class="home-screen-head my-games-head">
+        <button id="myGamesBackBtn" class="home-screen-back" type="button" aria-label="Назад на главную">←</button>
+        <div><span>КАПИТАНСКИЙ ЖУРНАЛ</span><h1 id="myGamesTitle">Мои партии</h1><p class="muted">Незавершённые путешествия этого аккаунта.</p></div>
         <button id="myGamesRefreshBtn" class="my-games-refresh" type="button" aria-label="Обновить список">↻</button>
       </div>
       <div id="myGamesList" class="my-games-list" aria-live="polite"></div>
       <p id="myGamesError" class="error" role="alert"></p>
     </section>
 
-    <section id="playFlow" class="play-flow hidden" aria-labelledby="playFlowTitle">
-      <div class="play-flow-head">
-        <button id="playFlowBackBtn" class="play-flow-back" type="button" aria-label="Назад на главную">←</button>
-        <div><span>ПУТЕШЕСТВИЕ</span><h1 id="playFlowTitle">Выберите путь</h1></div>
-      </div>
-      <div class="play-flow-actions">
-        <button id="playCreateChoiceBtn" class="play-choice primary" type="button"><strong>Создать игру</strong><small>Открыть новую комнату</small></button>
-        <button id="playJoinChoiceBtn" class="play-choice" type="button"><strong>Присоединиться</strong><small>Войти по коду комнаты</small></button>
-      </div>
-    </section>
-
-    <section id="entry" class="panel entry-panel hidden" data-entry-mode="create">
-      <div class="entry-head">
-        <button id="entryBackBtn" class="play-flow-back" type="button" aria-label="Назад к выбору">←</button>
+    <section id="entry" class="panel home-screen entry-panel hidden" data-entry-mode="create">
+      <div class="home-screen-head entry-head">
+        <button id="entryBackBtn" class="home-screen-back" type="button" aria-label="Назад на главную">←</button>
         <div><span>ИГРА</span><h1 id="entryTitle">Создать игру</h1><p id="entrySubtitle" class="muted">Подготовьте капитана и откройте новую комнату.</p></div>
       </div>
 

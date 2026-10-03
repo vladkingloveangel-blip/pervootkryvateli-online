@@ -1,7 +1,7 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mapMovePending: false, lastAutoCenterSignature: '', resultQueue: [], activeResult: null, toastQueue: [], journalEntries: [], ambientSnapshot: null, targeting: null, rehydrateOnNextRoomState: false, islandSheetView: null, roomStateSeq: 0 };
+  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mapMovePending: false, lastAutoCenterSignature: '', resultQueue: [], activeResult: null, toastQueue: [], journalEntries: [], ambientSnapshot: null, targeting: null, rehydrateOnNextRoomState: false, islandSheetView: null, roomStateSeq: 0, homeAvailableRooms: [], authStartupMessage: '' };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
   const shipName = id => state.room?.shipCatalog?.[id]?.name || state.shipCatalog?.[id]?.name || $('shipSelect').querySelector(`option[value="${id}"]`)?.textContent || 'Корабль';
   fetch('/api/rules').then(response => response.ok ? response.json() : null).then(rules => {
@@ -200,6 +200,7 @@
 
   function showAuth(message = '') {
     setGameScreenActive(false);
+    document.body.classList.remove('welcome-active');
     state.profileOpen = false;
     $('profilePanel').classList.add('hidden');
     $('settingsPanel').classList.add('hidden');
@@ -210,7 +211,7 @@
     $('homeMenuBtn')?.classList.add('hidden');
     $('entry').classList.add('hidden');
     $('homePrimaryAction').classList.add('hidden');
-    $('playFlow').classList.add('hidden');
+    $('homeDashboard').classList.add('hidden');
     $('myGamesPanel').classList.add('hidden');
     $('adminPanel').classList.add('hidden');
     if (!state.spectating) $('game').classList.add('hidden');
@@ -295,7 +296,7 @@
     const returnTo = $('rulesPanel').dataset.returnTo;
     $('rulesPanel').classList.add('hidden');
     if (returnTo === 'how-to') openHowToPlay();
-    else showHomePrimary();
+    else showHomeDashboard();
   }
 
   function openHowToPlay() {
@@ -309,7 +310,7 @@
 
   function closeHowToPlay() {
     $('howToPlayPanel').classList.add('hidden');
-    showHomePrimary();
+    showHomeDashboard();
   }
 
   function syncSettingsControls() {
@@ -343,7 +344,7 @@
       setGameScreenActive(true);
       render();
     } else {
-      showHomePrimary();
+      showHomeDashboard();
     }
   }
 
@@ -383,7 +384,7 @@
       setGameScreenActive(true);
       render();
     } else {
-      showHomePrimary();
+      showHomeDashboard();
       loadMyGames();
     }
   }
@@ -456,6 +457,7 @@
     const request = ++myGamesRequest;
     const enabled = Boolean(state.accountUser && token);
     if (!enabled) {
+      syncHomeContinue([]);
       $('myGamesPanel').classList.add('hidden');
       $('myGamesList').replaceChildren();
       return;
@@ -465,6 +467,7 @@
       const result = await apiJson('/api/my-games', { cache: 'no-store' });
       if (request !== myGamesRequest || token !== state.accountToken) return;
       if (!result?.ok) throw new Error(result?.error || 'Не удалось загрузить игры.');
+      syncHomeContinue(result.rooms);
       const box = $('myGamesList');
       box.replaceChildren();
       if (!result.rooms.length) {
@@ -473,7 +476,7 @@
       }
       for (const room of result.rooms) {
         const card = document.createElement('div');
-        card.className = 'admin-room-card';
+        card.className = 'home-game-card';
         const info = document.createElement('div');
         const title = document.createElement('strong');
         title.textContent = 'Комната ' + room.code;
@@ -488,22 +491,15 @@
         const button = document.createElement('button');
         button.className = 'small primary';
         button.textContent = 'Вернуться в игру';
-        button.addEventListener('click', () => {
-          if (!state.socketConnected) return setError('myGamesError', 'Нет связи с сервером. Дождись подключения.');
-          button.disabled = true;
-          state.rehydrateOnNextRoomState = true;
-          socket.timeout(15000).emit('resumeRoom', { code: room.code, accountToken: state.accountToken }, (err, res) => {
-            button.disabled = false;
-            if (token !== state.accountToken) return;
-            if (err || !res?.ok) return setError('myGamesError', res?.error || 'Сервер не ответил. Попробуй ещё раз.');
-            acceptSession(res);
-          });
-        });
+        button.addEventListener('click', () => resumeAvailableRoom(room, button, 'myGamesError'));
         card.append(info, button);
         box.append(card);
       }
     } catch (err) {
-      if (request === myGamesRequest && token === state.accountToken) setError('myGamesError', err.message || 'Не удалось загрузить игры.');
+      if (request === myGamesRequest && token === state.accountToken) {
+        syncHomeContinue([]);
+        setError('myGamesError', err.message || 'Не удалось загрузить игры.');
+      }
     }
   }
 
@@ -525,10 +521,13 @@
         } else {
           localStorage.removeItem('pervo:accountToken');
           state.accountToken = '';
-          showAuth('Войдите в аккаунт.');
+          state.accountUser = null;
+          state.authStartupMessage = 'Войдите в аккаунт.';
+          showHomePrimary();
         }
       } else {
-        showAuth(status?.databaseReady === false ? 'База аккаунтов подключается. Попробуйте обновить страницу.' : '');
+        state.authStartupMessage = status?.databaseReady === false ? 'База аккаунтов подключается. Попробуйте обновить страницу.' : '';
+        showHomePrimary();
       }
     } catch {
       showAuth('Не удалось проверить аккаунт.');
@@ -567,7 +566,9 @@
     const data = await apiJson(endpoint, { method: 'POST', body: JSON.stringify({ username, password, displayName }) });
     if (!data?.ok) return setError('authError', data?.error || 'Не удалось войти.');
     applyAccount(data.user, data.token);
+    state.authStartupMessage = '';
     state.resumeAttempted = false;
+    showHomeDashboard();
     maybeResumeLastRoom();
   }
 
@@ -662,6 +663,9 @@
     if (state.accountUser?.role !== 'admin') return;
     closeGameAccountMenu();
     setGameScreenActive(false);
+    document.body.classList.remove('welcome-active');
+    hideWelcomeScreen();
+    hideHomeScreens();
     state.spectating = false;
     state.room = null;
     document.body.classList.remove('spectator-mode');
@@ -738,7 +742,8 @@
     closeMapInfo();
     setGameScreenActive(false);
     $('game').classList.add('hidden');
-    showHomePrimary();
+    if (state.accountUser || !state.accountsEnabled) showHomeDashboard();
+    else showHomePrimary();
     setError('gameError', '');
     setError('entryError', message);
     loadMyGames();
@@ -978,7 +983,12 @@
   $('authDisplayName').addEventListener('keydown', e => {
     if (e.key === 'Enter') submitAuth('register');
   });
-  const HOME_SCREEN_IDS = ['homePrimaryAction', 'playFlow', 'entry', 'myGamesPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel'];
+  const WELCOME_SCREEN_ID = 'homePrimaryAction';
+  const HOME_SCREEN_IDS = ['homeDashboard', 'entry', 'myGamesPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel'];
+
+  function hideWelcomeScreen() {
+    $(WELCOME_SCREEN_ID)?.classList.add('hidden');
+  }
 
   function hideHomeScreens() {
     for (const id of HOME_SCREEN_IDS) $(id)?.classList.add('hidden');
@@ -986,13 +996,102 @@
 
   function showHomeScreen(id) {
     closeHomeMenu();
+    document.body.classList.remove('welcome-active');
+    hideWelcomeScreen();
     hideHomeScreens();
     $(id)?.classList.remove('hidden');
   }
 
-  function showHomePrimary() {
+  function showWelcomeScreen() {
     state.profileOpen = false;
-    showHomeScreen('homePrimaryAction');
+    closeHomeMenu();
+    hideHomeScreens();
+    document.body.classList.add('welcome-active');
+    $(WELCOME_SCREEN_ID)?.classList.remove('hidden');
+  }
+
+  function showHomePrimary() {
+    showWelcomeScreen();
+  }
+
+  function showHomeDashboard() {
+    if (state.accountsEnabled && !state.accountUser) {
+      showAuth(state.authStartupMessage || '');
+      return;
+    }
+    setGameScreenActive(false);
+    state.profileOpen = false;
+    $('authPanel').classList.add('hidden');
+    $('adminPanel').classList.add('hidden');
+    setError('homeDashboardError');
+    showHomeScreen('homeDashboard');
+    if (state.accountUser) loadMyGames();
+  }
+
+  function openWelcomeAction() {
+    if (state.accountsEnabled && !state.accountUser) {
+      showAuth(state.authStartupMessage || '');
+      return;
+    }
+    showHomeDashboard();
+  }
+
+  function syncHomeContinue(rooms) {
+    const available = Array.isArray(rooms) ? rooms : [];
+    state.homeAvailableRooms = available;
+    const button = $('homeContinueBtn');
+    const detail = $('homeContinueDetail');
+    const hasRooms = available.length > 0;
+    button.classList.toggle('hidden', !hasRooms);
+    $('homeNewGameBtn').classList.toggle('primary', !hasRooms);
+    if (!hasRooms) {
+      detail.textContent = 'Вернуться в незавершённую партию';
+      return;
+    }
+    if (available.length > 1) {
+      detail.textContent = 'Несколько незавершённых партий · выбрать';
+      return;
+    }
+    const room = available[0];
+    detail.textContent = room.started
+      ? 'Комната ' + room.code + ' · раунд ' + room.round + ', круг ' + room.circle + (room.isYourTurn ? ' · твой ход' : '')
+      : 'Комната ' + room.code + ' · лобби';
+  }
+
+  function resumeAvailableRoom(room, button, errorId) {
+    if (!room?.code) return;
+    if (!state.socketConnected) {
+      setError(errorId, 'Нет связи с сервером. Дождись подключения.');
+      return;
+    }
+    const token = state.accountToken;
+    button.disabled = true;
+    state.rehydrateOnNextRoomState = true;
+    socket.timeout(15000).emit('resumeRoom', { code: room.code, accountToken: token }, (err, res) => {
+      button.disabled = false;
+      if (token !== state.accountToken) return;
+      if (err || !res?.ok) {
+        state.rehydrateOnNextRoomState = false;
+        setError(errorId, res?.error || 'Сервер не ответил. Попробуй ещё раз.');
+        loadMyGames();
+        return;
+      }
+      acceptSession(res);
+    });
+  }
+
+  function continueFromHome() {
+    const rooms = state.homeAvailableRooms;
+    if (!rooms.length) {
+      loadMyGames();
+      return;
+    }
+    setError('homeDashboardError');
+    if (rooms.length > 1) {
+      openMyGames();
+      return;
+    }
+    resumeAvailableRoom(rooms[0], $('homeContinueBtn'), 'homeDashboardError');
   }
 
   function openMyGames() {
@@ -1000,11 +1099,6 @@
     setGameScreenActive(false);
     showHomeScreen('myGamesPanel');
     loadMyGames();
-  }
-
-  function openPlayFlow() {
-    showHomeScreen('playFlow');
-    $('playCreateChoiceBtn').focus({ preventScroll: true });
   }
 
   function openPlayEntry(mode) {
@@ -1022,13 +1116,17 @@
     else $('createBtn').focus({ preventScroll: true });
   }
 
-  $('homePlayBtn').addEventListener('click', openPlayFlow);
-  $('playFlowBackBtn').addEventListener('click', showHomePrimary);
-  $('myGamesBackBtn').addEventListener('click', showHomePrimary);
+  $('homePlayBtn').addEventListener('click', openWelcomeAction);
+  $('homeContinueBtn').addEventListener('click', continueFromHome);
+  $('homeNewGameBtn').addEventListener('click', () => openPlayEntry('create'));
+  $('homeJoinGameBtn').addEventListener('click', () => openPlayEntry('join'));
+  $('homeDashboardGamesBtn').addEventListener('click', openMyGames);
+  $('homeDashboardHowToBtn').addEventListener('click', openHowToPlay);
+  $('homeDashboardRulesBtn').addEventListener('click', () => openRules('home'));
+  $('homeDashboardSettingsBtn').addEventListener('click', openSettings);
+  $('myGamesBackBtn').addEventListener('click', showHomeDashboard);
   $('myGamesRefreshBtn').addEventListener('click', loadMyGames);
-  $('entryBackBtn').addEventListener('click', openPlayFlow);
-  $('playCreateChoiceBtn').addEventListener('click', () => openPlayEntry('create'));
-  $('playJoinChoiceBtn').addEventListener('click', () => openPlayEntry('join'));
+  $('entryBackBtn').addEventListener('click', showHomeDashboard);
   $('homeProfileBtn').addEventListener('click', openProfile);
   $('homeMenuBtn').addEventListener('click', openHomeMenu);
   $('homeMenuCloseBtn').addEventListener('click', closeHomeMenu);
@@ -1051,8 +1149,8 @@
     if (!document.body.classList.contains('home-active')) return;
     const control = event.target.closest?.('button, [role="tab"], input[type="checkbox"], input[type="range"]');
     if (!control || control.disabled || control.classList.contains('hidden')) return;
-    playSoundCue('confirm');
-    scheduleHomeMusic();
+    playHomeConfirmSound();
+    syncHomeMusic();
   });
   document.addEventListener('visibilitychange', syncHomeMusic);
 
@@ -1158,6 +1256,8 @@
     state.accountUser = null;
     state.profileOpen = false;
     $('profilePanel').classList.add('hidden');
+    $('homeProfileBtn')?.classList.add('hidden');
+    $('homeMenuBtn')?.classList.add('hidden');
     loadMyGames();
     socket.disconnect();
     socket.connect();
@@ -1169,7 +1269,8 @@
     document.body.classList.remove('spectator-mode');
     $('game').classList.add('hidden');
     $('adminPanel').classList.add('hidden');
-    showAuth('Вы вышли из аккаунта.');
+    state.authStartupMessage = 'Войдите в аккаунт.';
+    showHomePrimary();
   }
 
   $('resultContinueBtn').addEventListener('click', dismissResultCard);
@@ -2507,6 +2608,8 @@
   }
 
   let uiAudioContext = null;
+  let uiAudioUnlocked = false;
+  let mediaAudioUnlocked = false;
   let lastUiCueKey = '';
   const SOUND_STORAGE_KEY = 'pervo:sound';
   const soundState = (() => {
@@ -2518,63 +2621,101 @@
     }
   })();
   const soundCooldowns = new Map();
-  let homeMusicTimer = null;
-  let homeMusicStep = 0;
+  const HOME_MUSIC_GAIN = .34;
+  const HOME_UI_GAIN = .82;
+  const homeMusicAudio = typeof Audio === 'function' ? new Audio('/assets/audio/home-pirate-loop.ogg') : null;
+  const homeConfirmAudio = typeof Audio === 'function' ? new Audio('/assets/audio/ui-confirm.wav') : null;
+
+  if (homeMusicAudio) {
+    homeMusicAudio.loop = true;
+    homeMusicAudio.preload = 'auto';
+  }
+  if (homeConfirmAudio) homeConfirmAudio.preload = 'auto';
+
+  function updateHomeMediaVolumes() {
+    if (homeMusicAudio) homeMusicAudio.volume = Math.max(0, Math.min(1, soundState.volume * HOME_MUSIC_GAIN));
+    if (homeConfirmAudio) homeConfirmAudio.volume = Math.max(0, Math.min(1, soundState.volume * HOME_UI_GAIN));
+  }
 
   function homeAudioAllowed() {
-    return document.body.classList.contains('home-active') && !soundState.muted && soundState.volume > 0 && document.visibilityState !== 'hidden';
+    return document.body.classList.contains('home-active')
+      && mediaAudioUnlocked
+      && !soundState.muted
+      && soundState.volume > 0
+      && document.visibilityState !== 'hidden';
   }
 
-  function playHomeMusicNote(frequency, duration = 1.8, gain = .012) {
-    if (!homeAudioAllowed()) return;
+  async function ensureUiAudioUnlocked() {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
+    if (!AudioCtx) return false;
     try {
       uiAudioContext ||= new AudioCtx();
-      if (uiAudioContext.state === 'suspended') uiAudioContext.resume().catch(() => {});
-      const oscillator = uiAudioContext.createOscillator();
-      const volume = uiAudioContext.createGain();
-      oscillator.type = 'sine';
-      oscillator.frequency.value = frequency;
-      const now = uiAudioContext.currentTime;
-      volume.gain.setValueAtTime(.0001, now);
-      volume.gain.exponentialRampToValueAtTime(Math.max(.0001, gain * soundState.volume), now + .35);
-      volume.gain.exponentialRampToValueAtTime(.0001, now + duration);
-      oscillator.connect(volume).connect(uiAudioContext.destination);
-      oscillator.start(now);
-      oscillator.stop(now + duration + .05);
-    } catch (_) {}
+      if (uiAudioContext.state === 'suspended') await uiAudioContext.resume();
+      uiAudioUnlocked = uiAudioContext.state === 'running';
+      return uiAudioUnlocked;
+    } catch (_) {
+      uiAudioUnlocked = false;
+      return false;
+    }
   }
 
-  function scheduleHomeMusic() {
-    if (homeMusicTimer || !homeAudioAllowed()) return;
-    const notes = [146.83, 174.61, 196, 220, 196, 174.61, 164.81, 146.83];
-    const tick = () => {
-      if (!homeAudioAllowed()) {
-        homeMusicTimer = null;
-        return;
-      }
-      playHomeMusicNote(notes[homeMusicStep % notes.length]);
-      if (homeMusicStep % 4 === 0) playHomeMusicNote(notes[homeMusicStep % notes.length] / 2, 2.5, .008);
-      homeMusicStep += 1;
-      homeMusicTimer = setTimeout(tick, 2200);
-    };
-    tick();
+  function startHomeMusic() {
+    if (!homeMusicAudio || !homeAudioAllowed()) return;
+    updateHomeMediaVolumes();
+    if (!homeMusicAudio.paused) return;
+    const playback = homeMusicAudio.play();
+    if (playback?.catch) {
+      playback.catch(() => {
+        mediaAudioUnlocked = false;
+      });
+    }
   }
 
   function stopHomeMusic() {
-    if (homeMusicTimer) clearTimeout(homeMusicTimer);
-    homeMusicTimer = null;
+    if (!homeMusicAudio || homeMusicAudio.paused) return;
+    homeMusicAudio.pause();
   }
 
   function syncHomeMusic() {
-    if (homeAudioAllowed()) scheduleHomeMusic();
+    updateHomeMediaVolumes();
+    if (homeAudioAllowed()) startHomeMusic();
     else stopHomeMusic();
   }
 
-  // Compatibility marker for the canonical UI-38 fallback: playUiCue('confirm')
-  function playSoundCue(kind = 'confirm') {
+  function unlockAudioFromGesture() {
+    mediaAudioUnlocked = true;
+    updateHomeMediaVolumes();
+    ensureUiAudioUnlocked();
+    syncHomeMusic();
+    document.removeEventListener('pointerdown', unlockAudioFromGesture, true);
+    document.removeEventListener('keydown', unlockAudioFromGesture, true);
+  }
+
+  document.addEventListener('pointerdown', unlockAudioFromGesture, true);
+  document.addEventListener('keydown', unlockAudioFromGesture, true);
+
+  function playHomeConfirmSound() {
     if (soundState.muted || soundState.volume <= 0 || document.visibilityState === 'hidden' || state.spectating) return;
+    mediaAudioUnlocked = true;
+    updateHomeMediaVolumes();
+    if (!homeConfirmAudio) {
+      playSoundCue('confirm');
+      return;
+    }
+    try {
+      homeConfirmAudio.pause();
+      homeConfirmAudio.currentTime = 0;
+      const playback = homeConfirmAudio.play();
+      if (playback?.catch) playback.catch(() => playSoundCue('confirm'));
+    } catch (_) {
+      playSoundCue('confirm');
+    }
+  }
+
+  // Compatibility marker for the canonical UI-38 fallback: playUiCue('confirm')
+  async function playSoundCue(kind = 'confirm') {
+    if (soundState.muted || soundState.volume <= 0 || document.visibilityState === 'hidden' || state.spectating) return;
+    if (!(await ensureUiAudioUnlocked())) return;
     const now = performance.now();
     const cooldown = kind === 'turn' || kind === 'round' ? 700 : 180;
     if (now - (soundCooldowns.get(kind) || 0) < cooldown) return;
@@ -2600,26 +2741,22 @@
 
   function playUiCue(kind = 'confirm') {
     const masterVolume = soundState.muted ? 0 : soundState.volume;
-    if (document.visibilityState === 'hidden' || state.spectating) return;
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
+    if (!uiAudioUnlocked || uiAudioContext?.state !== 'running' || document.visibilityState === 'hidden' || state.spectating) return;
     try {
-      uiAudioContext ||= new AudioCtx();
-      if (uiAudioContext.state === 'suspended') uiAudioContext.resume().catch(() => {});
       const profiles = {
-        confirm: [[440, .035, .035]],
-        event: [[330, .04, .045], [392, .055, .035]],
-        reward: [[523, .04, .045], [659, .055, .035], [784, .075, .03]],
-        battle: [[130, .055, .05], [98, .08, .04]],
-        danger: [[196, .05, .04], [147, .08, .035]],
-        turn: [[392, .07, .04], [523, .11, .035]],
-        dice: [[190, .025, .045], [145, .028, .04], [220, .025, .035], [165, .035, .03]],
-        ship: [[105, .09, .035], [132, .11, .025]],
-        coins: [[880, .025, .035], [1175, .035, .028], [988, .03, .025]],
-        cargo: [[150, .045, .045], [110, .055, .03]],
-        construction: [[125, .035, .05], [210, .045, .035]],
-        legendary: [[98, .09, .045], [392, .1, .028], [659, .13, .025]],
-        error: [[120, .06, .045]],
+        confirm: [[520, .065, .09]],
+        event: [[330, .07, .075], [440, .085, .06]],
+        reward: [[523, .07, .075], [659, .09, .065], [784, .11, .055]],
+        battle: [[180, .085, .085], [130, .11, .07]],
+        danger: [[220, .08, .075], [165, .11, .065]],
+        turn: [[392, .10, .07], [523, .14, .06]],
+        dice: [[260, .04, .075], [190, .045, .065], [300, .04, .06], [220, .055, .055]],
+        ship: [[180, .12, .06], [240, .14, .05]],
+        coins: [[880, .04, .065], [1175, .05, .055], [988, .045, .05]],
+        cargo: [[220, .07, .065], [165, .085, .055]],
+        construction: [[180, .06, .075], [280, .075, .06]],
+        legendary: [[196, .12, .075], [392, .14, .055], [659, .17, .045]],
+        error: [[180, .095, .075]],
       };
       let offset = 0;
       for (const [frequency, duration, gain] of profiles[kind] || profiles.confirm) {
