@@ -879,8 +879,7 @@
     closeGameAccountMenu();
 
     if (!state.room) {
-      $('entry').classList.remove('hidden');
-      loadMyGames();
+      openMyGames();
       syncLogoutAvailability();
       return;
     }
