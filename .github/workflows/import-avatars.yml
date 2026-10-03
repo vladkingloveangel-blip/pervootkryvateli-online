@@ -1,0 +1,32 @@
+name: Import avatars
+on:
+  push:
+    paths:
+      - '.github/workflows/import-avatars.yml'
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download avatars
+        run: |
+          mkdir -p public/assets/avatars
+          curl -fL 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-f398-820a-933d-b7d6df8bf7c4/raw?se=2026-10-03T16%3A21%3A01Z&sp=r&sv=2026-02-06&sr=b&scid=a155b973-b362-5b8b-b591-d230e6333933&skoid=b971d227-1348-4524-8797-edb0fdf15147&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-10-03T09%3A44%3A32Z&ske=2026-10-04T09%3A44%3A32Z&sks=b&skv=2026-02-06&sig=sLKm0Ums9t62m0Tbo1H/Xcmg4EFdXwgSRlOwtm1zm2U%3D' -o public/assets/avatars/avatar-01.png
+          curl -fL 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-5a58-820a-89e6-f721d34e13e8/raw?se=2026-10-03T16%3A21%3A03Z&sp=r&sv=2026-02-06&sr=b&scid=fcea56a1-e0df-523e-a075-2b801e576ab6&skoid=b971d227-1348-4524-8797-edb0fdf15147&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-10-03T08%3A15%3A23Z&ske=2026-10-04T08%3A15%3A23Z&sks=b&skv=2026-02-06&sig=FgZp4cQ/QydgmwSVk/t5n03yVi3Z6ESyoU9KPoNgev4%3D' -o public/assets/avatars/avatar-02.png
+          curl -fL 'https://sdmntprukwest.oaiusercontent.com/files/00000000-92d8-8243-9a65-2a397d5037e1/raw?se=2026-10-03T16%3A21%3A05Z&sp=r&sv=2026-02-06&sr=b&scid=ba53d1d1-8150-526c-b20d-b444d58097dc&skoid=b971d227-1348-4524-8797-edb0fdf15147&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-10-03T08%3A38%3A36Z&ske=2026-10-04T08%3A38%3A36Z&sks=b&skv=2026-02-06&sig=kG/rnoish/Fdt2EWsnrYxNqAaQrxAzUIOPL7ZQ0B7nc%3D' -o public/assets/avatars/avatar-03.png
+          curl -fL 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-2518-820a-9afc-3d7eba021ce9/raw?se=2026-10-03T16%3A21%3A07Z&sp=r&sv=2026-02-06&sr=b&scid=4af29834-e86f-57c4-a634-57abb06ac3ff&skoid=b971d227-1348-4524-8797-edb0fdf15147&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-10-03T14%3A07%3A36Z&ske=2026-10-04T14%3A07%3A36Z&sks=b&skv=2026-02-06&sig=7Lv9sjWrltzOpD6GOOhwZk0hUQm7muTGb6dqCvSi7RY%3D' -o public/assets/avatars/avatar-04.png
+          curl -fL 'https://sdmntprnortheu.oaiusercontent.com/files/00000000-eb14-81f4-bcbe-142881cd7fb9/raw?se=2026-10-03T16%3A21%3A08Z&sp=r&sv=2026-02-06&sr=b&scid=726f41db-4ad7-5e87-a8e1-cfeef2d547d9&skoid=b971d227-1348-4524-8797-edb0fdf15147&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-10-03T06%3A52%3A44Z&ske=2026-10-04T06%3A52%3A44Z&sks=b&skv=2026-02-06&sig=LaGpvxg9biKDOyYUkeyKVeOvWL2IQctq3As9O9i0Sx4%3D' -o public/assets/avatars/avatar-05.png
+          curl -fL 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-f208-820a-9501-9ec38664c466/raw?se=2026-10-03T16%3A21%3A10Z&sp=r&sv=2026-02-06&sr=b&scid=5def1bd3-b5ee-567b-b2a0-c3b059891c85&skoid=b971d227-1348-4524-8797-edb0fdf15147&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-10-03T14%3A07%3A33Z&ske=2026-10-04T14%3A07%3A33Z&sks=b&skv=2026-02-06&sig=PakQL3qqafrfbxRIZqRiXTQwN5jxJXiCsxi/48nsYm0%3D' -o public/assets/avatars/avatar-06.jpg
+          curl -fL 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-d850-820a-b8ad-fa542be2c124/raw?se=2026-10-03T16%3A21%3A12Z&sp=r&sv=2026-02-06&sr=b&scid=7379443d-14c1-5b39-b2ef-1f31d58b46f2&skoid=b971d227-1348-4524-8797-edb0fdf15147&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-10-03T08%3A15%3A21Z&ske=2026-10-04T08%3A15%3A21Z&sks=b&skv=2026-02-06&sig=ft2CqafFlek15HdfljP8sAjhAN/pvsPo04fuOhzfrPs%3D' -o public/assets/avatars/avatar-07.png
+          curl -fL 'https://sdmntprdenmarkeast.oaiusercontent.com/files/00000000-8958-8210-8ab0-64b368303ecc/raw?se=2026-10-03T16%3A21%3A14Z&sp=r&sv=2026-02-06&sr=b&scid=a5fd0402-137d-545b-b5a2-c31faf2d9b77&skoid=b971d227-1348-4524-8797-edb0fdf15147&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-10-03T07%3A18%3A51Z&ske=2026-10-04T07%3A18%3A51Z&sks=b&skv=2026-02-06&sig=Lv0Dx01ex6lW9blO1aj8AlYnRzMitap/D5tzbrOYTP4%3D' -o public/assets/avatars/avatar-08.png
+          curl -fL 'https://sdmntprdenmarkeast.oaiusercontent.com/files/00000000-13b0-8210-9735-b05318013b9f/raw?se=2026-10-03T16%3A21%3A16Z&sp=r&sv=2026-02-06&sr=b&scid=aa1a94de-0209-5061-b2d2-65057bf6557f&skoid=b971d227-1348-4524-8797-edb0fdf15147&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-10-03T14%3A34%3A06Z&ske=2026-10-04T14%3A34%3A06Z&sks=b&skv=2026-02-06&sig=PBWe9Dc7TmeHGuAsqBl5jKwmqfaMq8pMg5RTMKFK5Pg%3D' -o public/assets/avatars/avatar-09.png
+          curl -fL 'https://sdmntprnortheu.oaiusercontent.com/files/00000000-0ed0-81f4-8fb9-a13504d6deb0/raw?se=2026-10-03T16%3A21%3A17Z&sp=r&sv=2026-02-06&sr=b&scid=127b156e-5cca-5299-9830-8869334dd33a&skoid=b971d227-1348-4524-8797-edb0fdf15147&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-10-03T14%3A07%3A40Z&ske=2026-10-04T14%3A07%3A40Z&sks=b&skv=2026-02-06&sig=xFwWJi0NrE6LQrSJmTGBJVOztpvx6f6ABocCKRIB%2Bss%3D' -o public/assets/avatars/avatar-10.png
+      - name: Commit avatars
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/assets/avatars
+          git commit -m "assets: add profile avatars"
+          git push
