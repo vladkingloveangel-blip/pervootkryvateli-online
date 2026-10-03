@@ -263,3 +263,17 @@ test('Home audio stays outside the active party and shares sound settings', () =
   assert.equal(homeAudio.includes("game-active"), false);
   assert.ok(homeAudio.includes("home-active"));
 });
+
+
+test('Profile avatar picker is account-backed and remains Home-only', () => {
+  assert.ok(html.includes('id="profileAvatarGrid"'));
+  assert.ok(html.includes('id="profileAvatarSaveBtn"'));
+  assert.ok(html.includes('id="homeAvatarImage"'));
+  assert.ok(app.includes("const AVATAR_IDS = Array.from({ length: 10 }"));
+  assert.ok(app.includes("async function saveProfileAvatar()"));
+  assert.ok(app.includes("body: JSON.stringify({ displayName, avatarId: selectedAvatarId })"));
+  assert.ok(app.includes("$('profileAvatarGrid').addEventListener('click'"));
+  assert.equal(app.includes("$('accountName').textContent = result.user.displayName"), false);
+  assert.ok(homeCss.includes('.profile-avatar-grid'));
+  assert.ok(homeCss.includes('min-width:33px;min-height:33px'));
+});
