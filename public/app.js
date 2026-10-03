@@ -138,6 +138,8 @@
     $('profilePanel').classList.add('hidden');
     $('authPanel').classList.remove('hidden');
     $('accountBar').classList.add('hidden');
+    $('homeProfileBtn')?.classList.add('hidden');
+    $('homeSettingsBtn')?.classList.add('hidden');
     $('entry').classList.add('hidden');
     $('adminPanel').classList.add('hidden');
     if (!state.spectating) $('game').classList.add('hidden');
@@ -152,6 +154,9 @@
     $('accountBar').classList.remove('hidden');
     $('accountName').textContent = user?.displayName || user?.username || 'Игрок';
     $('accountRole').textContent = user?.role === 'admin' ? 'администратор' : 'игрок';
+    $('homeAvatarInitial').textContent = String(user?.displayName || user?.username || '?').trim().charAt(0).toUpperCase() || '?';
+    $('homeProfileBtn').classList.remove('hidden');
+    $('homeSettingsBtn').classList.remove('hidden');
     $('adminOpenBtn').classList.toggle('hidden', user?.role !== 'admin');
     syncLogoutAvailability();
     loadMyGames();
@@ -773,6 +778,8 @@
   $('registerBtn').addEventListener('click', () => submitAuth('register'));
   $('authPassword').addEventListener('keydown', e => { if (e.key === 'Enter') submitAuth('login'); });
   $('profileOpenBtn').addEventListener('click', openProfile);
+  $('homeProfileBtn').addEventListener('click', openProfile);
+  $('homeSettingsBtn').addEventListener('click', openProfile);
   $('gameAccountBackdrop').addEventListener('click', closeGameAccountMenu);
   $('profileBackBtn').addEventListener('click', closeProfile);
   $('profileSaveBtn').addEventListener('click', saveProfileName);
