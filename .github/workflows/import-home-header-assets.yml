@@ -1,0 +1,28 @@
+name: Import Home header assets
+on:
+  push:
+    paths: [".github/workflows/import-home-header-assets.yml"]
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download assets
+        env:
+          LOGO_URL: "https://sdmntprdenmarkeast.oaiusercontent.com/files/00000000-eda4-8210-859e-56a8c68bfcff/raw?se=2026-10-03T15%3A14%3A36Z&sp=r&sv=2026-02-06&sr=b&scid=2d3457cf-2e7d-5553-9cd3-00a7e24e93a8&skoid=ba81670d-b682-4d2d-9682-ac0ffdfb3fa1&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-10-03T08%3A43%3A59Z&ske=2026-10-04T08%3A43%3A59Z&sks=b&skv=2026-02-06&sig=TB4dXI1EmuZoeVu0MV72FuwWKr9WjIu0/KdH4DczixQ%3D"
+          SETTINGS_URL: "https://sdmntprdenmarkeast.oaiusercontent.com/files/00000000-019c-8210-9eb2-8c8b88243508/raw?se=2026-10-03T15%3A14%3A36Z&sp=r&sv=2026-02-06&sr=b&scid=a3c967e0-459a-5bf9-b569-c5714770229a&skoid=ba81670d-b682-4d2d-9682-ac0ffdfb3fa1&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-10-03T09%3A48%3A54Z&ske=2026-10-04T09%3A48%3A54Z&sks=b&skv=2026-02-06&sig=tPJ4zMdOVQWL9fi2Ln0JT2KT9hvxrORMS/TVdRVjG0U%3D"
+        run: |
+          mkdir -p public/assets
+          curl --fail --location "$LOGO_URL" -o public/assets/home-logo.png
+          curl --fail --location "$SETTINGS_URL" -o public/assets/settings-icon.png
+          test -s public/assets/home-logo.png
+          test -s public/assets/settings-icon.png
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/assets/home-logo.png public/assets/settings-icon.png
+          git commit -m "assets: add home header artwork"
+          git push
