@@ -133,6 +133,60 @@
     $('gameAccountBackdrop').classList.add('hidden');
   }
 
+  const AVATAR_IDS = Array.from({ length: 10 }, (_, index) => 'avatar-' + String(index + 1).padStart(2, '0'));
+  let selectedAvatarId = 'avatar-01';
+
+  function avatarSrc(avatarId) {
+    const id = AVATAR_IDS.includes(avatarId) ? avatarId : 'avatar-01';
+    return '/assets/avatars/' + id + (id === 'avatar-06' ? '.jpg' : '.png');
+  }
+
+  function renderAccountAvatar(user = state.accountUser) {
+    const avatarId = AVATAR_IDS.includes(user?.avatarId) ? user.avatarId : 'avatar-01';
+    const name = String(user?.displayName || user?.username || '?').trim();
+    for (const [imageId, initialId] of [['homeAvatarImage', 'homeAvatarInitial'], ['profileAvatarImage', 'profileAvatarInitial']]) {
+      const image = $(imageId);
+      const initial = $(initialId);
+      if (image) {
+        image.src = avatarSrc(avatarId);
+        image.classList.remove('hidden');
+      }
+      if (initial) {
+        initial.textContent = name.charAt(0).toUpperCase() || '?';
+        initial.classList.add('hidden');
+      }
+    }
+  }
+
+  function renderAvatarPicker() {
+    const grid = $('profileAvatarGrid');
+    if (!grid) return;
+    selectedAvatarId = AVATAR_IDS.includes(state.accountUser?.avatarId) ? state.accountUser.avatarId : 'avatar-01';
+    grid.innerHTML = AVATAR_IDS.map((avatarId, index) => `<button type="button" class="profile-avatar-option${avatarId === selectedAvatarId ? ' selected' : ''}" data-avatar-id="${avatarId}" role="radio" aria-checked="${avatarId === selectedAvatarId}" aria-label="Аватар ${index + 1}"><img src="${avatarSrc(avatarId)}" alt="" /></button>`).join('');
+  }
+
+  async function saveProfileAvatar() {
+    const button = $('profileAvatarSaveBtn');
+    const status = $('profileAvatarStatus');
+    button.disabled = true;
+    status.textContent = '';
+    try {
+      const displayName = $('profileDisplayName').value.trim();
+      const result = await apiJson('/api/auth/profile', { method: 'POST', body: JSON.stringify({ displayName, avatarId: selectedAvatarId }) });
+      if (!result?.ok) throw new Error(result?.error || 'Не удалось сохранить аватар.');
+      state.accountUser = result.user;
+      state.accountToken = result.token;
+      localStorage.setItem('pervo:accountToken', result.token);
+      renderAccountAvatar(result.user);
+      renderAvatarPicker();
+      status.textContent = 'Аватар сохранён.';
+    } catch (err) {
+      status.textContent = err.message || 'Не удалось сохранить аватар.';
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   function showAuth(message = '') {
     setGameScreenActive(false);
     state.profileOpen = false;
@@ -158,7 +212,7 @@
     state.accountToken = token || '';
     if (state.accountToken) localStorage.setItem('pervo:accountToken', state.accountToken);
     $('authPanel').classList.add('hidden');
-    $('homeAvatarInitial').textContent = String(user?.displayName || user?.username || '?').trim().charAt(0).toUpperCase() || '?';
+    renderAccountAvatar(user);
     $('homeProfileBtn').classList.remove('hidden');
     $('homeMenuBtn').classList.remove('hidden');
     $('homeMenuAdminBtn').classList.toggle('hidden', user?.role !== 'admin');
@@ -292,7 +346,9 @@
     const profileName = state.accountUser.displayName || state.accountUser.username || 'Капитан';
     $('profileIdentityName').textContent = profileName;
     $('profileIdentityLogin').textContent = '@' + (state.accountUser.username || '—');
-    $('profileAvatarInitial').textContent = profileName.trim().charAt(0).toUpperCase() || '?';
+    renderAccountAvatar(state.accountUser);
+    renderAvatarPicker();
+    $('profileAvatarStatus').textContent = '';
     $('profileOldPassword').value = '';
     $('profileNewPassword').value = '';
     $('profileNewPassword2').value = '';
@@ -331,13 +387,11 @@
       state.accountUser = result.user;
       state.accountToken = result.token;
       localStorage.setItem('pervo:accountToken', result.token);
-      $('accountName').textContent = result.user.displayName || result.user.username;
       $('nameInput').value = result.user.displayName || result.user.username;
       $('profileDisplayName').value = result.user.displayName || '';
       const profileName = result.user.displayName || result.user.username || 'Капитан';
       $('profileIdentityName').textContent = profileName;
-      $('profileAvatarInitial').textContent = profileName.trim().charAt(0).toUpperCase() || '?';
-      $('homeAvatarInitial').textContent = profileName.trim().charAt(0).toUpperCase() || '?';
+      renderAccountAvatar(result.user);
       $('profileSaveStatus').textContent = 'Имя сохранено.';
     } catch (err) {
       $('profileSaveStatus').textContent = err.message || 'Не удалось сохранить имя.';
@@ -1005,6 +1059,21 @@
   $('gameAccountBackdrop').addEventListener('click', closeGameAccountMenu);
   $('profileBackBtn').addEventListener('click', closeProfile);
   $('profileSaveBtn').addEventListener('click', saveProfileName);
+  $('profileAvatarSaveBtn').addEventListener('click', saveProfileAvatar);
+  $('profileAvatarGrid').addEventListener('click', event => {
+    const option = event.target.closest?.('[data-avatar-id]');
+    if (!option || !AVATAR_IDS.includes(option.dataset.avatarId)) return;
+    selectedAvatarId = option.dataset.avatarId;
+    for (const button of $('profileAvatarGrid').querySelectorAll('[data-avatar-id]')) {
+      const selected = button.dataset.avatarId === selectedAvatarId;
+      button.classList.toggle('selected', selected);
+      button.setAttribute('aria-checked', selected ? 'true' : 'false');
+    }
+    $('profileAvatarImage').src = avatarSrc(selectedAvatarId);
+    $('profileAvatarImage').classList.remove('hidden');
+    $('profileAvatarInitial').classList.add('hidden');
+    $('profileAvatarStatus').textContent = '';
+  });
   $('profilePasswordBtn').addEventListener('click', changeProfilePassword);
   $('profileNewPassword2').addEventListener('keydown', e => { if (e.key === 'Enter') changeProfilePassword(); });
   $('adminHomeBtn').addEventListener('click', () => {
