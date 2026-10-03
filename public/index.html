@@ -14,10 +14,15 @@
 </head>
 <body>
   <div id="homeShell" class="home-shell" data-ui-scope="home">
-  <header class="topbar">
-    <div>
-      <strong>Первооткрыватели</strong>
-      <span class="tag">Online MVP 0.33.0</span>
+  <header class="topbar home-topbar">
+    <img class="home-logo" src="/assets/home-logo.png" alt="Первооткрыватели" />
+    <div class="home-top-actions">
+      <button id="homeProfileBtn" class="home-icon-button home-profile-button hidden" type="button" aria-label="Открыть профиль">
+        <span class="home-avatar" aria-hidden="true"><span id="homeAvatarInitial">?</span></span>
+      </button>
+      <button id="homeSettingsBtn" class="home-icon-button home-settings-button hidden" type="button" aria-label="Открыть настройки">
+        <img src="/assets/settings-icon.png" alt="" />
+      </button>
     </div>
     <div id="connection" class="connection">подключение…</div>
   </header>
