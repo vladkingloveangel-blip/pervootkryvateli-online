@@ -233,6 +233,10 @@
       </div>
 
       <div class="home-dashboard-primary">
+        <button id="homeContinueBtn" class="home-dashboard-action home-dashboard-continue primary hidden" type="button">
+          <strong>Продолжить</strong>
+          <small id="homeContinueDetail">Вернуться в незавершённую партию</small>
+        </button>
         <button id="homeNewGameBtn" class="home-dashboard-action primary" type="button">
           <strong>Новая игра</strong>
           <small>Создать новую комнату</small>
@@ -242,6 +246,7 @@
           <small>Войти по коду комнаты</small>
         </button>
       </div>
+      <p id="homeDashboardError" class="error home-dashboard-error" role="alert"></p>
 
       <div class="home-dashboard-links" aria-label="Разделы игры">
         <button id="homeDashboardGamesBtn" type="button"><strong>Мои партии</strong><small>Сохранённые игры</small></button>
