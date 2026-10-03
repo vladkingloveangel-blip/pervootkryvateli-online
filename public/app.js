@@ -2608,6 +2608,7 @@
   }
 
   let uiAudioContext = null;
+  let uiAudioUnlocked = false;
   let lastUiCueKey = '';
   const SOUND_STORAGE_KEY = 'pervo:sound';
   const soundState = (() => {
@@ -2623,23 +2624,48 @@
   let homeMusicStep = 0;
 
   function homeAudioAllowed() {
-    return document.body.classList.contains('home-active') && !soundState.muted && soundState.volume > 0 && document.visibilityState !== 'hidden';
+    return document.body.classList.contains('home-active')
+      && uiAudioUnlocked
+      && uiAudioContext?.state === 'running'
+      && !soundState.muted
+      && soundState.volume > 0
+      && document.visibilityState !== 'hidden';
   }
 
-  function playHomeMusicNote(frequency, duration = 1.8, gain = .012) {
-    if (!homeAudioAllowed()) return;
+  async function ensureUiAudioUnlocked() {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
+    if (!AudioCtx) return false;
     try {
       uiAudioContext ||= new AudioCtx();
-      if (uiAudioContext.state === 'suspended') uiAudioContext.resume().catch(() => {});
+      if (uiAudioContext.state === 'suspended') await uiAudioContext.resume();
+      uiAudioUnlocked = uiAudioContext.state === 'running';
+      if (uiAudioUnlocked) syncHomeMusic();
+      return uiAudioUnlocked;
+    } catch (_) {
+      uiAudioUnlocked = false;
+      return false;
+    }
+  }
+
+  async function unlockUiAudioFromGesture() {
+    if (!(await ensureUiAudioUnlocked())) return;
+    document.removeEventListener('pointerdown', unlockUiAudioFromGesture, true);
+    document.removeEventListener('keydown', unlockUiAudioFromGesture, true);
+  }
+
+  document.addEventListener('pointerdown', unlockUiAudioFromGesture, true);
+  document.addEventListener('keydown', unlockUiAudioFromGesture, true);
+
+  function playHomeMusicNote(frequency, duration = 1.7, gain = .026, type = 'triangle') {
+    if (!homeAudioAllowed()) return;
+    try {
       const oscillator = uiAudioContext.createOscillator();
       const volume = uiAudioContext.createGain();
-      oscillator.type = 'sine';
+      oscillator.type = type;
       oscillator.frequency.value = frequency;
       const now = uiAudioContext.currentTime;
       volume.gain.setValueAtTime(.0001, now);
-      volume.gain.exponentialRampToValueAtTime(Math.max(.0001, gain * soundState.volume), now + .35);
+      volume.gain.exponentialRampToValueAtTime(Math.max(.0001, gain * soundState.volume), now + .22);
       volume.gain.exponentialRampToValueAtTime(.0001, now + duration);
       oscillator.connect(volume).connect(uiAudioContext.destination);
       oscillator.start(now);
@@ -2649,16 +2675,19 @@
 
   function scheduleHomeMusic() {
     if (homeMusicTimer || !homeAudioAllowed()) return;
-    const notes = [146.83, 174.61, 196, 220, 196, 174.61, 164.81, 146.83];
+    // Keep the ambient motif in a phone-speaker-friendly range. The previous
+    // 73–220 Hz sine-only pattern was effectively inaudible on many mobiles.
+    const notes = [293.66, 349.23, 392, 440, 392, 349.23, 329.63, 293.66];
     const tick = () => {
       if (!homeAudioAllowed()) {
         homeMusicTimer = null;
         return;
       }
-      playHomeMusicNote(notes[homeMusicStep % notes.length]);
-      if (homeMusicStep % 4 === 0) playHomeMusicNote(notes[homeMusicStep % notes.length] / 2, 2.5, .008);
+      const note = notes[homeMusicStep % notes.length];
+      playHomeMusicNote(note);
+      if (homeMusicStep % 4 === 0) playHomeMusicNote(note / 2, 2.2, .014, 'sine');
       homeMusicStep += 1;
-      homeMusicTimer = setTimeout(tick, 2200);
+      homeMusicTimer = setTimeout(tick, 2100);
     };
     tick();
   }
@@ -2674,8 +2703,9 @@
   }
 
   // Compatibility marker for the canonical UI-38 fallback: playUiCue('confirm')
-  function playSoundCue(kind = 'confirm') {
+  async function playSoundCue(kind = 'confirm') {
     if (soundState.muted || soundState.volume <= 0 || document.visibilityState === 'hidden' || state.spectating) return;
+    if (!(await ensureUiAudioUnlocked())) return;
     const now = performance.now();
     const cooldown = kind === 'turn' || kind === 'round' ? 700 : 180;
     if (now - (soundCooldowns.get(kind) || 0) < cooldown) return;
@@ -2701,26 +2731,22 @@
 
   function playUiCue(kind = 'confirm') {
     const masterVolume = soundState.muted ? 0 : soundState.volume;
-    if (document.visibilityState === 'hidden' || state.spectating) return;
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
+    if (!uiAudioUnlocked || uiAudioContext?.state !== 'running' || document.visibilityState === 'hidden' || state.spectating) return;
     try {
-      uiAudioContext ||= new AudioCtx();
-      if (uiAudioContext.state === 'suspended') uiAudioContext.resume().catch(() => {});
       const profiles = {
-        confirm: [[440, .035, .035]],
-        event: [[330, .04, .045], [392, .055, .035]],
-        reward: [[523, .04, .045], [659, .055, .035], [784, .075, .03]],
-        battle: [[130, .055, .05], [98, .08, .04]],
-        danger: [[196, .05, .04], [147, .08, .035]],
-        turn: [[392, .07, .04], [523, .11, .035]],
-        dice: [[190, .025, .045], [145, .028, .04], [220, .025, .035], [165, .035, .03]],
-        ship: [[105, .09, .035], [132, .11, .025]],
-        coins: [[880, .025, .035], [1175, .035, .028], [988, .03, .025]],
-        cargo: [[150, .045, .045], [110, .055, .03]],
-        construction: [[125, .035, .05], [210, .045, .035]],
-        legendary: [[98, .09, .045], [392, .1, .028], [659, .13, .025]],
-        error: [[120, .06, .045]],
+        confirm: [[520, .065, .09]],
+        event: [[330, .07, .075], [440, .085, .06]],
+        reward: [[523, .07, .075], [659, .09, .065], [784, .11, .055]],
+        battle: [[180, .085, .085], [130, .11, .07]],
+        danger: [[220, .08, .075], [165, .11, .065]],
+        turn: [[392, .10, .07], [523, .14, .06]],
+        dice: [[260, .04, .075], [190, .045, .065], [300, .04, .06], [220, .055, .055]],
+        ship: [[180, .12, .06], [240, .14, .05]],
+        coins: [[880, .04, .065], [1175, .05, .055], [988, .045, .05]],
+        cargo: [[220, .07, .065], [165, .085, .055]],
+        construction: [[180, .06, .075], [280, .075, .06]],
+        legendary: [[196, .12, .075], [392, .14, .055], [659, .17, .045]],
+        error: [[180, .095, .075]],
       };
       let offset = 0;
       for (const [frequency, duration, gain] of profiles[kind] || profiles.confirm) {
