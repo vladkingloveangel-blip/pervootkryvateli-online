@@ -84,3 +84,29 @@ body.home-active .my-games-list>.admin-room-card .muted{margin-top:3px;font-size
 body.home-active .my-games-list>.admin-room-card button{min-height:42px;white-space:nowrap}
 body.home-active #myGamesError{min-height:18px;margin:10px 0 0}
 @media(max-width:520px){body.home-active #myGamesPanel{width:calc(100% - 8px);margin-top:clamp(24px,5dvh,52px);padding:14px}body.home-active .my-games-head{gap:9px}body.home-active .my-games-list>.admin-room-card{grid-template-columns:1fr}body.home-active .my-games-list>.admin-room-card button{width:100%}}
+
+/* Step 8: Profile */
+body.home-active #profilePanel.profile-panel{position:relative;z-index:2;width:min(100%,680px);margin:clamp(24px,5dvh,64px) auto 0;padding:18px;border:1px solid rgba(222,187,105,.55);border-radius:20px;background:linear-gradient(180deg,rgba(7,37,45,.94),rgba(4,24,31,.98));box-shadow:0 18px 48px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,238,190,.06);backdrop-filter:blur(8px)}
+body.home-active #profilePanel.hidden{display:none}
+body.home-active .profile-home-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:16px}
+body.home-active .profile-home-head>div{min-width:0}
+body.home-active .profile-home-head span{display:block;font-size:10px;font-weight:700;letter-spacing:.2em;color:rgba(235,207,139,.72)}
+body.home-active .profile-home-head h1{margin:3px 0 4px;font-family:Georgia,'Times New Roman',serif;font-size:clamp(24px,7vw,34px);color:#f0dda8}
+body.home-active .profile-home-head p{margin:0;font-size:12px}
+body.home-active .profile-identity{display:flex;align-items:center;gap:14px;padding:14px;margin-bottom:12px;border:1px solid rgba(198,165,91,.28);border-radius:15px;background:rgba(8,39,47,.72)}
+body.home-active .profile-avatar-preview{display:grid;place-items:center;width:64px;height:64px;min-width:64px;border:1px solid rgba(222,187,105,.7);border-radius:50%;background:radial-gradient(circle at 35% 28%,#365c64,#173640 64%,#0a222b);color:#ead9a7;font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:700}
+body.home-active .profile-identity>div:last-child{display:grid;gap:3px;min-width:0}
+body.home-active .profile-identity strong{overflow:hidden;color:#f0dda8;font-family:Georgia,'Times New Roman',serif;font-size:21px;text-overflow:ellipsis}
+body.home-active .profile-identity small{color:rgba(226,221,197,.62)}
+body.home-active .profile-section{padding:14px;margin-top:10px;border:1px solid rgba(198,165,91,.22);border-radius:14px;background:rgba(3,25,32,.56)}
+body.home-active .profile-section h2{margin:0 0 12px;color:#ead69e;font-family:Georgia,'Times New Roman',serif;font-size:18px}
+body.home-active #profilePanel .profile-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+body.home-active #profilePanel .profile-password-grid{grid-template-columns:1fr 1fr}
+body.home-active #profilePanel .profile-password-grid label:first-child{grid-column:1/-1}
+body.home-active #profilePanel label{display:grid;gap:6px;color:rgba(239,224,183,.82);font-size:12px;font-weight:700}
+body.home-active #profilePanel input{width:100%;min-height:46px;box-sizing:border-box;border:1px solid rgba(198,165,91,.4);border-radius:10px;background:rgba(2,21,28,.88);color:#f2e7c8}
+body.home-active #profilePanel input:disabled{opacity:.62}
+body.home-active #profilePanel .profile-note{margin:9px 0 12px;font-size:11px}
+body.home-active #profilePanel .profile-submit{min-height:44px}
+body.home-active #profilePanel .profile-status{min-height:18px;margin:8px 0 0}
+@media(max-width:520px){body.home-active #profilePanel.profile-panel{width:calc(100% - 8px);margin-top:20px;padding:14px}body.home-active #profilePanel .profile-grid,body.home-active #profilePanel .profile-password-grid{grid-template-columns:1fr}body.home-active #profilePanel .profile-password-grid label:first-child{grid-column:auto}}
