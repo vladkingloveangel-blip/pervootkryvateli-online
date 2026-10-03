@@ -103,7 +103,7 @@ test('Profile is a dedicated Home screen and preserves account APIs', () => {
   assert.ok(html.includes('id="profileIdentityLogin"'));
   assert.ok(app.includes("function openProfile()"));
   assert.ok(app.includes("renderAccountAvatar(state.accountUser)"));
-  assert.ok(app.includes("$('homeAvatarInitial').textContent"));
+  assert.ok(app.includes("renderAccountAvatar(user)"));
   assert.ok(app.includes("apiJson('/api/auth/profile'"));
   assert.ok(app.includes("apiJson('/api/auth/change-password'"));
 });
