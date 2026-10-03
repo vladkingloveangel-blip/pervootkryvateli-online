@@ -161,7 +161,7 @@
     syncLogoutAvailability();
     loadMyGames();
     if (!$('nameInput').value) $('nameInput').value = user?.displayName || user?.username || '';
-    if (!state.profileOpen && !state.spectating && !state.room && $('adminPanel').classList.contains('hidden')) $('entry').classList.remove('hidden');
+    if (!state.profileOpen && !state.spectating && !state.room && $('adminPanel').classList.contains('hidden')) showHomePrimary();
     maybeJoinInvite();
   }
 
@@ -215,7 +215,7 @@
       setGameScreenActive(true);
       render();
     } else {
-      $('entry').classList.remove('hidden');
+      showHomePrimary();
       loadMyGames();
     }
   }
@@ -546,7 +546,7 @@
     closeMapInfo();
     setGameScreenActive(false);
     $('game').classList.add('hidden');
-    $('entry').classList.remove('hidden');
+    showHomePrimary();
     setError('gameError', '');
     setError('entryError', message);
     loadMyGames();
