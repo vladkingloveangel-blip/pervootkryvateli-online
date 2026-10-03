@@ -164,7 +164,7 @@ test('stage 6.5: hostile legendary card + reactive Sea Veil discards both cards 
   assert.equal(targetView.legendaryStatus.shipVeilTurns, 0);
   assert.deepEqual(targetView.legendaryStatus.seaCurseTurns, []);
   assert.equal(targetView.legendaryStatus.seaCursePenalty, 0);
-  assert.equal(readDb().game_rooms[0].state.log.some(entry => entry.text.includes('Обе легендарные карты расходованы') && entry.text.includes('трёхходовая защита не начинается')), true);
+  assert.equal(readDb().game_rooms[0].state.log.some(entry => entry.text.includes('автоматически разыгрывает «Покров моря»') && entry.text.includes('Обе карты расходованы')), true);
 
   const persisted = readDb().game_rooms[0].state;
   const persistedTarget = persisted.players.find(player => player.id === targetId);

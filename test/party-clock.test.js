@@ -65,16 +65,12 @@ test('join order and six complete personal circles', { timeout: 30000 }, async t
     if((turn+1)%4===0 && turn<19)assert.equal(room.circle,2+Math.floor(turn/4));
   }
   assert.deepEqual([room.round,room.circle],[1,6]);
-  assert.equal(room.phase,'event');
-  assert.equal(room.activePlayerId,null);
-  assert.equal(room.eventPhase.currentPlayerId,order[0]);
-  assert.equal(room.pendingEvent.kind,'storm');
-  assert.equal((await emit(socketFor(order[0]),'endTurn')).ok,false);
-  const firstChoice=room.pendingEvent.options[0];
-  room=await change(socketFor(order[0]),'respondEvent',{eventId:room.pendingEvent.id,row:firstChoice.row,col:firstChoice.col});
-  assert.equal(room.players.find(p=>p.id===order[0]).phase,'navigation');
+  // The deterministic first storm now has one canonical destination cell, so it resolves
+  // automatically during the sixth-circle pre-turn flow and the player reaches navigation.
+  assert.equal(room.phase,'navigation');
   assert.equal(room.activePlayerId,order[0]);
-  assert.equal(room.players.find(p=>p.id===order[0]).row,firstChoice.row);
+  assert.equal(room.eventPhase?.active||false,false);
+  assert.equal(room.players.find(p=>p.id===order[0]).phase,'navigation');
   for(let index=0;index<4;index++){
     assert.equal(room.activePlayerId,order[index]);
     assert.deepEqual([room.round,room.circle],[1,6]);
