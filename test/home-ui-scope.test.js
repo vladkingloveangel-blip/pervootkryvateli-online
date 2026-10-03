@@ -16,7 +16,7 @@ test('home shell and active game are sibling UI scopes', () => {
   assert.ok(homeClose > homeOpen);
   assert.ok(game > homeClose, '#game must stay outside #homeShell');
   const homeMarkup = html.slice(homeOpen, homeClose);
-  for (const id of ['authPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel', 'homePrimaryAction', 'myGamesPanel', 'playFlow', 'entry']) {
+  for (const id of ['authPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel', 'homePrimaryAction', 'homeDashboard', 'myGamesPanel', 'playFlow', 'entry']) {
     assert.match(homeMarkup, new RegExp('id="' + id + '"'));
   }
 });
@@ -71,6 +71,9 @@ test('Welcome routes to the Home dashboard or authentication without game mutati
 
 test('Home dashboard connects existing non-party actions', () => {
   assert.ok(html.includes('id="homeDashboard" class="home-dashboard hidden"'));
+  assert.ok(html.includes('id="homeContinueBtn" class="home-dashboard-action home-dashboard-continue primary hidden"'));
+  assert.ok(html.includes('id="homeContinueDetail"'));
+  assert.ok(html.includes('id="homeDashboardError"'));
   assert.ok(html.includes('id="homeNewGameBtn"'));
   assert.ok(html.includes('id="homeJoinGameBtn"'));
   assert.ok(html.includes('id="homeDashboardGamesBtn"'));
@@ -86,6 +89,19 @@ test('Home dashboard connects existing non-party actions', () => {
   assert.ok(homeCss.includes('/* Home v2: dashboard */'));
   assert.ok(homeCss.includes('body.home-active #homeDashboard'));
 });
+
+test('Continue is shown only from authoritative unfinished room data', () => {
+  assert.ok(app.includes("const result = await apiJson('/api/my-games', { cache: 'no-store' })"));
+  assert.ok(app.includes('syncHomeContinue(result.rooms);'));
+  assert.ok(app.includes("button.classList.toggle('hidden', !hasRooms)"));
+  assert.ok(app.includes("$('homeNewGameBtn').classList.toggle('primary', !hasRooms)"));
+  assert.ok(app.includes("$('homeContinueBtn').addEventListener('click', continueFromHome)"));
+  assert.ok(app.includes('if (rooms.length > 1) {\n      openMyGames();'));
+  assert.ok(app.includes("resumeAvailableRoom(rooms[0], $('homeContinueBtn'), 'homeDashboardError')"));
+  assert.ok(app.includes("socket.timeout(15000).emit('resumeRoom', { code: room.code, accountToken: token }"));
+  assert.ok(homeCss.includes('body.home-active .home-dashboard-continue.hidden{display:none}'));
+});
+
 
 
 test('Play flow stays client-side until existing create/join actions', () => {
