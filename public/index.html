@@ -75,6 +75,30 @@
       </div>
     </section>
 
+    <section id="settingsPanel" class="panel settings-panel hidden" aria-labelledby="settingsTitle">
+      <div class="settings-home-head">
+        <button id="settingsBackBtn" class="play-flow-back" type="button" aria-label="Назад на главную">←</button>
+        <div><span>ПАРАМЕТРЫ</span><h1 id="settingsTitle">Настройки</h1><p class="muted">Настройки этого устройства.</p></div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-row">
+          <div><strong>Звуки игры</strong><small>События, ход, сражения и интерфейсные сигналы.</small></div>
+          <label class="settings-switch"><input id="settingsSoundEnabled" type="checkbox" /><span aria-hidden="true"></span></label>
+        </div>
+        <label class="settings-volume">Громкость
+          <div><input id="settingsSoundVolume" type="range" min="0" max="100" step="1" /><output id="settingsSoundVolumeValue">72%</output></div>
+        </label>
+      </div>
+
+      <div id="settingsInstallSection" class="settings-section hidden">
+        <div class="settings-row">
+          <div><strong>Установить игру</strong><small>Добавить «Первооткрывателей» на это устройство.</small></div>
+          <button id="settingsInstallBtn" type="button">Установить</button>
+        </div>
+      </div>
+    </section>
+
     <section id="profilePanel" class="panel profile-panel hidden" aria-labelledby="profileTitle">
       <div class="profile-home-head">
         <button id="profileBackBtn" class="play-flow-back" type="button" aria-label="Назад">←</button>
