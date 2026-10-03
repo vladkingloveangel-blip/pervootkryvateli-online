@@ -32,11 +32,11 @@ test('surface switch owns only the home/game boundary', () => {
 
 test('home shell stylesheet is isolated and mobile fullscreen', () => {
   assert.ok(html.includes('href="/home-shell.css"'));
-  assert.match(homeCss, /body\\.home-active #homeShell/);
-  assert.match(homeCss, /100dvh/);
-  assert.match(homeCss, /safe-area-inset-top/);
-  assert.match(homeCss, /home-background\\.webp/);
-  assert.doesNotMatch(homeCss, /body\\.game-active/);
+  assert.ok(homeCss.includes('body.home-active #homeShell'));
+  assert.ok(homeCss.includes('100dvh'));
+  assert.ok(homeCss.includes('safe-area-inset-top'));
+  assert.ok(homeCss.includes('home-background.webp'));
+  assert.ok(!homeCss.includes('body.game-active'));
 });
 
 
