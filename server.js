@@ -321,7 +321,7 @@ function requireAdminAccount(data, ack) {
 }
 async function initDatabase() {
   if (!db) return;
-  await db.query('CREATE TABLE IF NOT EXISTS users (id UUID PRIMARY KEY, username TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT \'player\', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), last_login_at TIMESTAMPTZ)');
+  await db.query('CREATE TABLE IF NOT EXISTS users (id UUID PRIMARY KEY, username TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT \'player\', avatar_id TEXT NOT NULL DEFAULT \'avatar-01\', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), last_login_at TIMESTAMPTZ)');
   await db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_id TEXT NOT NULL DEFAULT 'avatar-01'");
   if (ADMIN_USERNAME && ADMIN_PASSWORD) {
     const username = normalizeUsername(ADMIN_USERNAME);
