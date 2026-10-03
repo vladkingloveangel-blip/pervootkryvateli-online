@@ -280,9 +280,8 @@ main { width: min(1480px, 100%); margin: 0 auto; padding: 14px; }
 .state-prize-panel { border-color: rgba(216, 177, 77, .38); }
 
 /* v0.17 — облачный запуск, приглашения и PWA */
-.room-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.room-actions .small{white-space:nowrap}#installAppBtn{width:100%}@media(max-width:520px){.room-line{align-items:flex-start}.room-actions{width:100%;justify-content:stretch}.room-actions .small{flex:1 1 140px}}
+.room-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.room-actions .small{white-space:nowrap}@media(max-width:520px){.room-line{align-items:flex-start}.room-actions{width:100%;justify-content:stretch}.room-actions .small{flex:1 1 140px}}
 
-.account-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .auth-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .admin-panel { margin-bottom: 12px; }
 .admin-room-list { display: grid; gap: 10px; margin-top: 12px; }
@@ -406,44 +405,6 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     min-height: 0;
     overflow: hidden;
     padding: 0 8px;
-  }
-
-  body.game-active #accountBar { display: none !important; }
-  body.game-active.game-account-open #accountBar {
-    display: grid !important;
-    position: fixed;
-    z-index: 122;
-    top: 104px;
-    left: 8px;
-    right: auto;
-    width: min(300px, calc(100vw - 16px));
-    margin: 0;
-    padding: 12px;
-    gap: 10px;
-    box-shadow: 0 14px 34px rgba(0,0,0,.48);
-    border-color: rgba(240,196,91,.32);
-  }
-  body.game-active.game-account-open #accountBar .room-actions {
-    width: 100%;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 7px;
-  }
-  body.game-active.game-account-open #accountBar .room-actions .small {
-    min-height: 40px;
-    width: 100%;
-    font-size: 12px;
-  }
-  body.game-active .account-summary {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-  body.game-active .account-summary strong {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   body.game-active.game-account-open .game-account-backdrop {
     display: block !important;
