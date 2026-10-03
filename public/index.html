@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+  <div id="homeShell" class="home-shell" data-ui-scope="home">
   <header class="topbar">
     <div>
       <strong>Первооткрыватели</strong>
@@ -146,7 +147,9 @@
       <p id="entryError" class="error" role="alert"></p>
     </section>
 
-    <section id="game" class="game hidden">
+  </div><!-- /#homeShell: non-party UI only -->
+
+    <section id="game" class="game hidden" data-ui-scope="game" aria-hidden="true">
       <section id="spectatorBanner" class="panel spectator-banner hidden">
         <div><strong>Режим наблюдателя</strong> · <span id="spectatorRoomCode">—</span></div>
         <button id="adminBackBtn" class="small">Вернуться в админ-панель</button>
