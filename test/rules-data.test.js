@@ -234,6 +234,7 @@ test('stage 6.7 finalizes stage 6 while stage 7 consumers remain pending', () =>
   assert.deepEqual([data.FACTIONS.lionia.tax,data.FACTIONS.kadingir.tax,data.FACTIONS.mori.tax,data.FACTIONS.suniksiya.tax,data.FACTIONS.pirates.tax],[2,2,0,0,0]);
   assert.deepEqual([data.FACTIONS.lionia.rewardShare,data.FACTIONS.kadingir.rewardShare,data.FACTIONS.mori.rewardShare,data.FACTIONS.suniksiya.rewardShare,data.FACTIONS.pirates.rewardShare],[0,0,0,0.5,0.5]);
   assert.equal(data.BALANCE.session.taxUnderpaymentActionLimit,2);
+  assert.equal(data.BALANCE.session.assignmentMissPenalty,1);
   assert.deepEqual(data.ASSIGNMENT_CARDS.mori.map(card=>card.type),['visit-island','visit-island','visit-island','visit-island','visit-island','visit-island','visit-island','visit-island','visit-route','visit-route']);
   assert.deepEqual(data.ASSIGNMENT_CARDS.mori[8].route,[{islandId:'renaika'},{islandId:'mori'}]);
   assert.deepEqual(data.ASSIGNMENT_CARDS.mori[9].route,[{islandId:'kisalinia'},{mapObjectId:'citadel'}]);

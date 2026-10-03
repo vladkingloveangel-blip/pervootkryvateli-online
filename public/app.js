@@ -554,6 +554,17 @@
   socket.on('connect_error', () => {
     if (state.everConnected) showConnectionBanner('Сервер пока недоступен. Продолжаем переподключение…', 'warning');
   });
+  socket.on('assignmentPenalty', data => {
+    if (state.spectating) return;
+    const due = Math.max(0, Number(data?.due) || 0);
+    const paid = Math.max(0, Number(data?.paid) || 0);
+    const message = paid >= due
+      ? `Поручение сюзерена не выполнено — штраф ${due} дукат.`
+      : `Поручение сюзерена не выполнено — штраф ${due} дукат, списано ${paid}.`;
+    enqueueToast(message, 'danger');
+    playSoundCue('coins');
+  });
+
   socket.on('eventResolved', data => {
     if (state.spectating) return;
     const card = eventResolvedResultCard(data);

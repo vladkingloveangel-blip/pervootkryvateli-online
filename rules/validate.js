@@ -412,7 +412,7 @@ function validateRules(rules, map) {
   const { session, scoring, implementation, metadata } = rules;
   for (const key of ['min','max']) positive(session.players?.[key], `session.players.${key}`);
   check(session.players.min <= session.players.max, 'session.players', 'invalid player range');
-  for (const key of ['startingDucats','circlesPerRound','eventCircle','actionsPerTurn','dieSides','taxUnderpaymentActionLimit']) positive(session[key], `session.${key}`);
+  for (const key of ['startingDucats','circlesPerRound','eventCircle','actionsPerTurn','dieSides','taxUnderpaymentActionLimit','assignmentMissPenalty']) positive(session[key], `session.${key}`);
   check(session.eventCircle <= session.circlesPerRound, 'session', 'event circle beyond round');
   check(session.taxUnderpaymentActionLimit <= session.actionsPerTurn, 'session', 'tax action limit exceeds normal limit');
   for (const key of ['guard','permanentUpgrade','permanentDirect']) {

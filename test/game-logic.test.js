@@ -143,6 +143,7 @@ const {
   noteMoriAssignmentDeparture,
   advanceMoriAssignmentNavigation,
   completeAssignment,
+  applyUnfulfilledAssignmentRoundPenalty,
   settleVassalTax,
   legendaryPlaceAt,
   legendaryPlaceRule,
@@ -1760,6 +1761,65 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(result.withheld, 0);
   assert.equal(result.paid, 7);
   assert.equal(p.ducats, 7);
+}
+
+
+// Невыполненное поручение штрафуется на 1 дукат ровно один раз за общий раунд.
+// Штраф не создаёт долг, не уводит казну ниже нуля и переживает save/restart через assignmentPenaltyRound.
+{
+  const p = {
+    id: 'p1',
+    ducats: 3,
+    debt: 7,
+    activeAssignment: {
+      instanceId: 'assignment-penalty-1',
+      factionId: 'lionia',
+      card: { id: 'penalty-test', text: 'Постройте форт', reward: 5, type: 'build-type' },
+    },
+  };
+  const first = applyUnfulfilledAssignmentRoundPenalty(p, 4);
+  assert.equal(first.applies, true);
+  assert.equal(first.due, 1);
+  assert.equal(first.paid, 1);
+  assert.equal(p.ducats, 2);
+  assert.equal(p.debt, 7);
+  assert.equal(p.assignmentPenaltyRound, 4);
+  assert.ok(p.activeAssignment);
+
+  const restored = JSON.parse(JSON.stringify(p));
+  const repeated = applyUnfulfilledAssignmentRoundPenalty(restored, 4);
+  assert.equal(repeated.applies, false);
+  assert.equal(repeated.alreadyApplied, true);
+  assert.equal(restored.ducats, 2);
+
+  const nextRound = applyUnfulfilledAssignmentRoundPenalty(restored, 5);
+  assert.equal(nextRound.applies, true);
+  assert.equal(restored.ducats, 1);
+  assert.equal(restored.assignmentPenaltyRound, 5);
+
+  const empty = {
+    id: 'p2',
+    ducats: 0,
+    debt: 9,
+    activeAssignment: {
+      instanceId: 'assignment-penalty-2',
+      factionId: 'kadingir',
+      card: { id: 'penalty-test-2', text: 'Улучшите корабль', reward: 5, type: 'ship-level' },
+    },
+  };
+  const noCash = applyUnfulfilledAssignmentRoundPenalty(empty, 5);
+  assert.equal(noCash.applies, true);
+  assert.equal(noCash.due, 1);
+  assert.equal(noCash.paid, 0);
+  assert.equal(empty.ducats, 0);
+  assert.equal(empty.debt, 9);
+  assert.equal(empty.assignmentPenaltyRound, 5);
+
+  const completed = { id: 'p3', ducats: 3, debt: 0, activeAssignment: null };
+  const none = applyUnfulfilledAssignmentRoundPenalty(completed, 5);
+  assert.equal(none.applies, false);
+  assert.equal(completed.ducats, 3);
+  assert.equal(Object.hasOwn(completed, 'assignmentPenaltyRound'), false);
 }
 
 // Налог Лионии и Кадингира составляет ровно 2 дуката; недоплата не создаёт долг, а ограничивает ход двумя действиями.

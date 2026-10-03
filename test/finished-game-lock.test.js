@@ -144,6 +144,19 @@ test('server applies one central guard before socket handlers and keeps finished
   }
 });
 
+test('unfulfilled assignment penalty is applied at the final circle before round finalization or advance', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const start = source.indexOf('function endTurnInternal(room)');
+  const end = source.indexOf('\nfunction applyFreeClaimReward', start);
+  const body = source.slice(start, end);
+  const detectsBoundaryAt = body.indexOf('const completesRound =');
+  const penaltyAt = body.indexOf('applyAssignmentRoundPenalties(room)');
+  const finalizationAt = body.indexOf('completeRoundBoundaryAfterTurn(room');
+  assert.ok(detectsBoundaryAt > 0);
+  assert.ok(penaltyAt > detectsBoundaryAt);
+  assert.ok(finalizationAt > penaltyAt, 'penalty must affect the last-round final scoring too');
+});
+
 test('resumeRoom remains reachable for an in-memory finished room without exposing a gameplay bypass', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
   const start = source.indexOf("onSocketEvent(socket, 'resumeRoom'");

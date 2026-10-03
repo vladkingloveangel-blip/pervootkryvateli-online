@@ -160,6 +160,7 @@ const {
   noteMoriAssignmentDeparture,
   advanceMoriAssignmentNavigation,
   completeAssignment,
+  applyUnfulfilledAssignmentRoundPenalty,
   settleVassalTax,
   legendaryPlaceAt,
   legendaryPlaceRule,
@@ -2534,6 +2535,29 @@ function finishEventPhase(room) {
   advanceRound(room);
   beginTurn(room);
 }
+function applyAssignmentRoundPenalties(room) {
+  const round = Math.max(0, Math.floor(Number(room?.round) || 0));
+  const results = [];
+  for (const player of room?.players || []) {
+    const result = applyUnfulfilledAssignmentRoundPenalty(player, round);
+    if (!result?.applies) continue;
+    results.push({ playerId: player.id, ...result });
+    const payment = result.paid === result.due
+      ? `списан ${result.paid} дукат`
+      : `казна пуста или недостаточна: списано ${result.paid} из ${result.due}`;
+    log(room, `${player.name}: поручение сюзерена не выполнено к концу раунда ${round} — штраф ${result.due} дукат. ${payment}. Поручение остаётся активным.`);
+    if (player.socketId) {
+      io.to(player.socketId).emit('assignmentPenalty', {
+        round,
+        due: result.due,
+        paid: result.paid,
+        assignmentText: result.assignmentText || null,
+      });
+    }
+  }
+  return results;
+}
+
 function advanceRound(room) {
   if (isFinishedRoom(room)) return;
   room.round += 1;
@@ -2859,6 +2883,9 @@ function endTurnInternal(room) {
   }
   room.completedTurns += 1;
   room.turnIndex = (room.turnIndex + 1) % n;
+  const completesRound = room.completedTurns % n === 0
+    && Number(room.circle) === Number(BALANCE.session.circlesPerRound);
+  if (completesRound) applyAssignmentRoundPenalties(room);
   const boundary = completeRoundBoundaryAfterTurn(room, {
     circlesPerRound: BALANCE.session.circlesPerRound,
     advanceRound,
@@ -3078,6 +3105,7 @@ function newPlayer(socket, data, color) {
     vassalGiftIslandId: null,
     enemyFactionIds: [],
     nextActionLimit: null,
+    assignmentPenaltyRound: null,
     activeAssignmentTask: null,
   };
 }

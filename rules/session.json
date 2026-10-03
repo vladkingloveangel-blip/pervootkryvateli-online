@@ -8,5 +8,6 @@
   "eventCircle": 6,
   "actionsPerTurn": 3,
   "dieSides": 6,
-  "taxUnderpaymentActionLimit": 2
+  "taxUnderpaymentActionLimit": 2,
+  "assignmentMissPenalty": 1
 }

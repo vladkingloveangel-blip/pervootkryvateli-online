@@ -1262,6 +1262,43 @@ function completeAssignment(room, player, event) {
   return { ok: true, matched: true, assignment, gross, rewardShare, withheld, paid, credit };
 }
 
+function applyUnfulfilledAssignmentRoundPenalty(player, round) {
+  ensureAssignmentPlayer(player);
+  const task = getActiveAssignmentTask(player);
+  const currentRound = Math.max(0, Math.floor(Number(round) || 0));
+  const due = Math.max(0, Math.floor(Number(BALANCE.session.assignmentMissPenalty) || 0));
+  if (!player || !task || currentRound <= 0 || due <= 0) {
+    return { ok: true, applies: false, round: currentRound, due, paid: 0, alreadyApplied: false };
+  }
+  if (Number(player.assignmentPenaltyRound) === currentRound) {
+    return {
+      ok: true,
+      applies: false,
+      round: currentRound,
+      due,
+      paid: 0,
+      alreadyApplied: true,
+      assignmentInstanceId: task.id || null,
+      assignmentText: task.payload?.text || null,
+    };
+  }
+
+  const before = Math.max(0, Math.floor(Number(player.ducats) || 0));
+  const paid = Math.min(before, due);
+  player.ducats = before - paid;
+  player.assignmentPenaltyRound = currentRound;
+  return {
+    ok: true,
+    applies: true,
+    round: currentRound,
+    due,
+    paid,
+    alreadyApplied: false,
+    assignmentInstanceId: task.id || null,
+    assignmentText: task.payload?.text || null,
+  };
+}
+
 function settleVassalTax(player, factionId) {
   const faction = FACTIONS[factionId];
   const due = Math.max(0, Math.floor(Number(faction?.tax) || 0));
@@ -4186,6 +4223,7 @@ module.exports = {
   noteMoriAssignmentDeparture,
   advanceMoriAssignmentNavigation,
   completeAssignment,
+  applyUnfulfilledAssignmentRoundPenalty,
   settleVassalTax,
   legendaryPlaceAt,
   legendaryPlaceRule,

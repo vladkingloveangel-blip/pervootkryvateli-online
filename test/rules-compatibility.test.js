@@ -15,6 +15,7 @@ test('legacy profile references remain valid while canonical master data stays s
   assert.equal(runtime.BALANCE.session.players.min,1);
   assert.equal(runtime.BALANCE.session.players.max,6);
   assert.equal(runtime.BALANCE.session.circlesPerRound,6);
+  assert.equal(runtime.BALANCE.session.assignmentMissPenalty,1);
   assert.deepEqual(runtime.SHIP_LEVELS[legacy.shipLevel7.level],{...legacy.shipLevel7,retired:true});
   assert.deepEqual(runtime.SHIP_UPGRADES[legacy.removedUpgrade.id],{...legacy.removedUpgrade,retired:true});
   assert.deepEqual(runtime.ESCORTS[legacy.removedEscort.id],{...legacy.removedEscort,retired:true});
@@ -97,4 +98,6 @@ test('stage 5.8 assignment UI exposes current rules and contains no paid-replace
   assert.doesNotMatch(app,/assignmentReplacementPrice/);
   assert.doesNotMatch(app,/платно замен/iu);
   assert.doesNotMatch(app,/replacedAssignmentConditions/);
+  assert.match(app,/socket\.on\('assignmentPenalty'/);
+  assert.match(app,/Поручение сюзерена не выполнено — штраф/);
 });
