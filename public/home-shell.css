@@ -19,6 +19,8 @@ body.home-active .home-profile-button{padding:3px}
 body.home-active .home-avatar{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;background:radial-gradient(circle at 35% 28%,#365c64,#173640 64%,#0a222b);color:#ead9a7;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:700;text-shadow:0 1px 2px #000}
 body.home-active .home-settings-button img{display:block;width:68%;height:68%;object-fit:contain}
 body.home-active .home-topbar>.connection{grid-column:1/-1;justify-self:end;margin-top:-4px;min-height:0;font-size:11px;opacity:.72}
+body.home-active.welcome-active .home-top-actions{display:none}
+body.home-active.welcome-active .home-topbar>.connection{display:none}
 @media(max-width:520px){body.home-active .home-logo{width:min(59vw,300px)}body.home-active .home-top-actions{gap:6px}body.home-active .home-icon-button{width:33px;height:33px;min-width:33px}}
 @media(max-width:360px){body.home-active .home-logo{width:55vw}body.home-active .home-icon-button{width:40px;height:40px;min-width:40px}}
 
