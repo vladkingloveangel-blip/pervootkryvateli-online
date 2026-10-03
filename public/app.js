@@ -3649,7 +3649,7 @@
       'sea-veil': 'Защита флотилии или своего острова на ограниченное число личных ходов.',
       hellfire: 'Воздействие на постройки чужого острова на текущей клетке.',
       'mist-path': 'Одноразовое перемещение к допустимой клетке карты.',
-      'sea-curse': 'Временный штраф к движению чужого корабля на текущей клетке.',
+      'sea-curse': 'Временный штраф к движению выбранного другого игрока независимо от расстояния.',
     };
     return descriptions[entry.kind] || 'Цифровой игровой эффект. Условия применения определяет текущее состояние партии.';
   }
@@ -4402,7 +4402,7 @@
       ? `<div class="cargo-name">Основной трюм: рота ландскнехтов</div><div class="cargo-meta">+${mine.landCompany.army} войска только при штурме. Обычный груз в основной трюм недоступен.</div>`
       : (mine.cargo
         ? `<div class="cargo-name">Основной трюм: ${escapeHtml(mainGood?.name || mine.cargo.goodId)} × ${mine.cargo.quantity}</div><div class="cargo-meta">Выручка: ${mine.cargo.value} дукатов.</div>`
-        : `<div class="cargo-name">Основной трюм: пуст</div><div class="cargo-meta">Вместимость ${mine.cargoCapacity}. Погрузка на своём острове расходует одно действие.</div>`);
+        : `<div class="cargo-name">Основной трюм: пуст</div><div class="cargo-meta">Вместимость ${mine.cargoCapacity}. Одна обычная погрузка на своём острове расходует одно действие и заполняет все свободные доступные трюмы флотилии.</div>`);
     const escortText = cargoEscorts.length
       ? cargoEscorts.map((e, idx) => {
           const g = e.cargo ? goods[e.cargo.goodId] : null;
@@ -5249,7 +5249,7 @@
       const cargoMeta = island.loadedRound === state.room.round
         ? 'Погрузка в этом раунде уже выполнена'
         : `Товары: ${island.availableGoods.map(id => state.room.goodsCatalog?.[id]?.name || id).join(', ')}`;
-      appendIslandManagementButton(menu, 'cargo', 'Погрузить трюм', cargoMeta);
+      appendIslandManagementButton(menu, 'cargo', 'Погрузить флотилию', cargoMeta);
     }
 
     const hasArsenal = (island.buildings || []).some(building => building.type === 'arsenal');
@@ -5295,7 +5295,7 @@
     const definitions = {
       build: ['ПОСТРОИТЬ', 'Выберите новую постройку. Улучшения существующих зданий находятся в отдельном разделе.'],
       upgrade: ['УЛУЧШИТЬ ПОСТРОЙКИ', 'Здесь показаны только существующие здания, у которых есть следующая ступень.'],
-      cargo: ['ПОГРУЗИТЬ ТРЮМ', 'Выберите производимый товар и свободный активный трюм.'],
+      cargo: ['ПОГРУЗИТЬ ФЛОТИЛИЮ', 'Выберите производимый товар. Одно действие заполнит им все свободные доступные трюмы флотилии.'],
       military: ['ВОЕННАЯ ИНФРАСТРУКТУРА', 'Арсенал, рота ландскнехтов и превращение Крепости III в Бастион.'],
       palace: ['ДВОРЕЦ', 'Дворец позволяет один раз за партию прекратить действующую вражду с государством.'],
       expedition: ['ЭКСПЕДИЦИЯ', 'Картографическая палата даёт доступ к получению случайной экспедиции.'],

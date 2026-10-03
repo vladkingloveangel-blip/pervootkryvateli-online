@@ -2089,3 +2089,13 @@ test('UI-40 mobile HUD integrates connection status and uses the canonical tile 
   assert.match(styles, /body\.game-active \.hud-menu-btn[\s\S]*?width: var\(--hud-tile\) !important;[\s\S]*?height: var\(--hud-tile\) !important/);
 });
 
+
+test('stabilization UI copy reflects global Sea Curse and fleet-wide ordinary cargo loading', () => {
+  assert.match(app, /'sea-curse': 'Временный штраф к движению выбранного другого игрока независимо от расстояния\.'/);
+  assert.doesNotMatch(app, /'sea-curse': 'Временный штраф к движению чужого корабля на текущей клетке\.'/);
+  assert.match(app, /Погрузить флотилию/);
+  assert.match(app, /ПОГРУЗИТЬ ФЛОТИЛИЮ/);
+  assert.match(app, /Одно действие заполнит им все свободные доступные трюмы флотилии/);
+  assert.doesNotMatch(app, /Выберите производимый товар и свободный активный трюм/);
+  assert.match(app, /socket\.emit\('loadCargo', \{ islandId: island\.id, goodId \}/);
+});
