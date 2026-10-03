@@ -211,6 +211,7 @@
     $('homeMenuBtn')?.classList.add('hidden');
     $('entry').classList.add('hidden');
     $('homePrimaryAction').classList.add('hidden');
+    $('homeDashboard').classList.add('hidden');
     $('playFlow').classList.add('hidden');
     $('myGamesPanel').classList.add('hidden');
     $('adminPanel').classList.add('hidden');
@@ -526,7 +527,9 @@
         } else {
           localStorage.removeItem('pervo:accountToken');
           state.accountToken = '';
-          showAuth('Войдите в аккаунт.');
+          state.accountUser = null;
+          state.authStartupMessage = 'Войдите в аккаунт.';
+          showHomePrimary();
         }
       } else {
         state.authStartupMessage = status?.databaseReady === false ? 'База аккаунтов подключается. Попробуйте обновить страницу.' : '';
@@ -666,6 +669,9 @@
     if (state.accountUser?.role !== 'admin') return;
     closeGameAccountMenu();
     setGameScreenActive(false);
+    document.body.classList.remove('welcome-active');
+    hideWelcomeScreen();
+    hideHomeScreens();
     state.spectating = false;
     state.room = null;
     document.body.classList.remove('spectator-mode');
@@ -742,7 +748,8 @@
     closeMapInfo();
     setGameScreenActive(false);
     $('game').classList.add('hidden');
-    showHomePrimary();
+    if (state.accountUser || !state.accountsEnabled) showHomeDashboard();
+    else showHomePrimary();
     setError('gameError', '');
     setError('entryError', message);
     loadMyGames();
@@ -1202,6 +1209,8 @@
     state.accountUser = null;
     state.profileOpen = false;
     $('profilePanel').classList.add('hidden');
+    $('homeProfileBtn')?.classList.add('hidden');
+    $('homeMenuBtn')?.classList.add('hidden');
     loadMyGames();
     socket.disconnect();
     socket.connect();
@@ -1213,7 +1222,8 @@
     document.body.classList.remove('spectator-mode');
     $('game').classList.add('hidden');
     $('adminPanel').classList.add('hidden');
-    showAuth('Вы вышли из аккаунта.');
+    state.authStartupMessage = 'Войдите в аккаунт.';
+    showHomePrimary();
   }
 
   $('resultContinueBtn').addEventListener('click', dismissResultCard);
