@@ -296,7 +296,7 @@
     const returnTo = $('rulesPanel').dataset.returnTo;
     $('rulesPanel').classList.add('hidden');
     if (returnTo === 'how-to') openHowToPlay();
-    else showHomePrimary();
+    else showHomeDashboard();
   }
 
   function openHowToPlay() {
@@ -310,7 +310,7 @@
 
   function closeHowToPlay() {
     $('howToPlayPanel').classList.add('hidden');
-    showHomePrimary();
+    showHomeDashboard();
   }
 
   function syncSettingsControls() {
@@ -344,7 +344,7 @@
       setGameScreenActive(true);
       render();
     } else {
-      showHomePrimary();
+      showHomeDashboard();
     }
   }
 
@@ -384,7 +384,7 @@
       setGameScreenActive(true);
       render();
     } else {
-      showHomePrimary();
+      showHomeDashboard();
       loadMyGames();
     }
   }
@@ -529,7 +529,8 @@
           showAuth('Войдите в аккаунт.');
         }
       } else {
-        showAuth(status?.databaseReady === false ? 'База аккаунтов подключается. Попробуйте обновить страницу.' : '');
+        state.authStartupMessage = status?.databaseReady === false ? 'База аккаунтов подключается. Попробуйте обновить страницу.' : '';
+        showHomePrimary();
       }
     } catch {
       showAuth('Не удалось проверить аккаунт.');
@@ -568,7 +569,9 @@
     const data = await apiJson(endpoint, { method: 'POST', body: JSON.stringify({ username, password, displayName }) });
     if (!data?.ok) return setError('authError', data?.error || 'Не удалось войти.');
     applyAccount(data.user, data.token);
+    state.authStartupMessage = '';
     state.resumeAttempted = false;
+    showHomeDashboard();
     maybeResumeLastRoom();
   }
 
@@ -980,7 +983,7 @@
     if (e.key === 'Enter') submitAuth('register');
   });
   const WELCOME_SCREEN_ID = 'homePrimaryAction';
-  const HOME_SCREEN_IDS = ['playFlow', 'entry', 'myGamesPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel'];
+  const HOME_SCREEN_IDS = ['homeDashboard', 'playFlow', 'entry', 'myGamesPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel'];
 
   function hideWelcomeScreen() {
     $(WELCOME_SCREEN_ID)?.classList.add('hidden');
@@ -1010,6 +1013,26 @@
     showWelcomeScreen();
   }
 
+  function showHomeDashboard() {
+    if (state.accountsEnabled && !state.accountUser) {
+      showAuth(state.authStartupMessage || '');
+      return;
+    }
+    setGameScreenActive(false);
+    state.profileOpen = false;
+    $('authPanel').classList.add('hidden');
+    $('adminPanel').classList.add('hidden');
+    showHomeScreen('homeDashboard');
+  }
+
+  function openWelcomeAction() {
+    if (state.accountsEnabled && !state.accountUser) {
+      showAuth(state.authStartupMessage || '');
+      return;
+    }
+    showHomeDashboard();
+  }
+
   function openMyGames() {
     if (!state.accountUser) return;
     setGameScreenActive(false);
@@ -1037,11 +1060,17 @@
     else $('createBtn').focus({ preventScroll: true });
   }
 
-  $('homePlayBtn').addEventListener('click', openPlayFlow);
-  $('playFlowBackBtn').addEventListener('click', showHomePrimary);
-  $('myGamesBackBtn').addEventListener('click', showHomePrimary);
+  $('homePlayBtn').addEventListener('click', openWelcomeAction);
+  $('homeNewGameBtn').addEventListener('click', () => openPlayEntry('create'));
+  $('homeJoinGameBtn').addEventListener('click', () => openPlayEntry('join'));
+  $('homeDashboardGamesBtn').addEventListener('click', openMyGames);
+  $('homeDashboardHowToBtn').addEventListener('click', openHowToPlay);
+  $('homeDashboardRulesBtn').addEventListener('click', () => openRules('home'));
+  $('homeDashboardSettingsBtn').addEventListener('click', openSettings);
+  $('playFlowBackBtn').addEventListener('click', showHomeDashboard);
+  $('myGamesBackBtn').addEventListener('click', showHomeDashboard);
   $('myGamesRefreshBtn').addEventListener('click', loadMyGames);
-  $('entryBackBtn').addEventListener('click', openPlayFlow);
+  $('entryBackBtn').addEventListener('click', showHomeDashboard);
   $('playCreateChoiceBtn').addEventListener('click', () => openPlayEntry('create'));
   $('playJoinChoiceBtn').addEventListener('click', () => openPlayEntry('join'));
   $('homeProfileBtn').addEventListener('click', openProfile);
