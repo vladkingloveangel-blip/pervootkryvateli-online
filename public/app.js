@@ -77,8 +77,18 @@
     logout.classList.toggle('hidden', inPartyContext);
   }
 
+  // Home/game scope boundary. Home redesign code must target #homeShell only;
+  // the active-party subtree remains isolated under #game.
+  function syncAppSurface(activeGame) {
+    const gameActive = Boolean(activeGame);
+    document.body.classList.toggle('game-active', gameActive);
+    document.body.classList.toggle('home-active', !gameActive);
+    $('homeShell')?.setAttribute('aria-hidden', gameActive ? 'true' : 'false');
+    $('game')?.setAttribute('aria-hidden', gameActive ? 'false' : 'true');
+  }
+
   function setGameScreenActive(active) {
-    document.body.classList.toggle('game-active', Boolean(active));
+    syncAppSurface(active);
     syncLogoutAvailability();
     if (!active) {
       closeGameMenu();
