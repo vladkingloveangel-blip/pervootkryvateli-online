@@ -31,7 +31,7 @@ test('surface switch owns only the home/game boundary', () => {
 
 
 test('home shell stylesheet is isolated and mobile fullscreen', () => {
-  assert.match(html, /href="\\/home-shell\\.css"/);
+  assert.ok(html.includes('href="/home-shell.css"'));
   assert.match(homeCss, /body\\.home-active #homeShell/);
   assert.match(homeCss, /100dvh/);
   assert.match(homeCss, /safe-area-inset-top/);
@@ -41,12 +41,12 @@ test('home shell stylesheet is isolated and mobile fullscreen', () => {
 
 
 test('home top area uses authored assets without entering game scope', () => {
-  assert.match(html, /class="home-logo" src="\\/assets\\/home-logo\\.png"/);
+  assert.ok(html.includes('class="home-logo" src="/assets/home-logo.png"'));
   assert.match(html, /id="homeProfileBtn"/);
   assert.match(html, /id="homeSettingsBtn"/);
-  assert.match(html, /src="\\/assets\\/settings-icon\\.png"/);
-  assert.match(app, /\\$\\('homeProfileBtn'\\)\\.addEventListener\\('click', openProfile\\)/);
-  assert.match(app, /\\$\\('homeSettingsBtn'\\)\\.addEventListener\\('click', openProfile\\)/);
+  assert.ok(html.includes('src="/assets/settings-icon.png"'));
+  assert.ok(app.includes("$('homeProfileBtn').addEventListener('click', openProfile)"));
+  assert.ok(app.includes("$('homeSettingsBtn').addEventListener('click', openProfile)"));
 });
 
 
