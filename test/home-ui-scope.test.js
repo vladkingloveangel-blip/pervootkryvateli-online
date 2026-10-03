@@ -175,3 +175,19 @@ test('Authentication has separate login and registration modes without changing 
   assert.ok(app.includes("const me = await apiJson('/api/auth/me')"));
   assert.ok(app.includes("socket.emit('resumeRoom'"));
 });
+
+
+test('Home navigation keeps exactly one non-party screen active', () => {
+  assert.ok(app.includes("const HOME_SCREEN_IDS = ['homePrimaryAction', 'playFlow', 'entry', 'myGamesPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel']"));
+  assert.ok(app.includes('function hideHomeScreens()'));
+  assert.ok(app.includes('function showHomeScreen(id)'));
+  assert.ok(app.includes("showHomeScreen('homePrimaryAction')"));
+  assert.ok(app.includes("showHomeScreen('playFlow')"));
+  assert.ok(app.includes("showHomeScreen('entry')"));
+  assert.ok(app.includes("showHomeScreen('myGamesPanel')"));
+  assert.ok(app.includes("showHomeScreen('profilePanel')"));
+  assert.ok(app.includes("showHomeScreen('settingsPanel')"));
+  assert.ok(app.includes("showHomeScreen('howToPlayPanel')"));
+  assert.ok(app.includes("showHomeScreen('rulesPanel')"));
+  assert.ok(app.includes('closeHomeMenu();'));
+});
