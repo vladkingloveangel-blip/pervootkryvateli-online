@@ -1411,7 +1411,7 @@ test('UI-25 game menu exposes a direct home action and no account logout action'
 
 test('UI-25 goHome keeps account identity and logout is hidden in party context', () => {
   const helperStart = app.indexOf('  function goHomeToGames()');
-  const helperEnd = app.indexOf("\n  $('myGamesOpenBtn')", helperStart);
+  const helperEnd = app.indexOf('\n  function logoutAccount()', helperStart);
   assert.ok(helperStart >= 0 && helperEnd > helperStart);
   const helper = app.slice(helperStart, helperEnd);
   assert.match(helper, /socket\.timeout\(10000\)\.emit\('goHome'/);
