@@ -16,7 +16,7 @@ test('home shell and active game are sibling UI scopes', () => {
   assert.ok(homeClose > homeOpen);
   assert.ok(game > homeClose, '#game must stay outside #homeShell');
   const homeMarkup = html.slice(homeOpen, homeClose);
-  for (const id of ['authPanel', 'accountBar', 'profilePanel', 'homePrimaryAction', 'playFlow', 'entry']) {
+  for (const id of ['authPanel', 'accountBar', 'profilePanel', 'homePrimaryAction', 'myGamesPanel', 'playFlow', 'entry']) {
     assert.match(homeMarkup, new RegExp('id="' + id + '"'));
   }
 });
@@ -81,4 +81,17 @@ test('Create and Join use separate entry modes while preserving room events', ()
   assert.ok(app.includes("$('joinEntryActions').classList.toggle('hidden', !joinMode)"));
   assert.ok(app.includes("socket.emit('createRoom', profile()"));
   assert.ok(app.includes("socket.emit('joinRoom', { ...profile(), code"));
+});
+
+
+test('My Games is a dedicated Home state and preserves resume flow', () => {
+  assert.ok(html.includes('id="myGamesPanel" class="my-games-panel hidden"'));
+  assert.ok(html.includes('id="myGamesBackBtn"'));
+  assert.ok(html.includes('id="myGamesRefreshBtn"'));
+  assert.ok(html.includes('id="myGamesList" class="my-games-list"'));
+  assert.ok(app.includes('function openMyGames()'));
+  assert.ok(app.includes("$('myGamesBackBtn').addEventListener('click', showHomePrimary)"));
+  assert.ok(app.includes("$('myGamesRefreshBtn').addEventListener('click', loadMyGames)"));
+  assert.ok(app.includes("socket.timeout(15000).emit('resumeRoom'"));
+  assert.ok(app.includes("socket.timeout(10000).emit('goHome'"));
 });
