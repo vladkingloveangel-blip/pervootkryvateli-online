@@ -5,7 +5,8 @@ const path = require('node:path');
 
 const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
-const app = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');\nconst homeCss = fs.readFileSync(path.join(root, 'public', 'home-shell.css'), 'utf8');
+const app = fs.readFileSync(path.join(root, 'public', 'app.js'), 'utf8');
+const homeCss = fs.readFileSync(path.join(root, 'public', 'home-shell.css'), 'utf8');
 
 test('home shell and active game are sibling UI scopes', () => {
   const homeOpen = html.indexOf('<div id="homeShell"');
