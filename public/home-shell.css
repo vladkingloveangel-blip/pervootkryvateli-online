@@ -19,7 +19,7 @@ body.home-active .home-profile-button{padding:3px}
 body.home-active .home-avatar{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;background:radial-gradient(circle at 35% 28%,#365c64,#173640 64%,#0a222b);color:#ead9a7;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:700;text-shadow:0 1px 2px #000}
 body.home-active .home-settings-button img{display:block;width:68%;height:68%;object-fit:contain}
 body.home-active .home-topbar>.connection{grid-column:1/-1;justify-self:end;margin-top:-4px;min-height:0;font-size:11px;opacity:.72}
-@media(max-width:520px){body.home-active .home-logo{width:min(59vw,300px)}body.home-active .home-top-actions{gap:6px}body.home-active .home-icon-button{width:44px;height:44px;min-width:44px}}
+@media(max-width:520px){body.home-active .home-logo{width:min(59vw,300px)}body.home-active .home-top-actions{gap:6px}body.home-active .home-icon-button{width:33px;height:33px;min-width:33px}}
 @media(max-width:360px){body.home-active .home-logo{width:55vw}body.home-active .home-icon-button{width:40px;height:40px;min-width:40px}}
 
 /* Step 4: central primary action */
@@ -107,7 +107,7 @@ body.home-active #profilePanel label{display:grid;gap:6px;color:rgba(239,224,183
 body.home-active #profilePanel input{width:100%;min-height:46px;box-sizing:border-box;border:1px solid rgba(198,165,91,.4);border-radius:10px;background:rgba(2,21,28,.88);color:#f2e7c8}
 body.home-active #profilePanel input:disabled{opacity:.62}
 body.home-active #profilePanel .profile-note{margin:9px 0 12px;font-size:11px}
-body.home-active #profilePanel .profile-submit{min-height:44px}
+body.home-active #profilePanel .profile-submit{min-height:33px}
 body.home-active #profilePanel .profile-status{min-height:18px;margin:8px 0 0}
 @media(max-width:520px){body.home-active #profilePanel.profile-panel{width:calc(100% - 8px);margin-top:20px;padding:14px}body.home-active #profilePanel .profile-grid,body.home-active #profilePanel .profile-password-grid{grid-template-columns:1fr}body.home-active #profilePanel .profile-password-grid label:first-child{grid-column:auto}}
 
@@ -149,7 +149,7 @@ body.home-active .how-to-play-steps article{display:grid;grid-template-columns:3
 body.home-active .how-to-play-steps article>b{display:grid;place-items:center;width:34px;height:34px;border:1px solid rgba(222,187,105,.55);border-radius:50%;color:#ead69e;font-family:Georgia,'Times New Roman',serif}
 body.home-active .how-to-play-steps article strong{color:#ead69e;font-family:Georgia,'Times New Roman',serif;font-size:16px}
 body.home-active .how-to-play-steps article p{margin:4px 0 0;color:rgba(231,225,204,.74);font-size:12px;line-height:1.45}
-body.home-active .how-to-rules-link{width:100%;min-height:44px;margin-top:12px}
+body.home-active .how-to-rules-link{width:100%;min-height:33px;margin-top:12px}
 @media(max-width:520px){body.home-active #howToPlayPanel.how-to-play-panel{width:calc(100% - 8px);max-height:80dvh;margin-top:18px;padding:14px}}
 
 /* Step 11: Rules */
@@ -229,7 +229,7 @@ body.home-active #authPanel #authError{margin-bottom:0;text-align:center}
   body.home-active .settings-row>div{min-width:0}
   body.home-active .settings-row small{overflow-wrap:anywhere}
   body.home-active .rules-tabs{scroll-snap-type:x proximity}
-  body.home-active .rules-tabs button{min-height:44px;scroll-snap-align:start}
+  body.home-active .rules-tabs button{min-height:33px;scroll-snap-align:start}
   body.home-active .home-secondary-menu{left:8px;right:8px;width:auto;max-height:calc(100dvh - max(16px,env(safe-area-inset-top)) - max(8px,env(safe-area-inset-bottom)));padding-bottom:max(14px,env(safe-area-inset-bottom))}
 }
 @media(max-width:360px){
