@@ -54,6 +54,21 @@
       </div>
     </section>
 
+    <div id="gameMenuBackdrop" class="game-menu-backdrop hidden"></div>
+    <section id="gameMenuPanel" class="game-menu-panel hidden" role="dialog" aria-modal="true" aria-labelledby="gameMenuTitle">
+      <div class="game-menu-head"><div><span>МЕНЮ</span><strong id="gameMenuTitle">Первооткрыватели</strong></div><button id="gameMenuCloseBtn" class="small" type="button" aria-label="Закрыть меню">✕</button></div>
+      <div class="game-menu-grid">
+        <button type="button" data-game-menu="metrics"><span>◎</span><strong>Показатели партии</strong><small>Общий обзор игроков</small></button>
+        <button type="button" data-game-menu="holdings"><span>⌂</span><strong>Мои владения</strong><small>Острова и статусы</small></button>
+        <button type="button" data-game-menu="diplomacy"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#politics"></use></svg></span><strong>Дипломатия</strong><small>Государства и отношения</small></button>
+        <button type="button" data-game-menu="journal"><span>≡</span><strong>Журнал</strong><small>Последние публичные события</small></button>
+        <button type="button" data-game-menu="help"><span>?</span><strong>Справка</strong><small>Как устроен интерфейс</small></button>
+        <button type="button" data-game-menu="endgame"><span>◇</span><strong>Завершение игры</strong><small>Согласование окончания партии</small></button>
+        <button type="button" data-game-menu="settings"><span>⚙</span><strong>Настройки</strong><small>Профиль и аккаунт</small></button>
+        <button type="button" data-game-menu="exit" class="danger-soft"><span>↪</span><strong>Выход</strong><small>Выйти из аккаунта</small></button>
+      </div>
+    </section>
+
     <section id="profilePanel" class="panel profile-panel hidden">
       <div class="section-head">
         <div><h1>Профиль</h1><div class="muted">Настройки аккаунта игрока</div></div>
@@ -138,23 +153,35 @@
       </section>
 
       <section id="gameHud" class="game-hud" aria-label="Параметры игрока">
-        <button id="hudPlayerBtn" class="hud-player" type="button" aria-label="Меню игрока">
-          <span class="hud-ship-icon">⛵</span>
-          <span><strong id="hudPlayerName">Игрок</strong><small id="hudShipLevel">ур. I</small></span>
-          <span class="hud-menu-chevron">⌄</span>
+        <button id="hudPlayerBtn" class="hud-player" type="button" aria-label="Открыть корабль и флотилию">
+          <span class="hud-player-copy">
+            <span id="hudConnection" class="hud-connection" aria-live="polite">● онлайн</span>
+            <strong id="hudPlayerName">Игрок</strong>
+            <small id="hudShipLevel">ур. I</small>
+          </span>
         </button>
-        <div id="hudResources" class="hud-resources">
-          <button class="hud-chip" id="hudDucatsBtn" type="button" aria-label="Дукаты"><span>🪙</span><strong id="hudDucats">0</strong></button>
-          <button class="hud-chip" id="hudGloryBtn" type="button" aria-label="Слава"><span>★</span><strong id="hudGlory">0</strong></button>
-          <button class="hud-chip" id="hudArmyPointsBtn" type="button" aria-label="Очки армии"><span>⚔</span><strong id="hudArmyPoints">0</strong></button>
-          <button class="hud-chip" id="hudFleetPointsBtn" type="button" aria-label="Очки флота"><span>⚓</span><strong id="hudFleetPoints">0</strong></button>
-          <button class="hud-chip" id="hudCargoBtn" type="button" aria-label="Трюм"><span>▣</span><strong id="hudCargo">0/0</strong></button>
-          <button class="hud-chip hud-debt hidden" id="hudDebtBtn" type="button" aria-label="Долг"><span>!</span><strong id="hudDebt">0</strong></button>
+        <div id="hudResources" class="hud-resources" aria-label="Показатели игрока">
+          <button class="hud-chip" id="hudDucatsBtn" type="button" data-hud-metric="ducats" aria-label="Дукаты" aria-expanded="false"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#coin"></use></svg></span><strong id="hudDucats">0</strong></button>
+          <button class="hud-chip" id="hudCargoBtn" type="button" data-hud-metric="cargo" aria-label="Трюм" aria-expanded="false"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#cargo"></use></svg></span><strong id="hudCargo">0/0</strong></button>
+          <button class="hud-chip" id="hudArmyBtn" type="button" data-hud-metric="army" aria-label="Войско" aria-expanded="false"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#army"></use></svg></span><strong id="hudArmy">0</strong></button>
+          <button class="hud-chip" id="hudArtilleryBtn" type="button" data-hud-metric="artillery" aria-label="Артиллерия" aria-expanded="false"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#cannon"></use></svg></span><strong id="hudArtillery">0</strong></button>
+          <button class="hud-chip" id="hudArmyGloryBtn" type="button" data-hud-metric="army-glory" aria-label="Армейская слава" aria-expanded="false"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#army-glory"></use></svg></span><strong id="hudArmyGlory">0</strong></button>
+          <button class="hud-chip" id="hudFleetGloryBtn" type="button" data-hud-metric="fleet-glory" aria-label="Морская слава" aria-expanded="false"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#anchor"></use></svg></span><strong id="hudFleetGlory">0</strong></button>
+          <button class="hud-chip" id="hudPrestigeBtn" type="button" data-hud-metric="prestige" aria-label="Престиж" aria-expanded="false"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#glory"></use></svg></span><strong id="hudPrestige">0</strong></button>
         </div>
-        <button id="hudTurnBtn" class="hud-turn" type="button">
+        <div id="hudTurnStatus" class="hud-turn hud-turn-status" aria-label="Раунд и круг партии">
           <small id="hudRound">Лобби</small>
-          <strong id="hudTurn">Ожидание</strong>
-        </button>
+          <strong id="hudCircle">—</strong>
+        </div>
+        <button id="hudMenuBtn" class="hud-menu-btn" type="button" aria-label="Меню"><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#menu"></use></svg></button>
+      </section>
+
+      <section id="hudMetricPopover" class="hud-metric-popover hidden" role="status" aria-live="polite">
+        <div class="hud-metric-popover-head">
+          <span id="hudMetricPopoverTitle">Показатель</span>
+          <strong id="hudMetricPopoverValue">0</strong>
+        </div>
+        <p id="hudMetricPopoverBody"></p>
       </section>
 
       <section class="status panel legacy-status">
@@ -168,12 +195,27 @@
         </div>
       </section>
 
-      <section id="finalResultsPanel" class="panel final-results-panel hidden" aria-live="polite">
+      <nav id="gameRoster" class="game-roster hidden" aria-label="Игроки в партии"></nav>
+
+      <section id="eventFlowOverlay" class="event-flow-overlay hidden" aria-live="polite">
+        <div class="event-flow-art" aria-hidden="true"></div>
+        <div class="event-flow-head">
+          <span id="eventFlowKicker">ШЕСТОЙ КРУГ</span>
+          <strong id="eventFlowTitle">—</strong>
+          <small id="eventFlowStatus">—</small>
+        </div>
+        <div id="eventFlowSteps" class="event-flow-steps" aria-label="Этапы шестого круга"></div>
+        <div id="eventFlowLastCard" class="event-flow-last-card hidden"></div>
+      </section>
+
+      <section id="finalResultsPanel" class="final-results-panel final-results-screen hidden" aria-live="polite" aria-labelledby="finalResultsTitle">
+        <div class="final-results-art" aria-hidden="true"></div>
         <div class="final-results-head">
           <div>
             <span class="final-results-kicker">Партия завершена</span>
-            <h1>Итоги экспедиции</h1>
+            <h1 id="finalResultsTitle">Итоги экспедиции</h1>
             <p id="finalResultsRound" class="muted"></p>
+            <p class="final-results-rule">Общего победителя нет. Итог партии — шесть независимых титулов; один титул могут разделить несколько игроков.</p>
           </div>
           <div class="mini-badge">6 титулов</div>
         </div>
@@ -182,15 +224,28 @@
           <h2>Итоговые показатели игроков</h2>
           <div id="finalPlayerMetrics" class="final-player-grid"></div>
         </div>
+        <button id="finalHomeBtn" class="primary" type="button">Домой</button>
       </section>
 
-      <section class="layout">
+      <nav id="gameQuickAccess" class="game-quick-access" aria-label="Быстрый доступ">
+          <button class="quick-access-btn hud-character-chip" id="hudCharacterBtn" type="button" aria-label="Персонаж"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#character"></use></svg></span><span class="quick-access-label">Персонаж</span><strong id="hudCharacter">—</strong></button>
+          <button class="quick-access-btn hud-politics-chip" id="hudPoliticsBtn" type="button" aria-label="Дипломатия и сюзерен"><span>⚜</span><span class="quick-access-label">Дипломатия</span><strong id="hudPolitics">—</strong></button>
+          <button class="quick-access-btn hud-goals-chip" id="hudGoalsBtn" type="button" aria-label="Цели и экспедиции"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#goal"></use></svg></span><span class="quick-access-label">Цели</span><strong id="hudGoals">0</strong></button>
+          <button class="quick-access-btn hud-cards-chip" id="hudCardsBtn" type="button" aria-label="Карты и сохранённые эффекты"><span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#cards"></use></svg></span><span class="quick-access-label">Карты</span><strong id="hudCards">0</strong></button>
+      </nav>
+
+      <section id="gameWorldShell" class="layout game-world-shell">
         <div class="map-column">
           <div class="map-toolbar panel">
-            <button id="zoomOut" aria-label="Уменьшить карту">−</button>
-            <span id="zoomLabel">100%</span>
-            <button id="zoomIn" aria-label="Увеличить карту">+</button>
-            <button id="centerMe">Мой корабль</button>
+            <div class="map-zoom-control">
+              <button id="zoomToggle" class="map-tool-icon map-zoom-toggle" type="button" aria-label="Масштаб карты" aria-expanded="false" aria-controls="zoomPopover"></button>
+              <div id="zoomPopover" class="map-zoom-popover hidden">
+                <button id="zoomOut" type="button" aria-label="Уменьшить карту">−</button>
+                <span id="zoomLabel">100%</span>
+                <button id="zoomIn" type="button" aria-label="Увеличить карту">+</button>
+              </div>
+            </div>
+            <button id="centerMe" class="map-tool-icon map-center-me" type="button" aria-label="Показать мой корабль"><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui-icons.svg#ship"></use></svg></button>
           </div>
 
           <div id="mapViewport" class="map-viewport" tabindex="0" aria-label="Игровая карта">
@@ -236,10 +291,6 @@
         </div>
 
         <aside id="gameSidePanel" class="side-column">
-          <div class="mobile-sheet-head">
-            <strong id="mobileSheetTitle">Действия</strong>
-            <button id="mobileSheetClose" class="small" type="button" aria-label="Закрыть">✕</button>
-          </div>
           <section class="panel controls" data-ui-tab="actions">
             <h2>Ход</h2>
             <div id="youStatus" class="you-status">—</div>
@@ -330,8 +381,7 @@
               <span id="cargoBadge" class="mini-badge">0/0</span>
             </div>
             <div id="cargoContent" class="muted">Трюм пуст.</div>
-            <button id="sellCargoBtn" class="primary trade-button" disabled>Продать основной груз в Цитадели</button>
-            <div id="escortCargoActions" class="escort-cargo-actions"></div>
+            <button id="sellCargoBtn" class="primary trade-button" disabled>Продать весь груз флотилии в Цитадели</button>
           </section>
 
           <section class="panel anchor-panel" data-ui-tab="actions">
@@ -371,8 +421,34 @@
           </section>
 
           <section id="playersPanel" class="panel" data-ui-tab="players">
-            <div class="section-head">
-              <h2>Игроки</h2>
+            <div id="lobbyHero" class="lobby-hero hidden">
+              <div class="lobby-hero-copy">
+                <span>ЛОББИ</span>
+                <h1>Подготовка экспедиции</h1>
+                <p id="lobbyStatusText">Соберите команду, выберите корабли и подтвердите готовность.</p>
+              </div>
+              <div class="lobby-room-card">
+                <span>КОД КОМНАТЫ</span>
+                <strong id="lobbyRoomCode">—</strong>
+                <small id="lobbyCapacity">2–6 игроков</small>
+              </div>
+            </div>
+            <div id="lobbyToolbar" class="lobby-toolbar hidden">
+              <div>
+                <strong id="lobbyRole">Игрок</strong>
+                <small id="lobbyConnectionStatus">Ожидание игроков</small>
+              </div>
+              <div class="lobby-toolbar-actions">
+                <button id="lobbyCopyBtn" class="small" type="button">Копировать код</button>
+                <button id="lobbyShareBtn" class="small" type="button">Пригласить</button>
+                <button id="lobbyExitBtn" class="small danger-soft" type="button">Выйти</button>
+              </div>
+            </div>
+            <div class="section-head lobby-players-head">
+              <div>
+                <h2>Игроки</h2>
+                <small id="lobbyReadySummary" class="muted">Ожидание готовности</small>
+              </div>
               <button id="startBtn" class="primary small hidden">Начать игру</button>
             </div>
             <div id="players"></div>
@@ -393,18 +469,106 @@
         </aside>
       </section>
 
-      <section id="mobileActionDock" class="mobile-action-dock hidden" aria-label="Быстрые действия">
-        <button id="dockRollBtn" class="primary" type="button">🎲 Бросить</button>
-        <button id="dockSkipBtn" type="button">Остаться</button>
-        <button id="dockEndTurnBtn" class="danger-soft" type="button">Завершить</button>
+      <section id="targetingBar" class="targeting-bar hidden" role="status" aria-live="polite" aria-atomic="true" aria-label="Режим выбора цели">
+        <div class="targeting-copy">
+          <span id="targetingKicker">ВЫБОР ЦЕЛИ</span>
+          <strong id="targetingTitle">—</strong>
+          <small id="targetingDetail">—</small>
+        </div>
+        <button id="targetingCancelBtn" type="button">Отмена</button>
       </section>
 
-      <nav id="mobileGameNav" class="mobile-game-nav" aria-label="Разделы игры">
-        <button class="active" data-mobile-nav="map" type="button"><span>🗺</span><small>Карта</small></button>
-        <button id="mobileNavActions" data-mobile-nav="actions" type="button"><span>⚡</span><small>Действия</small></button>
-        <button id="mobileNavShip" data-mobile-nav="ship" type="button"><span>⛵</span><small>Корабль</small></button>
-        <button data-mobile-nav="players" type="button"><span>👥</span><small>Игроки</small></button>
-      </nav>
+      <section id="endGameVoteOverlay" class="end-game-vote-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="endGameVoteTitle">
+        <div class="end-game-vote-backdrop" aria-hidden="true"></div>
+        <div class="end-game-vote-card">
+          <div class="end-game-vote-head">
+            <div><span>ЗАВЕРШЕНИЕ ПАРТИИ</span><h2 id="endGameVoteTitle">Завершение игры</h2><small id="endGameVoteSummary">Решение принимается единогласно.</small></div>
+            <button id="endGameVoteCloseBtn" class="small" type="button" aria-label="Закрыть голосование">✕</button>
+          </div>
+          <div id="endGameVotePlayers" class="end-game-vote-players"></div>
+          <div id="endGameVoteActions" class="end-game-vote-actions"></div>
+        </div>
+      </section>
+
+      <section id="journalOverlay" class="journal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="journalOverlayTitle">
+        <div class="journal-overlay-backdrop" aria-hidden="true"></div>
+        <div class="journal-overlay-card">
+          <div class="journal-overlay-head">
+            <div><span>ЖУРНАЛ</span><h2 id="journalOverlayTitle">Ход партии</h2><small>Только события, уже доступные этому игроку.</small></div>
+            <button id="journalOverlayCloseBtn" class="small" type="button" aria-label="Закрыть журнал">✕</button>
+          </div>
+          <div id="journalOverlayBody" class="journal-overlay-body"></div>
+        </div>
+      </section>
+
+      <section id="scoreOverlay" class="score-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="scoreOverlayTitle">
+        <div class="score-overlay-backdrop" aria-hidden="true"></div>
+        <div class="score-overlay-card">
+          <div class="score-overlay-head">
+            <div>
+              <span>ПОКАЗАТЕЛИ ПАРТИИ</span>
+              <h2 id="scoreOverlayTitle">Текущие показатели</h2>
+              <small id="scoreOverlayNote">Показываются только данные, доступные вам по текущей server-side visibility.</small>
+            </div>
+            <button id="scoreOverlayCloseBtn" class="small" type="button" aria-label="Закрыть показатели">✕</button>
+          </div>
+          <div id="scoreOverlayBody" class="score-overlay-body"></div>
+        </div>
+      </section>
+
+      <section id="objectSheet" class="object-sheet hidden" role="dialog" aria-modal="false" aria-labelledby="objectSheetTitle">
+        <div id="objectSheetHero" class="object-sheet-hero hidden" aria-hidden="true">
+          <div id="objectSheetHeroImage" class="object-sheet-hero-image"></div>
+        </div>
+        <div class="object-sheet-head">
+          <button id="objectSheetBack" class="object-sheet-back small hidden" type="button" aria-label="Назад">←</button>
+          <div class="object-sheet-heading">
+            <span id="objectSheetKind" class="object-sheet-kind">Объект карты</span>
+            <strong id="objectSheetTitle">—</strong>
+          </div>
+          <div class="object-sheet-head-actions">
+            <button id="objectSheetClose" class="small" type="button" aria-label="Закрыть карточку">✕</button>
+          </div>
+        </div>
+        <div id="objectSheetBody" class="object-sheet-body"></div>
+        <div id="objectSheetActions" class="object-sheet-actions"></div>
+      </section>
+
+      <section id="gameActionBar" class="game-action-bar hidden" role="status" aria-live="polite" aria-atomic="true" aria-label="Текущее действие">
+        <div class="game-action-copy">
+          <div id="gameActionStatus" class="game-action-status">
+            <span id="gameActionKicker" class="game-action-kicker">Ожидание</span>
+            <div id="gameActionProgress" class="game-action-progress hidden" aria-label="Оставшиеся действия"></div>
+            <strong id="gameActionTitle">—</strong>
+          </div>
+          <span id="gameActionDetail" class="game-action-detail">—</span>
+        </div>
+        <div id="gameActionButtons" class="game-action-buttons"></div>
+      </section>
+
+      <section id="decisionLayer" class="decision-layer hidden" role="dialog" aria-modal="true" aria-labelledby="decisionTitle" aria-describedby="decisionBody">
+        <div class="decision-backdrop" aria-hidden="true"></div>
+        <div class="decision-card">
+          <span id="decisionKicker" class="decision-kicker">Требуется ваше решение</span>
+          <h2 id="decisionTitle">—</h2>
+          <div id="decisionBody" class="decision-body"></div>
+          <div id="decisionActions" class="decision-actions" role="group" aria-label="Варианты решения"></div>
+        </div>
+      </section>
+
+      <section id="resultLayer" class="result-layer hidden" role="dialog" aria-modal="true" aria-labelledby="resultTitle" aria-describedby="resultBody">
+        <div class="result-backdrop" aria-hidden="true"></div>
+        <article class="result-card">
+          <span id="resultKicker" class="result-kicker">Результат</span>
+          <h2 id="resultTitle">—</h2>
+          <div id="resultBody" class="result-body"></div>
+          <div id="resultDetails" class="result-details" aria-live="polite"></div>
+          <button id="resultContinueBtn" class="primary result-continue" type="button">Продолжить</button>
+        </article>
+      </section>
+
+      <div id="toastStack" class="toast-stack" aria-live="polite" aria-atomic="false"></div>
+
     </section>
   </main>
 

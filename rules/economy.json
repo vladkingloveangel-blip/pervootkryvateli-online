@@ -27,25 +27,25 @@
     "exotic": {
       "id": "exotic",
       "name": "Экзотические звери",
-      "price": 4,
+      "price": 3,
       "iconKey": "goods.exotic"
     },
     "slaves": {
       "id": "slaves",
       "name": "Невольники",
-      "price": 4,
+      "price": 3,
       "iconKey": "goods.slaves"
     },
     "gold": {
       "id": "gold",
       "name": "Самородное золото",
-      "price": 4,
+      "price": 3,
       "iconKey": "goods.gold"
     },
     "diamonds": {
       "id": "diamonds",
       "name": "Алмазы",
-      "price": 4,
+      "price": 3,
       "iconKey": "goods.diamonds"
     }
   },

@@ -271,8 +271,8 @@ test('socket commands work outside turn ownership and survive disconnect/reconne
   const joined = await emit(second, 'joinRoom', { code: created.code, name: 'Two' });
   assert.equal(created.ok && joined.ok, true);
 
-  assert.equal((await emit(first, 'setSeatingOrder', { playerIds: [created.playerId, joined.playerId] })).ok, true);
-  assert.equal((await emit(first, 'setLeader', { playerId: created.playerId })).ok, true);
+  assert.equal((await emit(first, 'changeShip', { shipClass: 'brigantine' })).ok, true);
+  assert.equal((await emit(second, 'changeShip', { shipClass: 'brigantine' })).ok, true);
   assert.equal((await emit(first, 'setReady', { ready: true })).ok, true);
   assert.equal((await emit(second, 'setReady', { ready: true })).ok, true);
   assert.equal((await emit(first, 'startGame')).ok, true);

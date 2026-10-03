@@ -1,7 +1,7 @@
 (() => {
   const socket = io();
   const $ = id => document.getElementById(id);
-  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mobileTab: 'map', mapMovePending: false, lastAutoCenterSignature: '' };
+  const state = { room: null, shipCatalog: null, myId: null, code: null, playerToken: null, zoom: 1, selectedIslandId: null, mapSelection: null, mistCardRef: null, characterPeek: '', accountToken: localStorage.getItem('pervo:accountToken') || '', accountUser: null, accountsEnabled: false, authResolved: false, socketConnected: false, resumeAttempted: false, spectating: false, profileOpen: false, profileReturn: 'entry', everConnected: false, mapMovePending: false, lastAutoCenterSignature: '', resultQueue: [], activeResult: null, toastQueue: [], journalEntries: [], ambientSnapshot: null, targeting: null, rehydrateOnNextRoomState: false, islandSheetView: null };
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
   const shipName = id => state.room?.shipCatalog?.[id]?.name || state.shipCatalog?.[id]?.name || $('shipSelect').querySelector(`option[value="${id}"]`)?.textContent || 'Корабль';
   fetch('/api/rules').then(response => response.ok ? response.json() : null).then(rules => {
@@ -66,11 +66,38 @@
 
   function setGameScreenActive(active) {
     document.body.classList.toggle('game-active', Boolean(active));
-    if (!active) closeGameAccountMenu();
+    if (!active) {
+      closeGameMenu();
+      closeGameAccountMenu();
+    }
+  }
+
+  function openGameMenu() {
+    if (!document.body.classList.contains('game-active') || !state.room) return;
+    closeEndGameVoteOverlay();
+    closeScoreOverlay();
+    closeJournalOverlay();
+    closeGameAccountMenu();
+    closeMapInfo();
+    $('gameMenuPanel').classList.remove('hidden');
+    $('gameMenuBackdrop').classList.remove('hidden');
+    document.body.classList.add('game-menu-open');
+  }
+
+  function closeGameMenu() {
+    $('gameMenuPanel')?.classList.add('hidden');
+    $('gameMenuBackdrop')?.classList.add('hidden');
+    document.body.classList.remove('game-menu-open');
+  }
+
+  function toggleGameMenu() {
+    if (document.body.classList.contains('game-menu-open')) closeGameMenu();
+    else openGameMenu();
   }
 
   function openGameAccountMenu() {
     if (!state.accountUser || !document.body.classList.contains('game-active')) return;
+    closeGameMenu();
     document.body.classList.add('game-account-open');
     $('gameAccountBackdrop').classList.remove('hidden');
   }
@@ -78,11 +105,6 @@
   function closeGameAccountMenu() {
     document.body.classList.remove('game-account-open');
     $('gameAccountBackdrop').classList.add('hidden');
-  }
-
-  function toggleGameAccountMenu() {
-    if (document.body.classList.contains('game-account-open')) closeGameAccountMenu();
-    else openGameAccountMenu();
   }
 
   function showAuth(message = '') {
@@ -265,6 +287,7 @@
         button.addEventListener('click', () => {
           if (!state.socketConnected) return setError('myGamesError', 'Нет связи с сервером. Дождись подключения.');
           button.disabled = true;
+          state.rehydrateOnNextRoomState = true;
           socket.timeout(15000).emit('resumeRoom', { code: room.code, accountToken: state.accountToken }, (err, res) => {
             button.disabled = false;
             if (token !== state.accountToken) return;
@@ -338,6 +361,7 @@
     try {
       const sess = JSON.parse(localStorage.getItem(keyFor(last)) || 'null');
       if (sess?.code && sess?.playerToken) {
+        state.rehydrateOnNextRoomState = true;
         socket.emit('resumeRoom', { ...sess, accountToken: state.accountToken }, res => {
           if (res?.ok) {
             acceptSession(res);
@@ -432,8 +456,44 @@
     if (state.code) localStorage.setItem('pervo:lastRoom', state.code);
   }
 
+  function resetTransientPresentationState() {
+    state.selectedIslandId = null;
+    state.mapSelection = null;
+    state.mistCardRef = null;
+    state.characterPeek = '';
+    state.mapMovePending = false;
+    state.lastAutoCenterSignature = '';
+    state.targeting = null;
+    state.resultQueue = [];
+    state.activeResult = null;
+    state.toastQueue = [];
+
+    if (typeof closeGameMenu === 'function') closeGameMenu();
+    if (typeof closeGameAccountMenu === 'function') closeGameAccountMenu();
+    if (typeof closeScoreOverlay === 'function') closeScoreOverlay();
+    if (typeof closeJournalOverlay === 'function') closeJournalOverlay();
+    if (typeof closeEndGameVoteOverlay === 'function') closeEndGameVoteOverlay();
+    if (typeof closeMapInfo === 'function') closeMapInfo();
+
+    $('decisionLayer')?.classList.add('hidden');
+    $('resultLayer')?.classList.add('hidden');
+    $('targetingBar')?.classList.add('hidden');
+    $('eventFlowOverlay')?.classList.add('hidden');
+    document.body?.classList?.remove(
+      'decision-layer-open', 'result-layer-open', 'object-sheet-open', 'targeting-open',
+      'score-overlay-open', 'journal-overlay-open', 'end-game-vote-open'
+    );
+  }
+
   function setError(id, msg = '') { $(id).textContent = msg; }
-  function setConnected(yes) { $('connection').textContent = yes ? '● онлайн' : '○ нет связи'; }
+  function setConnected(yes) {
+    $('connection').textContent = yes ? '● онлайн' : '○ нет связи';
+    const hudConnection = $('hudConnection');
+    if (hudConnection) {
+      hudConnection.textContent = yes ? '● онлайн' : '○ нет связи';
+      hudConnection.classList.toggle('offline', !yes);
+    }
+  }
 
   function clearSession(message = '') {
     const code = state.code;
@@ -445,8 +505,14 @@
     state.myId = null;
     state.code = null;
     state.playerToken = null;
+    state.resultQueue = [];
+    state.activeResult = null;
+    state.toastQueue = [];
+    state.journalEntries = [];
+    state.ambientSnapshot = null;
+    state.targeting = null;
+    state.rehydrateOnNextRoomState = false;
     closeMapInfo();
-    openMobileTab('map');
     setGameScreenActive(false);
     $('game').classList.add('hidden');
     $('entry').classList.remove('hidden');
@@ -475,6 +541,7 @@
     setConnected(false);
     state.socketConnected = false;
     state.resumeAttempted = false;
+    state.rehydrateOnNextRoomState = Boolean(state.code || state.room);
     document.body.classList.add('connection-lost');
     showConnectionBanner('Связь потеряна. Переподключаемся автоматически…', 'warning');
   });
@@ -487,8 +554,42 @@
   socket.on('connect_error', () => {
     if (state.everConnected) showConnectionBanner('Сервер пока недоступен. Продолжаем переподключение…', 'warning');
   });
+  socket.on('eventResolved', data => {
+    if (state.spectating) return;
+    const card = eventResolvedResultCard(data);
+    if (card) {
+      enqueueResultCard(card);
+      playSoundCue(card.tone === 'danger' ? 'danger' : card.tone === 'success' ? 'reward' : 'event');
+    }
+  });
+
+  socket.on('battleResolved', data => {
+    if (state.spectating || !data?.result) return;
+    playSoundCue('battle');
+    if (data.kind === 'sea') {
+      const target = state.room?.players?.find(player => player.id === data.targetPlayerId);
+      const attacker = state.room?.players?.find(player => player.id === data.attackerId);
+      const opponentName = data.attackerId === state.myId ? target?.name : attacker?.name;
+      const card = seaBattleResultCard({ ok: true, result: data.result }, opponentName || 'противник');
+      if (card) enqueueResultCard(card);
+      return;
+    }
+    if (data.kind === 'assault') {
+      const card = jointAssaultResultCard(data);
+      if (card) enqueueResultCard(card);
+    }
+  });
+
   socket.on('roomState', room => {
     if (state.spectating) return;
+    const rehydrating = state.rehydrateOnNextRoomState
+      || !state.room
+      || (state.room?.code && room?.code && state.room.code !== room.code);
+    if (rehydrating) {
+      resetTransientPresentationState();
+      state.rehydrateOnNextRoomState = false;
+    }
+    processAmbientRoomState(room, { silent: rehydrating });
     state.room = room;
     if (room?.shipCatalog) state.shipCatalog = room.shipCatalog;
     const incomingMine = room?.players?.find(p => p.id === state.myId);
@@ -519,16 +620,21 @@
 
   function acceptSession(res) {
     state.spectating = false;
+    const sameSession = state.code === res.code && state.myId === res.playerId && Boolean(state.room);
+    if (sameSession || state.rehydrateOnNextRoomState) {
+      state.rehydrateOnNextRoomState = true;
+      resetTransientPresentationState();
+    }
     document.body.classList.remove('spectator-mode');
     $('spectatorBanner').classList.add('hidden');
     $('adminPanel').classList.add('hidden');
     state.code = res.code;
     state.myId = res.playerId;
     state.playerToken = res.playerToken;
-    openMobileTab('map');
+    closeMapInfo();
     setGameScreenActive(true);
     saveSession();
-    if (state.room) render();
+    if (state.room && !state.rehydrateOnNextRoomState) render();
     $('entry').classList.add('hidden');
     $('game').classList.remove('hidden');
     try {
@@ -571,6 +677,17 @@
     e.target.value = e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 5);
   });
 
+  $('finalHomeBtn').addEventListener('click', () => clearSession());
+  $('lobbyCopyBtn').addEventListener('click', () => $('copyCodeBtn').click());
+  $('lobbyShareBtn').addEventListener('click', () => $('shareInviteBtn').click());
+  $('lobbyExitBtn').addEventListener('click', () => {
+    if (state.spectating) {
+      $('adminBackBtn').click();
+      return;
+    }
+    if (state.room?.hostId === state.myId) $('closeRoomBtn').click();
+    else $('leaveRoomBtn').click();
+  });
   $('copyCodeBtn').addEventListener('click', async () => {
     const code = state.room?.code || '';
     try {
@@ -625,6 +742,7 @@
     $('authPanel').classList.add('hidden');
 
     if (state.code && state.playerToken) {
+      state.rehydrateOnNextRoomState = true;
       socket.emit('resumeRoom', { code: state.code, playerToken: state.playerToken, accountToken: state.accountToken }, res => {
         if (res?.ok) {
           acceptSession(res);
@@ -682,16 +800,54 @@
     showAuth('Вы вышли из аккаунта.');
   });
 
-  document.querySelectorAll('[data-mobile-nav]').forEach(btn => {
-    btn.addEventListener('click', () => openMobileTab(btn.dataset.mobileNav));
+  $('resultContinueBtn').addEventListener('click', dismissResultCard);
+  $('objectSheetClose').addEventListener('click', closeMapInfo);
+  $('objectSheetBack').addEventListener('click', handleObjectSheetBack);
+  $('targetingCancelBtn').addEventListener('click', cancelTargeting);
+  $('hudPlayerBtn').addEventListener('click', () => { if (!state.spectating) renderFleetOverviewObjectSheet(); });
+  document.querySelectorAll('[data-hud-metric]').forEach(button => {
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      toggleHudMetricPopover(button.dataset.hudMetric, button);
+    });
   });
-  $('mobileSheetClose').addEventListener('click', () => openMobileTab('map'));
-  $('hudPlayerBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : toggleGameAccountMenu());
-  $('hudDucatsBtn').addEventListener('click', () => openMobileTab('ship'));
-  $('hudGloryBtn').addEventListener('click', () => openMobileTab('players'));
-  $('hudCargoBtn').addEventListener('click', () => openMobileTab('ship'));
-  $('hudDebtBtn').addEventListener('click', () => openMobileTab('ship'));
-  $('hudTurnBtn').addEventListener('click', () => state.spectating ? openMobileTab('players') : openMobileTab('actions'));
+  document.addEventListener('click', event => {
+    const popover = $('hudMetricPopover');
+    if (!popover || popover.classList.contains('hidden')) return;
+    if (popover.contains(event.target) || event.target.closest?.('[data-hud-metric]')) return;
+    closeHudMetricPopover();
+  });
+  window.addEventListener('resize', closeHudMetricPopover);
+  $('hudCharacterBtn').addEventListener('click', () => {
+    if (state.spectating) return;
+    if (isMobileGameplayUi()) renderCharacterObjectSheet();
+    else renderFleetOverviewObjectSheet();
+  });
+  $('hudCardsBtn').addEventListener('click', () => {
+    if (state.spectating) return;
+    if (isMobileGameplayUi()) renderCardsObjectSheet();
+    else renderCardsObjectSheet();
+  });
+  $('hudGoalsBtn').addEventListener('click', () => {
+    if (!state.spectating) renderGoalsObjectSheet();
+  });
+  $('hudPoliticsBtn').addEventListener('click', () => {
+    if (state.spectating) return;
+    if (isMobileGameplayUi()) renderDiplomacyObjectSheet(me()?.suzerainId || null);
+    else renderDiplomacyObjectSheet(me()?.suzerainId || null);
+  });
+  $('hudMenuBtn').addEventListener('click', toggleGameMenu);
+  $('gameMenuCloseBtn').addEventListener('click', closeGameMenu);
+  $('gameMenuBackdrop').addEventListener('click', closeGameMenu);
+  document.querySelectorAll('[data-game-menu]').forEach(button => {
+    button.addEventListener('click', () => handleGameMenuAction(button.dataset.gameMenu));
+  });
+  $('scoreOverlayCloseBtn').addEventListener('click', closeScoreOverlay);
+  $('scoreOverlay').querySelector('.score-overlay-backdrop').addEventListener('click', closeScoreOverlay);
+  $('journalOverlayCloseBtn').addEventListener('click', closeJournalOverlay);
+  $('journalOverlay').querySelector('.journal-overlay-backdrop').addEventListener('click', closeJournalOverlay);
+  $('endGameVoteCloseBtn').addEventListener('click', closeEndGameVoteOverlay);
+  $('endGameVoteOverlay').querySelector('.end-game-vote-backdrop').addEventListener('click', closeEndGameVoteOverlay);
 
   $('startBtn').addEventListener('click', () => {
     $('startBtn').disabled = true;
@@ -714,15 +870,12 @@
       if (res && !res.ok) handleGameAck(res);
     });
   });
-  $('rollBtn').addEventListener('click', () => socket.emit('rollMove', {}, handleGameAck));
+  $('rollBtn').addEventListener('click', () => socket.emit('rollMove', {}, res => handleSoundAck(res, 'dice')));
   $('skipBtn').addEventListener('click', () => socket.emit('skipNavigation', {}, handleGameAck));
   $('endTurnBtn').addEventListener('click', () => socket.emit('endTurn', {}, handleGameAck));
-  $('dockRollBtn').addEventListener('click', () => socket.emit('rollMove', {}, handleGameAck));
-  $('dockSkipBtn').addEventListener('click', () => socket.emit('skipNavigation', {}, handleGameAck));
-  $('dockEndTurnBtn').addEventListener('click', () => socket.emit('endTurn', {}, handleGameAck));
-  $('mapNavRollBtn').addEventListener('click', () => socket.emit('rollMove', {}, handleGameAck));
+  $('mapNavRollBtn').addEventListener('click', () => socket.emit('rollMove', {}, res => handleSoundAck(res, 'dice')));
   $('mapNavStayBtn').addEventListener('click', () => socket.emit('skipNavigation', {}, handleGameAck));
-  $('sellCargoBtn').addEventListener('click', () => socket.emit('sellCargo', {}, handleGameAck));
+  $('sellCargoBtn').addEventListener('click', () => socket.emit('sellCargo', {}, res => handleSoundAck(res, 'coins')));
 
   function emitEndGameCommand(event) {
     setError('gameError');
@@ -730,8 +883,106 @@
   }
 
   function handleGameAck(res) { setError('gameError', res?.ok ? '' : (res?.error || 'Действие отклонено.')); }
+  function handleSoundAck(res, cue) {
+    handleGameAck(res);
+    if (res?.ok) playSoundCue(cue);
+    else if (res && res.ok === false) playSoundCue('error');
+  }
   function me() { return state.room?.players.find(p => p.id === state.myId) || null; }
   function active() { return state.room?.players.find(p => p.id === state.room?.activePlayerId) || null; }
+
+  function hudMetricInfo(metric) {
+    const mine = me();
+    const room = state.room;
+    if (!mine || !room) return null;
+    const cargo = cargoSummary(mine, room);
+    const debt = Number(mine.debt) || 0;
+    const ducats = Number(mine.ducats) || 0;
+
+    const data = {
+      ducats: {
+        title: 'ДУКАТЫ',
+        value: String(ducats),
+        body: debt
+          ? `Казна для покупок и оплаты. Долг: ${debt}. Чистое богатство: ${ducats - debt}.`
+          : 'Казна для покупок, строительства и других платных действий.',
+      },
+      cargo: {
+        title: 'ТРЮМ',
+        value: `${cargo.quantity}/${cargo.capacity}`,
+        body: 'Текущая загрузка и общая вместимость доступных грузовых трюмов флотилии.',
+      },
+      army: {
+        title: 'ВОЙСКО',
+        value: String(mine.assaultArmy ?? mine.stats?.army ?? 0),
+        body: 'Текущая сила флотилии при штурме островов.',
+      },
+      artillery: {
+        title: 'АРТИЛЛЕРИЯ',
+        value: String(mine.fleetArtillery ?? mine.stats?.artillery ?? 0),
+        body: 'Текущая боевая сила флотилии в морских боях и встречах.',
+      },
+      'army-glory': {
+        title: 'АРМЕЙСКАЯ СЛАВА',
+        value: String(Number(mine.armyPoints) || 0),
+        body: 'Получается за военные успехи на суше и учитывается в итоговом результате партии.',
+      },
+      'fleet-glory': {
+        title: 'МОРСКАЯ СЛАВА',
+        value: String(Number(mine.fleetPoints) || 0),
+        body: 'Получается за победы на море и на якорных встречах и учитывается в итоговом результате.',
+      },
+      prestige: {
+        title: 'ПРЕСТИЖ',
+        value: String(Number(mine.prestige) || 0),
+        body: 'Складывается из статуса ваших островов и престижных публичных построек.',
+      },
+    };
+    return data[metric] || null;
+  }
+
+  function closeHudMetricPopover() {
+    const popover = $('hudMetricPopover');
+    if (!popover) return;
+    popover.classList.add('hidden');
+    popover.removeAttribute('data-metric');
+    document.querySelectorAll('[data-hud-metric]').forEach(button => button.setAttribute('aria-expanded', 'false'));
+  }
+
+  function positionHudMetricPopover(button) {
+    const popover = $('hudMetricPopover');
+    if (!popover || !button || popover.classList.contains('hidden')) return;
+    const width = Math.min(210, Math.max(168, window.innerWidth - 16));
+    popover.style.width = `${width}px`;
+    const rect = button.getBoundingClientRect();
+    let left = rect.left + rect.width / 2 - width / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+    popover.style.left = `${Math.round(left)}px`;
+    popover.style.top = `${Math.round(rect.bottom + 6)}px`;
+  }
+
+  function renderHudMetricPopover(metric, button) {
+    const info = hudMetricInfo(metric);
+    if (!info) return closeHudMetricPopover();
+    const popover = $('hudMetricPopover');
+    $('hudMetricPopoverTitle').textContent = info.title;
+    $('hudMetricPopoverValue').textContent = info.value;
+    $('hudMetricPopoverBody').textContent = info.body;
+    popover.dataset.metric = metric;
+    popover.classList.remove('hidden');
+    document.querySelectorAll('[data-hud-metric]').forEach(item => item.setAttribute('aria-expanded', item === button ? 'true' : 'false'));
+    positionHudMetricPopover(button);
+  }
+
+  function toggleHudMetricPopover(metric, button) {
+    const popover = $('hudMetricPopover');
+    if (!popover) return;
+    if (!popover.classList.contains('hidden') && popover.dataset.metric === metric) {
+      closeHudMetricPopover();
+      return;
+    }
+    renderHudMetricPopover(metric, button);
+  }
 
   function currentIslands() {
     const mine = me();
@@ -772,30 +1023,141 @@
   }
 
 
-  const MOBILE_TAB_TITLES = {
-    actions: 'Действия',
-    ship: 'Корабль и имущество',
-    players: 'Игроки и отношения',
-  };
-
-  function openMobileTab(tab = 'map') {
-    closeGameAccountMenu();
-    state.mobileTab = tab;
-    const side = $('gameSidePanel');
-    const isMap = tab === 'map';
-    side.classList.toggle('mobile-open', !isMap);
-    document.body.classList.toggle('mobile-sheet-open', !isMap);
-    if (!isMap) {
-      side.dataset.mobileTab = tab;
-      $('mobileSheetTitle').textContent = MOBILE_TAB_TITLES[tab] || 'Раздел';
-      side.scrollTop = 0;
-    } else {
-      delete side.dataset.mobileTab;
-    }
-    document.querySelectorAll('[data-mobile-nav]').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.mobileNav === tab);
-    });
+  function metricValue(value, hidden = 'скрыто') {
+    return value == null ? hidden : String(value);
   }
+
+  function projectedWealthLabel(player) {
+    if (!player || !Object.hasOwn(player, 'ducats')) return 'скрыто';
+    const debt = Object.hasOwn(player, 'debt') ? Number(player.debt) || 0 : 0;
+    return String((Number(player.ducats) || 0) - debt);
+  }
+
+  function renderScoreOverlay() {
+    const room = state.room;
+    if (!room) return;
+    closeGameMenu();
+    closeMapInfo();
+    const finished = Boolean(room.finished || room.phase === 'finished');
+    $('scoreOverlayTitle').textContent = finished ? 'Финальные показатели' : 'Текущие показатели';
+    $('scoreOverlayNote').textContent = finished
+      ? 'Финальные значения взяты из canonical finalResult.'
+      : 'Показываются только данные, уже разрешённые server-side visibility. Скрытые показатели не вычисляются на клиенте.';
+    const body = $('scoreOverlayBody');
+    body.innerHTML = '';
+    if (finished) {
+      const rows = room.finalResult?.playerMetrics || [];
+      for (const row of rows) {
+        const player = room.players?.find(item => item.id === row.playerId);
+        const metrics = row.metrics || {};
+        const card = document.createElement('article');
+        card.className = 'score-player-card';
+        card.innerHTML = '<h3>' + escapeHtml(player?.name || playerName(row.playerId)) + '</h3>'
+          + '<div class="score-metric-grid">'
+          + '<span>Острова</span><strong>' + metricValue(metrics.islands) + '</strong>'
+          + '<span>Богатство</span><strong>' + metricValue(metrics.wealth) + '</strong>'
+          + '<span>Армейская слава</span><strong>' + metricValue(metrics.army) + '</strong>'
+          + '<span>Морская слава</span><strong>' + metricValue(metrics.fleet) + '</strong>'
+          + '<span>Престиж</span><strong>' + metricValue(metrics.prestige) + '</strong>'
+          + '<span>Легендарные места</span><strong>' + metricValue(metrics.legendaryPlaces) + '</strong></div>';
+        body.appendChild(card);
+      }
+    } else {
+      for (const player of room.players || []) {
+        const card = document.createElement('article');
+        card.className = 'score-player-card';
+        card.innerHTML = '<h3>' + escapeHtml(player.name) + '</h3>'
+          + '<div class="score-metric-grid">'
+          + '<span>Острова</span><strong>' + metricValue(player.islandCount) + '</strong>'
+          + '<span>Богатство</span><strong>' + projectedWealthLabel(player) + '</strong>'
+          + '<span>Армейская слава</span><strong>' + metricValue(player.armyPoints) + '</strong>'
+          + '<span>Морская слава</span><strong>' + metricValue(player.fleetPoints) + '</strong>'
+          + '<span>Престиж</span><strong>' + metricValue(player.prestige) + '</strong>'
+          + '<span>Легендарные места</span><strong>скрыто</strong></div>';
+        body.appendChild(card);
+      }
+    }
+    $('scoreOverlay').classList.remove('hidden');
+    document.body.classList.add('score-overlay-open');
+  }
+
+  function closeScoreOverlay() {
+    $('scoreOverlay')?.classList.add('hidden');
+    document.body.classList.remove('score-overlay-open');
+  }
+
+  function openMenuInfoSheet(kind) {
+    const room = state.room;
+    if (!room) return;
+    closeGameMenu();
+    state.mapSelection = { kind: 'menu', id: kind };
+    $('objectSheetKind').textContent = 'МЕНЮ';
+    const body = $('objectSheetBody');
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+  
+    if (kind === 'holdings') {
+      $('objectSheetTitle').textContent = 'Мои владения';
+      const islands = (room.islands || []).filter(island => island.ownerId === state.myId);
+      body.innerHTML = islands.map(island =>
+        '<div class="menu-holding-row"><strong>' + escapeHtml(island.name) + '</strong><span>'
+        + escapeHtml(island.status || '—') + ' · площадь ' + (island.usedArea ?? 0) + '/'
+        + (island.effectiveArea ?? island.area ?? 0) + '</span></div>'
+      ).join('') || '<div class="menu-note">У вас пока нет островов.</div>';
+    } else if (kind === 'help') {
+      $('objectSheetTitle').textContent = 'Справка';
+      body.innerHTML = '<div class="menu-help-block"><strong>Карта</strong><span>Основное игровое пространство. Нажимайте на острова, корабли, якоря и другие объекты.</span></div>'
+        + '<div class="menu-help-block"><strong>Нижняя панель</strong><span>Показывает главное действие текущего состояния хода.</span></div>'
+        + '<div class="menu-help-block"><strong>Обязательные решения</strong><span>Появляются поверх карты и блокируют продолжение, пока сервер ждёт ваш выбор.</span></div>';
+    } else if (kind === 'endgame') {
+      $('objectSheetTitle').textContent = 'Завершение игры';
+      renderEndGame();
+      body.innerHTML = '<div class="menu-help-block"><strong>' + escapeHtml($('endGameTitle').textContent)
+        + '</strong><span>' + escapeHtml($('endGameSummary').textContent) + '</span></div>';
+      const openLegacy = document.createElement('button');
+      openLegacy.type = 'button';
+      openLegacy.className = 'primary';
+      openLegacy.textContent = 'Открыть согласование';
+      openLegacy.addEventListener('click', () => { closeMapInfo(); closeMapInfo(); });
+      actions.appendChild(openLegacy);
+    }
+  
+    $('objectSheet').classList.remove('hidden');
+    $('objectSheet').classList.add('expanded');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function handleGameMenuAction(kind) {
+    if (kind === 'metrics') {
+      renderScoreOverlay();
+      return;
+    }
+    if (kind === 'journal') {
+      renderJournalOverlay();
+      return;
+    }
+    if (kind === 'endgame') {
+      openEndGameVoteOverlay();
+      return;
+    }
+    if (kind === 'diplomacy') {
+      closeGameMenu();
+      renderDiplomacyObjectSheet(null);
+      return;
+    }
+    if (kind === 'settings') {
+      closeGameMenu();
+      openGameAccountMenu();
+      return;
+    }
+    if (kind === 'exit') {
+      closeGameMenu();
+      $('logoutBtn').click();
+      return;
+    }
+    openMenuInfoSheet(kind);
+  }
+
 
   function cargoSummary(player, room) {
     if (!player) return { quantity: 0, capacity: 0 };
@@ -813,37 +1175,47 @@
     const r = state.room;
     if (!r) return;
     const mine = me();
-    const activePlayer = active();
     $('hudResources').classList.toggle('hidden', !mine);
-    $('mobileNavActions').classList.toggle('hidden', state.spectating);
-    $('mobileNavShip').classList.toggle('hidden', state.spectating);
 
     if (mine) {
       const cargo = cargoSummary(mine, r);
       $('hudPlayerName').textContent = mine.name;
       $('hudShipLevel').textContent = `${shipName(mine.shipClass)} · ${ROMAN[mine.level] || mine.level}`;
       $('hudDucats').textContent = mine.ducats ?? 0;
-      $('hudGlory').textContent = mine.glory ?? 0;
-      $('hudArmyPoints').textContent = mine.armyPoints ?? 0;
-      $('hudFleetPoints').textContent = mine.fleetPoints ?? 0;
       $('hudCargo').textContent = `${cargo.quantity}/${cargo.capacity}`;
-      $('hudDebtBtn').classList.toggle('hidden', !(mine.debt > 0));
-      $('hudDebt').textContent = mine.debt || 0;
+      $('hudArmy').textContent = mine.assaultArmy ?? mine.stats?.army ?? 0;
+      $('hudArtillery').textContent = mine.fleetArtillery ?? mine.stats?.artillery ?? 0;
+      $('hudArmyGlory').textContent = mine.armyPoints ?? 0;
+      $('hudFleetGlory').textContent = mine.fleetPoints ?? 0;
+      $('hudPrestige').textContent = mine.prestige ?? 0;
+      $('hudCharacter').textContent = mine.character?.name ? mine.character.name.slice(0, 3) : '—';
+      $('hudCharacterBtn').title = mine.character?.name || 'Персонаж не нанят';
+      $('hudCards').textContent = String(digitalCardEntries(mine).length);
+      $('hudGoals').textContent = String(activeGoalCount(mine));
+      const suzerain = mine.suzerainId ? r.factions?.find(faction => faction.id === mine.suzerainId) : null;
+      $('hudPolitics').textContent = suzerain ? String(suzerain.name || '⚜').slice(0, 3) : ((mine.enemyFactionIds || []).length ? '⚔' : '—');
+      $('hudPoliticsBtn').title = suzerain
+        ? `Сюзерен: ${suzerain.name}`
+        : ((mine.enemyFactionIds || []).length ? `Вражда с государствами: ${(mine.enemyFactionIds || []).length}` : 'Дипломатия');
     } else {
+      closeHudMetricPopover();
       $('hudPlayerName').textContent = state.spectating ? 'Наблюдение' : 'Игрок';
       $('hudShipLevel').textContent = state.spectating ? `Комната ${r.code}` : '—';
-      $('hudDebtBtn').classList.add('hidden');
+      $('hudCharacter').textContent = '—';
+      $('hudCards').textContent = '0';
+      $('hudGoals').textContent = '0';
+      $('hudPolitics').textContent = '—';
+      $('hudPoliticsBtn').title = 'Дипломатия';
     }
 
-    $('hudRound').textContent = !r.started ? `Лобби · ${r.players.length}/${r.balanceCatalog.session.players.max}` : `Раунд ${r.round} · круг ${r.circle}/${r.balanceCatalog.session.circlesPerRound}`;
-    $('hudTurn').textContent = !r.started
-      ? 'Ожидание старта'
-      : r.eventPhase?.active
-        ? `События · ${playerName(r.eventPhase.currentPlayerId)}`
-        : activePlayer
-          ? (activePlayer.id === state.myId ? 'Ваш ход' : `Ход: ${activePlayer.name}`)
-          : 'Ожидание';
-    $('mobileNavActions').classList.toggle('attention', Boolean(isDecisionPending()));
+    $('hudRound').textContent = r.started ? `Раунд ${r.round}` : 'Лобби';
+    $('hudCircle').textContent = r.started ? `Круг ${r.circle}` : '—';
+
+    const openMetric = $('hudMetricPopover')?.dataset.metric;
+    if (openMetric && !$('hudMetricPopover').classList.contains('hidden')) {
+      const button = document.querySelector(`[data-hud-metric="${openMetric}"]`);
+      if (button) renderHudMetricPopover(openMetric, button);
+    }
   }
 
 
@@ -883,14 +1255,95 @@
     set('.island-panel', onIsland, 25);
     set('.combat-panel', combatRelevant, pendingCombat ? 3 : 27);
 
-    const visible = [...document.querySelectorAll('#gameSidePanel [data-ui-tab="actions"]:not(.context-hidden)')];
-    const actionNav = $('mobileNavActions');
-    actionNav.dataset.count = String(Math.max(0, visible.length - 1));
-    actionNav.setAttribute('aria-label', visible.length > 1 ? `Действия, доступно разделов: ${visible.length}` : 'Действия');
+  }
+
+  function openEndGameVoteOverlay() {
+    if (!state.room?.started || state.room.finished || state.room.phase === 'finished') return;
+    closeGameMenu();
+    closeMapInfo();
+    renderEndGameVoteOverlay(true);
+  }
+
+  function closeEndGameVoteOverlay() {
+    const consensus = state.room?.endGameConsensus;
+    const confirmed = new Set((consensus?.confirmedPlayerIds || []).map(String));
+    const mustRespond = consensus?.status === 'proposed' && !state.spectating && !confirmed.has(String(state.myId));
+    if (mustRespond) return;
+    $('endGameVoteOverlay')?.classList.add('hidden');
+    document.body.classList.remove('end-game-vote-open');
+  }
+
+  function renderEndGameVoteOverlay(forceOpen = false) {
+    const room = state.room;
+    const overlay = $('endGameVoteOverlay');
+    if (!overlay) return;
+    const consensus = room?.endGameConsensus;
+    const proposed = consensus?.status === 'proposed';
+    const accepted = consensus?.status === 'accepted';
+    if (!room?.started || room.finished || room.phase === 'finished' || accepted) {
+      overlay.classList.add('hidden');
+      document.body.classList.remove('end-game-vote-open');
+      return;
+    }
+
+    const confirmed = new Set((consensus?.confirmedPlayerIds || []).map(String));
+    const mineConfirmed = confirmed.has(String(state.myId));
+    const shouldOpen = forceOpen || proposed;
+    if (!shouldOpen) return;
+
+    $('endGameVoteTitle').textContent = proposed ? 'Завершить партию после этого раунда?' : 'Завершение игры';
+    $('endGameVoteSummary').textContent = proposed
+      ? `Предложил: ${playerName(consensus.proposedById)}. Нужно согласие всех игроков.`
+      : 'Если все игроки согласятся, партия завершится после полного текущего раунда.';
+
+    const players = $('endGameVotePlayers');
+    players.innerHTML = '';
+    if (proposed) {
+      for (const player of room.players || []) {
+        const row = document.createElement('div');
+        row.className = 'end-game-vote-player';
+        const yes = confirmed.has(String(player.id));
+        row.innerHTML = `<span>${escapeHtml(player.name)}</span><strong>${yes ? 'Согласился' : 'Ожидается ответ'}</strong>`;
+        players.appendChild(row);
+      }
+    }
+
+    const actions = $('endGameVoteActions');
+    actions.innerHTML = '';
+    if (!state.spectating && !proposed) {
+      const propose = document.createElement('button');
+      propose.type = 'button';
+      propose.className = 'primary';
+      propose.textContent = 'Предложить завершение партии';
+      propose.addEventListener('click', () => emitEndGameCommand('proposeEndGame'));
+      actions.appendChild(propose);
+    } else if (!state.spectating && proposed && !mineConfirmed) {
+      const confirmButton = document.createElement('button');
+      confirmButton.type = 'button';
+      confirmButton.className = 'primary';
+      confirmButton.textContent = 'Согласиться';
+      confirmButton.addEventListener('click', () => emitEndGameCommand('confirmEndGame'));
+      const rejectButton = document.createElement('button');
+      rejectButton.type = 'button';
+      rejectButton.className = 'danger-soft';
+      rejectButton.textContent = 'Отклонить';
+      rejectButton.addEventListener('click', () => emitEndGameCommand('rejectEndGame'));
+      actions.append(confirmButton, rejectButton);
+    } else if (proposed) {
+      const waiting = document.createElement('div');
+      waiting.className = 'end-game-vote-waiting';
+      waiting.textContent = state.spectating ? 'Ожидается решение игроков.' : 'Ваш голос учтён. Ожидаем остальных игроков.';
+      actions.appendChild(waiting);
+    }
+
+    $('endGameVoteCloseBtn').classList.toggle('hidden', proposed && !state.spectating && !mineConfirmed);
+    overlay.classList.remove('hidden');
+    document.body.classList.add('end-game-vote-open');
   }
 
   function renderEndGame() {
     const r = state.room;
+    if (typeof renderEndGameVoteOverlay === 'function') renderEndGameVoteOverlay();
     const panel = $('endGamePanel');
     const finalPanel = $('finalResultsPanel');
     const finished = Boolean(r?.finished || r?.phase === 'finished');
@@ -899,6 +1352,21 @@
 
     if (finished) {
       panel.classList.add('hidden');
+      if (typeof closeGameMenu === 'function') closeGameMenu();
+      if (typeof closeGameAccountMenu === 'function') closeGameAccountMenu();
+      if (typeof closeScoreOverlay === 'function') closeScoreOverlay();
+      if (typeof closeJournalOverlay === 'function') closeJournalOverlay();
+      if (typeof closeEndGameVoteOverlay === 'function') closeEndGameVoteOverlay();
+      if (typeof closeMapInfo === 'function') closeMapInfo();
+      state.targeting = null;
+      state.activeResult = null;
+      state.resultQueue = [];
+      state.toastQueue = [];
+      $('decisionLayer')?.classList.add('hidden');
+      $('resultLayer')?.classList.add('hidden');
+      $('targetingBar')?.classList.add('hidden');
+      $('eventFlowOverlay')?.classList.add('hidden');
+      document.body?.classList?.remove('decision-layer-open', 'result-layer-open', 'object-sheet-open', 'score-overlay-open', 'journal-overlay-open', 'end-game-vote-open');
       const result = r.finalResult || { titles: [], playerMetrics: [] };
       $('finalResultsRound').textContent = result.finishedRound == null ? '' : `Финальная граница: раунд ${result.finishedRound}`;
 
@@ -1023,6 +1491,7 @@
     $('turnLabel').textContent = !r.started ? `Игроков: ${r.players.length}/${r.balanceCatalog.session.players.max}` : r.eventPhase?.active ? `Событие: ${eventPlayer?.name || '—'}` : (a ? `Ход: ${a.name}` : '—');
 
     const mine = me();
+    renderLobbyShell();
     renderMobileHud();
     renderEndGame();
     if (r.finished || r.phase === 'finished') return;
@@ -1034,11 +1503,13 @@
       const skip = mine.skipTurns ? ` · пропусков хода: ${mine.skipTurns}` : '';
       const suzerain = mine.suzerainId ? r.factions?.find(f => f.id === mine.suzerainId)?.name : null;
       const politics = suzerain ? ` · вассал: ${suzerain}` : (mine.enemyFactionIds?.length ? ` · вражда: ${mine.enemyFactionIds.length}` : '');
-      $('youStatus').innerHTML = `<strong>${escapeHtml(mine.name)}</strong><br><span class="muted">${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level} · ${mine.ducats} дукатов${mine.debt ? ` · долг ${mine.debt}` : ''} · очки армии ${mine.armyPoints || 0} · очки флота ${mine.fleetPoints || 0} · слава ${mine.glory || 0} · островов ${mine.islandCount} · клетка ${mine.col + 1}:${mine.row + 1}${escapeHtml(cargo)}${escapeHtml(cards)}${escapeHtml(eventHand)}${escapeHtml(legendary)}${escapeHtml(skip)}${escapeHtml(politics)}</span>`;
+      $('youStatus').innerHTML = `<strong>${escapeHtml(mine.name)}</strong><br><span class="muted">${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level} · ${mine.ducats} дукатов${mine.debt ? ` · долг ${mine.debt}` : ''} · армейская слава ${mine.armyPoints || 0} · морская слава ${mine.fleetPoints || 0} · престиж ${mine.prestige || 0} · островов ${mine.islandCount} · клетка ${mine.col + 1}:${mine.row + 1}${escapeHtml(cargo)}${escapeHtml(cards)}${escapeHtml(eventHand)}${escapeHtml(legendary)}${escapeHtml(skip)}${escapeHtml(politics)}</span>`;
     }
 
+    renderGameRoster();
     renderPlayers();
     renderControls();
+    renderGameActionBar();
     renderMapNavigation();
     renderMapContext();
     renderEvents();
@@ -1047,19 +1518,134 @@
     renderFleetAdjustment();
     renderAssignments();
     renderLegendaryPlaces();
+    refreshOpenGoalsSheet();
     renderLegendary();
+    refreshOpenCardsSheet();
     renderFleet();
+    refreshOpenCharacterSheet();
     renderTrade();
+    refreshOpenCitadelSheet();
     renderAnchors();
+    refreshOpenAnchorSheet();
     renderIsland();
+    refreshOpenIslandSheet();
     renderAlliances();
     renderCombat();
+    refreshOpenSeaBattleFlow();
+    refreshOpenAssaultFlow();
+    renderEventFlowOverlay();
+    renderDecisionLayer();
+    renderResultLayer();
+    renderToastStack();
+    renderTargetingBar();
     renderMap();
     updateContextualActionPanels();
   }
 
+  function renderGameRoster() {
+    const roster = $('gameRoster');
+    const r = state.room;
+    if (!roster || !r?.started || r.finished || r.phase === 'finished') {
+      roster?.classList.add('hidden');
+      if (roster) roster.innerHTML = '';
+      return;
+    }
+
+    roster.innerHTML = '';
+    roster.classList.remove('hidden');
+    const orderedIds = Array.isArray(r.order) && r.order.length ? r.order : r.players.map(player => player.id);
+    const activeIndex = orderedIds.indexOf(r.activePlayerId);
+    const nextPlayerId = orderedIds.length > 1 && activeIndex >= 0
+      ? orderedIds[(activeIndex + 1) % orderedIds.length]
+      : null;
+
+    for (const id of orderedIds) {
+      const player = r.players.find(item => item.id === id);
+      if (!player) continue;
+      const isActive = player.id === r.activePlayerId;
+      const isNext = !isActive && player.id === nextPlayerId;
+      const turnStatus = isActive ? 'active' : isNext ? 'next' : 'waiting';
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `roster-player turn-${turnStatus}`;
+      if (player.id === state.myId) button.classList.add('you');
+      if (player.id !== state.myId && areAlliesClient(state.myId, player.id)) button.classList.add('ally');
+      button.setAttribute('aria-label', `${player.name}: ${shipName(player.shipClass)}; ${isActive ? 'ходит сейчас' : isNext ? 'ходит следующим' : 'ожидает хода'}`);
+
+      const token = document.createElement('span');
+      token.className = 'roster-token';
+      token.style.background = player.color;
+      token.textContent = String(player.name || '?').trim().slice(0, 1).toUpperCase() || '?';
+
+      const copy = document.createElement('span');
+      copy.className = 'roster-copy';
+
+      const nameRow = document.createElement('span');
+      nameRow.className = 'roster-name-row';
+
+      const name = document.createElement('span');
+      name.className = 'roster-name';
+      name.textContent = player.id === state.myId ? 'Вы' : player.name;
+
+      const status = document.createElement('span');
+      status.className = `roster-turn-dot roster-turn-dot-${turnStatus}`;
+      status.setAttribute('aria-hidden', 'true');
+
+      const ship = document.createElement('span');
+      ship.className = 'roster-ship';
+      ship.textContent = shipName(player.shipClass);
+
+      nameRow.append(name, status);
+      copy.append(nameRow, ship);
+      button.append(token, copy);
+      button.addEventListener('click', () => {
+        if (isDecisionPending()) return;
+        showPlayerMapInfo(player);
+      });
+      roster.appendChild(button);
+    }
+  }
+
+  function renderLobbyShell() {
+    const r = state.room;
+    const game = $('game');
+    const lobby = Boolean(r && !r.started && !r.finished && r.phase !== 'finished');
+    game.classList.toggle('lobby-state', lobby);
+    document.body.classList.toggle('game-lobby-active', lobby);
+    $('lobbyHero')?.classList.toggle('hidden', !lobby);
+    $('lobbyToolbar')?.classList.toggle('hidden', !lobby);
+    if (!lobby) return;
+
+    const min = Number(r.balanceCatalog?.session?.players?.min) || 2;
+    const max = Number(r.balanceCatalog?.session?.players?.max) || 6;
+    const connected = (r.players || []).filter(player => player.connected).length;
+    const ready = (r.players || []).filter(player => player.ready && player.connected).length;
+    const isHost = r.hostId === state.myId;
+    const mine = me();
+
+    $('lobbyRoomCode').textContent = r.code || '—';
+    $('lobbyCapacity').textContent = `${r.players.length}/${max} игроков · минимум ${min}`;
+    $('lobbyRole').textContent = state.spectating ? 'Наблюдатель' : isHost ? 'Организатор' : 'Игрок';
+    $('lobbyConnectionStatus').textContent = connected === r.players.length
+      ? `Все подключены · готовы ${ready}/${r.players.length}`
+      : `Подключены ${connected}/${r.players.length} · ждём reconnect`;
+    $('lobbyReadySummary').textContent = r.players.length < min
+      ? `Нужно минимум ${min} игрока`
+      : `Готовы ${ready} из ${r.players.length}`;
+    $('lobbyStatusText').textContent = state.spectating
+      ? 'Наблюдение за подготовкой партии. Игровые настройки доступны участникам комнаты.'
+      : isHost
+        ? 'Порядок хода определяется порядком входа в комнату. Дождитесь готовности всех игроков.'
+        : 'Выберите корабль, подтвердите готовность и дождитесь старта организатором.';
+
+    $('lobbyExitBtn').textContent = state.spectating ? 'Назад' : isHost ? 'Закрыть комнату' : 'Выйти';
+    $('lobbyExitBtn').classList.toggle('hidden', false);
+  }
+
   function renderPlayers() {
     const r = state.room;
+    if (!r.started) renderLobbyShell();
     $('players').innerHTML = '';
     const isHost = r.hostId === state.myId;
     const isSpectator = state.spectating;
@@ -1078,25 +1664,7 @@
       const politicalLabel = suzerainName ? ` · вассал ${suzerainName}` : (p.enemyFactionIds?.length ? ` · вражда ${p.enemyFactionIds.length}` : '');
       const readyLabel = !r.started ? (p.ready ? ' · ✓ готов' : ' · не готов') : '';
       const moneyLabel = Object.hasOwn(p, 'ducats') ? ` · ${p.ducats} дукатов${Object.hasOwn(p, 'debt') && p.debt ? ` · долг ${p.debt}` : ''}` : '';
-      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${p.id === r.leaderId ? ' · ведущий' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level}${moneyLabel} · армия ${p.armyPoints || 0} · флот ${p.fleetPoints || 0} · слава ${p.glory || 0} · островов ${p.islandCount} · именных ${p.namedPlaceCardCount || 0} · экспедиций ${p.expeditionHistoryCount || 0} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
-      if (!isSpectator && isHost && !r.started) {
-        const actions = el.querySelector('.player-side-actions');
-        if (p.id !== r.leaderId) {
-          const leader = document.createElement('button'); leader.className = 'seat-btn'; leader.textContent = 'Ведущий';
-          leader.addEventListener('click', () => sendLobbyChange(leader, 'setLeader', { playerId: p.id }));
-          actions.appendChild(leader);
-        }
-        for (const [step, label] of [[-1, 'Раньше'], [1, 'Позже']]) {
-          const target = seats.indexOf(p.id) + step;
-          if (target < 0 || target >= seats.length) continue;
-          const button = document.createElement('button'); button.className = 'seat-btn'; button.textContent = label;
-          button.addEventListener('click', () => {
-            const ids = [...seats]; [ids[target], ids[target - step]] = [ids[target - step], ids[target]];
-            sendLobbyChange(button, 'setSeatingOrder', { playerIds: ids });
-          });
-          actions.appendChild(button);
-        }
-      }
+      el.innerHTML = `<span class="player-dot" style="background:${p.color}"></span><div class="player-meta"><div class="player-name">${escapeHtml(p.name)}${p.isYou ? ' · вы' : ''}${!p.connected ? ' · офлайн' : ''}${readyLabel}</div><div class="player-sub">${r.started ? `Ход ${order}` : `Место ${order} по часовой стрелке`} · ${escapeHtml(shipName(p.shipClass))} ${ROMAN[p.level] || p.level}${moneyLabel} · армейская слава ${p.armyPoints || 0} · морская слава ${p.fleetPoints || 0} · островов ${p.islandCount} · именных ${p.namedPlaceCardCount || 0} · экспедиций ${p.expeditionHistoryCount || 0} · эскорт ${p.escorts?.length || 0}${p.skipTurns ? ` · пропуск ${p.skipTurns}` : ''}${escapeHtml(cargoLabel)}${escapeHtml(politicalLabel)}</div></div><div class="player-side-actions"><span class="order-badge">${r.started ? `#${order}` : ''}</span></div>`;
       if (!isSpectator && !r.started && p.isYou) {
         const label = document.createElement('label');
         label.className = 'lobby-ship-label';
@@ -1109,12 +1677,12 @@
           shipSelect.appendChild(option);
         }
         shipSelect.value = p.shipClass;
-        shipSelect.disabled = p.id === r.leaderId;
+        shipSelect.disabled = false;
         shipSelect.addEventListener('change', () => {
           shipSelect.disabled = true;
           socket.emit('changeShip', { shipClass: shipSelect.value }, res => {
             handleGameAck(res);
-            if (!res?.ok) { shipSelect.value = p.shipClass; shipSelect.disabled = p.id === r.leaderId; }
+            if (!res?.ok) { shipSelect.value = p.shipClass; shipSelect.disabled = false; }
           });
         });
         label.appendChild(shipSelect);
@@ -1140,8 +1708,8 @@
     const allReady = r.players.length >= r.balanceCatalog.session.players.min && r.players.every(p => p.ready && p.connected);
     const waitingReady = r.players.filter(p => !p.ready || !p.connected).length;
     $('startBtn').classList.toggle('hidden', isSpectator || r.started || !isHost);
-    $('startBtn').disabled = r.players.length < r.balanceCatalog.session.players.min || r.players.length > r.balanceCatalog.session.players.max || !r.leaderId || !allReady;
-    $('startBtn').textContent = r.players.length < r.balanceCatalog.session.players.min ? `Нужно ещё игроков: ${r.balanceCatalog.session.players.min - r.players.length}` : (!r.leaderId ? 'Выберите ведущего' : (!allReady ? `Ждём готовности: ${waitingReady}` : 'Начать игру'));
+    $('startBtn').disabled = r.players.length < r.balanceCatalog.session.players.min || r.players.length > r.balanceCatalog.session.players.max || !allReady;
+    $('startBtn').textContent = r.players.length < r.balanceCatalog.session.players.min ? `Нужно ещё игроков: ${r.balanceCatalog.session.players.min - r.players.length}` : (!allReady ? `Ждём готовности: ${waitingReady}` : 'Начать игру');
 
     $('closeRoomBtn').classList.toggle('hidden', isSpectator || !isHost);
     $('leaveRoomBtn').classList.toggle('hidden', isSpectator || isHost || r.started);
@@ -1214,6 +1782,7 @@
     $('mapNavStayBtn').disabled = true;
     socket.emit('moveTo', { row: cell.row, col: cell.col }, res => {
       handleGameAck(res);
+      if (res?.ok) playSoundCue('ship');
       if (res?.ok) return;
       state.mapMovePending = false;
       $('mapBoard').classList.remove('move-pending');
@@ -1243,12 +1812,12 @@
       return;
     }
 
-    const addAction = (label, tab, className = '') => {
+    const addAction = (label, handler, className = '') => {
       const b = document.createElement('button');
       b.type = 'button';
       if (className) b.className = className;
       b.textContent = label;
-      b.addEventListener('click', () => openMobileTab(tab));
+      b.addEventListener('click', handler);
       actions.appendChild(b);
     };
 
@@ -1263,7 +1832,7 @@
       else if (r.pendingLegendaryReaction) label = 'Решение по легендарной карте';
       title.textContent = label;
       text.textContent = 'Продолжение хода ждёт вашего выбора.';
-      addAction('Открыть решение', 'actions', 'primary');
+      addAction('Открыть решение', renderDecisionLayer, 'primary');
       overlay.classList.remove('hidden');
       return;
     }
@@ -1278,7 +1847,7 @@
     if (mine.atCitadel) {
       title.textContent = 'Цитадель';
       text.textContent = `Торговля, улучшения и сопровождение · действий осталось: ${mine.actionsLeft ?? 0}`;
-      addAction('Корабль и торговля', 'ship', 'primary');
+      addAction('Открыть Цитадель', () => renderCitadelObjectSheet(r.map?.citadel || { name: 'Цитадель' }), 'primary');
       overlay.classList.remove('hidden');
       return;
     }
@@ -1292,14 +1861,14 @@
         : '';
       if (hereIsland.ownerId === state.myId) {
         text.textContent = `Ваш остров · действий осталось: ${mine.actionsLeft ?? 0}${legendarySuffix}`;
-        addAction('Управление островом', 'actions', 'primary');
+        addAction('Управление островом', () => renderOwnIslandObjectSheet(hereIsland), 'primary');
       } else {
         const owner = islandOwnerLabel(hereIsland);
         text.textContent = `${owner} · защита ${hereIsland.defenseArmy ?? hereIsland.army ?? 0} · действий: ${mine.actionsLeft ?? 0}${legendarySuffix}`;
-        if (islandTargets.length && !mine.inPeaceZone) addAction('Штурм и действия', 'actions', 'danger-soft');
-        else addAction('Информация', 'actions');
+        if (islandTargets.length && !mine.inPeaceZone) addAction('Штурм и действия', () => renderForeignIslandObjectSheet(hereIsland), 'danger-soft');
+        else addAction('Информация', () => renderForeignIslandObjectSheet(hereIsland));
       }
-      if (seaTargets.length && !mine.inPeaceZone) addAction('Морской бой', 'actions', 'danger-soft');
+      if (seaTargets.length && !mine.inPeaceZone) addAction('Морской бой', () => renderPlayerObjectSheet(seaTargets[0]), 'danger-soft');
       overlay.classList.remove('hidden');
       return;
     }
@@ -1307,7 +1876,7 @@
     if (seaTargets.length && !mine.inPeaceZone) {
       title.textContent = 'Корабль противника рядом';
       text.textContent = `Целей: ${seaTargets.length} · ваша артиллерия: ${mine.fleetArtillery ?? 0}`;
-      addAction('Открыть морской бой', 'actions', 'danger-soft');
+      addAction('Открыть морской бой', () => renderPlayerObjectSheet(seaTargets[0]), 'danger-soft');
       overlay.classList.remove('hidden');
       return;
     }
@@ -1324,13 +1893,13 @@
       if (encounter) {
         const outcome = encounter.outcome === 'win' ? 'Победа' : encounter.outcome === 'loss' ? 'Поражение' : encounter.outcome === 'tie' ? 'Ничья' : 'Тихое море';
         text.textContent = `${outcome} · карта этой клетки уже разыграна в текущем раунде`;
-        addAction('Посмотреть результат', 'actions');
+        addAction('Посмотреть результат', () => renderAnchorEncounterSheet(hereAnchor));
       } else if (visitedHere) {
         text.textContent = 'Эта клетка якоря уже дала вам карту в текущем раунде.';
-        addAction('Открыть морские якоря', 'actions');
+        addAction('Открыть морские якоря', () => renderAnchorEncounterSheet(hereAnchor));
       } else {
         text.textContent = 'Бой на якоре добровольный и объявляется в фазе действий.';
-        addAction('Открыть морские якоря', 'actions', 'danger-soft');
+        addAction('Открыть морские якоря', () => renderAnchorEncounterSheet(hereAnchor), 'danger-soft');
       }
       overlay.classList.remove('hidden');
       return;
@@ -1348,6 +1917,704 @@
     overlay.classList.add('hidden');
   }
 
+  function actionBarDecisionLabel(room) {
+    if (room?.pendingEvent?.viewerCanRespond) return 'Решение по событию';
+    if (room?.pendingFeud?.viewerCanRespond) return 'Решение по вражде';
+    if (room?.pendingAssignmentChoice?.viewerCanRespond) return 'Выберите поручение';
+    if (room?.pendingIslandCorrection?.viewerCanRespond) return 'Исправьте остров';
+    if (room?.pendingFleetAdjustment?.viewerCanRespond) return 'Настройте флотилию';
+    if (room?.pendingLegendaryReaction) return 'Ответьте на легендарный эффект';
+    if (room?.pendingBattle?.viewerInvite) return 'Ответьте на приглашение в бой';
+    if (room?.pendingAlliance?.viewerRole === 'recipient') return 'Ответьте на предложение союза';
+    return null;
+  }
+
+  function eventStageLabel(phase) {
+    if (!phase?.active) return 'СОБЫТИЯ';
+    if (phase.stage === 'political' || phase.stage === 'feud') return 'ВРАЖДА';
+    if (phase.stage === 'assignment') return 'ПОРУЧЕНИЕ';
+    return 'СОБЫТИЕ';
+  }
+
+  function renderGameActionBar() {
+    const r = state.room;
+    const bar = $('gameActionBar');
+    const buttons = $('gameActionButtons');
+    const progress = $('gameActionProgress');
+    if (!r || !r.started || r.finished || r.phase === 'finished') {
+      bar.classList.add('hidden');
+      return;
+    }
+
+    bar.classList.remove('hidden');
+    bar.removeAttribute('data-mode');
+    buttons.innerHTML = '';
+    progress.innerHTML = '';
+    progress.classList.add('hidden');
+
+    const mine = me();
+    const activePlayer = active();
+    const myTurn = Boolean(mine && r.activePlayerId === state.myId && !state.spectating);
+    const decisionLabel = actionBarDecisionLabel(r);
+    const waitingActor = r.pendingDecision?.waiting ? playerName(r.pendingDecision.actorPlayerId) : null;
+
+    const setCopy = (kicker, title, detail = '') => {
+      $('gameActionKicker').textContent = kicker;
+      $('gameActionTitle').textContent = title;
+      $('gameActionDetail').textContent = detail;
+    };
+    const addButton = (label, onClick, className = '') => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `game-action-button${className ? ` ${className}` : ''}`;
+      button.textContent = label;
+      button.addEventListener('click', onClick);
+      buttons.appendChild(button);
+      return button;
+    };
+
+    if (decisionLabel) {
+      setCopy('ТРЕБУЕТСЯ РЕШЕНИЕ', decisionLabel, 'Продолжение партии ждёт вашего выбора.');
+      addButton('Открыть решение', () => closeMapInfo(), 'primary');
+      return;
+    }
+
+    if (waitingActor) {
+      setCopy('ОЖИДАНИЕ', `Ждём решения: ${waitingActor}`, 'Карта остаётся доступна для просмотра.');
+      return;
+    }
+
+    if (r.eventPhase?.active || r.phase === 'event') {
+      const actor = r.eventPhase?.currentPlayerId ? playerName(r.eventPhase.currentPlayerId) : null;
+      setCopy(eventStageLabel(r.eventPhase), actor ? `Сейчас: ${actor}` : 'Фаза событий', 'Событие → Вражда → Поручение');
+      return;
+    }
+
+    if (!myTurn) {
+      const name = activePlayer?.name || 'другого игрока';
+      const phase = activePlayer?.phase === 'navigation' ? 'навигация' : activePlayer?.phase === 'actions' ? 'действия' : 'ход';
+      setCopy('ОЖИДАНИЕ', `Ход: ${name}`, `Сейчас выполняется: ${phase}.`);
+      return;
+    }
+
+    if (mine.phase === 'navigation' && mine.roll === null) {
+      bar.dataset.mode = 'navigation';
+      setCopy('НАВИГАЦИЯ', '', 'Бросьте кубик или останьтесь.');
+      addButton('Остаться', () => socket.emit('skipNavigation', {}, handleGameAck));
+      addButton('🎲 Бросить', () => socket.emit('rollMove', {}, handleGameAck), 'primary');
+      return;
+    }
+
+    if (mine.phase === 'navigation') {
+      bar.dataset.mode = 'navigation-result';
+      const destinations = (r.reachableCells || []).filter(cell => cell.row !== mine.row || cell.col !== mine.col);
+      setCopy('', `Выпало ${mine.roll} · дальность ${mine.movePoints}`,
+        destinations.length ? `Выберите клетку · доступно: ${destinations.length}` : 'Доступных клеток нет.');
+      addButton('Остаться здесь', () => socket.emit('skipNavigation', {}, handleGameAck));
+      return;
+    }
+
+    if (mine.phase === 'actions') {
+      bar.dataset.mode = 'actions';
+      const left = Math.max(0, Number(mine.actionsLeft) || 0);
+      setCopy('ДЕЙСТВИЯ', '',
+        left > 0 ? 'Выберите объект или действие.' : 'Завершите ход.');
+      progress.classList.remove('hidden');
+      const total = Math.max(left, Number(mine.stats?.actionsPerTurn) || Number(r.balanceCatalog?.session?.actionsPerTurn) || 3);
+      for (let i = 0; i < total; i += 1) {
+        const dot = document.createElement('span');
+        dot.className = i < left ? 'active' : '';
+        progress.appendChild(dot);
+      }
+      addButton('Завершить ход', () => socket.emit('endTurn', {}, handleGameAck), left > 0 ? 'danger-soft' : 'primary');
+      return;
+    }
+
+    setCopy('ОЖИДАНИЕ', 'Состояние обновляется', 'Ожидаем следующего шага партии.');
+  }
+
+  function recordJournal(message, tone = 'neutral', detail = '') {
+    if (!message) return;
+    const entry = { id: `${Date.now()}:${Math.random()}`, at: Date.now(), message: String(message), detail: detail ? String(detail) : '', tone };
+    state.journalEntries.push(entry);
+    if (state.journalEntries.length > 120) state.journalEntries.splice(0, state.journalEntries.length - 120);
+  }
+
+  function renderJournalOverlay() {
+    closeGameMenu();
+    closeMapInfo();
+    const body = $('journalOverlayBody');
+    body.innerHTML = '';
+    const entries = state.journalEntries.slice().reverse();
+    if (!entries.length) {
+      body.innerHTML = '<div class="journal-empty">Пока нет событий, показанных этому игроку в текущей сессии.</div>';
+    } else {
+      for (const entry of entries) {
+        const row = document.createElement('article');
+        row.className = `journal-entry journal-${entry.tone}`;
+        const time = new Date(entry.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        row.innerHTML = `<span>${escapeHtml(time)}</span><strong>${escapeHtml(entry.message)}</strong>${entry.detail ? `<small>${escapeHtml(entry.detail)}</small>` : ''}`;
+        body.appendChild(row);
+      }
+    }
+    $('journalOverlay').classList.remove('hidden');
+    document.body.classList.add('journal-overlay-open');
+  }
+
+  function closeJournalOverlay() {
+    $('journalOverlay')?.classList.add('hidden');
+    document.body.classList.remove('journal-overlay-open');
+  }
+
+  function processAmbientRoomState(room, { silent = false } = {}) {
+    if (!room?.started || room.finished || room.phase === 'finished') {
+      state.ambientSnapshot = room ? { round: room.round, circle: room.circle, activePlayerId: room.activePlayerId, eventActive: Boolean(room.eventPhase?.active), eventPlayerId: room.eventPhase?.currentPlayerId || null } : null;
+      return;
+    }
+    const next = { round: room.round, circle: room.circle, activePlayerId: room.activePlayerId, eventActive: Boolean(room.eventPhase?.active), eventPlayerId: room.eventPhase?.currentPlayerId || null };
+    const prev = state.ambientSnapshot;
+    state.ambientSnapshot = next;
+    if (!prev || silent) return;
+    if (next.round !== prev.round) {
+      const message = `Начался раунд ${next.round}`;
+      recordJournal(message);
+      enqueueToast(message, 'neutral', false);
+      playSoundCue('round');
+      return;
+    }
+    if (next.circle !== prev.circle) {
+      const message = `Круг ${next.circle}`;
+      recordJournal(message);
+      enqueueToast(message, 'neutral', false);
+    }
+    if (next.eventActive && (!prev.eventActive || next.eventPlayerId !== prev.eventPlayerId)) {
+      const player = room.players?.find(item => item.id === next.eventPlayerId);
+      const message = player ? `События: ${player.name}` : 'Фаза событий';
+      recordJournal(message);
+      enqueueToast(message, 'neutral', false);
+      playSoundCue('event');
+    } else if (!next.eventActive && next.activePlayerId && next.activePlayerId !== prev.activePlayerId) {
+      const player = room.players?.find(item => item.id === next.activePlayerId);
+      const message = player ? `Ход: ${player.name}` : 'Следующий ход';
+      recordJournal(message);
+      enqueueToast(message, 'neutral', false);
+      if (next.activePlayerId === state.myId) playSoundCue('turn');
+    }
+  }
+
+  let uiAudioContext = null;
+  let lastUiCueKey = '';
+  const SOUND_STORAGE_KEY = 'pervo:sound';
+  const soundState = (() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SOUND_STORAGE_KEY) || 'null');
+      return { muted: Boolean(saved?.muted), volume: Math.max(0, Math.min(1, Number(saved?.volume ?? .72))) };
+    } catch {
+      return { muted: false, volume: .72 };
+    }
+  })();
+  const soundCooldowns = new Map();
+
+  // Compatibility marker for the canonical UI-38 fallback: playUiCue('confirm')
+  function playSoundCue(kind = 'confirm') {
+    if (soundState.muted || soundState.volume <= 0 || document.visibilityState === 'hidden' || state.spectating) return;
+    const now = performance.now();
+    const cooldown = kind === 'turn' || kind === 'round' ? 700 : 180;
+    if (now - (soundCooldowns.get(kind) || 0) < cooldown) return;
+    soundCooldowns.set(kind, now);
+    const map = {
+      turn: 'turn',
+      round: 'turn',
+      event: 'event',
+      battle: 'battle',
+      danger: 'danger',
+      reward: 'reward',
+      confirm: 'confirm',
+      dice: 'dice',
+      ship: 'ship',
+      coins: 'coins',
+      cargo: 'cargo',
+      construction: 'construction',
+      legendary: 'legendary',
+      error: 'error',
+    };
+    playUiCue(map[kind] || 'confirm');
+  }
+
+  function playUiCue(kind = 'confirm') {
+    const masterVolume = soundState.muted ? 0 : soundState.volume;
+    if (document.visibilityState === 'hidden' || state.spectating) return;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    try {
+      uiAudioContext ||= new AudioCtx();
+      if (uiAudioContext.state === 'suspended') uiAudioContext.resume().catch(() => {});
+      const profiles = {
+        confirm: [[440, .035, .035]],
+        event: [[330, .04, .045], [392, .055, .035]],
+        reward: [[523, .04, .045], [659, .055, .035], [784, .075, .03]],
+        battle: [[130, .055, .05], [98, .08, .04]],
+        danger: [[196, .05, .04], [147, .08, .035]],
+        turn: [[392, .07, .04], [523, .11, .035]],
+        dice: [[190, .025, .045], [145, .028, .04], [220, .025, .035], [165, .035, .03]],
+        ship: [[105, .09, .035], [132, .11, .025]],
+        coins: [[880, .025, .035], [1175, .035, .028], [988, .03, .025]],
+        cargo: [[150, .045, .045], [110, .055, .03]],
+        construction: [[125, .035, .05], [210, .045, .035]],
+        legendary: [[98, .09, .045], [392, .1, .028], [659, .13, .025]],
+        error: [[120, .06, .045]],
+      };
+      let offset = 0;
+      for (const [frequency, duration, gain] of profiles[kind] || profiles.confirm) {
+        const oscillator = uiAudioContext.createOscillator();
+        const volume = uiAudioContext.createGain();
+        oscillator.type = kind === 'battle' || kind === 'danger' ? 'triangle' : 'sine';
+        oscillator.frequency.value = frequency;
+        volume.gain.setValueAtTime(0.0001, uiAudioContext.currentTime + offset);
+        volume.gain.exponentialRampToValueAtTime(Math.max(.0001, gain * masterVolume), uiAudioContext.currentTime + offset + .008);
+        volume.gain.exponentialRampToValueAtTime(0.0001, uiAudioContext.currentTime + offset + duration);
+        oscillator.connect(volume).connect(uiAudioContext.destination);
+        oscillator.start(uiAudioContext.currentTime + offset);
+        oscillator.stop(uiAudioContext.currentTime + offset + duration + .01);
+        offset += duration * .72;
+      }
+    } catch (_) {}
+  }
+
+  function cueForResult(result) {
+    if (!result) return;
+    const text = (result.kicker + ' ' + result.title).toLowerCase();
+    if (/бой|сраж|штурм|якор/.test(text)) return result.tone === 'danger' ? 'danger' : 'battle';
+    if (/событ|вражд/.test(text)) return 'event';
+    if (result.tone === 'success' || /награ|слава|сокров|побед|открыт/.test(text)) return 'reward';
+    if (result.tone === 'danger') return 'danger';
+    return 'confirm';
+  }
+
+  function enqueueResultCard(result) {
+    if (!result || !result.title) return;
+    const entry = {
+      kicker: result.kicker || 'РЕЗУЛЬТАТ',
+      title: result.title,
+      body: result.body || '',
+      details: Array.isArray(result.details) ? result.details.slice(0, 8) : [],
+      tone: result.tone || 'neutral',
+    };
+    state.resultQueue.push(entry);
+    recordJournal(entry.title, entry.tone, entry.body);
+    if (state.resultQueue.length > 5) state.resultQueue.splice(0, state.resultQueue.length - 5);
+    // Do not render immediately from the ack callback. The next authoritative
+    // roomState render gets first chance to expose a higher-priority Decision Layer.
+  }
+
+  function enqueueToast(message, tone = 'neutral', journal = true) {
+    if (!message) return;
+    const toast = { id: `${Date.now()}:${Math.random()}`, message: String(message), tone };
+    state.toastQueue.push(toast);
+    if (journal) recordJournal(toast.message, toast.tone);
+    if (state.toastQueue.length > 4) state.toastQueue.splice(0, state.toastQueue.length - 4);
+    renderToastStack();
+    setTimeout(() => {
+      state.toastQueue = state.toastQueue.filter(item => item.id !== toast.id);
+      renderToastStack();
+    }, 2800);
+  }
+
+  function renderToastStack() {
+    const stack = $('toastStack');
+    if (!stack) return;
+    stack.innerHTML = '';
+    for (const toast of state.toastQueue.slice(-3)) {
+      const item = document.createElement('div');
+      item.className = `game-toast toast-${toast.tone}`;
+      item.textContent = toast.message;
+      stack.appendChild(item);
+    }
+  }
+
+  function dismissResultCard() {
+    state.activeResult = null;
+    renderResultLayer();
+    if (state.mapSelection?.kind === 'anchor') refreshOpenAnchorSheet();
+  }
+
+  function renderResultLayer() {
+    const layer = $('resultLayer');
+    if (!layer) return;
+    const decision = mobileDecisionDescriptor(state.room);
+    if (!state.room?.started || state.room.finished || state.room.phase === 'finished' || decision) {
+      layer.classList.add('hidden');
+      document.body.classList.remove('result-layer-open');
+      return;
+    }
+
+    if (!state.activeResult && state.resultQueue.length) state.activeResult = state.resultQueue.shift();
+    const result = state.activeResult;
+    layer.classList.toggle('hidden', !result);
+    document.body.classList.toggle('result-layer-open', Boolean(result));
+    if (!result) return;
+
+    $('resultKicker').textContent = result.kicker;
+    $('resultTitle').textContent = result.title;
+    $('resultBody').textContent = result.body || '';
+    const details = $('resultDetails');
+    details.innerHTML = '';
+    for (const detail of result.details || []) {
+      const row = document.createElement('div');
+      row.className = 'result-detail';
+      const label = document.createElement('span');
+      label.textContent = detail.label || '';
+      const value = document.createElement('strong');
+      value.textContent = detail.value == null ? '' : String(detail.value);
+      row.append(label, value);
+      details.appendChild(row);
+    }
+    layer.dataset.tone = result.tone || 'neutral';
+    const cueKey = [result.kicker, result.title, result.tone].join(':');
+    if (lastUiCueKey !== cueKey) {
+      lastUiCueKey = cueKey;
+      playUiCue(cueForResult(result));
+    }
+  }
+
+  function anchorResultCard(res) {
+    const result = res?.result;
+    if (!res?.ok || !result?.triggered) return null;
+    const outcome = result.outcome;
+    const title = outcome === 'win' ? 'Победа на морском якоре'
+      : outcome === 'loss' ? 'Поражение на морском якоре'
+      : outcome === 'tie' ? 'Ничья на морском якоре'
+      : 'На море тихо';
+    const details = [
+      { label: 'Встреча', value: result.card?.name || '—' },
+      { label: 'Ваша артиллерия', value: result.fleetPower ?? '—' },
+      { label: 'Противник', value: result.card?.artillery ?? '—' },
+    ];
+    let body = result.anchor?.name || 'Морское столкновение';
+    if (outcome === 'win') {
+      details.push({ label: 'Награда', value: `+${result.reward?.gross ?? result.card?.reward ?? 0} дукатов` });
+      if (result.reward?.debtPaid) details.push({ label: 'В погашение долга', value: result.reward.debtPaid });
+      if (result.fleetPoints) details.push({ label: 'Очки флота', value: `+${result.fleetPoints}` });
+      body = 'Вы выиграли столкновение и получили награду.';
+    } else if (outcome === 'loss') {
+      details.push({ label: 'Штраф', value: result.penalty?.required ?? 0 });
+      if (result.penalty?.addedDebt) details.push({ label: 'Новый долг', value: `+${result.penalty.addedDebt}` });
+      body = 'Флотилия уступила противнику. Уровень корабля от этого столкновения не снижается.';
+    } else if (outcome === 'tie') {
+      body = 'Силы равны. Награды и дополнительных последствий нет.';
+    } else {
+      body = 'Опасности не встретилось. Действие не расходуется.';
+    }
+    return { kicker: 'МОРСКОЙ ЯКОРЬ', title, body, details, tone: outcome === 'win' ? 'success' : outcome === 'loss' ? 'danger' : 'neutral' };
+  }
+
+  function seaBattleResultCard(res, targetName) {
+    const result = res?.result;
+    if (!res?.ok || !result || res.pending) return null;
+    const outcome = result.outcome;
+    const mineWon = outcome === 'attacker';
+    const title = outcome === 'tie' ? 'Морской бой завершён вничью' : mineWon ? 'Победа в морском бою' : 'Поражение в морском бою';
+    const details = [
+      { label: 'Вы', value: result.attackerPower ?? '—' },
+      { label: targetName || 'Противник', value: result.defenderPower ?? '—' },
+    ];
+    if (Number(result.loot) > 0) details.push({ label: 'Добыча', value: `${result.loot} дукатов` });
+    const myFleetAward = (result.fleetPointAwards || []).find(item => String(item.playerId) === String(state.myId));
+    if (myFleetAward?.points) details.push({ label: 'Ваши очки флота', value: `+${myFleetAward.points}` });
+    const myLoot = Number(result.lootShares?.[state.myId]) || 0;
+    if (myLoot > 0) details.push({ label: 'Ваша доля добычи', value: `+${myLoot} дукатов` });
+    const ownLoss = (result.levelLosses || []).find(item => String(item.playerId) === String(state.myId));
+    if (ownLoss) details.push({ label: 'Ваш корабль', value: ownLoss.prevented ? 'Потеря уровня предотвращена' : 'Потерян уровень' });
+    return {
+      kicker: 'МОРСКОЙ БОЙ',
+      title,
+      body: outcome === 'tie' ? 'Контроль и уровни не меняются.' : `Бой против ${targetName || 'противника'} разрешён сервером.`,
+      details,
+      tone: mineWon ? 'success' : outcome === 'tie' ? 'neutral' : 'danger',
+    };
+  }
+
+  function assaultResultCard(res, islandName) {
+    const result = res?.result;
+    if (!res?.ok || !result || res.pending) return null;
+    const outcome = result.outcome;
+    const title = outcome === 'attacker' ? 'Остров захвачен' : outcome === 'defender' ? 'Штурм отражён' : 'Штурм завершён вничью';
+    const details = [
+      { label: 'Ваше войско', value: result.attackerPower ?? '—' },
+      { label: 'Защита острова', value: result.defense?.total ?? '—' },
+    ];
+    const myAward = (result.armyPointAwards || []).find(item => String(item.playerId) === String(state.myId));
+    if (myAward?.points) details.push({ label: 'Ваши очки армии', value: `+${myAward.points}` });
+    if (result.captureRetention) details.push({ label: 'Инфраструктура', value: `сохранится ${result.captureRetention.keepCount}/${result.captureRetention.initialCount}` });
+    if ((result.rewardNotes || []).length) details.push({ label: 'Награда', value: result.rewardNotes.join(', ') });
+    return {
+      kicker: 'ШТУРМ',
+      title,
+      body: outcome === 'attacker' ? `${islandName || 'Остров'} переходит под ваш контроль.`
+        : outcome === 'defender' ? `Защита ${islandName || 'острова'} устояла.`
+        : 'Контроль над островом не меняется.',
+      details,
+      tone: outcome === 'attacker' ? 'success' : outcome === 'defender' ? 'danger' : 'neutral',
+    };
+  }
+
+  function handleAnchorResultAck(res) {
+    handleGameAck(res);
+    const card = anchorResultCard(res);
+    if (card) enqueueResultCard(card);
+  }
+
+  function handleSeaBattleResultAck(res, targetName) {
+    handleGameAck(res);
+    const card = seaBattleResultCard(res, targetName);
+    if (card) enqueueResultCard(card);
+  }
+
+  function handleAssaultResultAck(res, islandName) {
+    handleGameAck(res);
+    const card = assaultResultCard(res, islandName);
+    if (card) enqueueResultCard(card);
+  }
+
+  function eventFlowStageKey(phase) {
+    const stage = phase?.stage || 'sailing';
+    if (stage === 'political' || stage === 'feud') return 'feud';
+    if (stage === 'assignment' || stage === 'assignment-replace') return 'assignment';
+    return 'sailing';
+  }
+
+  function eventFlowStageIndex(phase) {
+    const key = eventFlowStageKey(phase);
+    return key === 'feud' ? 1 : key === 'assignment' ? 2 : 0;
+  }
+
+  function eventFlowStageStatus(room, phase) {
+    const key = eventFlowStageKey(phase);
+    if (room.pendingEvent) return room.pendingEvent.viewerCanRespond ? 'Нужно ваше решение по событию.' : `Ждём решения: ${playerName(room.pendingEvent.playerId)}.`;
+    if (room.pendingFeud) return room.pendingFeud.viewerCanRespond ? 'Нужно ваше решение по карте вражды.' : `Ждём решения: ${playerName(room.pendingFeud.playerId)}.`;
+    if (room.pendingAssignmentChoice) return room.pendingAssignmentChoice.viewerCanRespond ? 'Выберите поручение сюзерена.' : `Ждём выбора поручения: ${playerName(room.pendingAssignmentChoice.playerId)}.`;
+    if (room.pendingIslandCorrection?.viewerCanRespond || room.pendingFleetAdjustment?.viewerCanRespond) return 'Сначала завершите обязательное последствие карты.';
+    if (key === 'sailing') return 'Разрешается личное событие плавания.';
+    if (key === 'feud') return phase?.feudTotal ? `Разрешается вражда · ${Math.min((phase.feudIndex || 0) + 1, phase.feudTotal)}/${phase.feudTotal}.` : 'Проверяется вражда государств.';
+    return phase?.assignmentTotal ? `Выдаётся поручение · ${Math.min((phase.assignmentIndex || 0) + 1, phase.assignmentTotal)}/${phase.assignmentTotal}.` : 'Проверяется выдача поручения.';
+  }
+
+  function renderEventFlowOverlay() {
+    const overlay = $('eventFlowOverlay');
+    const room = state.room;
+    const phase = room?.eventPhase;
+    if (!overlay || !room?.started || room.finished || room.phase !== 'event' || !phase?.active) {
+      overlay?.classList.add('hidden');
+      document.body.classList.remove('event-flow-open');
+      return;
+    }
+
+    const currentName = playerName(phase.currentPlayerId);
+    const mine = phase.currentPlayerId === state.myId;
+    $('eventFlowKicker').textContent = phase.personalTurn ? 'ШЕСТОЙ КРУГ' : 'ФАЗА СОБЫТИЙ';
+    $('eventFlowTitle').textContent = mine ? 'Ваши предходовые события' : `Ход: ${currentName}`;
+    $('eventFlowStatus').textContent = eventFlowStageStatus(room, phase);
+
+    const currentIndex = eventFlowStageIndex(phase);
+    const steps = [
+      { key: 'sailing', label: 'Событие', icon: 'Ⅰ' },
+      { key: 'feud', label: 'Вражда', icon: 'Ⅱ' },
+      { key: 'assignment', label: 'Поручение', icon: 'Ⅲ' },
+    ];
+    const holder = $('eventFlowSteps');
+    holder.innerHTML = '';
+    steps.forEach((step, index) => {
+      const item = document.createElement('div');
+      item.className = 'event-flow-step';
+      if (index < currentIndex) item.classList.add('done');
+      if (index === currentIndex) item.classList.add('current');
+      item.innerHTML = `<span>${step.icon}</span><strong>${step.label}</strong>`;
+      holder.appendChild(item);
+    });
+
+    const last = $('eventFlowLastCard');
+    if (phase.lastCard?.cardName) {
+      const faction = phase.lastCard.factionName ? ` · ${phase.lastCard.factionName}` : '';
+      last.textContent = `Последнее: «${phase.lastCard.cardName}»${faction}${phase.lastCard.pending ? ' · ожидает решения' : ''}`;
+      last.classList.remove('hidden');
+    } else {
+      last.classList.add('hidden');
+      last.textContent = '';
+    }
+
+    overlay.classList.remove('hidden');
+    document.body.classList.add('event-flow-open');
+  }
+
+  function feudDecisionSceneHtml(pending) {
+    if (!pending) return '';
+    const descriptions = {
+      'downgrade-building': 'Выберите свою постройку для обязательного понижения.',
+      'remove-building': 'Выберите свою постройку, которую государство удалит.',
+      'reclaim-island': 'Выберите остров, который возвращается государству.',
+      'building-downgrade': 'Выберите постройку для понижения.',
+      'building-choice': 'Для выбранной постройки решите: удалить её или понизить.',
+      'remove-forts': 'Удалите требуемое число оборонительных построек.',
+      'remove-upgrade': 'Снимите одно установленное улучшение корабля.',
+      'remove-cargo': 'Выберите трюм, груз которого будет потерян.',
+    };
+    const remaining = Number(pending.remaining) > 1 ? ` Осталось решений: ${pending.remaining}.` : '';
+    return `
+      <section class="event-scene-card feud-scene-card">
+        <span>ВРАЖДА · ${escapeHtml(pending.factionName || 'ГОСУДАРСТВО')}</span>
+        <strong>«${escapeHtml(pending.cardName || 'Карта вражды')}»</strong>
+        <small>${escapeHtml(descriptions[pending.kind] || 'Карта вражды требует обязательного решения.')}${escapeHtml(remaining)}</small>
+      </section>
+    `;
+  }
+
+  function assignmentDecisionSceneHtml(pending) {
+    if (!pending) return '';
+    const options = pending.options || [];
+    const rewardText = options.length
+      ? `Предложено вариантов: ${options.length}. Награды указаны на кнопках выбора.`
+      : 'Выберите одно допустимое поручение.';
+    return `
+      <section class="event-scene-card assignment-scene-card">
+        <span>ПОРУЧЕНИЕ · ${escapeHtml(pending.factionName || 'СЮЗЕРЕН')}</span>
+        <strong>Посольство предлагает выбор</strong>
+        <small>${escapeHtml(rewardText)}</small>
+      </section>
+    `;
+  }
+
+  function eventDecisionSceneHtml(pending) {
+    if (!pending) return '';
+    const scene = {
+      observatory: ['ОБСЕРВАТОРИЯ', 'Оставить первую карту или заменить её обязательной второй.'],
+      cargo: ['РАЗМЕЩЕНИЕ ГРУЗА', 'Выберите один свободный трюм для результата события.'],
+      raid: ['НАБЕГ', 'Событие требует выбрать одну вашу постройку для понижения.'],
+      boarding: ['АБОРДАЖ', 'Событие требует снять одно установленное улучшение корабля.'],
+      storm: ['ШТОРМ', 'Выберите допустимую клетку берега. После выбора флотилия будет перенесена немедленно.'],
+      'treasure-choice': ['ИСКАТЕЛЬ СОКРОВИЩ', 'Выберите один из двух независимых результатов сокровища.'],
+    }[pending.kind] || ['СОБЫТИЕ', 'Требуется ваш выбор для продолжения партии.'];
+    return `
+      <section class="event-scene-card">
+        <span>${escapeHtml(scene[0])}</span>
+        <strong>«${escapeHtml(pending.cardName || 'Событие')}»</strong>
+        <small>${escapeHtml(scene[1])}</small>
+      </section>
+    `;
+  }
+
+  function eventResolvedResultCard(data) {
+    if (!data || data.source !== 'sailing' || !data.title) return null;
+    return {
+      kicker: 'СОБЫТИЕ',
+      title: data.title,
+      body: data.body || 'Событие разрешено.',
+      details: Array.isArray(data.details) ? data.details : [],
+      tone: data.tone || 'neutral',
+    };
+  }
+
+  function mobileDecisionDescriptor(room) {
+    if (!room) return null;
+    if (room.pendingLegendaryReaction?.viewerCanRespond) return {
+      kind: 'decision', kicker: 'ТРЕБУЕТСЯ ВАШЕ РЕШЕНИЕ', title: 'Легендарная реакция',
+      contentId: 'legendaryContent', actionsId: 'legendaryActions',
+    };
+    if (room.pendingEvent?.viewerCanRespond) return {
+      kind: 'decision', kicker: 'СОБЫТИЕ', title: room.pendingEvent.cardName || 'Решение по событию',
+      bodyHtml: eventDecisionSceneHtml(room.pendingEvent),
+      actionsId: 'eventActions',
+    };
+    if (room.pendingFeud?.viewerCanRespond) return {
+      kind: 'decision', kicker: 'ВРАЖДА', title: room.pendingFeud.cardName || 'Решение по вражде',
+      bodyHtml: feudDecisionSceneHtml(room.pendingFeud),
+      actionsId: 'eventActions',
+    };
+    if (room.pendingAssignmentChoice?.viewerCanRespond) return {
+      kind: 'decision', kicker: 'ПОРУЧЕНИЕ', title: 'Выберите поручение сюзерена',
+      bodyHtml: assignmentDecisionSceneHtml(room.pendingAssignmentChoice),
+      actionsId: 'assignmentActions',
+    };
+    if (room.pendingIslandCorrection?.viewerCanRespond) return {
+      kind: 'decision', kicker: 'ОБЯЗАТЕЛЬНОЕ РЕШЕНИЕ', title: room.pendingIslandCorrection.islandName || 'Исправление острова',
+      contentId: 'islandCorrectionContent', actionsId: 'islandCorrectionActions',
+    };
+    if (room.pendingFleetAdjustment?.viewerCanRespond) return {
+      kind: 'decision', kicker: 'ОБЯЗАТЕЛЬНОЕ РЕШЕНИЕ', title: 'Настройка флотилии',
+      contentId: 'fleetAdjustmentContent', actionsId: 'fleetAdjustmentActions',
+    };
+    if (room.pendingBattle?.viewerInvite) return {
+      kind: 'decision', kicker: 'СОВМЕСТНЫЙ БОЙ', title: 'Присоединиться к бою?',
+      bodyHtml: battleFlowStatusHtml(room.pendingBattle),
+      actionsId: 'combatActions',
+    };
+    if (room.pendingAlliance?.viewerRole === 'recipient') return {
+      kind: 'decision', kicker: 'ПРЕДЛОЖЕНИЕ СОЮЗА', title: `${playerName(room.pendingAlliance.fromId)} предлагает союз`,
+      contentId: 'allianceContent', actionsId: 'allianceActions',
+    };
+    if (room.pendingAlliance?.viewerRole === 'sender') return {
+      kind: 'waiting', kicker: 'ОЖИДАНИЕ', title: `Ждём ответа: ${playerName(room.pendingAlliance.toId)}`,
+      contentId: 'allianceContent', actionsId: 'allianceActions',
+    };
+    if (room.pendingBattle) return {
+      kind: 'waiting', kicker: 'БОЙ', title: 'Ожидаются ответы участников',
+      bodyHtml: battleFlowStatusHtml(room.pendingBattle),
+      actionsId: 'combatActions',
+    };
+    if (room.phase === 'event' && room.eventPhase?.active && room.pendingDecision?.waiting) return {
+      kind: 'waiting', kicker: 'ШЕСТОЙ КРУГ', title: `Ждём: ${playerName(room.pendingDecision.actorPlayerId)}`,
+      body: eventFlowStageStatus(room, room.eventPhase),
+    };
+    if (room.pendingDecision?.waiting) return {
+      kind: 'waiting', kicker: 'ОЖИДАНИЕ', title: `Ждём решения: ${playerName(room.pendingDecision.actorPlayerId)}`,
+      body: 'Продолжение партии заблокировано до обязательного решения этого игрока.',
+    };
+    return null;
+  }
+
+  function renderDecisionLayer() {
+    const layer = $('decisionLayer');
+    const actions = $('decisionActions');
+    const body = $('decisionBody');
+    if (!state.room?.started || state.room.finished || state.room.phase === 'finished') {
+      layer.classList.add('hidden');
+      document.body.classList.remove('decision-layer-open');
+      actions.innerHTML = '';
+      body.innerHTML = '';
+      return;
+    }
+
+    const descriptor = mobileDecisionDescriptor(state.room);
+    if (descriptor && state.targeting) state.targeting = null;
+    if (descriptor && state.mapSelection) closeMapInfo();
+    layer.classList.toggle('hidden', !descriptor);
+    document.body.classList.toggle('decision-layer-open', Boolean(descriptor));
+    if (!descriptor) {
+      actions.innerHTML = '';
+      body.innerHTML = '';
+      return;
+    }
+
+
+    $('decisionKicker').textContent = descriptor.kicker;
+    $('decisionTitle').textContent = descriptor.title;
+    const sourceContent = descriptor.contentId ? $(descriptor.contentId) : null;
+    if (descriptor.bodyHtml) body.innerHTML = descriptor.bodyHtml;
+    else body.textContent = descriptor.body || sourceContent?.textContent?.trim() || (descriptor.kind === 'waiting' ? 'Ожидается решение другого игрока.' : 'Выберите один из доступных вариантов.');
+
+    actions.innerHTML = '';
+    const sourceActions = descriptor.actionsId ? $(descriptor.actionsId) : null;
+    if (sourceActions) {
+      while (sourceActions.firstChild) actions.appendChild(sourceActions.firstChild);
+    }
+
+    if (descriptor.kind === 'decision' && !actions.children.length) {
+      const fallback = document.createElement('div');
+      fallback.className = 'decision-empty';
+      fallback.textContent = 'Варианты решения обновляются. Если они не появились, дождитесь следующего обновления состояния.';
+      actions.appendChild(fallback);
+    }
+  }
+
   function renderControls() {
     const r = state.room;
     const mine = me();
@@ -1361,17 +2628,8 @@
     $('skipBtn').disabled = !myTurn || phase !== 'navigation' || blocked;
     $('endTurnBtn').disabled = !myTurn || blocked;
 
-    const dock = $('mobileActionDock');
-    const mapNavigationActive = myTurn && phase === 'navigation' && !blocked;
-    dock.classList.toggle('hidden', state.spectating || !r.started || !myTurn || mapNavigationActive || blocked);
-    $('dockRollBtn').disabled = $('rollBtn').disabled;
-    $('dockSkipBtn').disabled = $('skipBtn').disabled;
-    $('dockEndTurnBtn').disabled = $('endTurnBtn').disabled;
-    $('dockRollBtn').classList.add('hidden');
-    $('dockSkipBtn').classList.add('hidden');
-    $('dockEndTurnBtn').classList.toggle('hidden', !myTurn || phase !== 'actions' || blocked);
 
-    if (!r.started) $('moveResult').textContent = 'Выберите корабль. Организатор назначает ведущего и порядок мест; затем все нажимают «Готов».';
+    if (!r.started) $('moveResult').textContent = 'Выберите корабль и нажмите «Готов». Порядок хода определяется порядком входа в комнату.';
     else if (r.pendingDecision?.waiting) $('moveResult').textContent = `Ожидается обязательное решение игрока ${playerName(r.pendingDecision.actorPlayerId)}.`;
     else if (r.eventPhase?.active) $('moveResult').textContent = r.pendingIslandCorrection?.viewerCanRespond ? `Остров ${r.pendingIslandCorrection.islandName} нужно исправить перед продолжением.` : r.pendingAssignmentChoice?.viewerCanRespond ? 'Нужно решить, оставить или заменить поручение сюзерена.' : r.pendingFeud?.viewerCanRespond ? 'Нужно разрешить вашу карту вражды.' : r.pendingEvent?.viewerCanRespond ? 'Нужно принять решение по вашей карте события.' : `Карты получает ${playerName(r.eventPhase.currentPlayerId)}.`;
     else if (r.pendingIslandCorrection?.viewerCanRespond) $('moveResult').textContent = `Остров ${r.pendingIslandCorrection.islandName} нужно немедленно привести к допустимым ограничениям.`;
@@ -1623,6 +2881,100 @@
     }
   }
 
+
+  function factionById(factionId) {
+    return state.room?.factions?.find(faction => faction.id === factionId) || null;
+  }
+
+  function factionForIsland(island) {
+    if (!island || island.kind !== 'state') return null;
+    const raw = String(island.faction || '').trim().toLowerCase();
+    return (state.room?.factions || []).find(faction =>
+      faction.id === island.faction
+      || String(faction.name || '').trim().toLowerCase() === raw
+    ) || null;
+  }
+
+  function factionRelationLabel(faction, mine = me()) {
+    if (!faction || !mine) return 'Нейтральные отношения';
+    if (mine.suzerainId === faction.id) return 'Ваш сюзерен';
+    if ((mine.enemyFactionIds || []).includes(faction.id)) return 'Вражда';
+    return 'Нейтральные отношения';
+  }
+
+  function factionDiplomacyHtml(faction) {
+    const mine = me();
+    if (!faction) return '<div class="diplomacy-note">Политические данные государства недоступны.</div>';
+    const relation = factionRelationLabel(faction, mine);
+    const existence = faction.exists ? 'Государство существует.' : `Государство прекратило существование${faction.ceasedRound ? ` в раунде ${faction.ceasedRound}` : ''}.`;
+    const vassal = faction.vassalPlayerId ? `Вассал: ${playerName(faction.vassalPlayerId)}.` : 'Сейчас у государства нет вассала.';
+    const tax = faction.tax ? `Налог вассала: ${faction.tax} дуката в начале личного хода шестого круга.` : 'Денежного налога за раунд нет.';
+    const gift = faction.giftIslandName ? `При вступлении государство может передать остров «${faction.giftIslandName}» по действующим правилам.` : 'Передаваемого острова нет.';
+    const prize = faction.fullConquestPrize
+      ? (faction.fullConquestPrize.amountUnresolved
+        ? 'Итоговая награда за полное завоевание пока не определена правилами.'
+        : `Итоговая награда за полное завоевание: ${faction.fullConquestPrize.ducats} дукатов.`)
+      : 'Отдельной итоговой награды за полное завоевание нет.';
+    const claimed = faction.fullConquestClaimed
+      ? `Награда уже получена: ${playerName(faction.fullConquestPlayerId)}.`
+      : '';
+    return `
+      <section class="diplomacy-state-card">
+        <span>ОТНОШЕНИЯ</span>
+        <strong>${escapeHtml(relation)}</strong>
+        <small>${escapeHtml(existence)}</small>
+      </section>
+      <div class="diplomacy-lines">
+        <div><span>Вассалитет</span><strong>${escapeHtml(vassal)}</strong></div>
+        <div><span>Налог</span><strong>${escapeHtml(tax)}</strong></div>
+        <div><span>Остров</span><strong>${escapeHtml(gift)}</strong></div>
+        <div><span>Завоевание</span><strong>${escapeHtml(prize)}${claimed ? ` ${escapeHtml(claimed)}` : ''}</strong></div>
+      </div>
+    `;
+  }
+
+  function appendCanonicalPoliticsActions(target, factionId = null) {
+    if (!target) return;
+    renderPolitics();
+    const source = $('politicsActions');
+    const faction = factionId ? factionById(factionId) : null;
+    for (const button of Array.from(source?.children || [])) {
+      if (faction && !button.textContent.includes(faction.name)) continue;
+      target.appendChild(button);
+    }
+  }
+
+  function renderDiplomacyObjectSheet(factionId = null) {
+    const sheet = $('objectSheet');
+    const room = state.room;
+    const mine = me();
+    if (!sheet || !room?.started || !mine) return;
+    const selectedFaction = factionId ? factionById(factionId) : null;
+    state.mapSelection = { kind: 'diplomacy', id: selectedFaction?.id || 'overview' };
+    $('objectSheetKind').textContent = selectedFaction ? 'ГОСУДАРСТВО' : 'ДИПЛОМАТИЯ';
+    $('objectSheetTitle').textContent = selectedFaction?.name || 'Дипломатия';
+    const factions = selectedFaction ? [selectedFaction] : (room.factions || []);
+    $('objectSheetBody').innerHTML = factions.map(faction => `
+      <section class="diplomacy-faction-block">
+        ${selectedFaction ? '' : `<h3>${escapeHtml(faction.name)}</h3>`}
+        ${factionDiplomacyHtml(faction)}
+      </section>
+    `).join('');
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    appendCanonicalPoliticsActions(actions, selectedFaction?.id || null);
+    if (!actions.children.length) {
+      const note = document.createElement('div');
+      note.className = 'diplomacy-note';
+      note.textContent = selectedFaction
+        ? 'Сейчас для этого государства нет доступного политического действия.'
+        : 'Сейчас политические действия недоступны.';
+      actions.appendChild(note);
+    }
+    sheet.classList.remove('hidden');
+    sheet.classList.add('expanded');
+    document.body.classList.add('object-sheet-open');
+  }
 
   function renderPolitics() {
     const r = state.room;
@@ -2017,6 +3369,7 @@
     const current = currentIslands();
     const foreignHere = current.filter(i => i.ownerId !== state.myId);
     const shipsHere = (r.players || []).filter(p => p.id !== state.myId && p.row === mine.row && p.col === mine.col && !areAlliesClient(state.myId, p.id));
+    const curseTargets = (r.players || []).filter(p => p.id !== state.myId && !areAlliesClient(state.myId, p.id));
 
     if (state.mistCardRef && !cards.some(c => c.source === state.mistCardRef.source && c.index === state.mistCardRef.index && c.kind === 'mist-path')) state.mistCardRef = null;
 
@@ -2024,7 +3377,7 @@
       'sea-veil': `Защитить свою флотилию или один свой остров на ${r.balanceCatalog.legendaryEffects['sea-veil'].durationPersonalTurns} следующих личных хода.`,
       hellfire: 'На клетке чужого острова понизить каждую постройку на одну строительную ступень; исходная I удаляется.',
       'mist-path': 'Перенести флотилию на любую клетку, достижимую без запрещённых препятствий.',
-      'sea-curse': `На одной клетке с чужим кораблём дать −${r.balanceCatalog.legendaryEffects['sea-curse'].amount} к обычному движению на ${r.balanceCatalog.legendaryEffects['sea-curse'].durationPersonalTurns} следующих личных хода.`,
+      'sea-curse': `Выбрать любого другого игрока и дать −${r.balanceCatalog.legendaryEffects['sea-curse'].amount} к обычному движению на ${r.balanceCatalog.legendaryEffects['sea-curse'].durationPersonalTurns} следующих личных хода.`,
     };
 
     for (const ref of cards) {
@@ -2065,15 +3418,15 @@
           const note = document.createElement('span'); note.className = 'cargo-meta'; note.textContent = 'На текущей клетке нет чужого острова.'; row.appendChild(note);
         }
       } else if (ref.kind === 'sea-curse') {
-        for (const target of shipsHere) {
+        for (const target of curseTargets) {
           const b = document.createElement('button');
           b.type = 'button'; b.className = 'danger-soft'; b.textContent = `Проклясть ${target.name}${target.legendaryStatus?.shipVeilTurns ? ' · Покров отменит карту' : ''}`;
-          b.disabled = !canUse || r.round === 1 || mine.inPeaceZone;
+          b.disabled = !canUse || r.round === 1;
           b.addEventListener('click', () => socket.emit('playLegendary', { source: ref.source, index: ref.index, targetPlayerId: target.id }, handleGameAck));
           row.appendChild(b);
         }
-        if (!shipsHere.length) {
-          const note = document.createElement('span'); note.className = 'cargo-meta'; note.textContent = 'На текущей клетке нет допустимой цели.'; row.appendChild(note);
+        if (!curseTargets.length) {
+          const note = document.createElement('span'); note.className = 'cargo-meta'; note.textContent = 'Нет допустимой цели.'; row.appendChild(note);
         }
       }
       wrap.appendChild(row);
@@ -2086,6 +3439,608 @@
       hint.textContent = '«Путь сквозь туман»: выберите подсвеченную клетку прямо на карте.';
       actions.appendChild(hint);
     }
+  }
+
+  function activeGoalCount(mine) {
+    if (!mine) return 0;
+    return Number(Boolean(mine.activeAssignment)) + Number(Boolean(mine.activeExpedition));
+  }
+
+  function assignmentGoalHtml(mine) {
+    const assignment = mine?.activeAssignment;
+    const r = state.room;
+    const suzerain = mine?.suzerainId ? r?.factions?.find(f => f.id === mine.suzerainId) : null;
+    if (!assignment) {
+      if (suzerain) {
+        return `
+          <section class="goal-card goal-card-muted">
+            <span>ПОРУЧЕНИЕ СЮЗЕРЕНА</span>
+            <strong>Активного поручения нет</strong>
+            <small>Если в начале подходящего шестого круга вы всё ещё вассал без поручения, оно будет выдано игровой системой.</small>
+          </section>
+        `;
+      }
+      return `
+        <section class="goal-card goal-card-muted">
+          <span>ПОРУЧЕНИЕ</span>
+          <strong>Нет активного поручения</strong>
+          <small>Поручения получают вассалы государств по действующим правилам политики.</small>
+        </section>
+      `;
+    }
+
+    const faction = r?.factions?.find(f => f.id === assignment.factionId) || suzerain;
+    const share = Number(faction?.rewardShare) || 0;
+    const withheld = share ? Math.floor((Number(assignment.reward) || 0) * share) : 0;
+    const net = (Number(assignment.reward) || 0) - withheld;
+    const progress = assignment.progress;
+    let progressHtml = '';
+    if (progress?.kind === 'mori-service') {
+      const completed = Number(progress.completedStopCount) || 0;
+      const total = Math.max(1, Number(progress.totalStops) || (assignment.type === 'visit-route' ? 2 : 1));
+      const labels = (progress.completedStops || []).map(stop => stop.label).filter(Boolean);
+      const leave = progress.departureRequired && !progress.departureSatisfied
+        ? 'Сначала нужно покинуть исходное место.'
+        : `${completed}/${total}${labels.length ? ` · ${labels.join(' → ')}` : ''}`;
+      progressHtml = `<div class="goal-progress"><span>Прогресс</span><strong>${escapeHtml(leave)}</strong></div>`;
+    }
+
+    const priority = mine.assignmentPriority;
+    const priorityText = priority
+      ? `<div class="goal-priority">Поручение сейчас имеет приоритет: ${escapeHtml(priority.kind || 'обязательное действие')}.</div>`
+      : '';
+
+    return `
+      <section class="goal-card goal-card-assignment">
+        <span>ПОРУЧЕНИЕ · ${escapeHtml(faction?.name || assignment.factionId || 'Сюзерен')}</span>
+        <strong>${escapeHtml(assignment.text)}</strong>
+        <div class="goal-reward"><span>Награда</span><strong>${assignment.reward} дук.${withheld ? ` · вам ${net}` : ''}</strong></div>
+        ${progressHtml}
+        ${priorityText}
+      </section>
+    `;
+  }
+
+  function expeditionGoalHtml(mine) {
+    const r = state.room;
+    const expedition = mine?.activeExpedition;
+    const places = r?.legendaryPlaces || [];
+    const placeById = Object.fromEntries(places.map(place => [place.id, place]));
+    if (!expedition) {
+      const status = mine?.expeditionTakenThisRound
+        ? 'В этом раунде новая экспедиция уже получалась.'
+        : 'Новую экспедицию можно получить при выполнении условий Картографической палаты.';
+      return `
+        <section class="goal-card goal-card-muted">
+          <span>ЭКСПЕДИЦИЯ</span>
+          <strong>Активной экспедиции нет</strong>
+          <small>${escapeHtml(status)}</small>
+        </section>
+      `;
+    }
+
+    const target = placeById[expedition.placeId];
+    const targetName = expedition.name || target?.name || expedition.placeId;
+    const kind = target?.kind === 'island' ? 'легендарный остров' : 'морское легендарное место';
+    const routeRule = expedition.requiresLeaveAndReturn
+      ? 'Сначала покиньте место назначения, затем вернитесь.'
+      : 'Завершится автоматически при следующем допустимом прибытии.';
+
+    return `
+      <section class="goal-card goal-card-expedition">
+        <span>ЭКСПЕДИЦИЯ</span>
+        <strong>${escapeHtml(targetName)}</strong>
+        <div class="goal-progress"><span>Цель</span><strong>${escapeHtml(kind)}</strong></div>
+        <div class="goal-reward"><span>Награда</span><strong>случайное сокровище</strong></div>
+        <small>${escapeHtml(routeRule)}</small>
+      </section>
+    `;
+  }
+
+  function legendaryGoalsHtml(mine) {
+    const r = state.room;
+    const cards = r?.namedPlaceCards || [];
+    const history = mine?.expeditionHistory || [];
+    const claimed = cards.filter(card => card.claimedBy);
+    const mineClaimed = claimed.filter(card => card.claimedBy === state.myId);
+    return `
+      <section class="goals-legendary-summary">
+        <div><span>Именные места</span><strong>${claimed.length}/${cards.length || 10}</strong></div>
+        <div><span>Открыто вами</span><strong>${mineClaimed.length}</strong></div>
+        <div><span>Экспедиции</span><strong>${history.length}</strong></div>
+      </section>
+      <section class="goals-place-list">
+        ${cards.map(card => {
+          const owner = card.claimedBy ? playerName(card.claimedBy) : 'не открыто';
+          const mineClass = card.claimedBy === state.myId ? ' mine' : '';
+          return `<div class="goals-place${mineClass}"><strong>${escapeHtml(card.name)}</strong><span>${escapeHtml(owner)}</span></div>`;
+        }).join('')}
+      </section>
+      ${history.length ? `
+        <section class="goals-history">
+          <span>ВАША ИСТОРИЯ ЭКСПЕДИЦИЙ</span>
+          ${history.map(item => `<div><strong>${escapeHtml(item.name || item.placeId)}</strong><small>раунд ${item.completedRound || '—'}</small></div>`).join('')}
+        </section>
+      ` : ''}
+    `;
+  }
+
+  function goalsSheetHtml(mine) {
+    return `
+      <div class="goals-intro">Текущие личные цели и прогресс. Это представление существующего состояния игры, а не отдельная система заданий.</div>
+      <div class="goals-stack">
+        ${assignmentGoalHtml(mine)}
+        ${expeditionGoalHtml(mine)}
+      </div>
+      ${legendaryGoalsHtml(mine)}
+    `;
+  }
+
+  function moveCanonicalGoalActions(target) {
+    if (!target) return;
+    const assignmentSource = $('assignmentActions');
+    if (assignmentSource && !state.room?.pendingAssignmentChoice?.viewerCanRespond) {
+      while (assignmentSource.firstChild) target.appendChild(assignmentSource.firstChild);
+    }
+    const expeditionSource = $('legendaryPlacesActions');
+    if (expeditionSource) {
+      while (expeditionSource.firstChild) target.appendChild(expeditionSource.firstChild);
+    }
+  }
+
+  function renderGoalsObjectSheet() {
+    const mine = me();
+    if (!mine || state.spectating || isDecisionPending()) return;
+    closeMapInfo();
+    state.mapSelection = { kind: 'goals', id: 'personal-goals' };
+    $('objectSheetKind').textContent = 'ВАШИ ЦЕЛИ';
+    $('objectSheetTitle').textContent = 'Цели';
+    $('objectSheetBody').innerHTML = goalsSheetHtml(mine);
+
+    // Existing assignment/legendary-place renderers remain authoritative for actions.
+    renderAssignments();
+    renderLegendaryPlaces();
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    moveCanonicalGoalActions(actions);
+
+    if (!actions.children.length) {
+      const note = document.createElement('div');
+      note.className = 'goals-no-actions';
+      note.textContent = 'Сейчас цели не требуют отдельного действия. Прогресс обновляется игровой механикой автоматически.';
+      actions.appendChild(note);
+    }
+
+    $('objectSheet').classList.remove('hidden');
+    $('objectSheet').classList.add('expanded');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function refreshOpenGoalsSheet() {
+    if (state.mapSelection?.kind !== 'goals' || !isMobileGameplayUi()) return;
+    renderGoalsObjectSheet();
+  }
+
+  function digitalCardEntries(mine) {
+    if (!mine) return [];
+    const entries = [];
+    for (const card of mine.savedEventCards || []) {
+      entries.push({ group: 'saved', id: card.id, name: card.name, kind: card.kind, label: 'СОХРАНЁННОЕ СОБЫТИЕ' });
+    }
+    for (const ref of mine.playableLegendaryCards || []) {
+      entries.push({
+        group: ref.source === 'special' ? 'special' : 'legendary',
+        id: `${ref.source}:${ref.index}`,
+        name: ref.name,
+        kind: ref.kind,
+        label: ref.source === 'special' ? 'ОСОБЫЙ ЭФФЕКТ' : 'ЛЕГЕНДАРНЫЙ ЭФФЕКТ',
+      });
+    }
+    return entries;
+  }
+
+  function digitalCardKindText(entry) {
+    const descriptions = {
+      'found-cargo': 'Сохранённый груз можно поместить в свободный активный трюм.',
+      'treasure-cargo': 'Сохранённый результат сокровища можно поместить в свободный активный трюм.',
+      'ship-master': 'Бесплатное улучшение корабля применяется в Цитадели.',
+      'market-blueprint': 'Бесплатное строительство рынка на своём острове.',
+      'farm-blueprint': 'Бесплатное строительство фермы на своём острове.',
+      'sea-veil': 'Защита флотилии или своего острова на ограниченное число личных ходов.',
+      hellfire: 'Воздействие на постройки чужого острова на текущей клетке.',
+      'mist-path': 'Одноразовое перемещение к допустимой клетке карты.',
+      'sea-curse': 'Временный штраф к движению выбранного другого игрока независимо от расстояния.',
+    };
+    return descriptions[entry.kind] || 'Цифровой игровой эффект. Условия применения определяет текущее состояние партии.';
+  }
+
+  function cardsSheetHtml(mine) {
+    const entries = digitalCardEntries(mine);
+    if (!entries.length) {
+      return `
+        <div class="cards-empty">
+          <span>НЕТ СОХРАНЁННЫХ ЭФФЕКТОВ</span>
+          <strong>Сейчас у вас нет цифровых карт для ручного применения.</strong>
+          <small>События, сокровища и легендарные награды появляются только через игровую механику; отдельной физической колоды в интерфейсе нет.</small>
+        </div>
+      `;
+    }
+    return `
+      <div class="cards-ux-note">Это цифровые игровые эффекты, а не отдельная симуляция физической колоды.</div>
+      <div class="cards-hand">
+        ${entries.map(entry => `
+          <article class="digital-card digital-card-${escapeAttr(entry.group)}">
+            <span>${escapeHtml(entry.label)}</span>
+            <strong>${escapeHtml(entry.name)}</strong>
+            <small>${escapeHtml(digitalCardKindText(entry))}</small>
+          </article>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function moveSavedEventActions(target) {
+    const source = $('eventActions');
+    if (!source || !target) return;
+    let currentCard = null;
+    for (const node of Array.from(source.children)) {
+      if (node.classList?.contains('saved-event-card')) {
+        currentCard = document.createElement('section');
+        currentCard.className = 'cards-action-group cards-action-saved';
+        currentCard.appendChild(node);
+        target.appendChild(currentCard);
+        continue;
+      }
+      if (currentCard) currentCard.appendChild(node);
+    }
+  }
+
+  function moveLegendaryCardActions(target) {
+    const source = $('legendaryActions');
+    if (!source || !target) return;
+    for (const node of Array.from(source.children)) {
+      if (node.classList?.contains('legendary-card') || node.classList?.contains('legendary-map-hint')) {
+        target.appendChild(node);
+      }
+    }
+  }
+
+  function renderCardsObjectSheet() {
+    const mine = me();
+    if (!mine || state.spectating || isDecisionPending()) return;
+    closeMapInfo();
+    state.mapSelection = { kind: 'cards', id: 'digital-cards' };
+    $('objectSheetKind').textContent = 'ВАШИ ЭФФЕКТЫ';
+    $('objectSheetTitle').textContent = 'Карты';
+    $('objectSheetBody').innerHTML = cardsSheetHtml(mine);
+
+    // Existing event/legendary renderers remain authoritative for all legality and payloads.
+    renderEvents();
+    renderLegendary();
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    moveSavedEventActions(actions);
+    moveLegendaryCardActions(actions);
+
+    if (!actions.children.length && digitalCardEntries(mine).length) {
+      const note = document.createElement('div');
+      note.className = 'cards-no-actions';
+      note.textContent = 'Эффекты есть, но сейчас ни один из них нельзя применить.';
+      actions.appendChild(note);
+    }
+
+    $('objectSheet').classList.remove('hidden');
+    $('objectSheet').classList.add('expanded');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function refreshOpenCardsSheet() {
+    if (state.mapSelection?.kind !== 'cards' || !isMobileGameplayUi()) return;
+    renderCardsObjectSheet();
+  }
+
+  const CHARACTER_UX = {
+    navigator: {
+      role: 'НАВИГАЦИЯ',
+      summary: 'После обычного броска позволяет один раз перебросить навигацию. Второй результат обязателен.',
+      hint: 'Доступен только после броска навигации и требует 1 действие.',
+    },
+    cartographer: {
+      role: 'РАЗВЕДКА МОРЯ',
+      summary: 'До броска навигации позволяет тайно посмотреть верхнюю карту одного доступного морского якоря.',
+      hint: 'На мобильном цель выбирается прямо на карте.',
+    },
+    scout: {
+      role: 'РАЗВЕДКА',
+      summary: 'Раскрывает гарнизон одного чужого острова или точную казну одного другого игрока в радиусе 4.',
+      hint: 'Полученные данные видны только вам и действуют до конца текущего личного хода.',
+    },
+    treasureHunter: {
+      role: 'СОКРОВИЩА',
+      summary: 'Определяет два независимых результата сокровища и позволяет выбрать один.',
+      hint: 'Использование требует 1 действие; выбор результата приходит как обязательное решение.',
+    },
+    firstMate: {
+      role: 'КОМАНДА',
+      summary: 'Даёт одно дополнительное действие в текущем ходу.',
+      hint: 'Применяется в фазе действий и не требует отдельной оплаты.',
+    },
+    shipCarpenter: {
+      role: 'БОЙ',
+      summary: 'Может предотвратить одну потерю уровня корабля при поражении.',
+      hint: 'Применение отмечается при объявлении своей атаки; дополнительное действие списывается только если потеря уровня действительно предотвращена.',
+    },
+  };
+
+  function characterUxInfo(character) {
+    if (!character) return null;
+    return CHARACTER_UX[character.id] || {
+      role: 'ПЕРСОНАЖ',
+      summary: character.name || 'Персонаж Адмиралтейства',
+      hint: 'Способность применяется по действующим правилам персонажа.',
+    };
+  }
+
+  function characterAvailabilityText(mine) {
+    if (!mine?.character) {
+      if ((mine?.characterAcquisitionOptions || []).length) return 'Можно получить персонажа Адмиралтейства.';
+      if (mine?.admiraltyLevelHere) return 'Доступных персонажей этого уровня сейчас нет.';
+      return 'Персонаж не нанят.';
+    }
+    if (isDecisionPending()) return 'Сначала завершите обязательное решение.';
+    const myTurn = state.room?.activePlayerId === state.myId;
+    if (!myTurn) return 'Способность будет доступна в подходящий момент вашего хода.';
+    const id = mine.character.id;
+    if (id === 'navigator') return mine.phase === 'navigation' && mine.roll !== null && (mine.actionsLeft ?? 0) > 0 ? 'Можно использовать сейчас.' : 'Доступен после броска навигации.';
+    if (id === 'cartographer') return mine.phase === 'navigation' && mine.roll === null && (mine.actionsLeft ?? 0) > 0 ? 'Можно использовать сейчас.' : 'Доступен до броска навигации.';
+    if (id === 'scout') return mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 ? 'Можно использовать сейчас.' : 'Доступен в фазе действий.';
+    if (id === 'treasureHunter') return mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 ? 'Можно использовать сейчас.' : 'Доступен в фазе действий.';
+    if (id === 'firstMate') return mine.phase === 'actions' ? 'Можно использовать сейчас.' : 'Доступен в фазе действий.';
+    if (id === 'shipCarpenter') return 'Срабатывает через интерфейс объявления морского боя или штурма.';
+    return 'Способность готова по правилам персонажа.';
+  }
+
+  function characterSheetHtml(mine) {
+    if (!mine?.character) {
+      return `
+        <div class="character-empty">
+          <span>ПЕРСОНАЖ НЕ НАНЯТ</span>
+          <strong>${characterAvailabilityText(mine)}</strong>
+          <small>Персонажи получаются через Адмиралтейство и остаются приватной информацией владельца.</small>
+        </div>
+      `;
+    }
+    const character = mine.character;
+    const info = characterUxInfo(character);
+    return `
+      <div class="character-hero">
+        <div class="character-emblem" aria-hidden="true">♟</div>
+        <div class="character-hero-copy">
+          <span>${escapeHtml(info.role)}</span>
+          <strong>${escapeHtml(character.name)}</strong>
+          <small>Адмиралтейство ${character.admiraltyLevel ?? '—'} ур.</small>
+        </div>
+      </div>
+      <div class="character-description">${escapeHtml(info.summary)}</div>
+      <div class="character-hint">${escapeHtml(info.hint)}</div>
+      <div class="character-availability">${escapeHtml(characterAvailabilityText(mine))}</div>
+    `;
+  }
+
+  function moveCanonicalCharacterActions(target) {
+    const source = $('fleetActions');
+    if (!source || !target) return;
+    const children = Array.from(source.children);
+    const start = children.findIndex(node => node.classList?.contains('action-group-label') && node.textContent === 'Персонаж Адмиралтейства');
+    if (start < 0) return;
+    for (let i = start + 1; i < children.length; i += 1) {
+      const node = children[i];
+      if (node.classList?.contains('action-group-label')) break;
+      target.appendChild(node);
+    }
+  }
+
+  function renderCharacterObjectSheet() {
+    const mine = me();
+    if (!mine || state.spectating) return;
+    closeMapInfo();
+    state.mapSelection = { kind: 'character', id: mine.character?.id || 'none' };
+    $('objectSheetKind').textContent = mine.character ? 'ВАШ ПЕРСОНАЖ' : 'АДМИРАЛТЕЙСТВО';
+    $('objectSheetTitle').textContent = mine.character?.name || 'Персонаж';
+    $('objectSheetBody').innerHTML = characterSheetHtml(mine);
+
+    // renderFleet remains the canonical owner of character legality and socket payloads.
+    renderFleet();
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    moveCanonicalCharacterActions(actions);
+
+    if (!actions.children.length) {
+      const note = document.createElement('div');
+      note.className = 'character-no-actions';
+      note.textContent = 'Сейчас для персонажа нет доступных действий.';
+      actions.appendChild(note);
+    }
+
+    $('objectSheet').classList.remove('hidden');
+    $('objectSheet').classList.remove('expanded');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function refreshOpenCharacterSheet() {
+    if (state.mapSelection?.kind !== 'character' || !isMobileGameplayUi()) return;
+    renderCharacterObjectSheet();
+  }
+
+  function isMobileGameplayUi() {
+    return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
+  }
+
+  function scoutTargetOptions(mode) {
+    const mine = me();
+    if (!mine?.character || mine.character.id !== 'scout') return [];
+    const range = Math.max(0, Number(mine.character.effect?.range) || 4);
+    if (mode === 'scout-garrison') {
+      const islandDistance = island => Math.min(...(island.cells || []).map(([row, col]) => Math.abs(Number(mine.row) - Number(row)) + Math.abs(Number(mine.col) - Number(col))));
+      return (state.room?.islands || [])
+        .filter(island => island.ownerId && island.ownerId !== state.myId)
+        .map(island => ({ kind: 'island', id: island.id, name: island.name, data: island, distance: islandDistance(island) }))
+        .filter(target => Number.isFinite(target.distance) && target.distance <= range)
+        .sort((a, b) => a.distance - b.distance || String(a.name).localeCompare(String(b.name)));
+    }
+    if (mode === 'scout-money') {
+      return (state.room?.players || [])
+        .filter(player => player.id !== state.myId)
+        .map(player => ({
+          kind: 'player',
+          id: player.id,
+          name: player.name,
+          data: player,
+          distance: Math.abs(Number(mine.row) - Number(player.row)) + Math.abs(Number(mine.col) - Number(player.col)),
+        }))
+        .filter(target => Number.isFinite(target.distance) && target.distance <= range)
+        .sort((a, b) => a.distance - b.distance || String(a.name).localeCompare(String(b.name)));
+    }
+    return [];
+  }
+
+  function targetingOptions(mode = state.targeting?.mode) {
+    const mine = me();
+    if (!mine || !mode) return [];
+    if (mode === 'cartographer') {
+      return (mine.cartographerAnchorOptions || []).map(option => ({
+        kind: 'anchor',
+        id: option.id || option.color,
+        name: option.name,
+        color: option.color,
+        distance: option.distance,
+        data: option,
+      }));
+    }
+    return scoutTargetOptions(mode);
+  }
+
+  function canStartTargeting(mode) {
+    const mine = me();
+    if (!mine || state.spectating || isDecisionPending()) return false;
+    const myTurn = state.room?.activePlayerId === state.myId;
+    if (!myTurn) return false;
+    if (mode === 'cartographer') {
+      return mine.character?.id === 'cartographer'
+        && mine.phase === 'navigation'
+        && mine.roll === null
+        && !mine.characterUsedThisRound
+        && (mine.actionsLeft ?? 0) > 0
+        && targetingOptions(mode).length > 0;
+    }
+    if (mode === 'scout-garrison' || mode === 'scout-money') {
+      return mine.character?.id === 'scout'
+        && mine.phase === 'actions'
+        && !mine.characterUsedThisRound
+        && (mine.actionsLeft ?? 0) > 0
+        && targetingOptions(mode).length > 0;
+    }
+    return false;
+  }
+
+  function startTargeting(mode) {
+    if (!canStartTargeting(mode)) return;
+    closeMapInfo();
+    state.targeting = { mode };
+    closeMapInfo();
+    render();
+  }
+
+  function cancelTargeting() {
+    state.targeting = null;
+    document.body.classList.remove('targeting-open');
+    render();
+  }
+
+  function completeTargeting(target) {
+    const mode = state.targeting?.mode;
+    if (!mode || !target) return;
+    if (mode === 'cartographer') {
+      socket.emit('useCartographer', { color: target.color }, res => {
+        handleGameAck(res);
+        if (!res?.ok) return;
+        state.targeting = null;
+        if (res.card) {
+          state.characterPeek = `${res.anchorName}: «${res.card.name}» · арт. ${res.card.artillery ?? '—'} · награда ${res.card.reward}`;
+          enqueueResultCard({
+            kicker: 'КАРТОГРАФ',
+            title: `Верхняя карта: ${res.anchorName}`,
+            body: `«${res.card.name}»`,
+            details: [
+              { label: 'Артиллерия', value: res.card.artillery ?? '—' },
+              { label: 'Награда', value: res.card.reward ?? '—' },
+            ],
+          });
+        }
+      });
+      return;
+    }
+    if (mode === 'scout-garrison') {
+      socket.emit('useScout', { mode: 'garrison', islandId: target.id }, res => {
+        handleGameAck(res);
+        if (!res?.ok) return;
+        state.targeting = null;
+        enqueueToast(`Разведан гарнизон: ${target.name}. Откройте остров на карте.`, 'success');
+      });
+      return;
+    }
+    if (mode === 'scout-money') {
+      socket.emit('useScout', { mode: 'money', targetPlayerId: target.id }, res => {
+        handleGameAck(res);
+        if (!res?.ok) return;
+        state.targeting = null;
+        enqueueToast(`Разведана казна: ${target.name}`, 'success');
+      });
+    }
+  }
+
+  function renderTargetingBar() {
+    const bar = $('targetingBar');
+    const mode = state.targeting?.mode;
+    if (!bar || !mode || !canStartTargeting(mode)) {
+      if (mode && !canStartTargeting(mode)) state.targeting = null;
+      bar?.classList.add('hidden');
+      document.body.classList.remove('targeting-open');
+      return;
+    }
+    const options = targetingOptions(mode);
+    const labels = {
+      cartographer: ['КАРТОГРАФ', 'Выберите морской якорь', 'На карте показаны только доступные якоря.'],
+      'scout-garrison': ['РАЗВЕДЧИК', 'Выберите чужой остров', `Доступные цели: ${options.length}`],
+      'scout-money': ['РАЗВЕДЧИК', 'Выберите корабль игрока', `Доступные цели: ${options.length}`],
+    };
+    const copy = labels[mode] || ['ВЫБОР ЦЕЛИ', 'Выберите цель', ''];
+    $('targetingKicker').textContent = copy[0];
+    $('targetingTitle').textContent = copy[1];
+    $('targetingDetail').textContent = copy[2];
+    bar.classList.remove('hidden');
+    document.body.classList.add('targeting-open');
+  }
+
+  function renderTargetingMapTargets(layer) {
+    const mode = state.targeting?.mode;
+    if (!mode || !canStartTargeting(mode)) return false;
+    const options = targetingOptions(mode);
+    for (const target of options) {
+      if (target.kind === 'island') {
+        for (const [row, col] of target.data.cells || []) {
+          addMapCellButton(layer, row, col, 'targeting-hit targeting-island', `${target.name} · ${target.distance} кл.`, () => completeTargeting(target));
+        }
+      } else if (target.kind === 'player') {
+        addMapMarker(layer, target.data.row, target.data.col, 'targeting-marker targeting-player', '◎', `${target.name} · ${target.distance} кл.`, () => completeTargeting(target));
+      } else if (target.kind === 'anchor') {
+        const anchors = (state.room?.anchorCells || []).filter(anchor => anchor.color === target.color || anchor.id === target.id);
+        for (const anchor of anchors) {
+          addMapMarker(layer, anchor.row, anchor.col, `targeting-marker targeting-anchor anchor-${anchor.color}`, '◎', `${target.name} · ${target.distance} кл.`, () => completeTargeting(target));
+        }
+      }
+    }
+    return true;
   }
 
   function renderFleet() {
@@ -2116,6 +4071,7 @@
         <span>Войско</span><strong>${stats.army ?? '—'}</strong>
         <span>Основной трюм</span><strong>${stats.cargo ?? '—'}</strong>
         <span>Модификатор хода</span><strong>${moveText}</strong>
+        <span>Действий за ход</span><strong>${stats.actionsPerTurn ?? 3}</strong>
         <span>Артиллерия флотилии</span><strong>${mine.fleetArtillery ?? stats.artillery ?? '—'}</strong>
         <span>Места улучшений</span><strong>${upgrades.length}/${mine.upgradeSlots}</strong>
         <span>Места верфей</span><strong>${mine.shipyardSlots}</strong>
@@ -2161,88 +4117,132 @@
         treasureHunter: 'Искатель сокровищ тратит одно действие, сразу определяет два независимых результата сокровища и позволяет выбрать один из них.',
         shipCarpenter: 'Корабельный плотник может предотвратить одну потерю уровня в бою. При объявлении своей атаки заранее отметьте его применение; дополнительное действие списывается только если уровень действительно сохранён.',
       };
-      effectNote.textContent = deferred[character.id] || `«${character.name}» готов к одноразовому применению.`;
+      effectNote.textContent = mine.characterUsedThisRound ? `«${character.name}» уже использован в этом раунде.` : (deferred[character.id] || `«${character.name}» готов к применению один раз в этом раунде.`);
       actions.appendChild(effectNote);
 
       if (character.id === 'navigator') {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
         b.textContent = 'Штурман: перебросить d6 · 1 действие';
-        b.disabled = !(myTurn && mine.phase === 'navigation' && mine.roll !== null && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending());
+        b.disabled = mine.characterUsedThisRound || !(myTurn && mine.phase === 'navigation' && mine.roll !== null && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending());
         b.addEventListener('click', () => socket.emit('useNavigator', {}, handleGameAck)); actions.appendChild(b);
       } else if (character.id === 'cartographer') {
-        for (const option of mine.cartographerAnchorOptions || []) {
+        if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 900px)').matches) {
           const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
-          b.textContent = `Картограф: посмотреть «${option.name}» · ${option.distance} кл. · 1 действие`;
-          b.disabled = !(myTurn && mine.phase === 'navigation' && mine.roll === null && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending());
-          b.addEventListener('click', () => socket.emit('useCartographer', { color: option.color }, res => {
-            if (res?.ok && res.card) state.characterPeek = `${res.anchorName}: «${res.card.name}» · арт. ${res.card.artillery ?? '—'} · награда ${res.card.reward}`;
-            handleGameAck(res); renderFleet();
-          }));
+          b.textContent = 'Картограф: выбрать якорь на карте · 1 действие';
+          b.disabled = !canStartTargeting('cartographer');
+          b.addEventListener('click', () => startTargeting('cartographer'));
           actions.appendChild(b);
+        } else {
+          for (const option of mine.cartographerAnchorOptions || []) {
+            const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
+            b.textContent = `Картограф: посмотреть «${option.name}» · ${option.distance} кл. · 1 действие`;
+            b.disabled = !(myTurn && mine.phase === 'navigation' && mine.roll === null && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending());
+            b.addEventListener('click', () => socket.emit('useCartographer', { color: option.color }, res => {
+              if (res?.ok && res.card) {
+                state.characterPeek = `${res.anchorName}: «${res.card.name}» · арт. ${res.card.artillery ?? '—'} · награда ${res.card.reward}`;
+                enqueueResultCard({
+                  kicker: 'КАРТОГРАФ',
+                  title: `Верхняя карта: ${res.anchorName}`,
+                  body: `«${res.card.name}»`,
+                  details: [
+                    { label: 'Артиллерия', value: res.card.artillery ?? '—' },
+                    { label: 'Награда', value: res.card.reward ?? '—' },
+                  ],
+                });
+              }
+              handleGameAck(res); renderFleet();
+            }));
+            actions.appendChild(b);
+          }
         }
         if (state.characterPeek) {
           const peek = document.createElement('div'); peek.className = 'event-effect'; peek.textContent = state.characterPeek; actions.appendChild(peek);
         }
       } else if (character.id === 'scout') {
-        const range = Math.max(0, Number(character.effect?.range) || 4);
-        const islandDistance = island => Math.min(...(island.cells || []).map(([row, col]) => Math.abs(Number(mine.row) - Number(row)) + Math.abs(Number(mine.col) - Number(col))));
-        const garrisonTargets = (state.room.islands || [])
-          .filter(island => island.ownerId && island.ownerId !== state.myId)
-          .map(island => ({ island, distance: islandDistance(island) }))
-          .filter(item => Number.isFinite(item.distance) && item.distance <= range)
-          .sort((a, b) => a.distance - b.distance || String(a.island.name).localeCompare(String(b.island.name)));
-        const moneyTargets = (state.room.players || [])
-          .filter(player => player.id !== state.myId)
-          .map(player => ({ player, distance: Math.abs(Number(mine.row) - Number(player.row)) + Math.abs(Number(mine.col) - Number(player.col)) }))
-          .filter(item => Number.isFinite(item.distance) && item.distance <= range)
-          .sort((a, b) => a.distance - b.distance || String(a.player.name).localeCompare(String(b.player.name)));
+        if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 900px)').matches) {
+          const garrisonTargets = targetingOptions('scout-garrison');
+          const moneyTargets = targetingOptions('scout-money');
 
-        const garrisonLabel = document.createElement('div');
-        garrisonLabel.className = 'cargo-meta';
-        garrisonLabel.textContent = 'Разведка гарнизона';
-        actions.appendChild(garrisonLabel);
-        for (const { island, distance } of garrisonTargets) {
-          const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
-          b.textContent = `Гарнизон: ${island.name} · ${distance} кл. · 1 действие`;
-          b.disabled = !canAct;
-          b.addEventListener('click', () => socket.emit('useScout', { mode: 'garrison', islandId: island.id }, handleGameAck));
-          actions.appendChild(b);
-        }
-        if (!garrisonTargets.length) {
-          const note = document.createElement('div'); note.className = 'cargo-meta'; note.textContent = 'Чужих островов в радиусе разведки нет.'; actions.appendChild(note);
-        }
+          const garrison = document.createElement('button');
+          garrison.type = 'button'; garrison.className = 'build-btn primary';
+          garrison.textContent = `Разведчик: гарнизон на карте · ${garrisonTargets.length} цел.`;
+          garrison.disabled = !canStartTargeting('scout-garrison');
+          garrison.addEventListener('click', () => startTargeting('scout-garrison'));
+          actions.appendChild(garrison);
 
-        const moneyLabel = document.createElement('div');
-        moneyLabel.className = 'cargo-meta';
-        moneyLabel.textContent = 'Разведка денег';
-        actions.appendChild(moneyLabel);
-        for (const { player, distance } of moneyTargets) {
-          const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
-          b.textContent = `Деньги: ${player.name} · ${distance} кл. · 1 действие`;
-          b.disabled = !canAct;
-          b.addEventListener('click', () => socket.emit('useScout', { mode: 'money', targetPlayerId: player.id }, handleGameAck));
-          actions.appendChild(b);
-        }
-        if (!moneyTargets.length) {
-          const note = document.createElement('div'); note.className = 'cargo-meta'; note.textContent = 'Других кораблей в радиусе разведки нет.'; actions.appendChild(note);
+          const money = document.createElement('button');
+          money.type = 'button'; money.className = 'build-btn primary';
+          money.textContent = `Разведчик: казна игрока на карте · ${moneyTargets.length} цел.`;
+          money.disabled = !canStartTargeting('scout-money');
+          money.addEventListener('click', () => startTargeting('scout-money'));
+          actions.appendChild(money);
+        } else {
+          const range = Math.max(0, Number(character.effect?.range) || 4);
+          const islandDistance = island => Math.min(...(island.cells || []).map(([row, col]) => Math.abs(Number(mine.row) - Number(row)) + Math.abs(Number(mine.col) - Number(col))));
+          const garrisonTargets = (state.room.islands || [])
+            .filter(island => island.ownerId && island.ownerId !== state.myId)
+            .map(island => ({ island, distance: islandDistance(island) }))
+            .filter(item => Number.isFinite(item.distance) && item.distance <= range)
+            .sort((a, b) => a.distance - b.distance || String(a.island.name).localeCompare(String(b.island.name)));
+          const moneyTargets = (state.room.players || [])
+            .filter(player => player.id !== state.myId)
+            .map(player => ({ player, distance: Math.abs(Number(mine.row) - Number(player.row)) + Math.abs(Number(mine.col) - Number(player.col)) }))
+            .filter(item => Number.isFinite(item.distance) && item.distance <= range)
+            .sort((a, b) => a.distance - b.distance || String(a.player.name).localeCompare(String(b.player.name)));
+
+          const garrisonLabel = document.createElement('div');
+          garrisonLabel.className = 'cargo-meta';
+          garrisonLabel.textContent = 'Разведка гарнизона';
+          actions.appendChild(garrisonLabel);
+          for (const { island, distance } of garrisonTargets) {
+            const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
+            b.textContent = `Гарнизон: ${island.name} · ${distance} кл. · 1 действие`;
+            b.disabled = !canAct;
+            b.addEventListener('click', () => socket.emit('useScout', { mode: 'garrison', islandId: island.id }, res => {
+              handleGameAck(res);
+              if (res?.ok) enqueueToast(`Разведан гарнизон: ${island.name}. Откройте остров на карте.`, 'success');
+            }));
+            actions.appendChild(b);
+          }
+          if (!garrisonTargets.length) {
+            const note = document.createElement('div'); note.className = 'cargo-meta'; note.textContent = 'Чужих островов в радиусе разведки нет.'; actions.appendChild(note);
+          }
+
+          const moneyLabel = document.createElement('div');
+          moneyLabel.className = 'cargo-meta';
+          moneyLabel.textContent = 'Разведка денег';
+          actions.appendChild(moneyLabel);
+          for (const { player, distance } of moneyTargets) {
+            const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
+            b.textContent = `Деньги: ${player.name} · ${distance} кл. · 1 действие`;
+            b.disabled = !canAct;
+            b.addEventListener('click', () => socket.emit('useScout', { mode: 'money', targetPlayerId: player.id }, res => {
+              handleGameAck(res);
+              if (res?.ok) enqueueToast(`Разведана казна: ${player.name}`, 'success');
+            }));
+            actions.appendChild(b);
+          }
+          if (!moneyTargets.length) {
+            const note = document.createElement('div'); note.className = 'cargo-meta'; note.textContent = 'Других кораблей в радиусе разведки нет.'; actions.appendChild(note);
+          }
         }
       } else if (character.id === 'treasureHunter') {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
         b.textContent = 'Искатель сокровищ: выбрать 1 из 2 · 1 действие';
-        b.disabled = !canAct;
+        b.disabled = mine.characterUsedThisRound || !canAct;
         b.addEventListener('click', () => socket.emit('useTreasureHunter', {}, handleGameAck));
         actions.appendChild(b);
       } else if (character.id === 'firstMate') {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn primary';
         b.textContent = 'Первый помощник: +1 дополнительное действие · бесплатно';
-        b.disabled = !(myTurn && mine.phase === 'actions' && !isDecisionPending());
+        b.disabled = mine.characterUsedThisRound || !(myTurn && mine.phase === 'actions' && !isDecisionPending());
         b.addEventListener('click', () => socket.emit('useFirstMate', {}, handleGameAck)); actions.appendChild(b);
       }
 
       if ((mine.characterReplacementOptions || []).length) {
         const replaceLabel = document.createElement('div');
         replaceLabel.className = 'cargo-meta';
-        replaceLabel.textContent = 'Неиспользованного персонажа можно заменить здесь один раз за раунд:';
+        replaceLabel.textContent = 'Персонажа можно заменить здесь один раз за раунд:';
         actions.appendChild(replaceLabel);
         for (const option of mine.characterReplacementOptions) {
           const b = document.createElement('button'); b.type = 'button'; b.className = 'build-btn';
@@ -2382,8 +4382,6 @@
     const content = $('cargoContent');
     const badge = $('cargoBadge');
     const sell = $('sellCargoBtn');
-    const escortActions = $('escortCargoActions');
-    escortActions.innerHTML = '';
     if (!mine) {
       badge.textContent = '0/0';
       content.textContent = 'Трюм недоступен.';
@@ -2404,7 +4402,7 @@
       ? `<div class="cargo-name">Основной трюм: рота ландскнехтов</div><div class="cargo-meta">+${mine.landCompany.army} войска только при штурме. Обычный груз в основной трюм недоступен.</div>`
       : (mine.cargo
         ? `<div class="cargo-name">Основной трюм: ${escapeHtml(mainGood?.name || mine.cargo.goodId)} × ${mine.cargo.quantity}</div><div class="cargo-meta">Выручка: ${mine.cargo.value} дукатов.</div>`
-        : `<div class="cargo-name">Основной трюм: пуст</div><div class="cargo-meta">Вместимость ${mine.cargoCapacity}. Погрузка на своём острове расходует одно действие.</div>`);
+        : `<div class="cargo-name">Основной трюм: пуст</div><div class="cargo-meta">Вместимость ${mine.cargoCapacity}. Одна обычная погрузка на своём острове расходует одно действие и заполняет все свободные доступные трюмы флотилии.</div>`);
     const escortText = cargoEscorts.length
       ? cargoEscorts.map((e, idx) => {
           const g = e.cargo ? goods[e.cargo.goodId] : null;
@@ -2414,22 +4412,13 @@
       : '<div class="cargo-meta">Сопровождения с грузовым трюмом нет.</div>';
     content.innerHTML = `${mainText}${escortText}<div class="cargo-meta">${mine.atCitadel ? 'Флотилия находится в Цитадели.' : 'Для продажи доставьте флотилию в Цитадель.'}</div>`;
 
+    const totalSaleValue = (mine.cargo?.value || 0) + cargoEscorts.filter(e => e.active).reduce((sum, e) => sum + (e.cargo?.value || 0), 0);
     sell.classList.toggle('hidden', !mine.atCitadel);
-    sell.disabled = !mine.cargo || !canAct || !mine.atCitadel;
-    sell.textContent = mine.cargo && mine.atCitadel ? `Продать основной груз за ${mine.cargo.value} дукатов` : 'Продать основной груз в Цитадели';
+    sell.disabled = totalSaleValue <= 0 || !canAct || !mine.atCitadel;
+    sell.textContent = totalSaleValue > 0 && mine.atCitadel
+      ? 'Продать весь груз флотилии за ' + totalSaleValue + ' дукатов'
+      : 'Продать весь груз флотилии в Цитадели';
 
-    if (!mine.atCitadel) return;
-
-    for (const e of cargoEscorts) {
-      if (!e.cargo) continue;
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'trade-button';
-      b.textContent = `Продать груз «${escortCatalog[e.type]?.name || 'сопровождения'}» за ${e.cargo.value} дукатов`;
-      b.disabled = !canAct || !mine.atCitadel || !e.active;
-      b.addEventListener('click', () => socket.emit('sellCargo', { holdId: e.id }, handleGameAck));
-      escortActions.appendChild(b);
-    }
   }
 
 
@@ -2498,12 +4487,13 @@
       button.textContent = 'Вступить в бой · 1 действие';
       button.title = 'Если открыта карта «На море тихо», действие не расходуется.';
       button.disabled = !canFight;
-      button.addEventListener('click', () => socket.emit('fightAnchor', {}, handleGameAck));
+      button.addEventListener('click', () => socket.emit('fightAnchor', {}, handleAnchorResultAck));
       actions.appendChild(button);
     }
   }
 
   function renderIsland() {
+    const r = state.room;
     const box = $('islandContent');
     const actions = $('islandActions');
     const badge = $('islandAreaBadge');
@@ -2573,12 +4563,10 @@
 
     const goods = state.room.goodsCatalog || {};
     const loadedThisRound = island.loadedRound === state.room.round;
-    const holdOptions = [{ id: 'main', name: mine?.landCompany ? 'основной трюм (занят ротой)' : 'основной трюм', capacity: mine?.cargoCapacity || 0, occupied: Boolean(mine?.cargo || mine?.landCompany) }];
     const escortCatalog = state.room.escortCatalog || {};
-    for (const e of (mine?.escorts || []).filter(e => e.active && (escortCatalog[e.type]?.cargo || 0) > 0)) {
-      const def = escortCatalog[e.type];
-      holdOptions.push({ id: e.id, name: (def?.name || 'сопровождение').toLowerCase(), capacity: def?.cargo || 0, occupied: Boolean(e.cargo) });
-    }
+    const freeMainCapacity = (!mine?.cargo && !mine?.landCompany) ? (mine?.cargoCapacity || 0) : 0;
+    const freeEscortCapacity = (mine?.escorts || []).filter(e => e.active && !e.cargo && (escortCatalog[e.type]?.cargo || 0) > 0).reduce((sum, e) => sum + (escortCatalog[e.type]?.cargo || 0), 0);
+    const freeFleetCapacity = freeMainCapacity + freeEscortCapacity;
 
     if ((island.availableGoods || []).length) {
       const label = document.createElement('div');
@@ -2588,18 +4576,16 @@
       for (const goodId of island.availableGoods) {
         const good = goods[goodId];
         if (!good) continue;
-        for (const hold of holdOptions) {
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.className = 'build-btn cargo-btn';
-          button.textContent = `Погрузить ${good.name} × ${hold.capacity} → ${hold.name}`;
-          button.disabled = !canAct || hold.occupied || loadedThisRound;
-          button.addEventListener('click', () => {
-            setError('gameError');
-            socket.emit('loadCargo', { islandId: island.id, goodId, holdId: hold.id }, handleGameAck);
-          });
-          actions.appendChild(button);
-        }
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'build-btn cargo-btn';
+        button.textContent = 'Погрузить ' + good.name + ' × ' + freeFleetCapacity + ' во флотилию';
+        button.disabled = !canAct || freeFleetCapacity <= 0 || loadedThisRound;
+        button.addEventListener('click', () => {
+          setError('gameError');
+          socket.emit('loadCargo', { islandId: island.id, goodId }, res => handleSoundAck(res, 'cargo'));
+        });
+        actions.appendChild(button);
       }
     }
 
@@ -2651,45 +4637,78 @@
     }
 
     const catalog = state.room.buildingCatalog || {};
+    const buildingPurpose = (type, level = 1) => {
+      const purposes = {
+        farm: 'Производит провизию.', manor: 'Развитая продовольственная постройка.',
+        lumbermill: 'Производит древесину.', shipyard: 'Даёт места для судов сопровождения.',
+        quarry: 'Производит камень.', stoneworks: 'Даёт места поддержки бастионов.',
+        mine: 'Производит руду.', arsenal: 'Позволяет снаряжать роту ландскнехтов.',
+        fort: 'Усиливает защиту острова.', fortress: 'Сильно усиливает защиту острова.', bastion: 'Мощная защита острова.',
+        market: 'Приносит доход с острова.', bank: 'Увеличивает доход с острова.',
+        exotic: 'Даёт погрузку экзотических зверей.', slaves: 'Даёт погрузку невольников.',
+        gold: 'Даёт погрузку золота.', diamonds: 'Даёт погрузку алмазов.',
+        lighthouse: '+1 к движению при отплытии с острова.',
+        observatory: 'Позволяет заменить морское событие.',
+        embassy: 'Позволяет выбирать поручение из двух вариантов.',
+        palace: 'Один раз за партию позволяет прекратить вражду с государством.',
+        cartography: 'Открывает доступ к экспедициям.',
+        admiralty: 'Даёт доступ к персонажам и их замене.'
+      };
+      return purposes[type] || 'Развивает возможности острова.';
+    };
+    const makeBuildingCard = (title, purpose, meta) => {
+      const card = document.createElement('div');
+      card.className = 'island-building-card';
+      const head = document.createElement('div'); head.className = 'island-building-card__head'; head.textContent = title;
+      const desc = document.createElement('div'); desc.className = 'island-building-card__desc'; desc.textContent = purpose;
+      const copy = document.createElement('div'); copy.className = 'island-building-card__copy';
+      copy.appendChild(head); copy.appendChild(desc);
+      if (meta) { const info = document.createElement('div'); info.className = 'island-building-card__meta'; info.textContent = meta; copy.appendChild(info); }
+      card.appendChild(copy);
+      return card;
+    };
+
     const buildLabel = document.createElement('div');
     buildLabel.className = 'action-group-label';
-    buildLabel.textContent = 'Строительство';
+    buildLabel.textContent = 'Можно построить';
     actions.appendChild(buildLabel);
     const ordered = ['farm', 'lumbermill', 'quarry', 'mine', 'fort', 'market', 'exotic', 'slaves', 'gold', 'diamonds', 'lighthouse', 'observatory', 'embassy', 'palace', 'cartography', 'admiralty'];
     for (const id of ordered) {
       const def = catalog[id];
       if (!def) continue;
       if (def.resource && !island.resources.includes(def.resource)) continue;
+      const card = makeBuildingCard(def.name, buildingPurpose(id), `${def.price} дук. · площадь ${def.area || 1}`);
       const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'build-btn';
-      button.textContent = `${def.name} · ${def.price} дук.`;
+      button.type = 'button'; button.className = 'build-btn primary'; button.textContent = 'Построить';
       button.disabled = !canAct || mine.ducats < def.price;
       button.addEventListener('click', () => {
         setError('gameError');
-        socket.emit('build', { islandId: island.id, buildingType: id }, handleGameAck);
+        socket.emit('build', { islandId: island.id, buildingType: id }, res => handleSoundAck(res, 'construction'));
       });
-      actions.appendChild(button);
+      card.appendChild(button); actions.appendChild(card);
     }
 
-    const upgradeable = island.buildings.filter(b => b.nextUpgrade);
-    if (upgradeable.length) {
-      const upLabel = document.createElement('div');
-      upLabel.className = 'action-group-label';
-      upLabel.textContent = 'Улучшение построек';
-      actions.appendChild(upLabel);
-      for (const b of upgradeable) {
+    const builtLabel = document.createElement('div');
+    builtLabel.className = 'action-group-label';
+    builtLabel.textContent = 'Построено';
+    actions.appendChild(builtLabel);
+    if (!island.buildings.length) {
+      const empty = document.createElement('div'); empty.className = 'cargo-meta'; empty.textContent = 'На острове пока нет построек.'; actions.appendChild(empty);
+    }
+    for (const b of island.buildings) {
+      const level = Number(b.level) || 1;
+      const card = makeBuildingCard(b.name, buildingPurpose(b.type, level), b.nextUpgrade ? `Следующий уровень: ${b.nextUpgrade.name} · ${b.nextUpgrade.price} дук.` : 'Текущий максимальный уровень');
+      if (b.nextUpgrade) {
         const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'build-btn upgrade-building-btn';
-        button.textContent = `${b.name} → ${b.nextUpgrade.name} · ${b.nextUpgrade.price} дук.`;
+        button.type = 'button'; button.className = 'build-btn upgrade-building-btn'; button.textContent = `Улучшить · ${b.nextUpgrade.price} дук.`;
         button.disabled = !canAct || mine.ducats < b.nextUpgrade.price;
         button.addEventListener('click', () => {
           setError('gameError');
-          socket.emit('upgradeBuilding', { islandId: island.id, buildingIndex: b.index }, handleGameAck);
+          socket.emit('upgradeBuilding', { islandId: island.id, buildingIndex: b.index }, res => handleSoundAck(res, 'construction'));
         });
-        actions.appendChild(button);
+        card.appendChild(button);
       }
+      actions.appendChild(card);
     }
   }
 
@@ -2848,6 +4867,8 @@
       for (const target of seaTargets) {
         const card = document.createElement('div');
         card.className = 'combat-target';
+        card.dataset.combatKind = 'sea';
+        card.dataset.targetPlayerId = target.id;
         let carpenterToggle = null;
         if (mine.character?.id === 'shipCarpenter') {
           const carpenterLabel = document.createElement('label');
@@ -2870,13 +4891,22 @@
         solo.textContent = `Атаковать · ${mine.fleetArtillery}:${target.fleetArtillery}`;
         solo.disabled = !canAct || firstRound || mine.inPeaceZone || target.inPeaceZone || usedAttackTargets.has(target.id) || (mine.brokenAlliesThisTurn || []).includes(target.id) || Boolean(target.legendaryStatus?.shipVeilTurns);
         if (usedAttackTargets.has(target.id)) solo.title = 'Лимит нападения на этого игрока в текущем раунде уже использован.';
-        solo.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
+        solo.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, res => handleSeaBattleResultAck(res, target.name)));
         const together = document.createElement('button');
         together.type = 'button';
         together.textContent = `Позвать союзника (${attackAllies.length})`;
         together.disabled = solo.disabled || attackAllies.length === 0;
-        together.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
+        together.addEventListener('click', () => socket.emit('attackShip', { targetPlayerId: target.id, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, res => handleSeaBattleResultAck(res, target.name)));
         row.appendChild(solo); row.appendChild(together);
+        const hellfireRef = (mine.playableLegendaryCards || []).find(ref => ref.kind === 'hellfire');
+        if (hellfireRef && !island.ownerId && ['state', 'independent'].includes(island.kind)) {
+          const fire = document.createElement('button');
+          fire.type = 'button'; fire.className = 'danger-soft'; fire.textContent = 'Захватить 🔥';
+          fire.disabled = !canAct || mine.inPeaceZone;
+          fire.title = 'Захватить остров «Пламенем Ада» независимо от силы обороны.';
+          fire.addEventListener('click', () => socket.emit('hellfireCapture', { islandId: island.id }, res => handleAssaultResultAck(res, island.name)));
+          row.appendChild(fire);
+        }
         card.appendChild(row);
         actions.appendChild(card);
       }
@@ -2894,6 +4924,8 @@
         const defenseAllies = island.ownerId ? r.players.filter(p => p.id !== state.myId && p.id !== island.ownerId && areAlliesClient(island.ownerId, p.id) && !areAlliesClient(state.myId, p.id) && playerOnIslandClient(p, island)) : [];
         const card = document.createElement('div');
         card.className = 'combat-target';
+        card.dataset.combatKind = 'assault';
+        card.dataset.islandId = island.id;
         const islandInfo = document.createElement('div');
         islandInfo.innerHTML = `<strong>${escapeHtml(island.name)}</strong><div class="cargo-meta">${escapeHtml(owner)} · ваша сила ${mine.assaultArmy ?? mine.stats?.army ?? 0} · базовая защита ${island.defenseArmy ?? island.army} · союзники атаки в позиции ${attackAllies.length} · защиты ${defenseAllies.length}${island.legendaryVeil?.remaining ? ` · Покров моря ${island.legendaryVeil.remaining} хода` : ''}</div>`;
         card.appendChild(islandInfo);
@@ -2916,12 +4948,12 @@
         solo.textContent = 'Штурмовать · одному';
         solo.disabled = !canAct || mine.inPeaceZone || (firstRound && pvpIsland) || (island.ownerId && usedAttackTargets.has(island.ownerId)) || (island.ownerId && (mine.brokenAlliesThisTurn || []).includes(island.ownerId)) || Boolean(island.legendaryVeil?.remaining);
         if (island.ownerId && usedAttackTargets.has(island.ownerId)) solo.title = 'Лимит нападения на владельца этого острова в текущем раунде уже использован.';
-        solo.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
+        solo.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, inviteAllies: false, useShipCarpenter: Boolean(carpenterToggle?.checked) }, res => handleAssaultResultAck(res, island.name)));
         const together = document.createElement('button');
         together.type = 'button';
         together.textContent = `Штурмовать · союз (${attackAllies.length})`;
         together.disabled = solo.disabled || attackAllies.length === 0;
-        together.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, handleGameAck));
+        together.addEventListener('click', () => socket.emit('assaultIsland', { islandId: island.id, inviteAllies: true, useShipCarpenter: Boolean(carpenterToggle?.checked) }, res => handleAssaultResultAck(res, island.name)));
         row.appendChild(solo); row.appendChild(together);
         card.appendChild(row);
         actions.appendChild(card);
@@ -2944,11 +4976,28 @@
   }
 
   function closeMapInfo() {
+    const closingCards = state.mapSelection?.kind === 'cards';
+    const closingGoals = state.mapSelection?.kind === 'goals';
     state.mapSelection = null;
+    resetIslandSheetChrome();
     const card = $('mapInfoCard');
     card.classList.add('hidden');
     card.style.visibility = '';
     card.style.maxHeight = '';
+    const sheet = $('objectSheet');
+    if (sheet) {
+      sheet.classList.add('hidden');
+      sheet.classList.remove('expanded');
+      document.body.classList.remove('object-sheet-open');
+    }
+    if (closingCards && state.room && me()) {
+      renderEvents();
+      renderLegendary();
+    }
+    if (closingGoals && state.room && me()) {
+      renderAssignments();
+      renderLegendaryPlaces();
+    }
   }
 
   function positionMapInfoAt(row, col) {
@@ -2996,6 +5045,1161 @@
     positionMapInfoAt(anchor.row, anchor.col);
   }
 
+  function mapObjectKindLabel(kind, data) {
+    if (kind === 'island') {
+      if (data.ownerId === state.myId) return 'ВАШ ОСТРОВ';
+      if (data.ownerId) return 'ОСТРОВ ИГРОКА';
+      if (data.kind === 'state') return 'ГОСУДАРСТВЕННЫЙ ОСТРОВ';
+      return 'ОСТРОВ';
+    }
+    if (kind === 'citadel') return 'ЦИТАДЕЛЬ';
+    if (kind === 'anchor') return 'МОРСКОЙ ЯКОРЬ';
+    if (kind === 'legendary') return 'ЛЕГЕНДАРНОЕ МЕСТО';
+    if (kind === 'hazard') return 'МОРСКАЯ ОПАСНОСТЬ';
+    if (kind === 'player') return data.id === state.myId ? 'ВАША ФЛОТИЛИЯ' : 'ФЛОТИЛИЯ ИГРОКА';
+    return 'ОБЪЕКТ КАРТЫ';
+  }
+
+
+  function resetIslandSheetChrome() {
+    state.islandSheetView = null;
+    const sheet = $('objectSheet');
+    sheet?.classList.remove('island-card-sheet');
+    $('objectSheetHero')?.classList.add('hidden');
+    const heroImage = $('objectSheetHeroImage');
+    if (heroImage) {
+      heroImage.style.backgroundPosition = '';
+      heroImage.style.backgroundSize = '';
+    }
+    $('objectSheetBack')?.classList.add('hidden');
+  }
+
+  function islandSheetCategory(island) {
+    if (island.ownerId === state.myId) return 'ВАШ ОСТРОВ';
+    if (island.ownerId) return 'ОСТРОВ ИГРОКА';
+    if (island.kind === 'state') return 'ГОСУДАРСТВЕННЫЙ ОСТРОВ';
+    if (island.kind === 'independent') return 'НЕЗАВИСИМЫЙ ОСТРОВ';
+    if (island.kind === 'free') return 'СВОБОДНЫЙ ОСТРОВ';
+    return 'ОСТРОВ';
+  }
+
+  function showIslandSheetHero(island) {
+    const hero = $('objectSheetHero');
+    const image = $('objectSheetHeroImage');
+    if (!hero || !image || !island) return;
+    const { rows, cols } = mapSize();
+    const center = centroid(island.cells || []);
+    const x = cols > 1 ? Math.max(0, Math.min(100, (Number(center.col) / (cols - 1)) * 100)) : 50;
+    const y = rows > 1 ? Math.max(0, Math.min(100, (Number(center.row) / (rows - 1)) * 100)) : 50;
+    image.style.backgroundPosition = `${x.toFixed(2)}% ${y.toFixed(2)}%`;
+    image.style.backgroundSize = '560% 560%';
+    hero.classList.remove('hidden');
+  }
+
+  function setIslandSheetHeader(island, kind, { back = false } = {}) {
+    const sheet = $('objectSheet');
+    sheet.classList.add('island-card-sheet', 'expanded');
+    $('objectSheetKind').textContent = kind;
+    $('objectSheetTitle').textContent = island.name;
+    const backButton = $('objectSheetBack');
+    backButton.classList.toggle('hidden', !back);
+    backButton.setAttribute('aria-label', back ? `Назад: ${island.name}` : 'Назад');
+    showIslandSheetHero(island);
+    sheet.classList.remove('hidden');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function islandIsHere(island) {
+    return Boolean(island && currentIslands().some(item => item.id === island.id));
+  }
+
+  function islandBuildingNames(island) {
+    return island.buildings?.length
+      ? island.buildings.map(building => {
+          const support = building.type === 'bastion' ? (building.supported ? ' · поддерживается' : ' · без поддержки') : '';
+          return `${building.name}${support}`;
+        }).join(', ')
+      : 'нет';
+  }
+
+  function ownIslandCompactHtml(island) {
+    const resources = island.resources?.length ? island.resources.join(', ') : 'нет';
+    const buildings = islandBuildingNames(island);
+    const defense = Object.hasOwn(island, 'defenseArmy') ? island.defenseArmy : island.army;
+    const garrison = Object.hasOwn(island, 'garrisonName')
+      ? (island.garrisonName ? `${island.garrisonName} (+${island.garrisonDefense || 0})` : 'нет')
+      : null;
+    return `
+      <div class="island-card-summary">
+        <div class="island-card-row"><span>Статус</span><strong>${escapeHtml(island.status || '—')}</strong></div>
+        <div class="island-card-row"><span>Защита</span><strong>${defense ?? '—'}</strong></div>
+        <div class="island-card-row"><span>Площадь</span><strong>${island.usedArea ?? 0}/${island.effectiveArea ?? island.area ?? 0}</strong></div>
+        <div class="island-card-row"><span>Ресурсы</span><strong>${escapeHtml(resources)}</strong></div>
+        ${garrison !== null ? `<div class="island-card-row"><span>Гарнизон</span><strong>${escapeHtml(garrison)}</strong></div>` : ''}
+        <div class="island-card-row island-card-buildings"><span>Постройки</span><strong>${escapeHtml(buildings)}</strong></div>
+      </div>
+    `;
+  }
+
+  function islandManagementSummaryHtml(island) {
+    const mine = me();
+    return `
+      <div class="island-management-status">
+        <div><span>Казна</span><strong>${mine?.ducats ?? 0} дук.</strong></div>
+        <div><span>Действия</span><strong>${mine?.actionsLeft ?? 0}</strong></div>
+        <div><span>Площадь</span><strong>${island.usedArea ?? 0}/${island.effectiveArea ?? island.area ?? 0}</strong></div>
+      </div>
+    `;
+  }
+
+  function islandAwayNote() {
+    const note = document.createElement('div');
+    note.className = 'island-action-note';
+    note.textContent = 'Для этого действия основной корабль должен находиться на клетке данного острова в допустимый момент хода.';
+    return note;
+  }
+
+  function islandNoActionNote(text) {
+    const note = document.createElement('div');
+    note.className = 'island-action-note';
+    note.textContent = text;
+    return note;
+  }
+
+  function moveCanonicalActionGroup(source, label, target) {
+    const children = Array.from(source?.children || []);
+    const start = children.findIndex(node =>
+      node.classList?.contains('action-group-label') && node.textContent.trim() === label
+    );
+    if (start < 0) return 0;
+    let moved = 0;
+    for (let i = start + 1; i < children.length; i += 1) {
+      const node = children[i];
+      if (node.classList?.contains('action-group-label')) break;
+      target.appendChild(node);
+      moved += 1;
+    }
+    return moved;
+  }
+
+  function appendIslandManagementButton(target, view, title, meta, tone = '') {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `island-management-button${tone ? ` ${tone}` : ''}`;
+    button.dataset.islandView = view;
+    const copy = document.createElement('span');
+    const strong = document.createElement('strong');
+    strong.textContent = title;
+    const small = document.createElement('small');
+    small.textContent = meta;
+    copy.append(strong, small);
+    const arrow = document.createElement('b');
+    arrow.textContent = '›';
+    button.append(copy, arrow);
+    button.addEventListener('click', () => renderOwnIslandActionView(state.islandSheetView?.islandId, view));
+    target.appendChild(button);
+  }
+
+  function renderOwnIslandObjectSheet(island) {
+    if (!island) return;
+    state.mapSelection = { kind: 'island', id: island.id, anchor: state.mapSelection?.anchor || null };
+    state.islandSheetView = { islandId: island.id, view: 'overview' };
+    setIslandSheetHeader(island, 'ВАШ ОСТРОВ');
+
+    $('objectSheetBody').innerHTML = ownIslandCompactHtml(island);
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+
+    const manage = document.createElement('button');
+    manage.type = 'button';
+    manage.className = 'primary island-manage-primary';
+    manage.textContent = 'Управлять островом';
+    manage.addEventListener('click', () => renderOwnIslandManagement(island.id));
+    actions.appendChild(manage);
+
+    if (!islandIsHere(island)) {
+      const note = document.createElement('div');
+      note.className = 'island-action-note compact';
+      note.textContent = 'Остров можно просматривать из любой точки карты. Действия станут доступны у его береговой клетки.';
+      actions.appendChild(note);
+    }
+  }
+
+  function renderOwnIslandManagement(islandId) {
+    const island = state.room?.islands?.find(item => item.id === islandId && item.ownerId === state.myId);
+    const mine = me();
+    if (!island || !mine) return;
+    state.mapSelection = { kind: 'island', id: island.id, anchor: state.mapSelection?.anchor || null };
+    state.islandSheetView = { islandId: island.id, view: 'manage' };
+    state.selectedIslandId = island.id;
+    setIslandSheetHeader(island, 'УПРАВЛЕНИЕ ОСТРОВОМ', { back: true });
+
+    const body = $('objectSheetBody');
+    body.innerHTML = islandManagementSummaryHtml(island);
+    const menu = document.createElement('div');
+    menu.className = 'island-management-menu';
+
+    appendIslandManagementButton(menu, 'build', 'Построить', 'Новые здания и промыслы');
+
+    const upgradeable = (island.buildings || []).filter(building => building.nextUpgrade);
+    appendIslandManagementButton(
+      menu, 'upgrade', 'Улучшить постройки',
+      upgradeable.length ? `Доступно улучшений: ${upgradeable.length}` : 'Сейчас улучшать нечего'
+    );
+
+    if ((island.availableGoods || []).length) {
+      const cargoMeta = island.loadedRound === state.room.round
+        ? 'Погрузка в этом раунде уже выполнена'
+        : `Товары: ${island.availableGoods.map(id => state.room.goodsCatalog?.[id]?.name || id).join(', ')}`;
+      appendIslandManagementButton(menu, 'cargo', 'Погрузить флотилию', cargoMeta);
+    }
+
+    const hasArsenal = (island.buildings || []).some(building => building.type === 'arsenal');
+    const hasFortressThree = (island.buildings || []).some(building => building.type === 'fortress' && Number(building.level) === 3);
+    const hasBastion = (island.buildings || []).some(building => building.type === 'bastion');
+    if (hasArsenal || hasFortressThree || hasBastion) {
+      const military = [];
+      if (hasArsenal) military.push('Арсенал');
+      if (hasFortressThree) military.push('Крепость III');
+      if (hasBastion) military.push('Бастион');
+      appendIslandManagementButton(menu, 'military', 'Военная инфраструктура', military.join(' · '), 'military');
+    }
+
+    if ((island.buildings || []).some(building => building.type === 'palace')) {
+      appendIslandManagementButton(menu, 'palace', 'Дворец', mine.palaceUsed ? 'Уже использован в этой партии' : 'Политическое действие');
+    }
+
+    if ((island.buildings || []).some(building => building.type === 'cartography')) {
+      const expeditionMeta = mine.activeExpedition
+        ? `Активна: ${mine.activeExpedition.name || 'экспедиция'}`
+        : mine.expeditionTakenThisRound ? 'Новая экспедиция уже получена в этом раунде' : 'Получение экспедиции';
+      appendIslandManagementButton(menu, 'expedition', 'Экспедиция', expeditionMeta);
+    }
+
+    const admiralty = (island.buildings || []).filter(building => building.type === 'admiralty').sort((a, b) => Number(b.level) - Number(a.level))[0];
+    if (admiralty) {
+      appendIslandManagementButton(menu, 'admiralty', 'Адмиралтейство', `Уровень ${ROMAN[admiralty.level] || admiralty.level} · персонажи`);
+    }
+
+    body.appendChild(menu);
+    $('objectSheetActions').innerHTML = '';
+  }
+
+  function expandOwnIslandManagement(islandId) {
+    renderOwnIslandManagement(islandId);
+  }
+
+  function renderOwnIslandActionView(islandId, view) {
+    const island = state.room?.islands?.find(item => item.id === islandId && item.ownerId === state.myId);
+    const mine = me();
+    if (!island || !mine) return;
+
+    const definitions = {
+      build: ['ПОСТРОИТЬ', 'Выберите постройку.'],
+      upgrade: ['УЛУЧШИТЬ ПОСТРОЙКИ', 'Здесь показаны только существующие здания, у которых есть следующая ступень.'],
+      cargo: ['ПОГРУЗИТЬ ФЛОТИЛИЮ', 'Выберите производимый товар. Одно действие заполнит им все свободные доступные трюмы флотилии.'],
+      military: ['ВОЕННАЯ ИНФРАСТРУКТУРА', 'Арсенал, рота ландскнехтов и превращение Крепости III в Бастион.'],
+      palace: ['ДВОРЕЦ', 'Дворец позволяет один раз за партию прекратить действующую вражду с государством.'],
+      expedition: ['ЭКСПЕДИЦИЯ', 'Картографическая палата даёт доступ к получению случайной экспедиции.'],
+      admiralty: ['АДМИРАЛТЕЙСТВО', 'Персонажи доступны в соответствии с уровнем Адмиралтейства и текущим состоянием партии.'],
+    };
+    const definition = definitions[view];
+    if (!definition) return renderOwnIslandManagement(island.id);
+
+    state.mapSelection = { kind: 'island', id: island.id, anchor: state.mapSelection?.anchor || null };
+    state.islandSheetView = { islandId: island.id, view };
+    state.selectedIslandId = island.id;
+    setIslandSheetHeader(island, definition[0], { back: true });
+
+    const body = $('objectSheetBody');
+    body.innerHTML = `
+      <div class="island-action-hint">${escapeHtml(definition[1])}</div>
+      <div id="islandPrimaryActions" class="island-primary-actions"></div>
+      <div class="island-action-context">
+        <span>Казна <strong>${mine?.ducats ?? 0}</strong></span>
+        <span>Действия <strong>${mine?.actionsLeft ?? 0}</strong></span>
+        <span>Площадь <strong>${island.usedArea ?? 0}/${island.effectiveArea ?? island.area ?? 0}</strong></span>
+      </div>
+    `;
+
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    const primaryActions = $('islandPrimaryActions');
+
+    const here = islandIsHere(island);
+    if (!here) {
+      primaryActions.appendChild(islandAwayNote());
+      return;
+    }
+
+    let moved = 0;
+    if (view === 'build' || view === 'upgrade' || view === 'cargo' || view === 'military' || view === 'palace') {
+      renderIsland();
+      const labels = {
+        build: 'Можно построить',
+        upgrade: 'Построено',
+        cargo: 'Погрузка',
+        military: 'Военная инфраструктура',
+        palace: 'Дворец',
+      };
+      moved += moveCanonicalActionGroup($('islandActions'), labels[view], primaryActions);
+    }
+
+    if (view === 'military' && mine.landCompany) {
+      renderFleet();
+      moved += moveCanonicalActionGroup($('fleetActions'), 'Рота ландскнехтов', primaryActions);
+    }
+
+    if (view === 'expedition') {
+      const status = document.createElement('div');
+      status.className = 'island-action-state';
+      if (mine.activeExpedition) {
+        status.textContent = `Активная экспедиция: ${mine.activeExpedition.name || mine.activeExpedition.placeId || 'цель назначена'}. Сначала завершите её.`;
+      } else if (mine.expeditionTakenThisRound) {
+        status.textContent = 'В этом общем раунде новая экспедиция уже получалась.';
+      } else if (mine.canTakeExpedition) {
+        status.textContent = 'Условия выполнены: можно получить новую экспедицию.';
+      } else {
+        status.textContent = 'Сейчас новая экспедиция недоступна по действующим условиям.';
+      }
+      primaryActions.appendChild(status);
+      renderLegendaryPlaces();
+      const source = $('legendaryPlacesActions');
+      for (const node of Array.from(source?.children || [])) {
+        primaryActions.appendChild(node);
+        moved += 1;
+      }
+    }
+
+    if (view === 'admiralty') {
+      renderFleet();
+      moved += moveCanonicalActionGroup($('fleetActions'), 'Персонаж Адмиралтейства', primaryActions);
+    }
+
+    if (!moved) {
+      const messages = {
+        upgrade: 'На этом острове сейчас нет построек, которые можно улучшить.',
+        cargo: island.loadedRound === state.room.round ? 'Погрузка с этого острова в текущем раунде уже выполнена.' : 'Сейчас нет доступного варианта погрузки.',
+        military: 'Сейчас военная инфраструктура не даёт отдельного доступного действия.',
+        palace: mine.palaceUsed ? 'Дворец уже использован в этой партии.' : 'Сейчас нет действующей вражды, которую можно прекратить Дворцом.',
+        expedition: 'Отдельного действия по экспедиции сейчас нет.',
+        admiralty: 'Сейчас через это Адмиралтейство нет доступного действия с персонажем.',
+        build: 'Сейчас строительство на этом острове недоступно.',
+      };
+      primaryActions.appendChild(islandNoActionNote(messages[view] || 'Сейчас здесь нет доступного действия.'));
+    }
+  }
+
+  function handleObjectSheetBack() {
+    const nav = state.islandSheetView;
+    if (!nav?.islandId) return;
+    const island = state.room?.islands?.find(item => item.id === nav.islandId);
+    if (!island) return closeMapInfo();
+    if (nav.view === 'manage') return renderOwnIslandObjectSheet(island);
+    if (nav.view && nav.view !== 'overview') return renderOwnIslandManagement(island.id);
+  }
+
+  function refreshOpenIslandSheet() {
+    const nav = state.islandSheetView;
+    if (!nav?.islandId || state.mapSelection?.kind !== 'island' || !isMobileGameplayUi()) return;
+    const island = state.room?.islands?.find(item => item.id === nav.islandId);
+    if (!island) return closeMapInfo();
+
+    if (island.ownerId === state.myId) {
+      if (nav.view === 'overview') renderOwnIslandObjectSheet(island);
+      else if (nav.view === 'manage') renderOwnIslandManagement(island.id);
+      else renderOwnIslandActionView(island.id, nav.view);
+      return;
+    }
+    renderForeignIslandObjectSheet(island);
+  }
+
+  function foreignIslandHasPrivateReveal(island) {
+    if (!island || island.ownerId === state.myId) return false;
+    return Object.hasOwn(island, 'garrisonName')
+      || Object.hasOwn(island, 'garrisonDefense')
+      || Object.hasOwn(island, 'defenseArmy')
+      || Object.hasOwn(island, 'defenseBreakdown');
+  }
+
+  function foreignIslandCompactHtml(island) {
+    const faction = !island.ownerId ? factionForIsland(island) : null;
+    const owner = island.ownerId
+      ? playerName(island.ownerId)
+      : faction?.name || (island.kind === 'free' ? 'Свободный остров' : island.kind === 'independent' ? 'Независимый остров' : 'Нет владельца');
+    const resources = island.resources?.length ? island.resources.join(', ') : 'нет';
+    const buildings = islandBuildingNames(island);
+    const revealed = foreignIslandHasPrivateReveal(island);
+
+    let garrison = '<div class="island-card-row"><span>Гарнизон</span><strong>неизвестно</strong></div>';
+    if (revealed) {
+      const name = island.garrisonName
+        ? `${island.garrisonName} (+${island.garrisonDefense || 0})`
+        : 'нет отдельного гарнизона';
+      garrison = `
+        <div class="foreign-island-scout-badge">РАЗВЕДАНО · до конца вашего хода</div>
+        <div class="island-card-row"><span>Гарнизон</span><strong>${escapeHtml(name)}</strong></div>
+        ${Object.hasOwn(island, 'defenseArmy') ? `<div class="island-card-row"><span>Точная защита</span><strong>${island.defenseArmy}</strong></div>` : ''}
+      `;
+    }
+
+    return `
+      <div class="island-card-summary">
+        <div class="island-card-row"><span>Владелец</span><strong>${escapeHtml(owner)}</strong></div>
+        <div class="island-card-row"><span>Статус</span><strong>${escapeHtml(island.status || '—')}</strong></div>
+        <div class="island-card-row"><span>Базовая защита</span><strong>${island.army ?? '—'}</strong></div>
+        <div class="island-card-row"><span>Площадь</span><strong>${island.usedArea ?? 0}/${island.effectiveArea ?? island.area ?? 0}</strong></div>
+        <div class="island-card-row"><span>Ресурсы</span><strong>${escapeHtml(resources)}</strong></div>
+        ${garrison}
+        <div class="island-card-row island-card-buildings"><span>Постройки</span><strong>${escapeHtml(buildings)}</strong></div>
+      </div>
+    `;
+  }
+
+  function renderForeignIslandObjectSheet(island) {
+    if (!island) return;
+    state.mapSelection = { kind: 'island', id: island.id, anchor: state.mapSelection?.anchor || null };
+    state.islandSheetView = { islandId: island.id, view: 'overview' };
+    setIslandSheetHeader(island, islandSheetCategory(island));
+    $('objectSheetBody').innerHTML = foreignIslandCompactHtml(island);
+
+    const politicalFaction = !island.ownerId ? factionForIsland(island) : null;
+
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+
+    if (politicalFaction) {
+      const diplomacy = document.createElement('button');
+      diplomacy.type = 'button';
+      diplomacy.className = 'primary';
+      diplomacy.textContent = `Государство: ${politicalFaction.name}`;
+      diplomacy.addEventListener('click', () => {
+        resetIslandSheetChrome();
+        renderDiplomacyObjectSheet(politicalFaction.id);
+      });
+      actions.appendChild(diplomacy);
+    }
+
+    const here = islandIsHere(island);
+    const mine = me();
+    const myTurn = state.room?.activePlayerId === state.myId;
+    const canContextAct = Boolean(here && mine && myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 && !isDecisionPending());
+    const attackable = island.ownerId !== state.myId
+      && !(island.kind === 'free' && !island.ownerId)
+      && (!island.ownerId || !areAlliesClient(state.myId, island.ownerId));
+
+    if (canContextAct && attackable) {
+      state.selectedIslandId = island.id;
+      const action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'danger-soft';
+      action.textContent = 'Штурм острова';
+      action.addEventListener('click', () => {
+        resetIslandSheetChrome();
+        renderAssaultFlowSheet(island.id);
+      });
+      actions.appendChild(action);
+    }
+
+    if (island.kind === 'free' && !island.ownerId) {
+      actions.appendChild(islandNoActionNote('Свободный остров переходит под контроль автоматически при допустимом прибытии корабля.'));
+    } else if (island.ownerId && areAlliesClient(state.myId, island.ownerId)) {
+      actions.appendChild(islandNoActionNote('Остров принадлежит вашему союзнику. Штурм союзного владения недоступен.'));
+    }
+  }
+
+  function citadelSheetHtml(mine) {
+    if (!mine) {
+      return `
+        <div class="citadel-overview">
+          <strong>Цитадель</strong>
+          <span>Нейтральный торговый хаб. Владеть им нельзя, бои внутри запрещены.</span>
+        </div>
+      `;
+    }
+    const cargo = cargoSummary(mine, state.room);
+    const upgrades = mine.upgrades?.length || 0;
+    const escorts = mine.escorts?.length || 0;
+    return `
+      <div class="citadel-overview">
+        <span class="citadel-kicker">НЕЙТРАЛЬНЫЙ ТОРГОВЫЙ ХАБ</span>
+        <strong>${mine.atCitadel ? 'Флотилия находится в Цитадели' : 'Цитадель'}</strong>
+        <small>Здесь продаётся груз, улучшается основной корабль, покупается сопровождение и оборона владений.</small>
+      </div>
+      <div class="citadel-summary-grid">
+        <div><span>Дукаты</span><strong>${mine.ducats ?? 0}</strong></div>
+        <div><span>Корабль</span><strong>${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level}</strong></div>
+        <div><span>Трюм</span><strong>${cargo.quantity}/${cargo.capacity}</strong></div>
+        <div><span>Улучшения</span><strong>${upgrades}/${mine.upgradeSlots ?? 0}</strong></div>
+        <div><span>Сопровождение</span><strong>${escorts}/${mine.escortUseLimit ?? state.room?.balanceCatalog?.maxEscorts ?? 0}</strong></div>
+        <div><span>Действия</span><strong>${mine.actionsLeft ?? 0}</strong></div>
+      </div>
+    `;
+  }
+
+  function moveCanonicalCitadelFleetActions(target) {
+    const source = $('fleetActions');
+    if (!source || !target) return;
+    const children = Array.from(source.children);
+    const start = children.findIndex(node => node.classList?.contains('action-group-label') && node.textContent === 'Уровень основного корабля');
+    if (start < 0) return;
+    for (let i = start; i < children.length; i += 1) target.appendChild(children[i]);
+  }
+
+  function appendCanonicalCitadelTradeActions(target) {
+    if (!target) return;
+    const label = document.createElement('div');
+    label.className = 'action-group-label';
+    label.textContent = 'Торговля';
+    target.appendChild(label);
+
+    const legacySell = $('sellCargoBtn');
+    if (legacySell && !legacySell.classList.contains('hidden')) {
+      const mainSell = document.createElement('button');
+      mainSell.type = 'button';
+      mainSell.className = 'build-btn primary';
+      mainSell.textContent = legacySell.textContent;
+      mainSell.disabled = legacySell.disabled;
+      mainSell.addEventListener('click', () => legacySell.click());
+      target.appendChild(mainSell);
+    }
+
+  }
+
+  function renderCitadelObjectSheet(data = {}) {
+    const mine = me();
+    const sheet = $('objectSheet');
+    state.mapSelection = { kind: 'citadel', id: data.id || data.name || 'citadel', anchor: state.mapSelection?.anchor || null };
+    $('objectSheetKind').textContent = 'ЦИТАДЕЛЬ';
+    $('objectSheetTitle').textContent = data.name || 'Цитадель';
+    $('objectSheetBody').innerHTML = citadelSheetHtml(mine);
+
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+
+    if (!mine || state.spectating) {
+      const note = document.createElement('div');
+      note.className = 'citadel-sheet-note';
+      note.textContent = 'Торговые действия доступны только участнику партии.';
+      actions.appendChild(note);
+    } else if (!mine.atCitadel) {
+      const note = document.createElement('div');
+      note.className = 'citadel-sheet-note';
+      note.textContent = 'Приплывите в Цитадель, чтобы продавать груз и пользоваться её магазином.';
+      actions.appendChild(note);
+    } else {
+      // Existing renderers remain authoritative for legality, prices and socket payloads.
+      renderFleet();
+      moveCanonicalCitadelFleetActions(actions);
+      renderTrade();
+      appendCanonicalCitadelTradeActions(actions);
+
+      if (!actions.querySelector('button')) {
+        const note = document.createElement('div');
+        note.className = 'citadel-sheet-note';
+        note.textContent = 'Сейчас в Цитадели нет доступных действий.';
+        actions.appendChild(note);
+      }
+    }
+
+    sheet.classList.remove('hidden');
+    sheet.classList.add('expanded');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function refreshOpenCitadelSheet() {
+    if (state.mapSelection?.kind !== 'citadel' || !isMobileGameplayUi()) return;
+    const citadel = state.room?.map?.citadel || { name: 'Цитадель' };
+    renderCitadelObjectSheet(citadel);
+  }
+
+  function anchorColorLabel(color) {
+    return color === 'blue' ? 'Синий якорь'
+      : color === 'yellow' ? 'Жёлтый якорь'
+      : color === 'red' ? 'Красный якорь'
+      : 'Морской якорь';
+  }
+
+  function anchorEncounterForCell(mine, anchor) {
+    const encounter = mine?.lastAnchorEncounter;
+    if (!encounter || !anchor) return null;
+    return Number(encounter.round) === Number(state.room?.round)
+      && Number(encounter.row) === Number(anchor.row)
+      && Number(encounter.col) === Number(anchor.col)
+      ? encounter
+      : null;
+  }
+
+  function anchorEncounterSheetHtml(anchor, mine) {
+    const atAnchor = Boolean(mine
+      && Number(mine.row) === Number(anchor.row)
+      && Number(mine.col) === Number(anchor.col));
+    const visited = Boolean(mine && (mine.visitedAnchors || []).includes(`${anchor.row},${anchor.col}`));
+    const encounter = anchorEncounterForCell(mine, anchor);
+    const ownArtillery = mine?.fleetArtillery ?? '—';
+    const location = atAnchor ? 'Вы находитесь на этом якоре.' : 'Чтобы вступить в столкновение, остановитесь на этой клетке.';
+    const availability = visited
+      ? 'Этот якорь уже разыгран вами в текущем раунде.'
+      : 'Столкновение добровольное и объявляется в фазе действий. Союзник не участвует.';
+
+    let last = '';
+    if (encounter) {
+      const outcome = encounter.outcome === 'win' ? 'Победа'
+        : encounter.outcome === 'loss' ? 'Поражение'
+        : encounter.outcome === 'tie' ? 'Ничья'
+        : 'На море тихо';
+      const card = encounter.cardName ? `«${escapeHtml(encounter.cardName)}»` : '—';
+      last = `
+        <section class="anchor-last-encounter">
+          <span>ПОСЛЕДНЕЕ СТОЛКНОВЕНИЕ</span>
+          <strong>${escapeHtml(outcome)}</strong>
+          <small>${card} · артиллерия противника ${encounter.cardArtillery ?? '—'} · ваша сила ${encounter.fleetPower ?? ownArtillery}</small>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="anchor-encounter-hero anchor-${escapeAttr(anchor.color || 'unknown')}">
+        <span>${escapeHtml(anchorColorLabel(anchor.color))}</span>
+        <strong>${escapeHtml(anchor.name || 'Морской якорь')}</strong>
+        <small>Карта встречи остаётся скрытой до объявления столкновения.</small>
+      </section>
+      <section class="anchor-encounter-stats">
+        <div><span>Ваша артиллерия</span><strong>${ownArtillery}</strong></div>
+        <div><span>За победу</span><strong>+${anchor.fleetPoints || 0} очк. флота</strong></div>
+      </section>
+      <div class="anchor-encounter-location">${escapeHtml(location)}</div>
+      <div class="anchor-encounter-rule">${escapeHtml(availability)}</div>
+      ${last}
+    `;
+  }
+
+  function moveCanonicalAnchorActions(target) {
+    const source = $('anchorActions');
+    if (!source || !target) return;
+    while (source.firstChild) target.appendChild(source.firstChild);
+  }
+
+  function renderAnchorEncounterSheet(anchor) {
+    const mine = me();
+    const sheet = $('objectSheet');
+    state.mapSelection = {
+      kind: 'anchor',
+      id: anchor.id || anchor.name || `${anchor.row},${anchor.col}`,
+      anchor: { row: Number(anchor.row), col: Number(anchor.col) },
+    };
+    $('objectSheetKind').textContent = 'МОРСКОЕ СТОЛКНОВЕНИЕ';
+    $('objectSheetTitle').textContent = anchor.name || 'Морской якорь';
+    $('objectSheetBody').innerHTML = anchorEncounterSheetHtml(anchor, mine);
+
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    if (!mine || state.spectating) {
+      const note = document.createElement('div');
+      note.className = 'anchor-encounter-note';
+      note.textContent = 'Наблюдатель может осмотреть якорь, но не объявлять столкновение.';
+      actions.appendChild(note);
+    } else {
+      const atAnchor = Number(mine.row) === Number(anchor.row) && Number(mine.col) === Number(anchor.col);
+      if (atAnchor) {
+        // The legacy renderer remains authoritative for visited state, phase,
+        // actionsLeft, pending decisions and the fightAnchor socket command.
+        renderAnchors();
+        moveCanonicalAnchorActions(actions);
+      }
+      if (!actions.children.length) {
+        const note = document.createElement('div');
+        note.className = 'anchor-encounter-note';
+        note.textContent = atAnchor
+          ? 'Сейчас столкновение на этом якоре недоступно.'
+          : 'Сначала завершите навигацию на клетке этого якоря.';
+        actions.appendChild(note);
+      }
+    }
+
+    sheet.classList.remove('hidden');
+    sheet.classList.remove('expanded');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function refreshOpenAnchorSheet() {
+    if (state.mapSelection?.kind !== 'anchor' || !isMobileGameplayUi()) return;
+    const selection = state.mapSelection;
+    const anchor = (state.room?.anchorCells || []).find(item =>
+      (selection.id && (item.id === selection.id || item.name === selection.id))
+      || (selection.anchor && Number(item.row) === Number(selection.anchor.row) && Number(item.col) === Number(selection.anchor.col))
+    );
+    if (anchor) renderAnchorEncounterSheet(anchor);
+    else closeMapInfo();
+  }
+
+  function renderObjectSheetFromMapInfo(kind, data) {
+    const sheet = $('objectSheet');
+    if (kind !== 'island') resetIslandSheetChrome();
+    if (!sheet) return;
+    if (kind === 'island' && data.ownerId === state.myId) {
+      renderOwnIslandObjectSheet(data);
+      return;
+    }
+    if (kind === 'island') {
+      renderForeignIslandObjectSheet(data);
+      return;
+    }
+    if (kind === 'player') {
+      renderPlayerObjectSheet(data);
+      return;
+    }
+    if (kind === 'citadel') {
+      renderCitadelObjectSheet(data);
+      return;
+    }
+    if (kind === 'anchor') {
+      renderAnchorEncounterSheet(data);
+      return;
+    }
+
+    $('objectSheetKind').textContent = mapObjectKindLabel(kind, data);
+    $('objectSheetTitle').textContent = $('mapInfoTitle').textContent || data.name || 'Объект';
+    $('objectSheetBody').innerHTML = $('mapInfoMeta').innerHTML;
+
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    const legacyAction = $('mapInfoAction');
+    if (!legacyAction.classList.contains('hidden')) {
+      const action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'primary';
+      action.textContent = legacyAction.textContent;
+      action.addEventListener('click', () => legacyAction.onclick?.());
+      actions.appendChild(action);
+    }
+
+    sheet.classList.remove('hidden');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function playerRelationLabel(player) {
+    if (!player || player.id === state.myId) return 'Вы';
+    const mine = me();
+    if ((mine?.allyIds || []).includes(player.id)) return 'Союзник · действующий союз';
+    if ((mine?.brokenAlliesThisTurn || []).includes(player.id)) return 'Бывший союзник';
+    if (player.suzerainId) {
+      const faction = state.room?.factions?.find(item => item.id === player.suzerainId);
+      if (faction) return `Вассал · ${faction.name}`;
+    }
+    return 'Другой игрок';
+  }
+
+  function playerPublicSheetHtml(player) {
+    const rows = [];
+    rows.push(`<div class="player-sheet-stat"><span>Корабль</span><strong>${escapeHtml(shipName(player.shipClass))} ${ROMAN[player.level] || player.level}</strong></div>`);
+    if (player.fleetArtillery != null) rows.push(`<div class="player-sheet-stat"><span>Артиллерия</span><strong>${player.fleetArtillery}</strong></div>`);
+    if (player.assaultArmy != null) rows.push(`<div class="player-sheet-stat"><span>Войско</span><strong>${player.assaultArmy}</strong></div>`);
+    if (player.islandCount != null) rows.push(`<div class="player-sheet-stat"><span>Острова</span><strong>${player.islandCount}</strong></div>`);
+    rows.push(`<div class="player-sheet-stat"><span>Связь</span><strong>${player.connected ? 'в сети' : 'отключён'}</strong></div>`);
+
+    const scoutedMoney = player.id !== state.myId && Object.hasOwn(player, 'ducats');
+    const money = scoutedMoney
+      ? `<div class="player-scout-money"><span>РАЗВЕДАНО · до конца вашего хода</span><strong>Казна: ${player.ducats} дукатов</strong></div>`
+      : '';
+
+    const veil = Number(player.legendaryStatus?.shipVeilTurns) > 0
+      ? `<div class="player-sheet-status">Покров моря: ${player.legendaryStatus.shipVeilTurns} ход.</div>`
+      : '';
+    const skip = Number(player.skipTurns) > 0
+      ? `<div class="player-sheet-status">Пропуск ходов: ${player.skipTurns}</div>`
+      : '';
+
+    return `
+      <div class="player-sheet-relation">${escapeHtml(playerRelationLabel(player))}</div>
+      <div class="player-sheet-grid">${rows.join('')}</div>
+      ${money}
+      ${veil}
+      ${skip}
+    `;
+  }
+
+  function assaultDefenseLabel(island) {
+    if (!island) return '—';
+    if (Object.hasOwn(island, 'defenseArmy')) return String(island.defenseArmy);
+    return `не менее ${island.army ?? 0}`;
+  }
+
+  function assaultPreviewHtml(island) {
+    const mine = me();
+    if (!mine || !island) return '';
+    const owner = island.ownerId
+      ? playerName(island.ownerId)
+      : (island.kind === 'independent' ? 'Независимый гарнизон' : island.faction || 'Государство');
+    const attackAllies = (state.room?.players || []).filter(player =>
+      player.id !== state.myId && player.id !== island.ownerId
+      && areAlliesClient(state.myId, player.id)
+      && (!island.ownerId || !areAlliesClient(island.ownerId, player.id))
+      && playerOnIslandClient(player, island)
+    );
+    const defenseAllies = island.ownerId ? (state.room?.players || []).filter(player =>
+      player.id !== state.myId && player.id !== island.ownerId
+      && areAlliesClient(island.ownerId, player.id)
+      && !areAlliesClient(state.myId, player.id)
+      && playerOnIslandClient(player, island)
+    ) : [];
+    const warnings = [];
+    const pvpIsland = Boolean(island.ownerId);
+    if (state.room?.round === 1 && pvpIsland) warnings.push('В первом раунде нельзя штурмовать остров другого игрока.');
+    if (mine.inPeaceZone) warnings.push('Цитадель — зона мира.');
+    if (island.ownerId && (mine.attackedPlayerIdsThisRound || []).includes(island.ownerId)) warnings.push('Лимит нападения на владельца в этом раунде уже использован.');
+    if (island.ownerId && (mine.brokenAlliesThisTurn || []).includes(island.ownerId)) warnings.push('После разрыва союза владение бывшего союзника нельзя атаковать в текущем ходу.');
+    if (island.legendaryVeil?.remaining) warnings.push(`Покров моря защищает остров ещё ${island.legendaryVeil.remaining} ход.`);
+
+    return `
+      <section class="assault-preview">
+        <span>ШТУРМ ОСТРОВА</span>
+        <strong>${escapeHtml(island.name)}</strong>
+        <small>Владелец: ${escapeHtml(owner)}. Сервер окончательно проверит штурм и все обязательные реакции.</small>
+      </section>
+      <section class="assault-sides">
+        <div>
+          <span>Ваше войско</span>
+          <strong>${mine.assaultArmy ?? mine.stats?.army ?? '—'}</strong>
+          <small>${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level}</small>
+        </div>
+        <div>
+          <span>Защита острова</span>
+          <strong>${escapeHtml(assaultDefenseLabel(island))}</strong>
+          <small>${Object.hasOwn(island, 'defenseArmy') ? 'точное значение доступно вам' : 'скрытый гарнизон не раскрывается'}</small>
+        </div>
+      </section>
+      <section class="assault-allies">
+        <div><span>Союзники атаки в позиции</span><strong>${attackAllies.length}</strong></div>
+        <div><span>Союзники защиты в позиции</span><strong>${defenseAllies.length}</strong></div>
+      </section>
+      ${warnings.length ? `<section class="assault-warnings">${warnings.map(w => `<div>${escapeHtml(w)}</div>`).join('')}</section>` : ''}
+    `;
+  }
+
+  function renderAssaultFlowSheet(islandId) {
+    const island = state.room?.islands?.find(item => item.id === islandId);
+    const mine = me();
+    if (!island || !mine || state.spectating || isDecisionPending()) return;
+    if (!currentIslands().some(item => item.id === island.id)) return;
+
+    closeMapInfo();
+    state.mapSelection = { kind: 'assault', id: island.id };
+    state.selectedIslandId = island.id;
+    $('objectSheetKind').textContent = 'БОЕВОЙ FLOW';
+    $('objectSheetTitle').textContent = `Штурм: ${island.name}`;
+    $('objectSheetBody').innerHTML = assaultPreviewHtml(island);
+
+    renderCombat();
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    const canonical = Array.from($('combatActions')?.children || []).find(node =>
+      node.classList?.contains('combat-target')
+      && node.dataset.combatKind === 'assault'
+      && node.dataset.islandId === island.id
+    );
+    if (canonical) actions.appendChild(canonical);
+
+    if (!canonical) {
+      const note = document.createElement('div');
+      note.className = 'assault-note';
+      note.textContent = 'Сейчас этот остров недоступен для штурма.';
+      actions.appendChild(note);
+    }
+
+    $('objectSheet').classList.remove('hidden');
+    $('objectSheet').classList.add('expanded');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function refreshOpenAssaultFlow() {
+    if (state.mapSelection?.kind !== 'assault' || !isMobileGameplayUi()) return;
+    const islandId = state.mapSelection.id;
+    const island = state.room?.islands?.find(item => item.id === islandId);
+    if (!island || state.room?.pendingBattle || state.room?.pendingLegendaryReaction) {
+      closeMapInfo();
+      return;
+    }
+    renderAssaultFlowSheet(islandId);
+  }
+
+  function jointAssaultResultCard(data) {
+    const result = data?.result;
+    if (!result || data?.kind !== 'assault') return null;
+    const island = state.room?.islands?.find(item => item.id === data.islandId);
+    const islandName = island?.name || data.islandName || 'Остров';
+    const onAttack = (result.attackerParticipantIds || []).includes(state.myId);
+    const onDefense = (result.defenderParticipantIds || []).includes(state.myId) || data.targetPlayerId === state.myId;
+    const outcome = result.outcome;
+    const title = outcome === 'attacker' ? 'Остров захвачен'
+      : outcome === 'defender' ? 'Штурм отражён'
+      : 'Штурм завершён вничью';
+    const details = [
+      { label: 'Сила атаки', value: result.attackerPower ?? '—' },
+      { label: 'Защита острова', value: result.defense?.total ?? '—' },
+    ];
+    const myAward = (result.armyPointAwards || []).find(item => String(item.playerId) === String(state.myId));
+    if (myAward?.points) details.push({ label: 'Ваши очки армии', value: `+${myAward.points}` });
+    if (result.captureRetention) details.push({ label: 'Инфраструктура', value: `сохранится ${result.captureRetention.keepCount}/${result.captureRetention.initialCount}` });
+    if ((result.rewardNotes || []).length && onAttack) details.push({ label: 'Награда атаки', value: result.rewardNotes.join(', ') });
+
+    let body = 'Контроль не меняется.';
+    if (outcome === 'attacker') body = `${islandName} захвачен атакующей стороной.`;
+    if (outcome === 'defender') body = `Защита ${islandName} устояла.`;
+    const viewerWon = (outcome === 'attacker' && onAttack) || (outcome === 'defender' && onDefense);
+    return {
+      kicker: 'ШТУРМ',
+      title,
+      body,
+      details,
+      tone: outcome === 'tie' ? 'neutral' : viewerWon ? 'success' : 'danger',
+    };
+  }
+
+  function seaBattlePreviewHtml(target) {
+    const mine = me();
+    if (!mine || !target) return '';
+    const attackAllies = (state.room?.players || []).filter(player =>
+      player.id !== state.myId && player.id !== target.id
+      && areAlliesClient(state.myId, player.id)
+      && !areAlliesClient(target.id, player.id)
+      && seaAttackPositionClient(player, target)
+      && !(player.attackedPlayerIdsThisRound || []).includes(target.id)
+    );
+    const defenseAllies = (state.room?.players || []).filter(player =>
+      player.id !== state.myId && player.id !== target.id
+      && areAlliesClient(target.id, player.id)
+      && !areAlliesClient(state.myId, player.id)
+      && seaAttackPositionClient(player, target)
+    );
+    const warnings = [];
+    if (state.room?.round === 1) warnings.push('В первом раунде атака на другого игрока запрещена.');
+    if (mine.inPeaceZone || target.inPeaceZone) warnings.push('Цитадель — зона мира.');
+    if ((mine.attackedPlayerIdsThisRound || []).includes(target.id)) warnings.push('Лимит нападения на этого игрока в текущем раунде уже использован.');
+    if ((mine.brokenAlliesThisTurn || []).includes(target.id)) warnings.push('После разрыва союза эту цель нельзя атаковать в текущем ходу.');
+    if (target.legendaryStatus?.shipVeilTurns) warnings.push(`Покров моря: защита ещё ${target.legendaryStatus.shipVeilTurns} ход.`);
+
+    return `
+      <section class="sea-battle-preview">
+        <span>МОРСКОЙ БОЙ</span>
+        <strong>${escapeHtml(mine.name)} → ${escapeHtml(target.name)}</strong>
+        <small>Сервер окончательно проверит допустимость и разрешит бой после всех обязательных реакций.</small>
+      </section>
+      <section class="sea-battle-sides">
+        <div>
+          <span>Ваша флотилия</span>
+          <strong>${mine.fleetArtillery ?? '—'} арт.</strong>
+          <small>${escapeHtml(shipName(mine.shipClass))} ${ROMAN[mine.level] || mine.level}</small>
+        </div>
+        <div>
+          <span>${escapeHtml(target.name)}</span>
+          <strong>${target.fleetArtillery ?? '—'} арт.</strong>
+          <small>${escapeHtml(shipName(target.shipClass))} ${ROMAN[target.level] || target.level}</small>
+        </div>
+      </section>
+      <section class="sea-battle-allies">
+        <div><span>Союзники атаки в позиции</span><strong>${attackAllies.length}</strong></div>
+        <div><span>Союзники защиты в позиции</span><strong>${defenseAllies.length}</strong></div>
+      </section>
+      ${warnings.length ? `<section class="sea-battle-warnings">${warnings.map(w => `<div>${escapeHtml(w)}</div>`).join('')}</section>` : ''}
+    `;
+  }
+
+  function renderSeaBattleFlowSheet(targetId) {
+    const target = state.room?.players?.find(player => player.id === targetId);
+    const mine = me();
+    if (!target || !mine || state.spectating || isDecisionPending()) return;
+
+    closeMapInfo();
+    state.mapSelection = { kind: 'sea-battle', id: target.id };
+    $('objectSheetKind').textContent = 'БОЕВОЙ FLOW';
+    $('objectSheetTitle').textContent = `Атака: ${target.name}`;
+    $('objectSheetBody').innerHTML = seaBattlePreviewHtml(target);
+
+    renderCombat();
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    const canonical = Array.from($('combatActions')?.children || []).find(node =>
+      node.classList?.contains('combat-target')
+      && node.dataset.combatKind === 'sea'
+      && node.dataset.targetPlayerId === target.id
+    );
+    if (canonical) actions.appendChild(canonical);
+
+    if (!canonical) {
+      const note = document.createElement('div');
+      note.className = 'sea-battle-note';
+      note.textContent = 'Сейчас эта цель недоступна для морского боя.';
+      actions.appendChild(note);
+    }
+
+    $('objectSheet').classList.remove('hidden');
+    $('objectSheet').classList.add('expanded');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function refreshOpenSeaBattleFlow() {
+    if (state.mapSelection?.kind !== 'sea-battle' || !isMobileGameplayUi()) return;
+    const targetId = state.mapSelection.id;
+    const target = state.room?.players?.find(player => player.id === targetId);
+    if (!target || state.room?.pendingBattle || state.room?.pendingLegendaryReaction) {
+      closeMapInfo();
+      return;
+    }
+    renderSeaBattleFlowSheet(targetId);
+  }
+
+  function battleFlowStatusHtml(pending) {
+    if (!pending) return '';
+    const attacker = playerName(pending.attackerId);
+    const target = pending.kind === 'sea'
+      ? playerName(pending.targetPlayerId)
+      : (state.room?.islands?.find(island => island.id === pending.islandId)?.name || 'остров');
+    const invites = (pending.invites || []).map(invite => {
+      const status = invite.status === 'pending' ? 'ожидается ответ'
+        : invite.status === 'joined' ? 'участвует'
+        : 'не участвует';
+      const side = invite.side === 'attacker' ? 'атака' : 'защита';
+      return `<div class="battle-flow-invite"><span>${escapeHtml(playerName(invite.playerId))} · ${side}</span><strong>${escapeHtml(status)}</strong></div>`;
+    }).join('');
+    return `
+      <section class="battle-flow-status">
+        <span>${pending.kind === 'sea' ? 'МОРСКОЙ БОЙ' : 'ШТУРМ'}</span>
+        <strong>${escapeHtml(attacker)} → ${escapeHtml(target)}</strong>
+        <small>Бой разрешится сервером после ответов всех приглашённых участников.</small>
+      </section>
+      <section class="battle-flow-invites">${invites || '<div class="battle-flow-invite"><span>Участники</span><strong>ожидание</strong></div>'}</section>
+    `;
+  }
+
+  function appendCanonicalAllianceActions(target, playerId) {
+    if (!target || !playerId) return;
+    renderAlliances();
+    const player = state.room?.players?.find(item => item.id === playerId);
+    if (!player) return;
+    const source = $('allianceActions');
+    for (const node of Array.from(source?.children || [])) {
+      if (node.tagName !== 'BUTTON') continue;
+      if (!node.textContent.includes(player.name)) continue;
+      target.appendChild(node);
+    }
+  }
+
+  function alliancePublicStatusHtml(player) {
+    if (!player || player.id === state.myId) return '';
+    if (areAlliesClient(state.myId, player.id)) {
+      return '<div class="player-alliance-status"><span>СОЮЗ</span><strong>Действующий союз</strong><small>Разрыв доступен только в разрешённый правилами момент.</small></div>';
+    }
+    return '';
+  }
+
+  function renderFleetOverviewObjectSheet() {
+    const mine = me();
+    if (!mine || state.spectating) return;
+    closeMapInfo();
+    state.mapSelection = { kind: 'fleet', id: state.myId };
+    $('objectSheetKind').textContent = 'ВАША ФЛОТИЛИЯ';
+    $('objectSheetTitle').textContent = mine.name;
+    const cargo = cargoSummary(mine, state.room);
+    $('objectSheetBody').innerHTML = playerPublicSheetHtml(mine)
+      + `<div class="player-sheet-stat"><span>Казна</span><strong>${mine.ducats ?? 0} дук.</strong></div>`
+      + `<div class="player-sheet-stat"><span>Груз</span><strong>${cargo.quantity}/${cargo.capacity}</strong></div>`
+      + `<div class="player-sheet-stat"><span>Персонаж</span><strong>${escapeHtml(mine.character?.name || 'нет')}</strong></div>`;
+
+    renderFleet();
+    renderTrade();
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+
+    const character = document.createElement('button');
+    character.type = 'button';
+    character.textContent = 'Персонаж';
+    character.addEventListener('click', renderCharacterObjectSheet);
+    actions.appendChild(character);
+
+    if (mine.atCitadel) {
+      const citadel = document.createElement('button');
+      citadel.type = 'button';
+      citadel.className = 'primary';
+      citadel.textContent = 'Услуги Цитадели';
+      citadel.addEventListener('click', () => renderCitadelObjectSheet(state.room?.map?.citadel || { name: 'Цитадель' }));
+      actions.appendChild(citadel);
+    }
+
+    $('objectSheet').classList.remove('hidden');
+    $('objectSheet').classList.add('expanded');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function renderPlayerObjectSheet(player) {
+    const sheet = $('objectSheet');
+    $('objectSheetKind').textContent = player.id === state.myId ? 'ВАША ФЛОТИЛИЯ' : 'ФЛОТИЛИЯ ИГРОКА';
+    $('objectSheetTitle').textContent = player.name;
+    $('objectSheetBody').innerHTML = playerPublicSheetHtml(player) + alliancePublicStatusHtml(player);
+
+    const actions = $('objectSheetActions');
+    actions.innerHTML = '';
+    const mine = me();
+
+    if (player.id === state.myId) {
+      const fleet = document.createElement('button');
+      fleet.type = 'button';
+      fleet.className = 'primary';
+      fleet.textContent = 'Корабль и флотилия';
+      fleet.addEventListener('click', renderFleetOverviewObjectSheet);
+      actions.appendChild(fleet);
+    } else if (mine && !state.spectating && state.room?.started) {
+      const myTurn = state.room.activePlayerId === state.myId;
+      const blocked = isDecisionPending();
+      const allies = areAlliesClient(state.myId, player.id);
+
+      appendCanonicalAllianceActions(actions, player.id);
+
+      const canReachForSeaBattle = seaAttackPositionClient(mine, player) && !allies;
+      if (canReachForSeaBattle) {
+        const combat = document.createElement('button');
+        combat.type = 'button';
+        combat.className = 'danger-soft';
+        combat.textContent = 'Морской бой';
+        combat.disabled = !(myTurn && mine.phase === 'actions' && (mine.actionsLeft ?? 0) > 0 && !blocked);
+        combat.addEventListener('click', () => renderSeaBattleFlowSheet(player.id));
+        actions.appendChild(combat);
+      }
+
+      const relations = document.createElement('button');
+      relations.type = 'button';
+      relations.textContent = 'Игроки и отношения';
+      relations.addEventListener('click', () => renderPlayerObjectSheet(player));
+      actions.appendChild(relations);
+    }
+
+    sheet.classList.remove('hidden');
+    sheet.classList.remove('expanded');
+    document.body.classList.add('object-sheet-open');
+  }
+
+  function showPlayerMapInfo(player) {
+    state.mapSelection = { kind: 'player', id: player.id, anchor: { row: player.row, col: player.col } };
+    $('mapInfoTitle').textContent = player.name;
+    $('mapInfoMeta').innerHTML = playerPublicSheetHtml(player);
+    const action = $('mapInfoAction');
+    action.classList.add('hidden');
+    action.onclick = null;
+
+    if (player.id === state.myId) {
+      action.textContent = 'Открыть флотилию';
+      action.classList.remove('hidden');
+      action.onclick = () => { closeMapInfo(); renderFleetOverviewObjectSheet(); };
+    } else {
+      action.textContent = 'Открыть игрока';
+      action.classList.remove('hidden');
+      action.onclick = () => { closeMapInfo(); renderPlayerObjectSheet(player); };
+    }
+
+    $('mapInfoCard').classList.add('hidden');
+    renderPlayerObjectSheet(player);
+  }
+
   function showMapInfo(kind, data, anchor = null) {
     const resolvedAnchor = anchor || (
       Number.isFinite(Number(data.row)) && Number.isFinite(Number(data.col))
@@ -3013,26 +6217,43 @@
     action.onclick = null;
 
     if (kind === 'island') {
-      const owner = data.ownerId ? playerName(data.ownerId) : (data.faction || (data.kind === 'free' ? 'Свободный остров' : data.kind === 'independent' ? 'Независимый остров' : 'Нет владельца'));
-      const resources = data.resources?.length ? data.resources.join(', ') : 'нет';
-      const defense = data.defenseArmy ?? data.army ?? 0;
-      meta.innerHTML = `<span>Владелец: <strong>${escapeHtml(owner)}</strong></span><span>Площадь: <strong>${data.area}</strong></span><span>Исходный гарнизон: <strong>${data.army ?? 0}</strong></span><span>Текущая защита: <strong>${defense}</strong></span><span>Ресурс: <strong>${escapeHtml(resources)}</strong></span>`;
+      if (data.ownerId === state.myId) {
+        const resources = data.resources?.length ? data.resources.join(', ') : 'нет';
+        const defense = Object.hasOwn(data, 'defenseArmy') ? data.defenseArmy : data.army;
+        meta.innerHTML = `<span>Ваш остров</span><span>Статус: <strong>${escapeHtml(data.status || '—')}</strong></span><span>Площадь: <strong>${data.usedArea ?? 0}/${data.effectiveArea ?? data.area ?? 0}</strong></span><span>Защита: <strong>${defense ?? '—'}</strong></span><span>Ресурсы: <strong>${escapeHtml(resources)}</strong></span>`;
+      } else {
+        meta.innerHTML = foreignIslandCompactHtml(data);
+      }
       const here = currentIslands().some(i => i.id === data.id);
       if (here) {
         state.selectedIslandId = data.id;
-        action.textContent = 'Действия на острове';
+        action.textContent = data.ownerId === state.myId ? 'Управлять островом' : 'Действия на острове';
         action.classList.remove('hidden');
-        action.onclick = () => { closeMapInfo(); openMobileTab('actions'); };
+        action.onclick = () => { closeMapInfo(); closeMapInfo(); };
       }
     } else if (kind === 'citadel') {
-      meta.innerHTML = '<span>Нейтральный торговый хаб</span><span>Продажа грузов · улучшения корабля · сопровождение</span><span>Владеть Цитаделью нельзя · бои запрещены</span>';
+      meta.innerHTML = '<span>Нейтральный торговый хаб</span><span>Продажа грузов · уровень корабля · улучшения · сопровождение</span><span>Городская стража · постоянные гарнизоны</span><span>Владеть Цитаделью нельзя · бои запрещены</span>';
       if (me()?.atCitadel) {
-        action.textContent = 'Открыть корабль и торговлю';
+        action.textContent = 'Открыть Цитадель';
         action.classList.remove('hidden');
-        action.onclick = () => { closeMapInfo(); openMobileTab('ship'); };
+        action.onclick = () => {
+          if (isMobileGameplayUi()) renderCitadelObjectSheet(data);
+          else { closeMapInfo(); renderFleetOverviewObjectSheet(); }
+        };
       }
     } else if (kind === 'anchor') {
-      meta.innerHTML = `<span>Морской якорь</span><span>Бой добровольный в фазе действий</span><span>Победа: <strong>+${data.fleetPoints || 0} очк. флота</strong></span>`;
+      const mine = me();
+      const atAnchor = Boolean(mine && Number(mine.row) === Number(data.row) && Number(mine.col) === Number(data.col));
+      const visited = Boolean(mine && (mine.visitedAnchors || []).includes(`${data.row},${data.col}`));
+      meta.innerHTML = `<span>${escapeHtml(anchorColorLabel(data.color))}</span><span>Карта встречи скрыта до объявления столкновения</span><span>Победа: <strong>+${data.fleetPoints || 0} очк. флота</strong></span><span>${visited ? 'Уже разыгран вами в этом раунде' : atAnchor ? 'Вы находитесь на якоре' : 'Остановитесь на клетке якоря'}</span>`;
+      if (atAnchor && !visited) {
+        action.textContent = 'Открыть столкновение';
+        action.classList.remove('hidden');
+        action.onclick = () => {
+          if (isMobileGameplayUi()) renderAnchorEncounterSheet(data);
+          else { closeMapInfo(); }
+        };
+      }
     } else if (kind === 'legendary') {
       const reward = data.reward === 'legendary' ? 'случайная легендарная карта' : data.reward === 'treasure' ? 'случайная карта сокровища' : 'награда пока не определена';
       const here = me() && Number(me().row) === Number(data.row) && Number(me().col) === Number(data.col);
@@ -3049,8 +6270,9 @@
       };
       meta.innerHTML = `<span>${escapeHtml(descriptions[data.type] || 'Опасная морская клетка.')}</span>`;
     }
-    card.classList.remove('hidden');
-    positionMapInfoAt(resolvedAnchor.row, resolvedAnchor.col);
+    card.classList.add('hidden');
+    card.style.visibility = '';
+    renderObjectSheetFromMapInfo(kind, data);
   }
 
   function addMapCellButton(layer, row, col, className, label, onClick) {
@@ -3175,7 +6397,7 @@
     for (const a of r.anchorCells || []) {
       const d = document.createElement('div');
       d.className = `anchor-cell anchor-${a.color}`;
-      d.title = `${a.name} · победа +${a.glory} славы`;
+      d.title = `${a.name} · победа +${a.fleetPoints ?? 0} морской славы`;
       placeCell(d, a.row, a.col);
       ownershipLayer.appendChild(d);
     }
@@ -3202,18 +6424,27 @@
     }
 
     r.players.forEach((p, idx) => {
-      const t = document.createElement('div');
+      const t = document.createElement('button');
+      t.type = 'button';
       t.className = `token${p.id === state.myId ? ' you' : ''}`;
-      t.style.left = `calc(${p.col} * 100% / ${cols} + ${(idx % 3) * 4}px)`;
-      t.style.top = `calc(${p.row} * 100% / ${rows} + ${Math.floor(idx / 3) * 4}px)`;
+      t.style.left = `calc((${p.col} + .5) * 100% / ${cols} + ${(idx % 3) * 4}px)`;
+      t.style.top = `calc((${p.row} + .5) * 100% / ${rows} + ${Math.floor(idx / 3) * 4}px)`;
       t.style.background = p.color;
       t.textContent = '⚓';
       t.title = p.name;
+      t.setAttribute('aria-label', `Открыть флотилию игрока ${p.name}`);
+      t.addEventListener('click', event => {
+        event.stopPropagation();
+        if (isDecisionPending()) return;
+        showPlayerMapInfo(p);
+      });
       tokenLayer.appendChild(t);
     });
 
     const mine = me();
     if (!mine || !r.started || r.activePlayerId !== state.myId) return;
+
+    if (renderTargetingMapTargets(highlightLayer)) return;
 
     if (state.mistCardRef && mine.phase === 'actions' && !isDecisionPending()) {
       for (const cell of r.mistReachableCells || []) {
@@ -3285,6 +6516,12 @@
   };
   $('mapViewport').addEventListener('scroll', scheduleMapInfoReposition, { passive: true });
   window.addEventListener('resize', scheduleMapInfoReposition);
+  $('zoomToggle').addEventListener('click', () => {
+    const popover = $('zoomPopover');
+    const opening = popover.classList.contains('hidden');
+    popover.classList.toggle('hidden', !opening);
+    $('zoomToggle').setAttribute('aria-expanded', opening ? 'true' : 'false');
+  });
   $('zoomIn').addEventListener('click', () => { state.zoom += .15; applyZoom(); scheduleMapInfoReposition(); });
   $('zoomOut').addEventListener('click', () => { state.zoom -= .15; applyZoom(); scheduleMapInfoReposition(); });
   $('centerMe').addEventListener('click', () => centerMapOnMe('smooth'));

@@ -568,8 +568,10 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(replaceCharacter(room, p1, 'firstMate').ok, true);
   island.buildings = [];
   assert.equal(p1.character.id, 'firstMate');
-  assert.equal(consumeCharacter(p1, 'firstMate').ok, true);
-  assert.equal(p1.character, null);
+  assert.equal(consumeCharacter(p1, 'firstMate', room.round).ok, true);
+  assert.equal(p1.character.id, 'firstMate');
+  assert.equal(p1.characterUsedRound, room.round);
+  assert.equal(consumeCharacter(p1, 'firstMate', room.round).ok, false);
 }
 
 // Картограф использует манхэттенскую дальность до клеток якорей.
@@ -599,7 +601,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
 // Уровни II–VI: новые характеристики без бонуса движения; VII читается для старых комнат.
 {
   const p = { shipClass: 'frigate', level: 4, upgrades: [] };
-  assert.deepEqual(shipStats(p), { artillery: 8, army: 6, cargo: 5, moveMod: 0 });
+  assert.deepEqual(shipStats(p), { artillery: 8, army: 6, cargo: 5, moveMod: 0, actionsPerTurn: 5 });
   p.shipClass = 'carrack';
   p.level = 7;
   p.upgrades = ['orlop', 'sternStores'];
@@ -669,27 +671,28 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(island.loadedRound, 1);
 }
 
-// Грузовой эскорт имеет отдельный трюм 5 и может продать его в Цитадели.
+// Одна погрузка заполняет основной и все активные свободные грузовые трюмы,
+// а одна продажа в Цитадели продаёт весь груз флотилии.
 {
   const room = { islands: cloneIslands(), round: 2 };
   const source = room.islands.find(i => i.id === 'bogamia');
   source.ownerId = 'p1';
-  source.buildings.push({ type: 'farm', level: 1 });
-  const yard = room.islands.find(i => i.id === 'kisalinia');
-  yard.ownerId = 'p1';
-  yard.buildings.push({ type: 'shipyard', level: 1 });
+  source.buildings.push({ type: 'farm', level: 1 }, { type: 'shipyard', level: 1 });
   const p = {
     id: 'p1', row: 5, col: 1, shipClass: 'brigantine', level: 1, upgrades: [], cargo: null, ducats: 0,
     escorts: [{ id: 'escort-1', type: 'cargo', special: false, cargo: null }],
   };
-  const loaded = loadCargo(room, p, 'bogamia', 'provisions', 'escort-1');
+  const loaded = loadCargo(room, p, 'bogamia', 'provisions');
   assert.equal(loaded.ok, true);
+  assert.equal(loaded.quantity, 7);
+  assert.equal(p.cargo.quantity, 2);
   assert.equal(p.escorts[0].cargo.quantity, 5);
   p.row = 13; p.col = 13;
-  const sold = sellCargo(room, p, 'escort-1');
+  const sold = sellCargo(room, p);
   assert.equal(sold.ok, true);
-  assert.equal(sold.revenue, 5);
-  assert.equal(p.ducats, 5);
+  assert.equal(sold.revenue, 7);
+  assert.equal(p.ducats, 7);
+  assert.equal(p.cargo, null);
   assert.equal(p.escorts[0].cargo, null);
 }
 
@@ -811,8 +814,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(canAttackPlayerThisRound(room, a, b.id).ok, true);
 }
 
-// Корабельный плотник предотвращает одну боевую потерю уровня и после применения
-// возвращается в колоду персонажей. Без явного применения уровень теряется обычно.
+// Корабельный плотник предотвращает одну боевую потерю уровня за раунд и остаётся
+// на корабле, помечаясь characterUsedRound. Без явного применения уровень теряется обычно.
 {
   const room = { round: 2, islands: cloneIslands(), players: [] };
   const a = { id: 'a', row: 10, col: 10, shipClass: 'brigantine', level: 2, upgrades: [], escorts: [], ducats: 5, character: { id: 'shipCarpenter' } };
@@ -821,7 +824,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const result = seaBattle(room, a, b, { shipCarpenterPlayerIds: ['a'] });
   assert.equal(result.outcome, 'defender');
   assert.equal(a.level, 2);
-  assert.equal(a.character, null);
+  assert.equal(a.character.id, 'shipCarpenter');
+  assert.equal(a.characterUsedRound, room.round);
   assert.equal(result.levelLoss.prevented, true);
   assert.equal(result.levelLoss.preventedByCharacter, 'shipCarpenter');
 }
@@ -840,7 +844,8 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const result = assaultIsland(room, a, island, { shipCarpenterPlayerIds: ['a'] });
   assert.equal(result.outcome, 'defender');
   assert.equal(a.level, 2);
-  assert.equal(a.character, null);
+  assert.equal(a.character.id, 'shipCarpenter');
+  assert.equal(a.characterUsedRound, room.round);
   assert.equal(a.landCompany, null);
   assert.equal(result.levelLoss.prevented, true);
 }
@@ -1287,13 +1292,14 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(p.cargo.quantity, 2);
 }
 
-// Цифровой легендарный пул содержит четыре типа и выбирает независимо с возвращением.
+// Цифровой легендарный пул выбирает независимо с возвращением по canonical весам 2/1/2/2.
 {
   assert.equal(BALANCE.legendaryPool.mode,'random-with-replacement');
-  assert.equal(BALANCE.legendaryPool.selection,'uniform');
+  assert.equal(BALANCE.legendaryPool.selection,'weighted');
+  assert.deepEqual(BALANCE.legendaryPool.weights,{ 'sea-veil':2, hellfire:1, 'mist-path':2, 'sea-curse':2 });
   assert.deepEqual(
-    [0,0.25,0.5,0.75].map(value=>drawLegendaryCard(null,()=>value).id),
-    ['sea-veil','hellfire','mist-path','sea-curse']
+    [0,0.2,0.3,0.43,0.6,0.72,0.99].map(value=>drawLegendaryCard(null,()=>value).id),
+    ['sea-veil','sea-veil','hellfire','mist-path','mist-path','sea-curse','sea-curse']
   );
   assert.equal(drawLegendaryCard(null,()=>0).id,'sea-veil');
   assert.equal(drawLegendaryCard(null,()=>0).id,'sea-veil'); // тот же тип может выпасть повторно
@@ -1409,6 +1415,14 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(shipStats(p).artillery, 6); // кулеврины без фальконов не действуют
 }
 
+// Уровень корабля увеличивает число действий на II, IV и VI уровнях.
+{
+  const expected = [3, 4, 4, 5, 5, 6];
+  for (let level = 1; level <= 6; level += 1) {
+    assert.equal(shipStats({ shipClass: 'brigantine', level, upgrades: [] }).actionsPerTurn, expected[level - 1]);
+  }
+}
+
 // Шторм предлагает допустимые береговые клетки целевого острова.
 // В.21 сохраняет старый id для save-compatibility, но staging-канон переносит к Ренаике.
 {
@@ -1418,10 +1432,9 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.ok(storm);
   assert.equal(storm.name, 'Шторм: Ренаика');
   assert.equal(storm.islandId, 'renaika');
-  const options = stormCellOptions(room, p, storm.islandId);
-  assert.ok(options.length > 0);
-  const island = room.islands.find(i => i.id === 'renaika');
-  assert.equal(options.every(o => island.cells.some(([r,c]) => r === o.row && c === o.col)), true);
+  assert.deepEqual(stormCellOptions(room, p, storm.islandId), [{ row: 4, col: 5 }]);
+  assert.deepEqual(stormCellOptions(room, p, 'kadingir'), [{ row: 0, col: 24 }]);
+  assert.deepEqual(stormCellOptions(room, p, 'landin'), [{ row: 9, col: 17 }]);
 }
 
 // Колода событий плавания содержит ровно 26 физических карт и использует канонический
@@ -1808,9 +1821,10 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   };
   const sold = sellCargo(room, p);
   assert.equal(sold.ok, true);
-  assert.equal(sold.quantity, 2);
-  assert.equal(sold.capacity, 2);
-  assert.equal(sold.assignmentInstanceId, 'delivery-sale');
+  assert.equal(sold.sales.length, 1);
+  assert.equal(sold.sales[0].quantity, 2);
+  assert.equal(sold.sales[0].capacity, 2);
+  assert.equal(sold.sales[0].assignmentInstanceId, 'delivery-sale');
 }
 // Сокровище не засчитывается задним числом: получение и разрешение относятся к текущему поручению.
 {
@@ -2252,7 +2266,7 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   const firstPlayer = { id:'p1', name:'One', row, col, shipClass:'brigantine', level:1, upgrades:[], escorts:[], ducats:0, debt:0, armyPoints:0, attackCountsThisRound:{}, namedPlaceCards:[], legendaryCards:[] };
   const room = { round:2, islands, players:[firstPlayer], alliances:[], factionState:{}, legendaryPlacesExplored:{} };
 
-  const first = jointAssaultIsland(room, firstPlayer, atlantia, [], [], { rng:()=>0.25 });
+  const first = jointAssaultIsland(room, firstPlayer, atlantia, [], [], { rng:()=>0.30 });
   assert.equal(first.ok, true);
   assert.equal(first.outcome, 'attacker');
   assert.equal(first.legendaryDiscovery.first, true);

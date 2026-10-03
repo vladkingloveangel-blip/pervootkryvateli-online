@@ -155,8 +155,7 @@ async function bootstrapStartedRoom(h) {
     { playerId: created.playerId, account: accounts[0] },
     ...joined.map((entry, index) => ({ playerId: entry.playerId, account: accounts[index + 1] })),
   ];
-  assert.equal((await h.emit(sockets[0], 'setSeatingOrder', { playerIds: members.map(member => member.playerId) })).ok, true);
-  assert.equal((await h.emit(sockets[0], 'setLeader', { playerId: members[0].playerId })).ok, true);
+  for (let i = 0; i < sockets.length; i++) assert.equal((await h.emit(sockets[i], 'changeShip', { shipClass: 'brigantine' })).ok, true);
   for (let i = 0; i < sockets.length; i++) assert.equal((await h.emit(sockets[i], 'setReady', { ready: true })).ok, true);
   assert.equal((await h.emit(sockets[0], 'startGame')).ok, true);
   await h.stop();
@@ -428,7 +427,8 @@ test('4.7 real sockets isolate owner/opponent/admin state and Scout grants acros
   const turnNo = restartA.personalTurnNo;
   restartB.ducats = 919;
   restartB.debt = 929;
-  restartA.character = 'scout'; // test-fixture rearm so a second real use can replace the current grant.
+  restartA.character = 'scout'; // emulate a newly replaced Scout, which resets once-per-round usage.
+  restartA.characterUsedRound = null;
   room.actionsLeft = 4;
   h.writeDatabase(db);
   await h.start();
@@ -572,7 +572,7 @@ test('4.7 personal pending families and event phase are actor-only over real roo
 
 test('4.7 pure public observer receives approved public state and no private/unknown fields or Scout grant', () => {
   const room = {
-    version: '0.33.0', code: 'ABCDE', started: true, hostId: 'p1', leaderId: 'p1', round: 2, circle: 1, turnIndex: 0, activePlayerId: 'p1', seatingOrder: ['p1', 'p2'], order: ['p1', 'p2'],
+    version: '0.33.0', code: 'ABCDE', started: true, hostId: 'p1', round: 2, circle: 1, turnIndex: 0, activePlayerId: 'p1', seatingOrder: ['p1', 'p2'], order: ['p1', 'p2'],
     log: [{ text: 'SECRET_LOG' }], eventDecks: { sailing: { remaining: 9 } }, feudDecks: { mori: { remaining: 8 } }, assignmentDecks: { mori: { remaining: 7 } }, scoutRevealGrants: [{ viewerPlayerId: 'p1', mode: 'money', targetPlayerId: 'p2', arbitrary: 'SECRET_SCOUT_RAW' }],
     players: [{
       id: 'p1', name: 'Alice', color: 'red', shipClass: 'frigate', level: 3, row: 5, col: 7, connected: true, ready: true,

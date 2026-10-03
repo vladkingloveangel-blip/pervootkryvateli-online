@@ -100,7 +100,7 @@ test('stage 6.1: Observatory resolves one sailing card before feud, Embassy assi
   for (let i = 1; i < 4; i++) {
     ids.push((await emit(initialSockets[i], 'joinRoom', { code: created.code, accountToken: accounts[i].token, name: `Player ${i + 1}` })).playerId);
   }
-  await change(initialSockets[0], 'setLeader', { playerId: ids[0] });
+  for (let i = 0; i < 4; i++) await change(initialSockets[i], 'changeShip', { shipClass: 'brigantine' });
   for (let i = 0; i < 4; i++) await change(initialSockets[i], 'setReady', { ready: true });
   await change(initialSockets[0], 'startGame');
   await stop();

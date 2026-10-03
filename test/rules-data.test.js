@@ -269,16 +269,17 @@ test('stage 6.7 finalizes stage 6 while stage 7 consumers remain pending', () =>
 test('author decisions include the closed R29 Scout visibility rule', () => {
   assert.equal(rules.metadata.rulesetVersion,'master-2026-09-28-author-2026-10-01-stage7-playtest-v1');
   assert.deepEqual(rules.metadata.unresolved,[]);
-  assert.deepEqual(rules.metadata.authorOverrides.resolved,['R05','R06','R07','R21','treasure-copies','R29','players-min-2','storm-renaika']);
-  assert.deepEqual(rules.session.players,{min:2,max:6});
+  assert.deepEqual(rules.metadata.authorOverrides.resolved,['R05','R06','R07','R21','treasure-copies','R29','players-min-1','storm-renaika']);
+  assert.deepEqual(rules.session.players,{min:1,max:6});
   const stormRenaika=rules.events.sailing.find(card=>card.id==='storm-chertonia');
   assert.equal(stormRenaika.name,'Шторм: Ренаика');
   assert.equal(stormRenaika.islandId,'renaika');
   assert.equal(rules.metadata.mapCanon.canonical,true);
   assert.equal(rules.metadata.mapCanon.source,'current-online-map');
   assert.equal(rules.legends.legendaryPool.mode,'random-with-replacement');
-  assert.equal(rules.legends.legendaryPool.selection,'uniform');
+  assert.equal(rules.legends.legendaryPool.selection,'weighted');
   assert.deepEqual(rules.legends.legendaryPool.typeIds,['sea-veil','hellfire','mist-path','sea-curse']);
+  assert.deepEqual(rules.legends.legendaryPool.weights,{'sea-veil':2,hellfire:1,'mist-path':2,'sea-curse':2});
   assert.equal(rules.legends.legendaryPool.consumedOnUse,true);
   assert.deepEqual(rules.legends.expeditions.map(card=>card.placeId),['kraken','abyss','pharaoh','pearl','vortex','icebergs','rose']);
   assert.equal(Object.hasOwn(rules.legends,'legendaryDeck'),false);
@@ -331,6 +332,9 @@ test('runtime consumers use canonical prices, characteristics, income and safe m
   }
   for(let count=0;count<3;count++) assert.equal(logic.escortPurchasePrice({escorts:Array(count).fill({})}),rules.fleet.escortPrices[count]);
   assert.deepEqual(data.GOODS,rules.economy.goods);
+  assert.deepEqual(Object.values(rules.economy.goods).filter(g=>['exotic','slaves','gold','diamonds'].includes(g.id)).map(g=>g.price),[3,3,3,3]);
+  assert.deepEqual([2,3,4,5,6].map(level=>rules.fleet.levels[level].price),[10,20,40,80,160]);
+  assert.deepEqual([1,2,3,4,5,6].map(level=>rules.fleet.levels[level].actionBonus),[0,1,1,2,2,3]);
   assert.equal(data.BALANCE.loadingLimitPerIslandPerRound,rules.economy.loadingLimitPerIslandPerRound);
   assert.deepEqual(data.TREASURE_CARDS.map(c=>c.id),rules.legends.treasures.map(c=>c.id));
   assert.equal(data.TREASURE_CARDS.find(c=>c.id==='full-diamonds-hold').cargoGoodId,'diamonds');

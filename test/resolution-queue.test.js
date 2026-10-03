@@ -299,7 +299,7 @@ test('restart mid expedition pending keeps queued B blocked, then cargo response
       name: `P${i + 1}`,
     })).playerId);
   }
-  await emit(initial[0], 'setLeader', { playerId: ids[0] });
+  for (let i = 0; i < 4; i++) await emit(initial[i], 'changeShip', { shipClass: 'brigantine' });
   for (let i = 0; i < 4; i++) await emit(initial[i], 'setReady', { ready: true });
   assert.equal((await emit(initial[0], 'startGame')).ok, true);
   await stop();

@@ -24,7 +24,7 @@
 | Поручения — `room.assignmentDecks` | `drawPile + discard + removed`, с фильтрацией допустимости | Да, и модель сложнее обычной колоды |
 | Экспедиции — `room.expeditionDeck` | один `drawPile`, активная карта временно изъята и после завершения возвращается с перемешиванием | Да |
 | Сокровища | `TREASURE_CARDS + BALANCE.treasurePool`, независимый uniform random-with-replacement | Нет. `treasureDeck` не создаётся и не читается gameplay-кодом |
-| Легендарные награды | `LEGENDARY_CARDS + BALANCE.legendaryPool`, независимый uniform random-with-replacement | Нет. `legendaryDeck` удалён из текущей модели |
+| Легендарные награды | `LEGENDARY_CARDS + BALANCE.legendaryPool`, независимый weighted random-with-replacement (2/1/2/2; Hellfire — 1) | Нет. `legendaryDeck` удалён из текущей модели |
 | Именные карты мест | `player.namedPlaceCards` + `room.legendaryPlacesExplored` | Нет: это запись первого открытия/достижения |
 | Закрытые сохранённые карты | `specialCards`, `legendaryCards`, `savedEventCards` | Частично: только `savedEventCards` удерживают конкретный экземпляр из `eventDeck` |
 | Сохранённые эффекты | `activeTurnEffects`, `nextTurnEffects`, `legendaryEffects`, `legendaryVeil*` | Нет: это состояние эффекта после разрешения карты |
@@ -161,7 +161,7 @@
 
 **Источник:** `rules/legends.json:legendary/legendaryPool`.
 
-**Текущая механика:** `drawLegendaryCard(_room, rng)` независимо выбирает один из четырёх typeIds; `random-with-replacement`, uniform. Нет draw pile, discard pile или количества физических копий.
+**Текущая механика:** `drawLegendaryCard(_room, rng)` независимо выбирает один из четырёх typeIds; `random-with-replacement`, weighted. Canonical веса: Sea Veil 2, Hellfire 1, Mist Path 2, Sea Curse 2. Нет draw pile, discard pile или количества физических копий.
 
 **Получение:** sailing event типа `legendary`, первое открытие легендарного места, военные награды отдельных островов. Полученный экземпляр помещается в `player.legendaryCards`.
 
@@ -264,7 +264,7 @@ Transient server state для враждебной легендарной кар
 
 ### 8.6. Персонажи как сущности
 
-`CHARACTERS` выбираются из каталога через `characterOptionsAtAdmiralty()`; `player.character` хранит один id, при использовании персонаж обычно расходуется (`consumeCharacter`). Нет `characterDeck`, draw pile, discard или reshuffle. Доступность определяется уровнем Адмиралтейства и уникальностью уже занятых персонажей.
+`CHARACTERS` выбираются из каталога через `characterOptionsAtAdmiralty()`; `player.character` хранит выбранного персонажа, а `consumeCharacter()` помечает его использованным через `characterUsedRound`, не удаляя с корабля. Замена в Адмиралтействе ставит нового персонажа и сбрасывает его once-per-round usage. Нет `characterDeck`, draw pile, discard или reshuffle. Доступность определяется уровнем Адмиралтейства и уникальностью уже занятых персонажей.
 
 ### 8.7. «Карточки островов»
 

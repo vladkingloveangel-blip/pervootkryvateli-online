@@ -243,10 +243,11 @@ Persisted source object не нужен. Целевая операция: `selec
 **Владелец:** static rules/service.  
 **Persistence:** нет.  
 **Класс:** random source + static ability definitions.  
-**Семантика:** independent uniform random with replacement.
+**Семантика:** independent weighted random with replacement.
 
 Инварианты:
 - четыре typeIds;
+- canonical веса: Sea Veil 2, Hellfire 1, Mist Path 2, Sea Curse 2;
 - каждый grant независим;
 - одинаковый type может выпадать подряд и существовать у игрока в нескольких экземплярах;
 - consumption не влияет на вероятность future grants;
@@ -696,7 +697,7 @@ Compatibility-only scheduled effects old event timing. Не удалять до 
 6. Active assignment остаётся отдельной task entity, не hand item.
 7. Экспедиция резервирует pool entry; два player не получают один active entry; completion возвращает entry; history влияет на eligibility.
 8. Treasure: independent uniform 25% ×4 with replacement.
-9. Legendary grants: independent uniform по четырём typeIds with replacement.
+9. Legendary grants: independent weighted по четырём typeIds with replacement, веса 2/1/2/2 (Hellfire — 1).
 10. Treasure Hunter — operation over digital source, никогда не `treasureDeck`.
 11. Scout — visibility/R29, не random-source problem.
 12. До блока 6 old saves не теряют source state, reserved tasks, stored benefits или pending resolutions.
@@ -736,7 +737,7 @@ Compatibility-only scheduled effects old event timing. Не удалять до 
 | `expeditionDrawRound + expeditionsDrawnThisRound` | `expeditionAccessUsage` | per-round limit | Нет карточной семантики | 5 → 6 |
 | `TREASURE_CARDS + treasurePool` | `TreasureOutcomeSource` | independent uniform 25% ×4 with replacement | Уже убрана | 3 |
 | legacy `treasureDeck` | migration-only | не влияет на draws | Полностью | 6 |
-| `LEGENDARY_CARDS + legendaryPool` | `LegendaryAbilitySource` | independent uniform with replacement | Уже убрана | 3 |
+| `LEGENDARY_CARDS + legendaryPool` | `LegendaryAbilitySource` | independent weighted 2/1/2/2 with replacement | Уже убрана | 3 |
 | legacy `legendaryDeck` | migration-only | не влияет на grants | Полностью | 6 |
 | `legendaryCards` | `consumableAbilities` | duplicate instances; independent consumption | Да | 5 → 4 → 6 |
 | `specialCards` | `consumableAbilities` with origin | fixed one-use grants | Да | 5 → 4 → 6 |

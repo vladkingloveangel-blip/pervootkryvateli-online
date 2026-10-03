@@ -16,7 +16,7 @@ const IMPLEMENTED_POLICY_KEYS = Object.freeze([
 const SCOUT_RUNTIME_ENABLED = true;
 
 const cargo = o(f('id goodId name quantity price value'));
-const stats = o(f('artillery army cargo moveMod'));
+const stats = o(f('artillery army cargo moveMod actionsPerTurn'));
 const upgrade = o(f('id name branch active disabledByLevel missingRequirement'));
 const escort = o({ ...f('id type special active inactiveReason'), cargo });
 const discovery = o(f('id name placeId claimedBy exploredBy'));
@@ -54,11 +54,11 @@ const publicPlayer = o({
   nextLevel:o(f('level price')), allyIds:a(S),
 });
 const ownerPlayer = o({
-  ducats:S, debt:S, character, activeAssignment:assignment, hasActiveAssignment:S, assignmentPriority:o(f('kind text')),
+  ducats:S, debt:S, prestige:S, character, activeAssignment:assignment, hasActiveAssignment:S, assignmentPriority:o(f('kind text')),
   specialCards:a(S), specialCardCount:S, legendaryCards:a(legendaryCard), legendaryCardCount:S,
   playableLegendaryCards:a(legendaryRef), savedEventCards:a(savedEvent), savedEventCardCount:S,
   activeExpedition:expedition, hasActiveExpedition:S,
-  ...f('nextActionLimit expeditionTakenThisRound canTakeExpedition canDismissLandCompanyHere characterReplacedThisRound admiraltyLevelHere palaceUsed pendingLandinEscort'),
+  ...f('nextActionLimit expeditionTakenThisRound canTakeExpedition canDismissLandCompanyHere characterReplacedThisRound characterUsedThisRound admiraltyLevelHere palaceUsed pendingLandinEscort'),
   attackedPlayerIdsThisRound:a(S), nextTurnEffects:turnEffects, lastAnchorEncounter:ownerAnchorEncounter,
   characterAcquisitionOptions:a(characterOption), characterReplacementOptions:a(characterOption),
   cartographerAnchorOptions:a(o(f('id color name distance'))),
@@ -208,7 +208,7 @@ function projectEventPhaseForViewer(phase, viewerContext=null){
 function projectRoomForViewer(roomView, viewerContext=null){
   if(!roomView || typeof roomView!=='object' || Array.isArray(roomView)) return {};
   const c=ctx(viewerContext), out={};
-  for(const key of 'version code started hostId leaderId round circle turnIndex activePlayerId finished phase'.split(' ')) put(out,roomView,key,S);
+  for(const key of 'version code started hostId round circle turnIndex activePlayerId finished phase'.split(' ')) put(out,roomView,key,S);
   for(const key of ['seatingOrder','order']) put(out,roomView,key,a(S));
   for(const [key,schema] of [['eventPhase',eventPhase],['treasurePool',pool],['legendaryPool',pool],['legendaryPlaces',a(legendaryPlace)],['namedPlaceCards',a(namedPlace)],['alliances',a(a(S))],['pendingBattle',battle],['pendingAlliance',alliance],['endGameConsensus',endGameConsensus],['finalResult',finalResult],['characterCatalog',characterCatalog],['buildingCatalog',simpleCatalog],['goodsCatalog',simpleCatalog],['shipUpgradeCatalog',simpleCatalog]]) put(out,roomView,key,schema);
   projectPersonalPendingFamilies(out,roomView,c);

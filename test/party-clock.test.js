@@ -7,7 +7,7 @@ const path = require('node:path');
 const { io } = require('socket.io-client');
 const rules = require('../rules');
 
-test('leader, clockwise order and six complete personal circles', { timeout: 30000 }, async t => {
+test('join order and six complete personal circles', { timeout: 30000 }, async t => {
   const listener=net.createServer(); listener.listen(0,'127.0.0.1'); await once(listener,'listening');
   const port=listener.address().port; await new Promise(resolve=>listener.close(resolve));
   const base=`http://127.0.0.1:${port}`;
@@ -31,39 +31,29 @@ test('leader, clockwise order and six complete personal circles', { timeout: 300
     assert.equal(result.ok,true,`${event}: ${result.error||''}`);
     return (await next)[0];
   }
-  // Staging/playtest author override: a complete game may start with two players.
-  const minimumPlayers=await Promise.all(Array.from({length:2},()=>connect()));
-  const minimumCreated=await emit(minimumPlayers[0],'createRoom',{name:'Minimum One'});
-  const minimumJoined=await emit(minimumPlayers[1],'joinRoom',{code:minimumCreated.code,name:'Minimum Two'});
-  assert.equal(minimumCreated.ok && minimumJoined.ok,true);
-  await change(minimumPlayers[0],'setLeader',{playerId:minimumCreated.playerId});
-  await change(minimumPlayers[0],'setReady',{ready:true});
-  await change(minimumPlayers[1],'setReady',{ready:true});
-  assert.equal((await emit(minimumPlayers[0],'startGame')).ok,true);
-  minimumPlayers.forEach(socket=>socket.disconnect());
+  // Staging/playtest author override: a complete game may start with one player.
+  const minimumPlayer=await connect();
+  const minimumCreated=await emit(minimumPlayer,'createRoom',{name:'Minimum One'});
+  assert.equal(minimumCreated.ok,true);
+  await change(minimumPlayer,'setReady',{ready:true});
+  assert.equal((await emit(minimumPlayer,'startGame')).ok,true);
+  minimumPlayer.disconnect();
 
   const players=await Promise.all(Array.from({length:4},()=>connect()));
   const created=await emit(players[0],'createRoom',{name:'One'});
   const ids=[created.playerId];
   assert.equal(created.ok,true);
   for(let i=1;i<4;i++)ids.push((await emit(players[i],'joinRoom',{code:created.code,name:`Player ${i+1}`})).playerId);
-  assert.equal((await emit(players[1],'setLeader',{playerId:ids[1]})).ok,false);
-  assert.equal((await emit(players[0],'setSeatingOrder',{playerIds:[ids[0],ids[0],ids[1],ids[2]]})).ok,false);
   assert.equal((await emit(players[0],'startGame')).ok,false);
-  await change(players[0],'setSeatingOrder',{playerIds:[ids[0],ids[2],ids[1],ids[3]]});
-  await change(players[0],'setLeader',{playerId:ids[1]});
-  assert.equal((await emit(players[1],'changeShip',{shipClass:'frigate'})).ok,false);
   await change(players[0],'changeShip',{shipClass:'frigate'});
+  await change(players[1],'changeShip',{shipClass:'frigate'});
   for(const socket of players)await change(socket,'setReady',{ready:true});
   let room=await change(players[0],'startGame');
-  const order=[ids[1],ids[3],ids[0],ids[2]];
+  const order=[...ids];
   assert.deepEqual(room.order,order);
-  assert.equal(room.leaderId,ids[1]);
-  assert.equal(room.players.find(p=>p.id===ids[1]).shipClass,'carrack');
   assert.equal(room.players.find(p=>p.id===ids[0]).shipClass,'frigate');
+  assert.equal(room.players.find(p=>p.id===ids[1]).shipClass,'frigate');
   assert.equal(room.players.every(p=>p.row===0 && p.col===0 && p.level===1),true);
-  assert.equal((await emit(players[0],'setLeader',{playerId:ids[0]})).ok,false);
-  assert.equal((await emit(players[0],'setSeatingOrder',{playerIds:ids})).ok,false);
   assert.equal(room.players.find(p=>p.isYou).ducats,rules.session.startingDucats);
   assert.equal(room.players.filter(p=>!p.isYou).every(p=>!Object.hasOwn(p,'ducats')),true);
   assert.deepEqual([room.round,room.circle,room.players.find(p=>p.id===order[0]).actionsLeft],[1,1,rules.session.actionsPerTurn]);
@@ -75,16 +65,12 @@ test('leader, clockwise order and six complete personal circles', { timeout: 300
     if((turn+1)%4===0 && turn<19)assert.equal(room.circle,2+Math.floor(turn/4));
   }
   assert.deepEqual([room.round,room.circle],[1,6]);
-  assert.equal(room.players.every(p=>p.phase==='waiting'),true);
-  assert.equal(room.activePlayerId,null);
-  assert.equal(room.eventPhase.currentPlayerId,order[0]);
-  assert.equal(room.pendingEvent.kind,'storm');
-  assert.equal((await emit(socketFor(order[0]),'endTurn')).ok,false);
-  const firstChoice=room.pendingEvent.options[0];
-  room=await change(socketFor(order[0]),'respondEvent',{eventId:room.pendingEvent.id,row:firstChoice.row,col:firstChoice.col});
-  assert.equal(room.players.find(p=>p.id===order[0]).phase,'navigation');
+  // The deterministic first storm now has one canonical destination cell, so it resolves
+  // automatically during the sixth-circle pre-turn flow and the player reaches navigation.
+  assert.equal(room.phase,'navigation');
   assert.equal(room.activePlayerId,order[0]);
-  assert.equal(room.players.find(p=>p.id===order[0]).row,firstChoice.row);
+  assert.equal(room.eventPhase?.active||false,false);
+  assert.equal(room.players.find(p=>p.id===order[0]).phase,'navigation');
   for(let index=0;index<4;index++){
     assert.equal(room.activePlayerId,order[index]);
     assert.deepEqual([room.round,room.circle],[1,6]);
@@ -107,7 +93,7 @@ test('leader, clockwise order and six complete personal circles', { timeout: 300
   assert.equal(full.ok,true);
   for(let i=1;i<6;i++)assert.equal((await emit(six[i],'joinRoom',{code:full.code,name:`Seat ${i+1}`})).ok,true);
   assert.equal((await emit(six[6],'joinRoom',{code:full.code,name:'Seventh'})).ok,false);
-  await change(six[0],'setLeader',{playerId:full.playerId});
+  for(let i=0;i<6;i++)await change(six[i],'changeShip',{shipClass:'brigantine'});
   for(let i=0;i<6;i++)await change(six[i],'setReady',{ready:true});
   const fullRoom=await change(six[0],'startGame');
   assert.equal(fullRoom.players.length,6);
