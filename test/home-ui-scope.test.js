@@ -44,9 +44,9 @@ test('home top area uses authored assets without entering game scope', () => {
   assert.ok(html.includes('class="home-logo" src="/assets/home-logo.png"'));
   assert.match(html, /id="homeProfileBtn"/);
   assert.match(html, /id="homeSettingsBtn"/);
-  assert.ok(html.includes('src="/assets/settings-icon.png"'));
+  assert.ok(html.includes('id="homeMenuBtn"'));
   assert.ok(app.includes("$('homeProfileBtn').addEventListener('click', openProfile)"));
-  assert.ok(app.includes("$('homeSettingsBtn').addEventListener('click', openSettings)"));
+  assert.ok(app.includes("$('homeMenuBtn').addEventListener('click', openHomeMenu)"));
 });
 
 
@@ -115,7 +115,7 @@ test('Settings is separate from Profile and persists real sound controls', () =>
   assert.ok(html.includes('id="settingsSoundEnabled"'));
   assert.ok(html.includes('id="settingsSoundVolume"'));
   assert.ok(html.includes('id="settingsInstallSection"'));
-  assert.ok(app.includes("$('homeSettingsBtn').addEventListener('click', openSettings)"));
+  assert.ok(app.includes("if (action === 'settings') return openSettings()"));
   assert.ok(app.includes('function syncSettingsControls()'));
   assert.ok(app.includes('localStorage.setItem(SOUND_STORAGE_KEY, JSON.stringify(soundState))'));
   assert.ok(app.includes("$('settingsInstallBtn').addEventListener('click'"));
@@ -145,4 +145,19 @@ test('Rules is a dedicated Home reader linked from How to Play', () => {
   assert.ok(app.includes("$('howToRulesBtn').addEventListener('click', () => openRules('how-to'))"));
   assert.ok(app.includes("$('rulesBackBtn').addEventListener('click', closeRules)"));
   assert.ok(html.includes('data-game-menu="help"'));
+});
+
+
+test('Secondary Home menu centralizes non-party navigation', () => {
+  assert.ok(html.includes('id="homeSecondaryMenu" class="home-secondary-menu hidden"'));
+  assert.ok(html.includes('data-home-menu="games"'));
+  assert.ok(html.includes('data-home-menu="profile"'));
+  assert.ok(html.includes('data-home-menu="settings"'));
+  assert.ok(html.includes('data-home-menu="how-to"'));
+  assert.ok(html.includes('data-home-menu="rules"'));
+  assert.ok(html.includes('data-home-menu="logout"'));
+  assert.ok(app.includes('function openHomeMenu()'));
+  assert.ok(app.includes('function handleHomeMenuAction(action)'));
+  assert.ok(app.includes("if (action === 'logout') return $('logoutBtn').click()"));
+  assert.ok(app.includes("$('homeMenuAdminBtn').classList.toggle('hidden', user?.role !== 'admin')"));
 });
