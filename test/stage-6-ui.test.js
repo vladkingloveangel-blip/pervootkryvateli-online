@@ -451,7 +451,7 @@ test('UI-10 own islands use one canonical overview-to-management workflow', () =
   assert.match(code, /ВАШ ОСТРОВ/);
   assert.match(code, /Управлять островом/);
   assert.match(code, /Погрузка/);
-  assert.match(code, /Улучшение построек/);
+  assert.match(code, /Улучшить постройки/);
   assert.match(code, /Построить/);
 
   // Management views reuse existing canonical renderers/action nodes instead
