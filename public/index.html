@@ -20,8 +20,8 @@
       <button id="homeProfileBtn" class="home-icon-button home-profile-button hidden" type="button" aria-label="Открыть профиль">
         <span class="home-avatar" aria-hidden="true"><span id="homeAvatarInitial">?</span></span>
       </button>
-      <button id="homeSettingsBtn" class="home-icon-button home-settings-button hidden" type="button" aria-label="Открыть настройки">
-        <img src="/assets/settings-icon.png" alt="" />
+      <button id="homeMenuBtn" class="home-icon-button home-menu-button hidden" type="button" aria-label="Открыть меню" aria-expanded="false" aria-controls="homeSecondaryMenu">
+        <span aria-hidden="true">☰</span>
       </button>
     </div>
     <div id="connection" class="connection">подключение…</div>
@@ -73,6 +73,20 @@
         <button type="button" data-game-menu="endgame"><span>◇</span><strong>Завершение игры</strong><small>Согласование окончания партии</small></button>
         <button type="button" data-game-menu="settings"><span>⚙</span><strong>Настройки</strong><small>Профиль и настройки</small></button>
         <button type="button" data-game-menu="home" class="primary"><span>⌂</span><strong>К моим играм</strong><small>На главную без выхода из аккаунта</small></button>
+      </div>
+    </section>
+
+    <div id="homeMenuBackdrop" class="home-menu-backdrop hidden"></div>
+    <section id="homeSecondaryMenu" class="home-secondary-menu hidden" role="dialog" aria-modal="true" aria-labelledby="homeMenuTitle">
+      <div class="home-secondary-head"><div><span>МЕНЮ</span><strong id="homeMenuTitle">Каюта капитана</strong></div><button id="homeMenuCloseBtn" class="small" type="button" aria-label="Закрыть меню">✕</button></div>
+      <div class="home-secondary-grid">
+        <button type="button" data-home-menu="games"><span>◈</span><strong>Мои игры</strong><small>Активные и сохранённые партии</small></button>
+        <button type="button" data-home-menu="profile"><span>♙</span><strong>Профиль</strong><small>Имя и безопасность аккаунта</small></button>
+        <button type="button" data-home-menu="settings"><span>⚙</span><strong>Настройки</strong><small>Звук и параметры устройства</small></button>
+        <button type="button" data-home-menu="how-to"><span>?</span><strong>Как играть</strong><small>Короткое введение в партию</small></button>
+        <button type="button" data-home-menu="rules"><span>≡</span><strong>Правила</strong><small>Полный свод цифровой редакции</small></button>
+        <button id="homeMenuAdminBtn" class="hidden" type="button" data-home-menu="admin"><span>◇</span><strong>Админ-панель</strong><small>Управление комнатами</small></button>
+        <button type="button" data-home-menu="logout" class="danger-soft"><span>↪</span><strong>Выйти</strong><small>Завершить сеанс на устройстве</small></button>
       </div>
     </section>
 
