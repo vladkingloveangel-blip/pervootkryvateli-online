@@ -139,6 +139,7 @@
     state.profileOpen = false;
     $('profilePanel').classList.add('hidden');
     $('settingsPanel').classList.add('hidden');
+    $('howToPlayPanel').classList.add('hidden');
     $('authPanel').classList.remove('hidden');
     $('accountBar').classList.add('hidden');
     $('homeProfileBtn')?.classList.add('hidden');
@@ -188,6 +189,26 @@
     if (!el) return;
     clearTimeout(showConnectionBanner.timer);
     el.classList.add('hidden');
+  }
+
+  function openHowToPlay() {
+    if (!state.accountUser) return;
+    setGameScreenActive(false);
+    state.profileOpen = false;
+    $('profilePanel').classList.add('hidden');
+    $('settingsPanel').classList.add('hidden');
+    $('homePrimaryAction').classList.add('hidden');
+    $('playFlow').classList.add('hidden');
+    $('entry').classList.add('hidden');
+    $('myGamesPanel').classList.add('hidden');
+    $('adminPanel').classList.add('hidden');
+    $('authPanel').classList.add('hidden');
+    $('howToPlayPanel').classList.remove('hidden');
+  }
+
+  function closeHowToPlay() {
+    $('howToPlayPanel').classList.add('hidden');
+    showHomePrimary();
   }
 
   function syncSettingsControls() {
@@ -841,6 +862,7 @@
     $('entry').classList.add('hidden');
     $('myGamesPanel').classList.add('hidden');
     $('settingsPanel').classList.add('hidden');
+    $('howToPlayPanel').classList.add('hidden');
     $('homePrimaryAction').classList.remove('hidden');
   }
 
@@ -891,6 +913,11 @@
   $('homeProfileBtn').addEventListener('click', openProfile);
   $('homeSettingsBtn').addEventListener('click', openSettings);
   $('settingsBackBtn').addEventListener('click', closeSettings);
+  $('howToPlayBackBtn').addEventListener('click', closeHowToPlay);
+  $('howToRulesBtn').addEventListener('click', () => {
+    closeHowToPlay();
+    document.dispatchEvent(new CustomEvent('home:open-rules'));
+  });
   $('settingsSoundEnabled').addEventListener('change', event => {
     soundState.muted = !event.currentTarget.checked;
     saveSoundSettings();
