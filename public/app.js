@@ -725,6 +725,9 @@
   }
 
   $('joinBtn').addEventListener('click', () => joinRoomByCode($('codeInput').value));
+  $('codeInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') joinRoomByCode(e.currentTarget.value);
+  });
 
   $('codeInput').addEventListener('input', e => {
     e.target.value = e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 5);
@@ -791,15 +794,25 @@
   }
 
   function openPlayEntry(mode) {
+    const joinMode = mode === 'join';
     $('homePrimaryAction').classList.add('hidden');
     $('playFlow').classList.add('hidden');
     $('entry').classList.remove('hidden');
-    if (mode === 'join') $('codeInput').focus({ preventScroll: true });
+    $('entry').dataset.entryMode = joinMode ? 'join' : 'create';
+    $('entryTitle').textContent = joinMode ? 'Присоединиться' : 'Создать игру';
+    $('entrySubtitle').textContent = joinMode
+      ? 'Введите код комнаты, полученный от другого игрока.'
+      : 'Подготовьте капитана и откройте новую комнату.';
+    $('createEntryActions').classList.toggle('hidden', joinMode);
+    $('joinEntryActions').classList.toggle('hidden', !joinMode);
+    setError('entryError');
+    if (joinMode) $('codeInput').focus({ preventScroll: true });
     else $('createBtn').focus({ preventScroll: true });
   }
 
   $('homePlayBtn').addEventListener('click', openPlayFlow);
   $('playFlowBackBtn').addEventListener('click', showHomePrimary);
+  $('entryBackBtn').addEventListener('click', openPlayFlow);
   $('playCreateChoiceBtn').addEventListener('click', () => openPlayEntry('create'));
   $('playJoinChoiceBtn').addEventListener('click', () => openPlayEntry('join'));
   $('profileOpenBtn').addEventListener('click', openProfile);
