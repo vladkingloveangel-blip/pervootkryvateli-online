@@ -157,6 +157,7 @@ test('Secondary Home menu centralizes non-party navigation', () => {
   assert.ok(html.includes('data-home-menu="logout"'));
   assert.ok(app.includes('function openHomeMenu()'));
   assert.ok(app.includes('function handleHomeMenuAction(action)'));
-  assert.ok(app.includes("if (action === 'logout') return $('logoutBtn').click()"));
+  assert.ok(app.includes("if (action === 'logout') return logoutAccount()"));
+  assert.ok(app.includes("$('logoutBtn').addEventListener('click', logoutAccount)"));
   assert.ok(app.includes("$('homeMenuAdminBtn').classList.toggle('hidden', user?.role !== 'admin')"));
 });
