@@ -126,6 +126,16 @@
       </button>
     </section>
 
+    <section id="myGamesPanel" class="my-games-panel hidden" aria-labelledby="myGamesTitle">
+      <div class="my-games-head">
+        <button id="myGamesBackBtn" class="play-flow-back" type="button" aria-label="Назад на главную">←</button>
+        <div><span>КАПИТАНСКИЙ ЖУРНАЛ</span><h1 id="myGamesTitle">Мои игры</h1><p class="muted">Продолжите сохранённую партию или вернитесь на главную.</p></div>
+        <button id="myGamesRefreshBtn" class="my-games-refresh" type="button" aria-label="Обновить список">↻</button>
+      </div>
+      <div id="myGamesList" class="my-games-list" aria-live="polite"></div>
+      <p id="myGamesError" class="error" role="alert"></p>
+    </section>
+
     <section id="playFlow" class="play-flow hidden" aria-labelledby="playFlowTitle">
       <div class="play-flow-head">
         <button id="playFlowBackBtn" class="play-flow-back" type="button" aria-label="Назад на главную">←</button>
