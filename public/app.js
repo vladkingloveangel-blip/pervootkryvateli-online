@@ -144,7 +144,7 @@
     $('authPanel').classList.remove('hidden');
     $('accountBar').classList.add('hidden');
     $('homeProfileBtn')?.classList.add('hidden');
-    $('homeSettingsBtn')?.classList.add('hidden');
+    $('homeMenuBtn')?.classList.add('hidden');
     $('entry').classList.add('hidden');
     $('homePrimaryAction').classList.add('hidden');
     $('playFlow').classList.add('hidden');
@@ -164,8 +164,9 @@
     $('accountRole').textContent = user?.role === 'admin' ? 'администратор' : 'игрок';
     $('homeAvatarInitial').textContent = String(user?.displayName || user?.username || '?').trim().charAt(0).toUpperCase() || '?';
     $('homeProfileBtn').classList.remove('hidden');
-    $('homeSettingsBtn').classList.remove('hidden');
+    $('homeMenuBtn').classList.remove('hidden');
     $('adminOpenBtn').classList.toggle('hidden', user?.role !== 'admin');
+    $('homeMenuAdminBtn').classList.toggle('hidden', user?.role !== 'admin');
     syncLogoutAvailability();
     loadMyGames();
     if (!$('nameInput').value) $('nameInput').value = user?.displayName || user?.username || '';
@@ -190,6 +191,32 @@
     if (!el) return;
     clearTimeout(showConnectionBanner.timer);
     el.classList.add('hidden');
+  }
+
+  function closeHomeMenu() {
+    $('homeSecondaryMenu').classList.add('hidden');
+    $('homeMenuBackdrop').classList.add('hidden');
+    $('homeMenuBtn')?.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('home-menu-open');
+  }
+
+  function openHomeMenu() {
+    if (!state.accountUser || document.body.classList.contains('game-active')) return;
+    $('homeSecondaryMenu').classList.remove('hidden');
+    $('homeMenuBackdrop').classList.remove('hidden');
+    $('homeMenuBtn').setAttribute('aria-expanded', 'true');
+    document.body.classList.add('home-menu-open');
+  }
+
+  function handleHomeMenuAction(action) {
+    closeHomeMenu();
+    if (action === 'games') return showMyGamesPanel();
+    if (action === 'profile') return openProfile();
+    if (action === 'settings') return openSettings();
+    if (action === 'how-to') return openHowToPlay();
+    if (action === 'rules') return openRules('home');
+    if (action === 'admin') return $('adminOpenBtn').click();
+    if (action === 'logout') return $('logoutBtn').click();
   }
 
   function openRules(returnTo = 'home') {
@@ -939,7 +966,12 @@
   $('profileOpenBtn').addEventListener('click', openProfile);
   $('howToPlayOpenBtn').addEventListener('click', openHowToPlay);
   $('homeProfileBtn').addEventListener('click', openProfile);
-  $('homeSettingsBtn').addEventListener('click', openSettings);
+  $('homeMenuBtn').addEventListener('click', openHomeMenu);
+  $('homeMenuCloseBtn').addEventListener('click', closeHomeMenu);
+  $('homeMenuBackdrop').addEventListener('click', closeHomeMenu);
+  for (const button of document.querySelectorAll('[data-home-menu]')) {
+    button.addEventListener('click', () => handleHomeMenuAction(button.dataset.homeMenu));
+  }
   $('settingsBackBtn').addEventListener('click', closeSettings);
   $('howToPlayBackBtn').addEventListener('click', closeHowToPlay);
   $('howToRulesBtn').addEventListener('click', () => openRules('how-to'));
