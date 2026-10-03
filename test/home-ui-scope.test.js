@@ -247,3 +247,19 @@ test('Final Home redesign contract keeps the new shell clean and party UI isolat
   assert.ok(homeCss.includes('/assets/home-background.webp'));
   assert.ok(html.includes('/assets/home-logo.png'));
 });
+
+
+test('Home audio stays outside the active party and shares sound settings', () => {
+  assert.ok(app.includes("function homeAudioAllowed()"));
+  assert.ok(app.includes("document.body.classList.contains('home-active')"));
+  assert.ok(app.includes("function scheduleHomeMusic()"));
+  assert.ok(app.includes("function stopHomeMusic()"));
+  assert.ok(app.includes("$('homeShell').addEventListener('click'"));
+  assert.ok(app.includes("playSoundCue('confirm')"));
+  assert.ok(app.includes("document.addEventListener('visibilitychange', syncHomeMusic)"));
+  const musicStart = app.indexOf('  function homeAudioAllowed()');
+  const musicEnd = app.indexOf('  // Compatibility marker', musicStart);
+  const homeAudio = app.slice(musicStart, musicEnd);
+  assert.equal(homeAudio.includes("game-active"), false);
+  assert.ok(homeAudio.includes("home-active"));
+});
