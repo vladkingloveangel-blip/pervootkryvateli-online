@@ -263,12 +263,19 @@ function verifyPassword(password, stored) {
     return false;
   }
 }
+const AVATAR_IDS = new Set(Array.from({ length: 10 }, (_, index) => 'avatar-' + String(index + 1).padStart(2, '0')));
+
+function accountUserPayload(user) {
+  return { id: user.id, username: user.username, displayName: user.display_name || user.displayName, role: user.role, avatarId: user.avatar_id || user.avatarId || 'avatar-01' };
+}
+
 function signAccountToken(user) {
   const payload = {
     sub: user.id,
     username: user.username,
     displayName: user.display_name || user.displayName || user.username,
     role: user.role || 'player',
+    avatarId: user.avatar_id || user.avatarId || 'avatar-01',
     exp: Date.now() + 1000 * 60 * 60 * 24 * 30,
   };
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
@@ -315,6 +322,7 @@ function requireAdminAccount(data, ack) {
 async function initDatabase() {
   if (!db) return;
   await db.query('CREATE TABLE IF NOT EXISTS users (id UUID PRIMARY KEY, username TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT \'player\', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), last_login_at TIMESTAMPTZ)');
+  await db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_id TEXT NOT NULL DEFAULT 'avatar-01'");
   if (ADMIN_USERNAME && ADMIN_PASSWORD) {
     const username = normalizeUsername(ADMIN_USERNAME);
     const existing = await db.query('SELECT id FROM users WHERE username = $1', [username]);
@@ -365,7 +373,7 @@ app.post('/api/auth/register', async (req, res) => {
       'INSERT INTO users (id, username, display_name, password_hash, role) VALUES ($1,$2,$3,$4,$5)',
       [user.id, user.username, user.display_name, hashPassword(password), user.role]
     );
-    return res.json({ ok: true, token: signAccountToken(user), user: { id: user.id, username: user.username, displayName: user.display_name, role: user.role } });
+    return res.json({ ok: true, token: signAccountToken(user), user: accountUserPayload(user) });
   } catch (err) {
     if (err?.code === '23505') return res.status(409).json({ ok: false, error: 'Такой логин уже занят.' });
     console.error('Register error:', err);
@@ -378,11 +386,11 @@ app.post('/api/auth/login', async (req, res) => {
   const username = normalizeUsername(req.body?.username);
   const password = String(req.body?.password || '');
   try {
-    const result = await db.query('SELECT id, username, display_name, password_hash, role FROM users WHERE username = $1', [username]);
+    const result = await db.query('SELECT id, username, display_name, password_hash, role, avatar_id FROM users WHERE username = $1', [username]);
     const user = result.rows[0];
     if (!user || !verifyPassword(password, user.password_hash)) return res.status(401).json({ ok: false, error: 'Неверный логин или пароль.' });
     await db.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
-    return res.json({ ok: true, token: signAccountToken(user), user: { id: user.id, username: user.username, displayName: user.display_name, role: user.role } });
+    return res.json({ ok: true, token: signAccountToken(user), user: accountUserPayload(user) });
   } catch (err) {
     console.error('Login error:', err);
     return res.status(500).json({ ok: false, error: 'Не удалось войти.' });
@@ -392,12 +400,12 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', async (req, res) => {
   const auth = verifyAccountToken(bearerToken(req));
   if (!auth) return res.status(401).json({ ok: false, error: 'Сессия истекла.' });
-  if (!db || !dbReady) return res.json({ ok: true, user: { id: auth.sub, username: auth.username, displayName: auth.displayName, role: auth.role } });
+  if (!db || !dbReady) return res.json({ ok: true, user: { id: auth.sub, username: auth.username, displayName: auth.displayName, role: auth.role, avatarId: auth.avatarId || 'avatar-01' } });
   try {
-    const result = await db.query('SELECT id, username, display_name, role FROM users WHERE id = $1', [auth.sub]);
+    const result = await db.query('SELECT id, username, display_name, role, avatar_id FROM users WHERE id = $1', [auth.sub]);
     const user = result.rows[0];
     if (!user) return res.status(401).json({ ok: false, error: 'Аккаунт не найден.' });
-    return res.json({ ok: true, user: { id: user.id, username: user.username, displayName: user.display_name, role: user.role } });
+    return res.json({ ok: true, user: accountUserPayload(user) });
   } catch (err) {
     console.error('Account read error:', err);
     return res.status(500).json({ ok: false, error: 'Не удалось загрузить профиль.' });
@@ -409,16 +417,18 @@ app.post('/api/auth/profile', async (req, res) => {
   const auth = verifyAccountToken(bearerToken(req));
   if (!auth) return res.status(401).json({ ok: false, error: 'Сессия истекла.' });
   const rawName = String(req.body?.displayName || '').trim().replace(/\s+/g, ' ');
+  const avatarId = String(req.body?.avatarId || auth.avatarId || 'avatar-01');
   if (rawName.length < 2 || rawName.length > 24) return res.status(400).json({ ok: false, error: 'Имя должно содержать от 2 до 24 символов.' });
+  if (!AVATAR_IDS.has(avatarId)) return res.status(400).json({ ok: false, error: 'Неизвестный аватар.' });
   try {
     const result = await db.query(
-      'UPDATE users SET display_name = $2 WHERE id = $1 RETURNING id, username, display_name, role',
-      [auth.sub, rawName]
+      'UPDATE users SET display_name = $2, avatar_id = $3 WHERE id = $1 RETURNING id, username, display_name, role, avatar_id',
+      [auth.sub, rawName, avatarId]
     );
     const user = result.rows[0];
     if (!user) return res.status(404).json({ ok: false, error: 'Аккаунт не найден.' });
     const token = signAccountToken(user);
-    return res.json({ ok: true, token, user: { id: user.id, username: user.username, displayName: user.display_name, role: user.role } });
+    return res.json({ ok: true, token, user: accountUserPayload(user) });
   } catch (err) {
     console.error('Profile update error:', err);
     return res.status(500).json({ ok: false, error: 'Не удалось сохранить профиль.' });
