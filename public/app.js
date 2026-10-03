@@ -200,6 +200,7 @@
 
   function showAuth(message = '') {
     setGameScreenActive(false);
+    document.body.classList.remove('welcome-active');
     state.profileOpen = false;
     $('profilePanel').classList.add('hidden');
     $('settingsPanel').classList.add('hidden');
@@ -991,6 +992,7 @@
 
   function showHomeScreen(id) {
     closeHomeMenu();
+    document.body.classList.remove('welcome-active');
     hideWelcomeScreen();
     hideHomeScreens();
     $(id)?.classList.remove('hidden');
@@ -1000,6 +1002,7 @@
     state.profileOpen = false;
     closeHomeMenu();
     hideHomeScreens();
+    document.body.classList.add('welcome-active');
     $(WELCOME_SCREEN_ID)?.classList.remove('hidden');
   }
 
