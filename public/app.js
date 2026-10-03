@@ -212,7 +212,6 @@
     $('entry').classList.add('hidden');
     $('homePrimaryAction').classList.add('hidden');
     $('homeDashboard').classList.add('hidden');
-    $('playFlow').classList.add('hidden');
     $('myGamesPanel').classList.add('hidden');
     $('adminPanel').classList.add('hidden');
     if (!state.spectating) $('game').classList.add('hidden');
@@ -477,7 +476,7 @@
       }
       for (const room of result.rooms) {
         const card = document.createElement('div');
-        card.className = 'admin-room-card';
+        card.className = 'home-game-card';
         const info = document.createElement('div');
         const title = document.createElement('strong');
         title.textContent = 'Комната ' + room.code;
@@ -985,7 +984,7 @@
     if (e.key === 'Enter') submitAuth('register');
   });
   const WELCOME_SCREEN_ID = 'homePrimaryAction';
-  const HOME_SCREEN_IDS = ['homeDashboard', 'playFlow', 'entry', 'myGamesPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel'];
+  const HOME_SCREEN_IDS = ['homeDashboard', 'entry', 'myGamesPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel'];
 
   function hideWelcomeScreen() {
     $(WELCOME_SCREEN_ID)?.classList.add('hidden');
@@ -1102,11 +1101,6 @@
     loadMyGames();
   }
 
-  function openPlayFlow() {
-    showHomeScreen('playFlow');
-    $('playCreateChoiceBtn').focus({ preventScroll: true });
-  }
-
   function openPlayEntry(mode) {
     const joinMode = mode === 'join';
     showHomeScreen('entry');
@@ -1130,12 +1124,9 @@
   $('homeDashboardHowToBtn').addEventListener('click', openHowToPlay);
   $('homeDashboardRulesBtn').addEventListener('click', () => openRules('home'));
   $('homeDashboardSettingsBtn').addEventListener('click', openSettings);
-  $('playFlowBackBtn').addEventListener('click', showHomeDashboard);
   $('myGamesBackBtn').addEventListener('click', showHomeDashboard);
   $('myGamesRefreshBtn').addEventListener('click', loadMyGames);
   $('entryBackBtn').addEventListener('click', showHomeDashboard);
-  $('playCreateChoiceBtn').addEventListener('click', () => openPlayEntry('create'));
-  $('playJoinChoiceBtn').addEventListener('click', () => openPlayEntry('join'));
   $('homeProfileBtn').addEventListener('click', openProfile);
   $('homeMenuBtn').addEventListener('click', openHomeMenu);
   $('homeMenuCloseBtn').addEventListener('click', closeHomeMenu);
