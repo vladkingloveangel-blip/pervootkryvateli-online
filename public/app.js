@@ -899,10 +899,7 @@
     });
   }
 
-  $('myGamesOpenBtn').addEventListener('click', () => {
-    if (state.room) goHomeToGames();
-    else openMyGames();
-  });
+  $('myGamesOpenBtn').addEventListener('click', goHomeToGames);
   $('adminRefreshBtn').addEventListener('click', loadAdminRooms);
   $('adminBackBtn').addEventListener('click', () => {
     socket.emit('adminStopWatching', {}, () => {});
