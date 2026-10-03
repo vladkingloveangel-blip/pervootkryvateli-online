@@ -48,17 +48,15 @@
   window.addEventListener('beforeinstallprompt', event => {
     event.preventDefault();
     deferredInstallPrompt = event;
-    $('installAppBtn').classList.remove('hidden');
     $('settingsInstallSection')?.classList.remove('hidden');
   });
-  $('installAppBtn').addEventListener('click', async () => {
+  async function promptAppInstall() {
     if (!deferredInstallPrompt) return;
     deferredInstallPrompt.prompt();
     try { await deferredInstallPrompt.userChoice; } catch {}
     deferredInstallPrompt = null;
-    $('installAppBtn').classList.add('hidden');
     $('settingsInstallSection')?.classList.add('hidden');
-  });
+  }
 
 
   async function apiJson(url, options = {}) {
@@ -73,7 +71,7 @@
 
 
   function syncLogoutAvailability() {
-    const logout = $('logoutBtn');
+    const logout = document.querySelector('[data-home-menu="logout"]');
     if (!logout) return;
     const inPartyContext = document.body.classList.contains('game-active') || Boolean(state.room) || state.spectating;
     logout.classList.toggle('hidden', inPartyContext);
@@ -142,7 +140,6 @@
     $('howToPlayPanel').classList.add('hidden');
     $('rulesPanel').classList.add('hidden');
     $('authPanel').classList.remove('hidden');
-    $('accountBar').classList.add('hidden');
     $('homeProfileBtn')?.classList.add('hidden');
     $('homeMenuBtn')?.classList.add('hidden');
     $('entry').classList.add('hidden');
@@ -160,13 +157,9 @@
     state.accountToken = token || '';
     if (state.accountToken) localStorage.setItem('pervo:accountToken', state.accountToken);
     $('authPanel').classList.add('hidden');
-    $('accountBar').classList.remove('hidden');
-    $('accountName').textContent = user?.displayName || user?.username || 'Игрок';
-    $('accountRole').textContent = user?.role === 'admin' ? 'администратор' : 'игрок';
     $('homeAvatarInitial').textContent = String(user?.displayName || user?.username || '?').trim().charAt(0).toUpperCase() || '?';
     $('homeProfileBtn').classList.remove('hidden');
     $('homeMenuBtn').classList.remove('hidden');
-    $('adminOpenBtn').classList.toggle('hidden', user?.role !== 'admin');
     $('homeMenuAdminBtn').classList.toggle('hidden', user?.role !== 'admin');
     syncLogoutAvailability();
     loadMyGames();
@@ -216,7 +209,7 @@
     if (action === 'settings') return openSettings();
     if (action === 'how-to') return openHowToPlay();
     if (action === 'rules') return openRules('home');
-    if (action === 'admin') return $('adminOpenBtn').click();
+    if (action === 'admin') return showAdminPanel();
     if (action === 'logout') return logoutAccount();
   }
 
@@ -909,8 +902,6 @@
     }
   });
 
-  $('loginBtn').addEventListener('click', () => submitAuth('login'));
-  $('registerBtn').addEventListener('click', () => submitAuth('register'));
   $('authLoginTab').addEventListener('click', () => setAuthMode('login'));
   $('authRegisterTab').addEventListener('click', () => setAuthMode('register'));
   $('authSubmitBtn').addEventListener('click', () => submitAuth($('authPanel').dataset.authMode || 'login'));
@@ -971,8 +962,6 @@
   $('entryBackBtn').addEventListener('click', openPlayFlow);
   $('playCreateChoiceBtn').addEventListener('click', () => openPlayEntry('create'));
   $('playJoinChoiceBtn').addEventListener('click', () => openPlayEntry('join'));
-  $('profileOpenBtn').addEventListener('click', openProfile);
-  $('howToPlayOpenBtn').addEventListener('click', openHowToPlay);
   $('homeProfileBtn').addEventListener('click', openProfile);
   $('homeMenuBtn').addEventListener('click', openHomeMenu);
   $('homeMenuCloseBtn').addEventListener('click', closeHomeMenu);
@@ -1001,13 +990,12 @@
     saveSoundSettings();
   });
   $('settingsSoundVolume').addEventListener('change', () => playSoundCue('confirm'));
-  $('settingsInstallBtn').addEventListener('click', () => $('installAppBtn').click());
+  $('settingsInstallBtn').addEventListener('click', promptAppInstall);
   $('gameAccountBackdrop').addEventListener('click', closeGameAccountMenu);
   $('profileBackBtn').addEventListener('click', closeProfile);
   $('profileSaveBtn').addEventListener('click', saveProfileName);
   $('profilePasswordBtn').addEventListener('click', changeProfilePassword);
   $('profileNewPassword2').addEventListener('keydown', e => { if (e.key === 'Enter') changeProfilePassword(); });
-  $('adminOpenBtn').addEventListener('click', showAdminPanel);
   $('adminHomeBtn').addEventListener('click', () => {
     socket.emit('adminStopWatching', {}, () => {});
     loadMyGames();
@@ -1065,7 +1053,6 @@
     });
   }
 
-  $('myGamesOpenBtn').addEventListener('click', goHomeToGames);
   $('adminRefreshBtn').addEventListener('click', loadAdminRooms);
   $('adminBackBtn').addEventListener('click', () => {
     socket.emit('adminStopWatching', {}, () => {});
@@ -1091,11 +1078,8 @@
     document.body.classList.remove('spectator-mode');
     $('game').classList.add('hidden');
     $('adminPanel').classList.add('hidden');
-    $('accountBar').classList.add('hidden');
     showAuth('Вы вышли из аккаунта.');
   }
-
-  $('logoutBtn').addEventListener('click', logoutAccount);
 
   $('resultContinueBtn').addEventListener('click', dismissResultCard);
   $('objectSheetClose').addEventListener('click', closeMapInfo);
