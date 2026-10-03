@@ -59,12 +59,32 @@ test('Welcome hides Home controls and keeps only the authored scene controls', (
 });
 
 
-test('Welcome action routes to the existing play flow without game mutations', () => {
+test('Welcome routes to the Home dashboard or authentication without game mutations', () => {
   assert.match(html, /id="homePrimaryAction"/);
   assert.match(html, /id="homePlayBtn"/);
-  assert.ok(app.includes("$('homePlayBtn').addEventListener('click', openPlayFlow)"));
-  assert.ok(app.includes("function openPlayFlow()"));
+  assert.ok(app.includes("$('homePlayBtn').addEventListener('click', openWelcomeAction)"));
+  assert.ok(app.includes('function openWelcomeAction()'));
+  assert.ok(app.includes('function showHomeDashboard()'));
   assert.ok(!app.includes("$('homePlayBtn').addEventListener('click', () => {\n    socket.emit"));
+});
+
+
+test('Home dashboard connects existing non-party actions', () => {
+  assert.ok(html.includes('id="homeDashboard" class="home-dashboard hidden"'));
+  assert.ok(html.includes('id="homeNewGameBtn"'));
+  assert.ok(html.includes('id="homeJoinGameBtn"'));
+  assert.ok(html.includes('id="homeDashboardGamesBtn"'));
+  assert.ok(html.includes('id="homeDashboardHowToBtn"'));
+  assert.ok(html.includes('id="homeDashboardRulesBtn"'));
+  assert.ok(html.includes('id="homeDashboardSettingsBtn"'));
+  assert.ok(app.includes("$('homeNewGameBtn').addEventListener('click', () => openPlayEntry('create'))"));
+  assert.ok(app.includes("$('homeJoinGameBtn').addEventListener('click', () => openPlayEntry('join'))"));
+  assert.ok(app.includes("$('homeDashboardGamesBtn').addEventListener('click', openMyGames)"));
+  assert.ok(app.includes("$('homeDashboardHowToBtn').addEventListener('click', openHowToPlay)"));
+  assert.ok(app.includes("$('homeDashboardRulesBtn').addEventListener('click', () => openRules('home'))"));
+  assert.ok(app.includes("$('homeDashboardSettingsBtn').addEventListener('click', openSettings)"));
+  assert.ok(homeCss.includes('/* Home v2: dashboard */'));
+  assert.ok(homeCss.includes('body.home-active #homeDashboard'));
 });
 
 
@@ -72,7 +92,6 @@ test('Play flow stays client-side until existing create/join actions', () => {
   assert.ok(html.includes('id="playFlow"'));
   assert.ok(html.includes('id="playCreateChoiceBtn"'));
   assert.ok(html.includes('id="playJoinChoiceBtn"'));
-  assert.ok(app.includes("$('homePlayBtn').addEventListener('click', openPlayFlow)"));
   assert.ok(app.includes("$('playCreateChoiceBtn').addEventListener('click', () => openPlayEntry('create'))"));
   assert.ok(app.includes("$('playJoinChoiceBtn').addEventListener('click', () => openPlayEntry('join'))"));
   assert.ok(app.includes("socket.emit('createRoom', profile()"));
@@ -88,6 +107,7 @@ test('Create and Join use separate entry modes while preserving room events', ()
   assert.ok(app.includes("$('entry').dataset.entryMode = joinMode ? 'join' : 'create'"));
   assert.ok(app.includes("$('createEntryActions').classList.toggle('hidden', joinMode)"));
   assert.ok(app.includes("$('joinEntryActions').classList.toggle('hidden', !joinMode)"));
+  assert.ok(app.includes("$('entryBackBtn').addEventListener('click', showHomeDashboard)"));
   assert.ok(app.includes("socket.emit('createRoom', profile()"));
   assert.ok(app.includes("socket.emit('joinRoom', { ...profile(), code"));
 });
@@ -99,7 +119,7 @@ test('My Games is a dedicated Home state and preserves resume flow', () => {
   assert.ok(html.includes('id="myGamesRefreshBtn"'));
   assert.ok(html.includes('id="myGamesList" class="my-games-list"'));
   assert.ok(app.includes('function openMyGames()'));
-  assert.ok(app.includes("$('myGamesBackBtn').addEventListener('click', showHomePrimary)"));
+  assert.ok(app.includes("$('myGamesBackBtn').addEventListener('click', showHomeDashboard)"));
   assert.ok(app.includes("$('myGamesRefreshBtn').addEventListener('click', loadMyGames)"));
   assert.ok(app.includes("socket.timeout(15000).emit('resumeRoom'"));
   assert.ok(app.includes("socket.timeout(10000).emit('goHome'"));
@@ -189,7 +209,7 @@ test('Authentication has separate login and registration modes without changing 
 
 test('Welcome is structurally separate from internal Home screens', () => {
   assert.ok(app.includes("const WELCOME_SCREEN_ID = 'homePrimaryAction'"));
-  assert.ok(app.includes("const HOME_SCREEN_IDS = ['playFlow', 'entry', 'myGamesPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel']"));
+  assert.ok(app.includes("const HOME_SCREEN_IDS = ['homeDashboard', 'playFlow', 'entry', 'myGamesPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel']"));
   assert.ok(app.includes('function hideWelcomeScreen()'));
   assert.ok(app.includes('function hideHomeScreens()'));
   assert.ok(app.includes('function showHomeScreen(id)'));
@@ -198,6 +218,7 @@ test('Welcome is structurally separate from internal Home screens', () => {
   assert.ok(app.includes("$(WELCOME_SCREEN_ID)?.classList.remove('hidden')"));
   assert.ok(app.includes('function showHomePrimary()'));
   assert.ok(app.includes('showWelcomeScreen();'));
+  assert.ok(app.includes("showHomeScreen('homeDashboard')"));
   assert.ok(app.includes("showHomeScreen('playFlow')"));
   assert.ok(app.includes("showHomeScreen('entry')"));
   assert.ok(app.includes("showHomeScreen('myGamesPanel')"));
