@@ -247,3 +247,36 @@ body.home-active #authPanel #authError{margin-bottom:0;text-align:center}
   body.home-active .auth-fields{gap:8px}
   body.home-active #authPanel .auth-actions{margin-top:10px}
 }
+
+/* Step 16: Desktop adaptation */
+@media(min-width:901px){
+  body.home-active #homeShell{padding:clamp(18px,2.4vw,34px) clamp(24px,4vw,72px) 28px;background-position:center 48%}
+  body.home-active #homeShell>.topbar,body.home-active #homeShell>main{width:min(100%,1280px)}
+  body.home-active .home-topbar{grid-template-columns:minmax(360px,1fr) auto}
+  body.home-active .home-logo{width:min(34vw,470px)}
+  body.home-active .home-top-actions{gap:10px}
+  body.home-active .home-icon-button{width:50px;height:50px;min-width:50px}
+  body.home-active #homePrimaryAction{min-height:clamp(320px,52dvh,570px);align-items:flex-end;padding-bottom:clamp(48px,8dvh,96px)}
+  body.home-active .home-play-button{width:380px;min-height:108px}
+  body.home-active .home-play-button strong{font-size:46px}
+  body.home-active #playFlow,body.home-active #entry.entry-panel,body.home-active #settingsPanel.settings-panel,body.home-active #authPanel.auth-panel{margin-left:clamp(3vw,8vw,110px);margin-right:auto}
+  body.home-active #myGamesPanel.my-games-panel,body.home-active #profilePanel.profile-panel,body.home-active #howToPlayPanel.how-to-play-panel,body.home-active #rulesPanel.rules-panel{margin-left:auto;margin-right:auto}
+  body.home-active #playFlow{width:min(48vw,600px);margin-top:clamp(60px,11dvh,120px)}
+  body.home-active #entry.entry-panel{width:min(52vw,640px);margin-top:clamp(48px,8dvh,92px)}
+  body.home-active #authPanel.auth-panel{width:min(40vw,470px);margin-top:clamp(64px,11dvh,120px)}
+  body.home-active #settingsPanel.settings-panel{width:min(52vw,650px);margin-top:clamp(48px,8dvh,86px)}
+  body.home-active #myGamesPanel.my-games-panel{width:min(74vw,860px)}
+  body.home-active #profilePanel.profile-panel{width:min(72vw,820px)}
+  body.home-active #howToPlayPanel.how-to-play-panel{width:min(72vw,820px);max-height:min(76dvh,780px)}
+  body.home-active #rulesPanel.rules-panel{width:min(78vw,920px);max-height:min(78dvh,840px)}
+  body.home-active .how-to-play-steps{grid-template-columns:repeat(2,minmax(0,1fr))}
+  body.home-active .rules-content{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+  body.home-active .rules-content section{min-height:150px}
+  body.home-active .rules-tabs{justify-content:center}
+  body.home-active .home-secondary-menu{top:clamp(76px,10dvh,108px);right:clamp(24px,4vw,72px);width:370px}
+}
+@media(min-width:1400px){
+  body.home-active #homeShell{background-size:cover;background-position:center 46%}
+  body.home-active #homePrimaryAction{min-height:56dvh}
+  body.home-active .home-play-button{width:400px}
+}
