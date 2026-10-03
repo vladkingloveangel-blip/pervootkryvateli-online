@@ -95,3 +95,16 @@ test('My Games is a dedicated Home state and preserves resume flow', () => {
   assert.ok(app.includes("socket.timeout(15000).emit('resumeRoom'"));
   assert.ok(app.includes("socket.timeout(10000).emit('goHome'"));
 });
+
+
+test('Profile is a dedicated Home screen and preserves account APIs', () => {
+  assert.ok(html.includes('id="profilePanel" class="panel profile-panel hidden"'));
+  assert.ok(html.includes('id="profileAvatarInitial"'));
+  assert.ok(html.includes('id="profileIdentityName"'));
+  assert.ok(html.includes('id="profileIdentityLogin"'));
+  assert.ok(app.includes("function openProfile()"));
+  assert.ok(app.includes("$('profileAvatarInitial').textContent"));
+  assert.ok(app.includes("$('homeAvatarInitial').textContent"));
+  assert.ok(app.includes("apiJson('/api/auth/profile'"));
+  assert.ok(app.includes("apiJson('/api/auth/change-password'"));
+});
