@@ -277,3 +277,13 @@ test('Profile avatar picker is account-backed and remains Home-only', () => {
   assert.ok(homeCss.includes('.profile-avatar-grid'));
   assert.ok(homeCss.includes('min-width:33px;min-height:33px'));
 });
+
+
+test('Persisted account startup activates the Home surface before rendering Home UI', () => {
+  const applyStart = app.indexOf('function applyAccount(user, token = state.accountToken)');
+  const applyEnd = app.indexOf('function showConnectionBanner', applyStart);
+  const applyAccount = app.slice(applyStart, applyEnd);
+  assert.ok(applyStart >= 0);
+  assert.ok(applyAccount.includes("if (!state.room && !state.spectating) setGameScreenActive(false);"));
+  assert.ok(applyAccount.indexOf('setGameScreenActive(false)') < applyAccount.indexOf('showHomePrimary()'));
+});
