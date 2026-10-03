@@ -285,8 +285,11 @@
     const token = state.accountToken;
     const request = ++myGamesRequest;
     const enabled = Boolean(state.accountUser && token);
-    $('myGamesPanel').classList.toggle('hidden', !enabled);
-    if (!enabled) { $('myGamesList').replaceChildren(); return; }
+    if (!enabled) {
+      $('myGamesPanel').classList.add('hidden');
+      $('myGamesList').replaceChildren();
+      return;
+    }
     setError('myGamesError');
     try {
       const result = await apiJson('/api/my-games', { cache: 'no-store' });
@@ -783,12 +786,25 @@
   function showHomePrimary() {
     $('playFlow').classList.add('hidden');
     $('entry').classList.add('hidden');
+    $('myGamesPanel').classList.add('hidden');
     $('homePrimaryAction').classList.remove('hidden');
+  }
+
+  function openMyGames() {
+    if (!state.accountUser) return;
+    setGameScreenActive(false);
+    $('homePrimaryAction').classList.add('hidden');
+    $('playFlow').classList.add('hidden');
+    $('entry').classList.add('hidden');
+    $('profilePanel').classList.add('hidden');
+    $('myGamesPanel').classList.remove('hidden');
+    loadMyGames();
   }
 
   function openPlayFlow() {
     $('homePrimaryAction').classList.add('hidden');
     $('entry').classList.add('hidden');
+    $('myGamesPanel').classList.add('hidden');
     $('playFlow').classList.remove('hidden');
     $('playCreateChoiceBtn').focus({ preventScroll: true });
   }
@@ -812,6 +828,8 @@
 
   $('homePlayBtn').addEventListener('click', openPlayFlow);
   $('playFlowBackBtn').addEventListener('click', showHomePrimary);
+  $('myGamesBackBtn').addEventListener('click', showHomePrimary);
+  $('myGamesRefreshBtn').addEventListener('click', loadMyGames);
   $('entryBackBtn').addEventListener('click', openPlayFlow);
   $('playCreateChoiceBtn').addEventListener('click', () => openPlayEntry('create'));
   $('playJoinChoiceBtn').addEventListener('click', () => openPlayEntry('join'));
@@ -882,7 +900,10 @@
     });
   }
 
-  $('myGamesOpenBtn').addEventListener('click', goHomeToGames);
+  $('myGamesOpenBtn').addEventListener('click', () => {
+    if (state.room) goHomeToGames();
+    else openMyGames();
+  });
   $('adminRefreshBtn').addEventListener('click', loadAdminRooms);
   $('adminBackBtn').addEventListener('click', () => {
     socket.emit('adminStopWatching', {}, () => {});
