@@ -136,3 +136,18 @@ body.home-active .settings-volume input{width:100%;accent-color:#caa75c}
 body.home-active .settings-volume output{text-align:right;color:#ead69e;font-variant-numeric:tabular-nums}
 body.home-active #settingsInstallBtn{min-height:42px;white-space:nowrap}
 @media(max-width:520px){body.home-active #settingsPanel.settings-panel{width:calc(100% - 8px);margin-top:24px;padding:14px}body.home-active .settings-row{gap:10px}}
+
+/* Step 10: How to Play */
+body.home-active #howToPlayPanel.how-to-play-panel{position:relative;z-index:2;width:min(100%,680px);max-height:min(78dvh,760px);overflow:auto;margin:clamp(22px,5dvh,60px) auto 0;padding:18px;border:1px solid rgba(222,187,105,.55);border-radius:20px;background:linear-gradient(180deg,rgba(7,37,45,.95),rgba(4,24,31,.98));box-shadow:0 18px 48px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,238,190,.06);backdrop-filter:blur(8px)}
+body.home-active #howToPlayPanel.hidden{display:none}
+body.home-active .how-to-play-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:16px}
+body.home-active .how-to-play-head span{display:block;font-size:10px;font-weight:700;letter-spacing:.2em;color:rgba(235,207,139,.72)}
+body.home-active .how-to-play-head h1{margin:3px 0 4px;font-family:Georgia,'Times New Roman',serif;font-size:clamp(24px,7vw,34px);color:#f0dda8}
+body.home-active .how-to-play-head p{margin:0;font-size:12px}
+body.home-active .how-to-play-steps{display:grid;gap:9px}
+body.home-active .how-to-play-steps article{display:grid;grid-template-columns:38px 1fr;gap:11px;padding:12px;border:1px solid rgba(198,165,91,.22);border-radius:13px;background:rgba(3,25,32,.62)}
+body.home-active .how-to-play-steps article>b{display:grid;place-items:center;width:34px;height:34px;border:1px solid rgba(222,187,105,.55);border-radius:50%;color:#ead69e;font-family:Georgia,'Times New Roman',serif}
+body.home-active .how-to-play-steps article strong{color:#ead69e;font-family:Georgia,'Times New Roman',serif;font-size:16px}
+body.home-active .how-to-play-steps article p{margin:4px 0 0;color:rgba(231,225,204,.74);font-size:12px;line-height:1.45}
+body.home-active .how-to-rules-link{width:100%;min-height:44px;margin-top:12px}
+@media(max-width:520px){body.home-active #howToPlayPanel.how-to-play-panel{width:calc(100% - 8px);max-height:80dvh;margin-top:18px;padding:14px}}
