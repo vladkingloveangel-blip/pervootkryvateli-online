@@ -219,6 +219,7 @@
   }
 
   function applyAccount(user, token = state.accountToken) {
+    if (!state.room && !state.spectating) setGameScreenActive(false);
     state.accountUser = user;
     state.accountToken = token || '';
     if (state.accountToken) localStorage.setItem('pervo:accountToken', state.accountToken);
