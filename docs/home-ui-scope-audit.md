@@ -11,13 +11,11 @@ The non-party UI is now rooted at `#homeShell[data-ui-scope="home"]`. The active
 ## Current non-party DOM
 
 - `#authPanel`: login/registration.
-- `#accountBar`: account identity, My Games, Profile, Admin (role-gated), logout.
 - `#profilePanel`: display-name and password changes.
 - `#adminPanel`: admin room list/spectator entry; retained legacy utility, not part of the planned player Home redesign.
 - `#entry`: current room entry surface.
 - `#myGamesPanel` inside `#entry`: saved/active rooms.
 - create/join controls: `#nameInput`, `#shipSelect`, `#createBtn`, `#codeInput`, `#joinBtn`.
-- `#logoutBtn`: account logout; `syncLogoutAvailability()` hides it whenever party context exists.
 - `#game`: active-party/lobby subtree and explicit redesign exclusion.
 
 ## Current transition map
