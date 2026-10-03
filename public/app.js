@@ -777,6 +777,10 @@
   $('loginBtn').addEventListener('click', () => submitAuth('login'));
   $('registerBtn').addEventListener('click', () => submitAuth('register'));
   $('authPassword').addEventListener('keydown', e => { if (e.key === 'Enter') submitAuth('login'); });
+  $('homePlayBtn').addEventListener('click', () => {
+    $('entry').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    $('createBtn').focus({ preventScroll: true });
+  });
   $('profileOpenBtn').addEventListener('click', openProfile);
   $('homeProfileBtn').addEventListener('click', openProfile);
   $('homeSettingsBtn').addEventListener('click', openProfile);
