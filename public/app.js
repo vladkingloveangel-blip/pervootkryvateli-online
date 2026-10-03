@@ -224,17 +224,10 @@
     if (!state.accountUser) return;
     setGameScreenActive(false);
     state.profileOpen = false;
-    $('profilePanel').classList.add('hidden');
-    $('settingsPanel').classList.add('hidden');
-    $('howToPlayPanel').classList.add('hidden');
-    $('homePrimaryAction').classList.add('hidden');
-    $('playFlow').classList.add('hidden');
-    $('entry').classList.add('hidden');
-    $('myGamesPanel').classList.add('hidden');
     $('adminPanel').classList.add('hidden');
     $('authPanel').classList.add('hidden');
     $('rulesPanel').dataset.returnTo = returnTo;
-    $('rulesPanel').classList.remove('hidden');
+    showHomeScreen('rulesPanel');
     $('rulesPanel').scrollTop = 0;
   }
 
@@ -249,15 +242,9 @@
     if (!state.accountUser) return;
     setGameScreenActive(false);
     state.profileOpen = false;
-    $('profilePanel').classList.add('hidden');
-    $('settingsPanel').classList.add('hidden');
-    $('homePrimaryAction').classList.add('hidden');
-    $('playFlow').classList.add('hidden');
-    $('entry').classList.add('hidden');
-    $('myGamesPanel').classList.add('hidden');
     $('adminPanel').classList.add('hidden');
     $('authPanel').classList.add('hidden');
-    $('howToPlayPanel').classList.remove('hidden');
+    showHomeScreen('howToPlayPanel');
   }
 
   function closeHowToPlay() {
@@ -282,15 +269,10 @@
     closeGameAccountMenu();
     setGameScreenActive(false);
     state.profileOpen = false;
-    $('profilePanel').classList.add('hidden');
-    $('homePrimaryAction').classList.add('hidden');
-    $('playFlow').classList.add('hidden');
-    $('entry').classList.add('hidden');
-    $('myGamesPanel').classList.add('hidden');
     $('adminPanel').classList.add('hidden');
     $('authPanel').classList.add('hidden');
     syncSettingsControls();
-    $('settingsPanel').classList.remove('hidden');
+    showHomeScreen('settingsPanel');
   }
 
   function closeSettings() {
@@ -321,11 +303,10 @@
     $('profileNewPassword2').value = '';
     $('profileSaveStatus').textContent = '';
     $('profilePasswordStatus').textContent = '';
-    $('entry').classList.add('hidden');
     $('adminPanel').classList.add('hidden');
     $('game').classList.add('hidden');
     $('authPanel').classList.add('hidden');
-    $('profilePanel').classList.remove('hidden');
+    showHomeScreen('profilePanel');
   }
 
   function closeProfile() {
