@@ -16,7 +16,7 @@ test('home shell and active game are sibling UI scopes', () => {
   assert.ok(homeClose > homeOpen);
   assert.ok(game > homeClose, '#game must stay outside #homeShell');
   const homeMarkup = html.slice(homeOpen, homeClose);
-  for (const id of ['authPanel', 'accountBar', 'profilePanel', 'entry', 'myGamesPanel']) {
+  for (const id of ['authPanel', 'accountBar', 'profilePanel', 'homePrimaryAction', 'playFlow', 'entry', 'myGamesPanel']) {
     assert.match(homeMarkup, new RegExp('id="' + id + '"'));
   }
 });
@@ -56,4 +56,16 @@ test('central Home action routes to existing entry without game mutations', () =
   assert.match(app, /\$\('homePlayBtn'\)\.addEventListener\('click'/);
   assert.match(app, /\$\('entry'\)\.scrollIntoView/);
   assert.doesNotMatch(app, /homePlayBtn[\s\S]{0,300}socket\.emit/);
+});
+
+
+test('Play flow stays client-side until existing create/join actions', () => {
+  assert.ok(html.includes('id="playFlow"'));
+  assert.ok(html.includes('id="playCreateChoiceBtn"'));
+  assert.ok(html.includes('id="playJoinChoiceBtn"'));
+  assert.ok(app.includes("$('homePlayBtn').addEventListener('click', openPlayFlow)"));
+  assert.ok(app.includes("$('playCreateChoiceBtn').addEventListener('click', () => openPlayEntry('create'))"));
+  assert.ok(app.includes("$('playJoinChoiceBtn').addEventListener('click', () => openPlayEntry('join'))"));
+  assert.ok(app.includes("socket.emit('createRoom', profile()"));
+  assert.ok(app.includes("socket.emit('joinRoom', { ...profile(), code"));
 });
