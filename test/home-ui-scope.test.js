@@ -16,7 +16,7 @@ test('home shell and active game are sibling UI scopes', () => {
   assert.ok(homeClose > homeOpen);
   assert.ok(game > homeClose, '#game must stay outside #homeShell');
   const homeMarkup = html.slice(homeOpen, homeClose);
-  for (const id of ['authPanel', 'accountBar', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel', 'homePrimaryAction', 'myGamesPanel', 'playFlow', 'entry']) {
+  for (const id of ['authPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel', 'homePrimaryAction', 'myGamesPanel', 'playFlow', 'entry']) {
     assert.match(homeMarkup, new RegExp('id="' + id + '"'));
   }
 });
@@ -158,7 +158,7 @@ test('Secondary Home menu centralizes non-party navigation', () => {
   assert.ok(app.includes('function openHomeMenu()'));
   assert.ok(app.includes('function handleHomeMenuAction(action)'));
   assert.ok(app.includes("if (action === 'logout') return logoutAccount()"));
-  assert.ok(app.includes("$('logoutBtn').addEventListener('click', logoutAccount)"));
+  assert.ok(app.includes("if (action === 'logout') return logoutAccount()"));
   assert.ok(app.includes("$('homeMenuAdminBtn').classList.toggle('hidden', user?.role !== 'admin')"));
 });
 
@@ -215,4 +215,21 @@ test('Desktop Home adaptation keeps the scene layout without touching game UI', 
   assert.ok(homeCss.includes('@media(min-width:1400px)'));
   const step16 = homeCss.slice(homeCss.indexOf('/* Step 16: Desktop adaptation */'));
   assert.equal(step16.includes('body.game-active'), false);
+});
+
+
+test('Legacy Home shell controls are removed after navigation migration', () => {
+  assert.equal(html.includes('id="accountBar"'), false);
+  assert.equal(html.includes('id="myGamesOpenBtn"'), false);
+  assert.equal(html.includes('id="profileOpenBtn"'), false);
+  assert.equal(html.includes('id="howToPlayOpenBtn"'), false);
+  assert.equal(html.includes('id="adminOpenBtn"'), false);
+  assert.equal(html.includes('id="logoutBtn"'), false);
+  assert.equal(html.includes('id="loginBtn"'), false);
+  assert.equal(html.includes('id="registerBtn"'), false);
+  assert.equal(html.includes('id="installAppBtn"'), false);
+  assert.ok(app.includes("if (action === 'admin') return showAdminPanel()"));
+  assert.ok(app.includes("$('settingsInstallBtn').addEventListener('click', promptAppInstall)"));
+  assert.ok(html.includes('id="gameMenuPanel"'));
+  assert.ok(html.includes('id="gameAccountBackdrop"'));
 });
