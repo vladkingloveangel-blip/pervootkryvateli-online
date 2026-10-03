@@ -161,3 +161,17 @@ test('Secondary Home menu centralizes non-party navigation', () => {
   assert.ok(app.includes("$('logoutBtn').addEventListener('click', logoutAccount)"));
   assert.ok(app.includes("$('homeMenuAdminBtn').classList.toggle('hidden', user?.role !== 'admin')"));
 });
+
+
+test('Authentication has separate login and registration modes without changing account API', () => {
+  assert.ok(html.includes('id="authPanel" class="panel auth-panel entry-panel hidden" data-auth-mode="login"'));
+  assert.ok(html.includes('id="authLoginTab"'));
+  assert.ok(html.includes('id="authRegisterTab"'));
+  assert.ok(html.includes('id="authDisplayNameField" class="hidden"'));
+  assert.ok(html.includes('id="authSubmitBtn"'));
+  assert.ok(app.includes('function setAuthMode(mode)'));
+  assert.ok(app.includes("submitAuth($('authPanel').dataset.authMode || 'login')"));
+  assert.ok(app.includes("const endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/login'"));
+  assert.ok(app.includes("const me = await apiJson('/api/auth/me')"));
+  assert.ok(app.includes("socket.emit('resumeRoom'"));
+});
