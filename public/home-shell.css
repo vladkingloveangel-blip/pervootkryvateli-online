@@ -34,6 +34,46 @@ body.home-active .home-play-kicker{margin-bottom:7px;font-size:10px;font-weight:
 body.home-active .home-play-button:active{transform:translateY(2px);box-shadow:0 7px 20px rgba(0,0,0,.34),inset 0 0 0 2px rgba(255,232,169,.08)}
 @media(max-width:420px){body.home-active .home-play-button{width:min(82vw,330px);min-height:96px}}
 
+/* Home v2: dashboard */
+body.home-active #homeDashboard{position:relative;z-index:2;width:min(100%,560px);margin:clamp(12px,3dvh,34px) auto 0;padding:0 4px max(18px,env(safe-area-inset-bottom));box-sizing:border-box}
+body.home-active #homeDashboard.hidden{display:none}
+body.home-active .home-dashboard-intro{text-align:center;color:#f1dfad;text-shadow:0 2px 8px rgba(0,0,0,.7)}
+body.home-active .home-dashboard-intro>span{display:block;margin-bottom:4px;font-size:10px;font-weight:800;letter-spacing:.24em;color:rgba(239,213,151,.78)}
+body.home-active .home-dashboard-intro h1{margin:0;font-family:Georgia,'Times New Roman',serif;font-size:clamp(29px,8vw,42px);line-height:1;color:#f6e5b6}
+body.home-active .home-dashboard-intro p{margin:5px 0 0;font-size:12px;color:rgba(235,235,220,.82)}
+body.home-active .home-dashboard-primary{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;margin-top:16px}
+body.home-active .home-dashboard-action{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;width:100%;min-height:76px;padding:13px 18px;border:1px solid rgba(213,180,101,.62);border-radius:17px;background:linear-gradient(180deg,rgba(9,46,55,.88),rgba(5,28,35,.94));box-shadow:0 10px 28px rgba(0,0,0,.3),inset 0 0 0 1px rgba(255,239,195,.05);color:#f0dfae;text-align:left}
+body.home-active .home-dashboard-action.primary{border-color:rgba(238,201,116,.92);background:linear-gradient(180deg,rgba(31,78,78,.94),rgba(8,40,48,.97));box-shadow:0 13px 34px rgba(0,0,0,.36),inset 0 0 0 2px rgba(255,232,169,.07)}
+body.home-active .home-dashboard-action strong{font-family:Georgia,'Times New Roman',serif;font-size:22px;line-height:1.05;letter-spacing:.025em}
+body.home-active .home-dashboard-action small{margin-top:5px;font-size:10px;letter-spacing:.04em;color:rgba(229,224,200,.72)}
+body.home-active .home-dashboard-action:active{transform:translateY(1px)}
+body.home-active .home-dashboard-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:10px}
+body.home-active .home-dashboard-links>button{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;min-width:0;min-height:60px;padding:10px 12px;border:1px solid rgba(204,173,100,.42);border-radius:14px;background:rgba(5,31,39,.82);box-shadow:0 7px 20px rgba(0,0,0,.24);color:#ecdcad;text-align:left;backdrop-filter:blur(6px)}
+body.home-active .home-dashboard-links>button strong{font-size:13px;line-height:1.1}
+body.home-active .home-dashboard-links>button small{margin-top:4px;max-width:100%;font-size:9px;line-height:1.15;color:rgba(226,222,201,.68);overflow-wrap:anywhere}
+body.home-active .home-dashboard-links>button:active{transform:translateY(1px)}
+@media(max-width:520px){
+  body.home-active #homeDashboard{width:min(100%,430px);margin-top:clamp(8px,2dvh,20px)}
+  body.home-active .home-dashboard-primary{margin-top:12px}
+  body.home-active .home-dashboard-action{min-height:68px;padding:11px 15px}
+  body.home-active .home-dashboard-action strong{font-size:20px}
+  body.home-active .home-dashboard-links>button{min-height:56px;padding:9px 10px}
+}
+@media(max-height:620px) and (max-width:520px){
+  body.home-active #homeDashboard{margin-top:4px}
+  body.home-active .home-dashboard-intro p{display:none}
+  body.home-active .home-dashboard-primary{margin-top:8px;gap:7px}
+  body.home-active .home-dashboard-action{min-height:58px}
+  body.home-active .home-dashboard-links{gap:7px;margin-top:7px}
+  body.home-active .home-dashboard-links>button{min-height:50px}
+}
+@media(min-width:901px){
+  body.home-active #homeDashboard{width:min(52vw,620px);margin-top:clamp(30px,6dvh,72px)}
+  body.home-active .home-dashboard-primary{grid-template-columns:repeat(2,minmax(0,1fr))}
+  body.home-active .home-dashboard-action{min-height:92px}
+  body.home-active .home-dashboard-links>button{min-height:68px}
+}
+
 /* Step 5: Play flow */
 body.home-active #playFlow{position:relative;z-index:2;width:min(100%,560px);margin:clamp(48px,12dvh,140px) auto 0;padding:18px;box-sizing:border-box;border:1px solid rgba(222,187,105,.55);border-radius:20px;background:linear-gradient(180deg,rgba(7,37,45,.9),rgba(4,24,31,.95));box-shadow:0 18px 48px rgba(0,0,0,.38),inset 0 0 0 1px rgba(255,238,190,.06);backdrop-filter:blur(8px)}
 body.home-active #playFlow.hidden{display:none}
