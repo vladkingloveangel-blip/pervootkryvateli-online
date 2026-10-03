@@ -193,12 +193,12 @@ test('Home navigation keeps exactly one non-party screen active', () => {
 });
 
 
-test('Mobile Home polish preserves safe areas, scrolling, and touch targets', () => {
+test('Mobile Home polish preserves safe areas, scrolling, and compact touch targets', () => {
   assert.ok(homeCss.includes('/* Step 15: Mobile polish */'));
   assert.ok(homeCss.includes('min-height:100svh'));
   assert.ok(homeCss.includes('height:100dvh'));
   assert.ok(homeCss.includes('env(safe-area-inset-bottom)'));
-  assert.ok(homeCss.includes('min-width:44px;min-height:44px'));
+  assert.ok(homeCss.includes('min-width:33px;min-height:33px'));
   assert.ok(homeCss.includes('overscroll-behavior:contain'));
   assert.ok(homeCss.includes('-webkit-overflow-scrolling:touch'));
   assert.ok(homeCss.includes('@media(max-height:620px) and (max-width:520px)'));
