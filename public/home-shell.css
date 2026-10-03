@@ -151,3 +151,19 @@ body.home-active .how-to-play-steps article strong{color:#ead69e;font-family:Geo
 body.home-active .how-to-play-steps article p{margin:4px 0 0;color:rgba(231,225,204,.74);font-size:12px;line-height:1.45}
 body.home-active .how-to-rules-link{width:100%;min-height:44px;margin-top:12px}
 @media(max-width:520px){body.home-active #howToPlayPanel.how-to-play-panel{width:calc(100% - 8px);max-height:80dvh;margin-top:18px;padding:14px}}
+
+/* Step 11: Rules */
+body.home-active #rulesPanel.rules-panel{position:relative;z-index:2;width:min(100%,760px);max-height:min(82dvh,820px);overflow:auto;scroll-behavior:smooth;margin:clamp(18px,4dvh,48px) auto 0;padding:18px;border:1px solid rgba(222,187,105,.55);border-radius:20px;background:linear-gradient(180deg,rgba(7,37,45,.96),rgba(4,24,31,.99));box-shadow:0 18px 48px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,238,190,.06);backdrop-filter:blur(8px)}
+body.home-active #rulesPanel.hidden{display:none}
+body.home-active .rules-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:14px}
+body.home-active .rules-head span{display:block;font-size:10px;font-weight:700;letter-spacing:.2em;color:rgba(235,207,139,.72)}
+body.home-active .rules-head h1{margin:3px 0 4px;font-family:Georgia,'Times New Roman',serif;font-size:clamp(24px,7vw,34px);color:#f0dda8}
+body.home-active .rules-head p{margin:0;font-size:12px}
+body.home-active .rules-tabs{position:sticky;top:-18px;z-index:2;display:flex;gap:6px;overflow-x:auto;margin:0 -4px 12px;padding:10px 4px;background:rgba(5,29,36,.96);scrollbar-width:none}
+body.home-active .rules-tabs::-webkit-scrollbar{display:none}
+body.home-active .rules-tabs button{flex:0 0 auto;min-height:36px;padding:7px 11px;border-color:rgba(198,165,91,.34);border-radius:999px;font-size:11px}
+body.home-active .rules-content{display:grid;gap:10px}
+body.home-active .rules-content section{scroll-margin-top:64px;padding:14px;border:1px solid rgba(198,165,91,.22);border-radius:14px;background:rgba(3,25,32,.62)}
+body.home-active .rules-content h2{margin:0 0 8px;color:#ead69e;font-family:Georgia,'Times New Roman',serif;font-size:19px}
+body.home-active .rules-content p{margin:7px 0;color:rgba(231,225,204,.76);font-size:12px;line-height:1.55}
+@media(max-width:520px){body.home-active #rulesPanel.rules-panel{width:calc(100% - 8px);max-height:84dvh;margin-top:14px;padding:14px}body.home-active .rules-tabs{top:-14px}}
