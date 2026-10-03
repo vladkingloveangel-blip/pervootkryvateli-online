@@ -231,8 +231,6 @@ Some commands are routed through helper functions and therefore are not all visi
 
 The server also exposes commands that are not represented by one obvious permanent UI panel or were missed by simple client literal-emission inventory:
 
-- setLeader;
-- setSeatingOrder;
 - buyShipLevel;
 - buyShipUpgrade;
 - buyEscort;
@@ -246,7 +244,7 @@ The server also exposes commands that are not represented by one obvious permane
 
 The new UX must ensure every player-facing legal command still has a discoverable route where appropriate.
 
-Lobby commands setLeader/setSeatingOrder belong to UI-30.
+Legacy lobby commands setLeader/setSeatingOrder are retired from current gameplay. Current lobby uses creator-first join order plus per-player changeShip/setReady; they must not be restored by UI migration.
 
 Ship/Citadel purchase commands belong to UI-15/fleet-sheet work.
 

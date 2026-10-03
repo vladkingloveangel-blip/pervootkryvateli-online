@@ -116,7 +116,7 @@ function room() {
     code: 'ABCDE',
     started: true,
     hostId: 'p1',
-    leaderId: 'p1',
+    leaderId: 'p1', // legacy-shaped compatibility field; current lobby gameplay does not use a leader
     round: 4,
     circle: 2,
     turnIndex: 0,

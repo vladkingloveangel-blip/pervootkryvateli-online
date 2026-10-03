@@ -199,7 +199,7 @@ test('public projection keeps legacy feud stage for actor and minimal envelope f
     code: 'ABCDE',
     started: true,
     hostId: 'p1',
-    leaderId: 'p1',
+    leaderId: 'p1', // legacy-shaped compatibility field preserved while projecting old room state
     round: 1,
     circle: 6,
     turnIndex: 0,

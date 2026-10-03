@@ -264,7 +264,7 @@ Transient server state для враждебной легендарной кар
 
 ### 8.6. Персонажи как сущности
 
-`CHARACTERS` выбираются из каталога через `characterOptionsAtAdmiralty()`; `player.character` хранит один id, при использовании персонаж обычно расходуется (`consumeCharacter`). Нет `characterDeck`, draw pile, discard или reshuffle. Доступность определяется уровнем Адмиралтейства и уникальностью уже занятых персонажей.
+`CHARACTERS` выбираются из каталога через `characterOptionsAtAdmiralty()`; `player.character` хранит выбранного персонажа, а `consumeCharacter()` помечает его использованным через `characterUsedRound`, не удаляя с корабля. Замена в Адмиралтействе ставит нового персонажа и сбрасывает его once-per-round usage. Нет `characterDeck`, draw pile, discard или reshuffle. Доступность определяется уровнем Адмиралтейства и уникальностью уже занятых персонажей.
 
 ### 8.7. «Карточки островов»
 
