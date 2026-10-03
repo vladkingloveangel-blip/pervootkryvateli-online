@@ -49,6 +49,7 @@
     event.preventDefault();
     deferredInstallPrompt = event;
     $('installAppBtn').classList.remove('hidden');
+    $('settingsInstallSection')?.classList.remove('hidden');
   });
   $('installAppBtn').addEventListener('click', async () => {
     if (!deferredInstallPrompt) return;
@@ -56,6 +57,7 @@
     try { await deferredInstallPrompt.userChoice; } catch {}
     deferredInstallPrompt = null;
     $('installAppBtn').classList.add('hidden');
+    $('settingsInstallSection')?.classList.add('hidden');
   });
 
 
@@ -136,6 +138,7 @@
     setGameScreenActive(false);
     state.profileOpen = false;
     $('profilePanel').classList.add('hidden');
+    $('settingsPanel').classList.add('hidden');
     $('authPanel').classList.remove('hidden');
     $('accountBar').classList.add('hidden');
     $('homeProfileBtn')?.classList.add('hidden');
@@ -185,6 +188,45 @@
     if (!el) return;
     clearTimeout(showConnectionBanner.timer);
     el.classList.add('hidden');
+  }
+
+  function syncSettingsControls() {
+    $('settingsSoundEnabled').checked = !soundState.muted;
+    $('settingsSoundVolume').value = String(Math.round(soundState.volume * 100));
+    $('settingsSoundVolumeValue').textContent = Math.round(soundState.volume * 100) + '%';
+    $('settingsSoundVolume').disabled = soundState.muted;
+  }
+
+  function saveSoundSettings() {
+    localStorage.setItem(SOUND_STORAGE_KEY, JSON.stringify(soundState));
+    syncSettingsControls();
+  }
+
+  function openSettings() {
+    if (!state.accountUser) return;
+    closeGameAccountMenu();
+    setGameScreenActive(false);
+    state.profileOpen = false;
+    $('profilePanel').classList.add('hidden');
+    $('homePrimaryAction').classList.add('hidden');
+    $('playFlow').classList.add('hidden');
+    $('entry').classList.add('hidden');
+    $('myGamesPanel').classList.add('hidden');
+    $('adminPanel').classList.add('hidden');
+    $('authPanel').classList.add('hidden');
+    syncSettingsControls();
+    $('settingsPanel').classList.remove('hidden');
+  }
+
+  function closeSettings() {
+    $('settingsPanel').classList.add('hidden');
+    if (state.room) {
+      $('game').classList.remove('hidden');
+      setGameScreenActive(true);
+      render();
+    } else {
+      showHomePrimary();
+    }
   }
 
   function openProfile() {
@@ -798,6 +840,7 @@
     $('playFlow').classList.add('hidden');
     $('entry').classList.add('hidden');
     $('myGamesPanel').classList.add('hidden');
+    $('settingsPanel').classList.add('hidden');
     $('homePrimaryAction').classList.remove('hidden');
   }
 
@@ -846,7 +889,19 @@
   $('playJoinChoiceBtn').addEventListener('click', () => openPlayEntry('join'));
   $('profileOpenBtn').addEventListener('click', openProfile);
   $('homeProfileBtn').addEventListener('click', openProfile);
-  $('homeSettingsBtn').addEventListener('click', openProfile);
+  $('homeSettingsBtn').addEventListener('click', openSettings);
+  $('settingsBackBtn').addEventListener('click', closeSettings);
+  $('settingsSoundEnabled').addEventListener('change', event => {
+    soundState.muted = !event.currentTarget.checked;
+    saveSoundSettings();
+    if (!soundState.muted) playSoundCue('confirm');
+  });
+  $('settingsSoundVolume').addEventListener('input', event => {
+    soundState.volume = Math.max(0, Math.min(1, Number(event.currentTarget.value) / 100));
+    saveSoundSettings();
+  });
+  $('settingsSoundVolume').addEventListener('change', () => playSoundCue('confirm'));
+  $('settingsInstallBtn').addEventListener('click', () => $('installAppBtn').click());
   $('gameAccountBackdrop').addEventListener('click', closeGameAccountMenu);
   $('profileBackBtn').addEventListener('click', closeProfile);
   $('profileSaveBtn').addEventListener('click', saveProfileName);
