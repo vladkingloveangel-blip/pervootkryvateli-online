@@ -16,7 +16,7 @@ test('home shell and active game are sibling UI scopes', () => {
   assert.ok(homeClose > homeOpen);
   assert.ok(game > homeClose, '#game must stay outside #homeShell');
   const homeMarkup = html.slice(homeOpen, homeClose);
-  for (const id of ['authPanel', 'accountBar', 'profilePanel', 'settingsPanel', 'homePrimaryAction', 'myGamesPanel', 'playFlow', 'entry']) {
+  for (const id of ['authPanel', 'accountBar', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'homePrimaryAction', 'myGamesPanel', 'playFlow', 'entry']) {
     assert.match(homeMarkup, new RegExp('id="' + id + '"'));
   }
 });
@@ -119,4 +119,15 @@ test('Settings is separate from Profile and persists real sound controls', () =>
   assert.ok(app.includes('function syncSettingsControls()'));
   assert.ok(app.includes('localStorage.setItem(SOUND_STORAGE_KEY, JSON.stringify(soundState))'));
   assert.ok(app.includes("$('settingsInstallBtn').addEventListener('click'"));
+});
+
+
+test('How to Play is a dedicated Home guide without changing game help', () => {
+  assert.ok(html.includes('id="howToPlayPanel" class="panel how-to-play-panel hidden"'));
+  assert.ok(html.includes('id="howToPlayOpenBtn"'));
+  assert.ok(html.includes('id="howToRulesBtn"'));
+  assert.ok(app.includes('function openHowToPlay()'));
+  assert.ok(app.includes("$('howToPlayOpenBtn').addEventListener('click', openHowToPlay)"));
+  assert.ok(app.includes("new CustomEvent('home:open-rules')"));
+  assert.ok(html.includes('data-game-menu="help"'));
 });
