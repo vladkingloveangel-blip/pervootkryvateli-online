@@ -215,6 +215,40 @@ test('server source routes four pending families through facade and leaves other
   assert.match(domain, /const RESOLUTION_QUEUE_FIELD = 'resolutionQueue'/);
 });
 
+test('goHome and disconnect settle optional pending states but preserve mandatory personal decisions', () => {
+  const server = source('server.js');
+  const helperStart = server.indexOf('function mandatoryPendingKindsForPlayer(room, playerId)');
+  const helperEnd = server.indexOf('\nfunction fleetAdjustmentOptions(', helperStart);
+  assert.ok(helperStart >= 0 && helperEnd > helperStart);
+  const helper = server.slice(helperStart, helperEnd);
+
+  assert.match(helper, /room\.pendingAlliance = null/);
+  assert.match(helper, /invite\.response = false/);
+  assert.match(helper, /allBattleInvitesAnswered\(room\.pendingBattle\)/);
+  assert.match(helper, /resolvePendingBattle\(room\)/);
+
+  for (const family of ['event', 'feud', 'assignment-choice', 'legendary-reaction']) {
+    assert.match(helper, new RegExp("pendingLegacy\\(room, '" + family.replace('-', '\\-') + "'\\)"));
+  }
+  assert.match(helper, /room\?\.pendingIslandCorrection\?\.playerId/);
+  assert.match(helper, /room\?\.pendingFleetAdjustment\?\.playerId/);
+  assert.doesNotMatch(helper, /clearPendingResolution|pendingIslandCorrection\s*=\s*null|pendingFleetAdjustment\s*=\s*null/);
+  assert.match(helper, /обязательное решение[\s\S]*сохранено до возвращения/);
+
+  const goHomeStart = server.indexOf("onSocketEvent(socket, 'goHome'");
+  const goHomeEnd = server.indexOf("\n  onSocketEvent(socket, 'adminListRooms'", goHomeStart);
+  const goHome = server.slice(goHomeStart, goHomeEnd);
+  assert.match(goHome, /player\.connected = false/);
+  assert.match(goHome, /settleOptionalPendingOnPlayerDetach\(room, player, 'выхода на главную'\)/);
+  assert.ok(goHome.indexOf('player.connected = false') < goHome.indexOf('settleOptionalPendingOnPlayerDetach'));
+  assert.match(goHome, /Его место в партии сохранено/);
+
+  const disconnectStart = server.indexOf("onSocketEvent(socket, 'disconnect'");
+  const disconnectEnd = server.indexOf('\n});\n\napp.use', disconnectStart);
+  const disconnect = server.slice(disconnectStart, disconnectEnd);
+  assert.match(disconnect, /settleOptionalPendingOnPlayerDetach\(room, p, 'отключения'\)/);
+});
+
 test('alliance proposals are map-distance independent while remaining server conditions are revalidated', () => {
   const server = source('server.js');
   const start = server.indexOf("onSocketEvent(socket, 'requestAlliance'");

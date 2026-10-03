@@ -893,6 +893,7 @@
     else renderDiplomacyObjectSheet(me()?.suzerainId || null);
   });
   $('hudMenuBtn').addEventListener('click', toggleGameMenu);
+  $('decisionMenuBtn').addEventListener('click', openGameMenu);
   $('gameMenuCloseBtn').addEventListener('click', closeGameMenu);
   $('gameMenuBackdrop').addEventListener('click', closeGameMenu);
   document.querySelectorAll('[data-game-menu]').forEach(button => {

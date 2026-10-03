@@ -357,6 +357,27 @@ test('UI-7 unifies authoritative pending choices in one mobile Decision Layer', 
 });
 
 
+test('UI-7 mandatory Decision Layer exposes menu access without making the decision dismissible', () => {
+  assert.match(index, /id="decisionMenuBtn"[^>]*>☰ Меню<\/button>/);
+  assert.doesNotMatch(index, /id="decisionClose"/);
+  assert.match(app, /\$\('decisionMenuBtn'\)\.addEventListener\('click', openGameMenu\)/);
+
+  const renderStart = app.indexOf('  function renderDecisionLayer()');
+  const renderEnd = app.indexOf('\n  function renderControls()', renderStart);
+  const renderCode = app.slice(renderStart, renderEnd);
+  assert.match(renderCode, /mobileDecisionDescriptor\(state\.room\)/);
+  assert.doesNotMatch(renderCode, /pendingAlliance\s*=\s*null|pendingBattle\s*=\s*null|clearPending/);
+
+  const menuStart = app.indexOf('  function openGameMenu()');
+  const menuEnd = app.indexOf('\n  function closeGameMenu()', menuStart);
+  const menuCode = app.slice(menuStart, menuEnd);
+  assert.doesNotMatch(menuCode, /socket\.emit|actionsLeft|pendingDecision\s*=/);
+
+  assert.match(styles, /body\.game-active \.decision-menu-btn/);
+  assert.match(styles, /body\.game-active\.game-menu-open \.game-menu-panel[\s\S]*?z-index: 119/);
+  assert.match(styles, /body\.game-active \.decision-layer[\s\S]*?z-index: 110/);
+});
+
 test('UI-8 adds queued Result Cards without turning client diffs into game authority', () => {
   assert.match(index, /id="resultLayer" class="result-layer hidden"/);
   assert.match(index, /id="resultContinueBtn"/);

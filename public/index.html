@@ -549,7 +549,10 @@
       <section id="decisionLayer" class="decision-layer hidden" role="dialog" aria-modal="true" aria-labelledby="decisionTitle" aria-describedby="decisionBody">
         <div class="decision-backdrop" aria-hidden="true"></div>
         <div class="decision-card">
-          <span id="decisionKicker" class="decision-kicker">Требуется ваше решение</span>
+          <div class="decision-head">
+            <span id="decisionKicker" class="decision-kicker">Требуется ваше решение</span>
+            <button id="decisionMenuBtn" class="small decision-menu-btn" type="button">☰ Меню</button>
+          </div>
           <h2 id="decisionTitle">—</h2>
           <div id="decisionBody" class="decision-body"></div>
           <div id="decisionActions" class="decision-actions" role="group" aria-label="Варианты решения"></div>

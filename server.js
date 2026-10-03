@@ -1145,6 +1145,54 @@ function pendingDecisionError(room) {
   return null;
 }
 
+function mandatoryPendingKindsForPlayer(room, playerId) {
+  const kinds = [];
+  const event = pendingLegacy(room, 'event');
+  const feud = pendingLegacy(room, 'feud');
+  const assignment = pendingLegacy(room, 'assignment-choice');
+  const legendary = pendingLegacy(room, 'legendary-reaction');
+  if (event?.playerId === playerId) kinds.push('событие');
+  if (feud?.playerId === playerId) kinds.push('вражда');
+  if (assignment?.playerId === playerId) kinds.push('поручение');
+  if (legendary?.targetPlayerId === playerId) kinds.push('реакция');
+  if (room?.pendingIslandCorrection?.playerId === playerId) kinds.push('исправление острова');
+  if (room?.pendingFleetAdjustment?.playerId === playerId) kinds.push('корректировка флотилии');
+  return kinds;
+}
+
+function settleOptionalPendingOnPlayerDetach(room, player, reason = 'отключения') {
+  if (!room || !player) return { allianceCancelled: false, battleDeclined: false, battleResolved: false, mandatoryKinds: [] };
+
+  let allianceCancelled = false;
+  if (room.pendingAlliance && (room.pendingAlliance.fromId === player.id || room.pendingAlliance.toId === player.id)) {
+    room.pendingAlliance = null;
+    allianceCancelled = true;
+    log(room, `Незавершённое предложение союза отменено из-за ${reason} ${player.name}.`);
+  }
+
+  let battleDeclined = false;
+  let battleResolved = false;
+  if (room.pendingBattle) {
+    const invite = room.pendingBattle.invites.find(inv => inv.playerId === player.id && inv.response == null);
+    if (invite) {
+      invite.response = false;
+      battleDeclined = true;
+      log(room, `${player.name} автоматически не участвует в совместном бою из-за ${reason}.`);
+      if (allBattleInvitesAnswered(room.pendingBattle)) {
+        const resolved = resolvePendingBattle(room);
+        battleResolved = Boolean(resolved);
+      }
+    }
+  }
+
+  const mandatoryKinds = mandatoryPendingKindsForPlayer(room, player.id);
+  if (mandatoryKinds.length) {
+    log(room, `${player.name}: обязательное решение (${mandatoryKinds.join(', ')}) сохранено до возвращения.`);
+  }
+
+  return { allianceCancelled, battleDeclined, battleResolved, mandatoryKinds };
+}
+
 function fleetAdjustmentOptions(room, player, stage) {
   if (stage === 'bastions') {
     const owned = new Set(bastionSupportChoiceNeeds(room, player).owned);
@@ -3138,6 +3186,8 @@ io.on('connection', socket => {
       player.socketId = null;
       player.connected = false;
       socket.leave(room.code);
+      settleOptionalPendingOnPlayerDetach(room, player, 'выхода на главную');
+      log(room, `${player.name} вышел на главную. Его место в партии сохранено.`);
       emitRoom(room);
     }
     socket.data.roomCode = null;
@@ -4614,22 +4664,7 @@ io.on('connection', socket => {
       persistRoom(roomStore.save(room));
       return;
     }
-    if (room.pendingAlliance && (room.pendingAlliance.fromId === p.id || room.pendingAlliance.toId === p.id)) {
-      room.pendingAlliance = null;
-      log(room, `Незавершённое предложение союза отменено из-за отключения ${p.name}.`);
-    }
-    const disconnectLegendaryReaction = pendingLegacy(room, 'legendary-reaction');
-    if (disconnectLegendaryReaction && disconnectLegendaryReaction.targetPlayerId === p.id) {
-      log(room, `${p.name} отключился во время обязательного решения по «Покрову моря». Решение сохранено до переподключения.`);
-    }
-    if (room.pendingBattle) {
-      const invite = room.pendingBattle.invites.find(inv => inv.playerId === p.id && inv.response == null);
-      if (invite) {
-        invite.response = false;
-        log(room, `${p.name} автоматически не участвует в совместном бою из-за отключения.`);
-        if (allBattleInvitesAnswered(room.pendingBattle)) resolvePendingBattle(room);
-      }
-    }
+    settleOptionalPendingOnPlayerDetach(room, p, 'отключения');
     log(room, `${p.name} отключился. Его место сохранено.`);
     emitRoom(room);
   });

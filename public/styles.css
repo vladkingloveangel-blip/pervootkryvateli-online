@@ -1136,6 +1136,19 @@ body.connection-lost #entry button { pointer-events: none; opacity: .55; }
     overscroll-behavior: contain;
   }
 
+  body.game-active .decision-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  body.game-active .decision-menu-btn {
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding-inline: 12px;
+  }
+
   body.game-active .decision-kicker {
     color: var(--accent);
     font-size: 10px;
