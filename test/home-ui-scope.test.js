@@ -123,7 +123,7 @@ test('Settings is separate from Profile and persists real sound controls', () =>
 
 test('How to Play is a dedicated Home guide without changing game help', () => {
   assert.ok(html.includes('id="howToPlayPanel" class="panel how-to-play-panel hidden"'));
-  assert.ok(html.includes('id="howToPlayOpenBtn"'));
+  assert.ok(html.includes('data-home-menu="how-to"'));
   assert.ok(html.includes('id="howToRulesBtn"'));
   assert.ok(app.includes('function openHowToPlay()'));
   assert.ok(app.includes("$('howToPlayOpenBtn').addEventListener('click', openHowToPlay)"));
