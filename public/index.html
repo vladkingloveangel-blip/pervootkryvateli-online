@@ -53,24 +53,13 @@
       </div>
       <div class="entry-actions auth-actions">
         <button id="authSubmitBtn" class="primary" type="button">Войти</button>
-        <button id="loginBtn" class="hidden" type="button" tabindex="-1" aria-hidden="true">Войти</button>
-        <button id="registerBtn" class="hidden" type="button" tabindex="-1" aria-hidden="true">Создать аккаунт</button>
       </div>
       <p id="authModeHint" class="auth-mode-hint">Нет аккаунта? Выберите «Регистрация».</p>
       <p id="authError" class="error" role="alert"></p>
     </section>
 
     <div id="gameAccountBackdrop" class="game-account-backdrop hidden"></div>
-    <section id="accountBar" class="panel account-bar hidden">
-      <div class="account-summary"><strong id="accountName">—</strong> <span id="accountRole" class="mini-badge">игрок</span></div>
-      <div class="room-actions">
-        <button id="myGamesOpenBtn" class="small">Мои игры</button>
-        <button id="howToPlayOpenBtn" class="small">Как играть</button>
-        <button id="profileOpenBtn" class="small">Профиль</button>
-        <button id="adminOpenBtn" class="small hidden">Админ-панель</button>
-        <button id="logoutBtn" class="small danger-soft">Выйти из аккаунта</button>
-      </div>
-    </section>
+
 
     <div id="gameMenuBackdrop" class="game-menu-backdrop hidden"></div>
     <section id="gameMenuPanel" class="game-menu-panel hidden" role="dialog" aria-modal="true" aria-labelledby="gameMenuTitle">
@@ -279,7 +268,6 @@
           </label>
           <button id="joinBtn" class="primary entry-submit">Войти в игру</button>
         </div>
-        <button id="installAppBtn" class="hidden">Установить на телефон</button>
       </div>
       <p id="entryError" class="error" role="alert"></p>
     </section>
