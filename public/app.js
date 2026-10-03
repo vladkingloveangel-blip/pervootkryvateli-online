@@ -70,8 +70,16 @@
   }
 
 
+  function syncLogoutAvailability() {
+    const logout = $('logoutBtn');
+    if (!logout) return;
+    const inPartyContext = document.body.classList.contains('game-active') || Boolean(state.room) || state.spectating;
+    logout.classList.toggle('hidden', inPartyContext);
+  }
+
   function setGameScreenActive(active) {
     document.body.classList.toggle('game-active', Boolean(active));
+    syncLogoutAvailability();
     if (!active) {
       closeGameMenu();
       closeGameAccountMenu();
@@ -104,6 +112,7 @@
   function openGameAccountMenu() {
     if (!state.accountUser || !document.body.classList.contains('game-active')) return;
     closeGameMenu();
+    syncLogoutAvailability();
     document.body.classList.add('game-account-open');
     $('gameAccountBackdrop').classList.remove('hidden');
   }
@@ -134,6 +143,7 @@
     $('accountName').textContent = user?.displayName || user?.username || 'Игрок';
     $('accountRole').textContent = user?.role === 'admin' ? 'администратор' : 'игрок';
     $('adminOpenBtn').classList.toggle('hidden', user?.role !== 'admin');
+    syncLogoutAvailability();
     loadMyGames();
     if (!$('nameInput').value) $('nameInput').value = user?.displayName || user?.username || '';
     if (!state.profileOpen && !state.spectating && !state.room && $('adminPanel').classList.contains('hidden')) $('entry').classList.remove('hidden');
@@ -789,17 +799,35 @@
     }
   });
   $('myGamesRefreshBtn').addEventListener('click', loadMyGames);
-  $('myGamesOpenBtn').addEventListener('click', () => {
+
+  function goHomeToGames() {
+    if (goHomeToGames.pending) return;
+    closeGameMenu();
     closeGameAccountMenu();
-    socket.emit('goHome', {}, res => {
-      if (!res?.ok) return handleGameAck(res);
+
+    if (!state.room) {
+      $('entry').classList.remove('hidden');
+      loadMyGames();
+      syncLogoutAvailability();
+      return;
+    }
+
+    goHomeToGames.pending = true;
+    socket.timeout(10000).emit('goHome', {}, (error, res) => {
+      goHomeToGames.pending = false;
+      const result = error
+        ? { ok: false, error: 'Не удалось выйти на главную. Проверьте соединение и попробуйте ещё раз.' }
+        : res;
+      if (!result?.ok) return handleGameAck(result);
       state.spectating = false;
       document.body.classList.remove('spectator-mode');
       $('adminPanel').classList.add('hidden');
       $('spectatorBanner').classList.add('hidden');
       clearSession();
     });
-  });
+  }
+
+  $('myGamesOpenBtn').addEventListener('click', goHomeToGames);
   $('adminRefreshBtn').addEventListener('click', loadAdminRooms);
   $('adminBackBtn').addEventListener('click', () => {
     socket.emit('adminStopWatching', {}, () => {});
@@ -1210,9 +1238,8 @@
       openGameAccountMenu();
       return;
     }
-    if (kind === 'exit') {
-      closeGameMenu();
-      $('logoutBtn').click();
+    if (kind === 'home') {
+      goHomeToGames();
       return;
     }
     openMenuInfoSheet(kind);

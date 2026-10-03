@@ -1350,7 +1350,7 @@ test('UI-24 shows a compact public active-alliance status in player cards', () =
 
 test('UI-25 adds one unified secondary game menu over the map', () => {
   assert.match(index, /id="gameMenuPanel" class="game-menu-panel hidden"/);
-  for (const key of ['metrics','holdings','diplomacy','journal','help','endgame','settings','exit']) {
+  for (const key of ['metrics','holdings','diplomacy','journal','help','endgame','settings','home']) {
     assert.match(index, new RegExp('data-game-menu="' + key + '"'));
   }
   assert.match(styles, /UI-25 — unified secondary game menu/);
@@ -1364,16 +1364,48 @@ test('UI-25 HUD menu opens the game menu rather than the old account popover', (
   assert.doesNotMatch(app, /\$\('hudMenuBtn'\)\.addEventListener\('click', \(\) => toggleGameAccountMenu\(\)\)/);
 });
 
-test('UI-25 menu routes to existing secondary surfaces without adding gameplay socket logic', () => {
+test('UI-25 menu routes secondary surfaces and returns home without logging out', () => {
   const start = app.indexOf('  function openMenuInfoSheet(');
   const end = app.indexOf('\n  function cargoSummary', start);
   assert.ok(start >= 0 && end > start);
   const code = app.slice(start, end);
   assert.match(code, /renderDiplomacyObjectSheet\(null\)/);
   assert.match(code, /openGameAccountMenu\(\)/);
-  assert.match(code, /\$\('logoutBtn'\)\.click\(\)/);
+  assert.match(code, /kind === 'home'/);
+  assert.match(code, /goHomeToGames\(\)/);
+  assert.doesNotMatch(code, /\$\('logoutBtn'\)\.click\(\)/);
   assert.doesNotMatch(code, /openMobileTab|data-mobile-nav/);
-  assert.doesNotMatch(code, /socket\.emit\(/);
+});
+
+test('UI-25 game menu exposes a direct home action and no account logout action', () => {
+  const start = index.indexOf('id="gameMenuPanel"');
+  const end = index.indexOf('id="profilePanel"', start);
+  const code = index.slice(start, end);
+  assert.match(code, /data-game-menu="home"/);
+  assert.match(code, /К моим играм/);
+  assert.match(code, /На главную без выхода из аккаунта/);
+  assert.doesNotMatch(code, /data-game-menu="exit"/);
+  assert.doesNotMatch(code, /Выйти из аккаунта/);
+});
+
+test('UI-25 goHome keeps account identity and logout is hidden in party context', () => {
+  const helperStart = app.indexOf('  function goHomeToGames()');
+  const helperEnd = app.indexOf("\n  $('myGamesOpenBtn')", helperStart);
+  assert.ok(helperStart >= 0 && helperEnd > helperStart);
+  const helper = app.slice(helperStart, helperEnd);
+  assert.match(helper, /socket\.timeout\(10000\)\.emit\('goHome'/);
+  assert.match(helper, /clearSession\(\)/);
+  assert.doesNotMatch(helper, /accountToken\s*=|localStorage\.removeItem\('pervo:accountToken'\)|logoutBtn/);
+
+  const syncStart = app.indexOf('  function syncLogoutAvailability()');
+  const syncEnd = app.indexOf('\n\n  function setGameScreenActive', syncStart);
+  const sync = app.slice(syncStart, syncEnd);
+  assert.match(sync, /Boolean\(state\.room\)/);
+  assert.match(sync, /state\.spectating/);
+  assert.match(sync, /logout\.classList\.toggle\('hidden', inPartyContext\)/);
+
+  assert.match(app, /\$\('myGamesOpenBtn'\)\.addEventListener\('click', goHomeToGames\)/);
+  assert.equal((app.match(/\$\('logoutBtn'\)\.click\(\)/g) || []).length, 0);
 });
 
 test('UI-25 keeps ordinary turn actions outside the secondary menu', () => {
