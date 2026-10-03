@@ -648,8 +648,9 @@ function publicRoom(room, viewerId = null) {
     },
     legendaryPool: {
       mode: BALANCE.legendaryPool?.mode || 'random-with-replacement',
-      selection: BALANCE.legendaryPool?.selection || 'uniform',
+      selection: BALANCE.legendaryPool?.selection || 'weighted',
       typeIds: [...(BALANCE.legendaryPool?.typeIds || [])],
+      weights: { ...(BALANCE.legendaryPool?.weights || {}) },
     },
     factions: POLITICAL_FACTION_ORDER.map(factionId => {
       const f = FACTIONS[factionId];

@@ -22,8 +22,12 @@ function selectTreasureOutcome(rng = Math.random) {
 
 function selectLegendaryAbility(rng = Math.random) {
   const candidates = canonicalLegendaryCandidates();
-  const weighted = candidates.flatMap(card => Array(card.id === 'hellfire' ? 1 : 2).fill(card));
-  return cloneDefinition(selectIndependent(weighted, rng));
+  const weights = BALANCE.legendaryPool?.weights || {};
+  const weighted = candidates.flatMap(card => {
+    const count = Math.max(0, Math.floor(Number(weights[card.id]) || 0));
+    return Array(count).fill(card);
+  });
+  return cloneDefinition(selectIndependent(weighted.length ? weighted : candidates, rng));
 }
 
 function selectTreasureCandidates(count, rng = Math.random) {

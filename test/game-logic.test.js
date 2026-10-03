@@ -1292,13 +1292,14 @@ function has(cells, row, col) { return cells.some(c => c.row === row && c.col ==
   assert.equal(p.cargo.quantity, 2);
 }
 
-// Цифровой легендарный пул содержит четыре типа и выбирает независимо с возвращением.
+// Цифровой легендарный пул выбирает независимо с возвращением по canonical весам 2/1/2/2.
 {
   assert.equal(BALANCE.legendaryPool.mode,'random-with-replacement');
-  assert.equal(BALANCE.legendaryPool.selection,'uniform');
+  assert.equal(BALANCE.legendaryPool.selection,'weighted');
+  assert.deepEqual(BALANCE.legendaryPool.weights,{ 'sea-veil':2, hellfire:1, 'mist-path':2, 'sea-curse':2 });
   assert.deepEqual(
-    [0,0.25,0.5,0.75].map(value=>drawLegendaryCard(null,()=>value).id),
-    ['sea-veil','sea-veil','mist-path','sea-curse']
+    [0,0.2,0.3,0.43,0.6,0.72,0.99].map(value=>drawLegendaryCard(null,()=>value).id),
+    ['sea-veil','sea-veil','hellfire','mist-path','mist-path','sea-curse','sea-curse']
   );
   assert.equal(drawLegendaryCard(null,()=>0).id,'sea-veil');
   assert.equal(drawLegendaryCard(null,()=>0).id,'sea-veil'); // тот же тип может выпасть повторно

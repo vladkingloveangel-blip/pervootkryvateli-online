@@ -277,8 +277,9 @@ test('author decisions include the closed R29 Scout visibility rule', () => {
   assert.equal(rules.metadata.mapCanon.canonical,true);
   assert.equal(rules.metadata.mapCanon.source,'current-online-map');
   assert.equal(rules.legends.legendaryPool.mode,'random-with-replacement');
-  assert.equal(rules.legends.legendaryPool.selection,'uniform');
+  assert.equal(rules.legends.legendaryPool.selection,'weighted');
   assert.deepEqual(rules.legends.legendaryPool.typeIds,['sea-veil','hellfire','mist-path','sea-curse']);
+  assert.deepEqual(rules.legends.legendaryPool.weights,{'sea-veil':2,hellfire:1,'mist-path':2,'sea-curse':2});
   assert.equal(rules.legends.legendaryPool.consumedOnUse,true);
   assert.deepEqual(rules.legends.expeditions.map(card=>card.placeId),['kraken','abyss','pharaoh','pearl','vortex','icebergs','rose']);
   assert.equal(Object.hasOwn(rules.legends,'legendaryDeck'),false);

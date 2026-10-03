@@ -227,8 +227,9 @@ test('accounts, moves, restart recovery, private My Games, reattachment and admi
   assert.equal(Object.hasOwn(watch.room.eventDecks,'legendary'),false);
   assert.deepEqual(watch.room.legendaryPool,{
     mode:'random-with-replacement',
-    selection:'uniform',
+    selection:'weighted',
     typeIds:['sea-veil','hellfire','mist-path','sea-curse'],
+    weights:{'sea-veil':2,hellfire:1,'mist-path':2,'sea-curse':2},
   });
   assert.equal(watch.room.players.every(player=>player.hasActiveExpedition===false && player.expeditionHistoryCount===0),true);
   assert.equal(Object.hasOwn(watch.room.balanceCatalog,'assignmentReplacementPrice'),false);

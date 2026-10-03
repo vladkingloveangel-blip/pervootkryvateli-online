@@ -133,8 +133,9 @@ test('appendix G assignments and legendary places reference the entities named i
   }
   assert.deepEqual(rules.legends.legendaryPool,{
     mode:'random-with-replacement',
-    selection:'uniform',
+    selection:'weighted',
     typeIds:['sea-veil','hellfire','mist-path','sea-curse'],
+    weights:{'sea-veil':2,hellfire:1,'mist-path':2,'sea-curse':2},
     consumedOnUse:true,
   });
 });

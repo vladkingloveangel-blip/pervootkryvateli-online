@@ -359,14 +359,24 @@ function validateRules(rules, map) {
   records(legends.legendary, 'legendary'); records(legends.treasures, 'treasures');
   check(legends.legendary.length === 4, 'legendary', 'expected four digital legendary types');
   check(legends.legendaryPool?.mode === 'random-with-replacement', 'legendaryPool.mode', 'expected random-with-replacement');
-  check(legends.legendaryPool?.selection === 'uniform', 'legendaryPool.selection', 'expected uniform selection');
+  check(legends.legendaryPool?.selection === 'weighted', 'legendaryPool.selection', 'expected weighted selection');
   check(legends.legendaryPool?.consumedOnUse === true, 'legendaryPool.consumedOnUse', 'legendary cards must be consumed on use');
   check(Array.isArray(legends.legendaryPool?.typeIds), 'legendaryPool.typeIds', 'missing type ids');
+  const legendaryWeights = legends.legendaryPool?.weights;
+  check(legendaryWeights && typeof legendaryWeights === 'object' && !Array.isArray(legendaryWeights), 'legendaryPool.weights', 'missing weights');
   if (Array.isArray(legends.legendaryPool?.typeIds)) {
     unique(legends.legendaryPool.typeIds, 'legendaryPool.typeIds');
     check(legends.legendaryPool.typeIds.length === legends.legendary.length, 'legendaryPool.typeIds', 'pool/type count mismatch');
-    for (const id of legends.legendaryPool.typeIds) ref(id, new Set(legends.legendary.map(c=>c.id)), 'legendaryPool.typeIds');
+    for (const id of legends.legendaryPool.typeIds) {
+      ref(id, new Set(legends.legendary.map(c=>c.id)), 'legendaryPool.typeIds');
+      positive(legendaryWeights?.[id], `legendaryPool.weights.${id}`);
+    }
+    check(Object.keys(legendaryWeights || {}).every(id => legends.legendaryPool.typeIds.includes(id)), 'legendaryPool.weights', 'unexpected weight id');
   }
+  check(legendaryWeights?.['sea-veil'] === 2, 'legendaryPool.weights.sea-veil', 'expected canonical weight 2');
+  check(legendaryWeights?.hellfire === 1, 'legendaryPool.weights.hellfire', 'expected canonical weight 1');
+  check(legendaryWeights?.['mist-path'] === 2, 'legendaryPool.weights.mist-path', 'expected canonical weight 2');
+  check(legendaryWeights?.['sea-curse'] === 2, 'legendaryPool.weights.sea-curse', 'expected canonical weight 2');
   check(legends.treasurePool?.mode === 'random-with-replacement', 'treasurePool.mode', 'expected random-with-replacement');
   check(legends.treasurePool?.selection === 'uniform', 'treasurePool.selection', 'expected uniform selection');
   check(Array.isArray(legends.treasurePool?.typeIds), 'treasurePool.typeIds', 'missing treasure type ids');
