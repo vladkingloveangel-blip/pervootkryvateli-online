@@ -66,3 +66,21 @@ body.home-active #entry[data-entry-mode="join"] .entry-captain-fields{margin-bot
 body.home-active #entry #codeInput{text-transform:uppercase;text-align:center;font-size:24px;font-weight:800;letter-spacing:.22em}
 body.home-active #entry #entryError{min-height:18px;margin:10px 0 0}
 @media(max-width:520px){body.home-active #entry.entry-panel{width:calc(100% - 8px);margin-top:clamp(28px,6dvh,60px);padding:14px}body.home-active .entry-captain-fields{grid-template-columns:1fr}}
+
+/* Step 7: My Games */
+body.home-active #myGamesPanel{position:relative;z-index:2;width:min(100%,680px);margin:clamp(30px,7dvh,80px) auto 0;padding:18px;border:1px solid rgba(222,187,105,.55);border-radius:20px;background:linear-gradient(180deg,rgba(7,37,45,.92),rgba(4,24,31,.97));box-shadow:0 18px 48px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,238,190,.06);backdrop-filter:blur(8px)}
+body.home-active #myGamesPanel.hidden{display:none}
+body.home-active .my-games-head{display:grid;grid-template-columns:auto 1fr auto;align-items:start;gap:14px;margin-bottom:16px}
+body.home-active .my-games-head>div{min-width:0}
+body.home-active .my-games-head span{display:block;font-size:10px;font-weight:700;letter-spacing:.2em;color:rgba(235,207,139,.72)}
+body.home-active .my-games-head h1{margin:3px 0 4px;font-family:Georgia,'Times New Roman',serif;font-size:clamp(24px,7vw,34px);color:#f0dda8}
+body.home-active .my-games-head p{margin:0;font-size:12px}
+body.home-active .my-games-refresh{display:grid;place-items:center;width:42px;height:42px;padding:0;border:1px solid rgba(220,183,96,.52);border-radius:50%;background:rgba(7,32,40,.86);color:#ecd79e;font-size:22px}
+body.home-active .my-games-list{display:grid;gap:10px;min-height:56px}
+body.home-active .my-games-list>.admin-room-card{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:14px;padding:14px;border:1px solid rgba(198,165,91,.34);border-radius:14px;background:rgba(8,39,47,.82)}
+body.home-active .my-games-list>.admin-room-card>div{min-width:0}
+body.home-active .my-games-list>.admin-room-card strong{color:#f0dda8;font-family:Georgia,'Times New Roman',serif;font-size:18px}
+body.home-active .my-games-list>.admin-room-card .muted{margin-top:3px;font-size:11px;overflow-wrap:anywhere}
+body.home-active .my-games-list>.admin-room-card button{min-height:42px;white-space:nowrap}
+body.home-active #myGamesError{min-height:18px;margin:10px 0 0}
+@media(max-width:520px){body.home-active #myGamesPanel{width:calc(100% - 8px);margin-top:clamp(24px,5dvh,52px);padding:14px}body.home-active .my-games-head{gap:9px}body.home-active .my-games-list>.admin-room-card{grid-template-columns:1fr}body.home-active .my-games-list>.admin-room-card button{width:100%}}
