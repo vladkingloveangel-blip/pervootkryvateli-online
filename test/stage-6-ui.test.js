@@ -1425,7 +1425,8 @@ test('UI-25 goHome keeps account identity and logout is hidden in party context'
   assert.match(sync, /state\.spectating/);
   assert.match(sync, /logout\.classList\.toggle\('hidden', inPartyContext\)/);
 
-  assert.match(app, /\$\('myGamesOpenBtn'\)\.addEventListener\('click', goHomeToGames\)/);
+  assert.match(app, /if \(action === 'games'\) return openMyGames\(\)/);
+  assert.match(app, /if \(action === 'logout'\) return logoutAccount\(\)/);
   assert.equal((app.match(/\$\('logoutBtn'\)\.click\(\)/g) || []).length, 0);
 });
 
