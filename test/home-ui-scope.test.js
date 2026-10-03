@@ -16,7 +16,7 @@ test('home shell and active game are sibling UI scopes', () => {
   assert.ok(homeClose > homeOpen);
   assert.ok(game > homeClose, '#game must stay outside #homeShell');
   const homeMarkup = html.slice(homeOpen, homeClose);
-  for (const id of ['authPanel', 'accountBar', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'homePrimaryAction', 'myGamesPanel', 'playFlow', 'entry']) {
+  for (const id of ['authPanel', 'accountBar', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel', 'homePrimaryAction', 'myGamesPanel', 'playFlow', 'entry']) {
     assert.match(homeMarkup, new RegExp('id="' + id + '"'));
   }
 });
@@ -128,6 +128,21 @@ test('How to Play is a dedicated Home guide without changing game help', () => {
   assert.ok(html.includes('id="howToRulesBtn"'));
   assert.ok(app.includes('function openHowToPlay()'));
   assert.ok(app.includes("$('howToPlayOpenBtn').addEventListener('click', openHowToPlay)"));
-  assert.ok(app.includes("new CustomEvent('home:open-rules')"));
+  assert.ok(app.includes("$('howToRulesBtn').addEventListener('click', () => openRules('how-to'))"));
+  assert.ok(html.includes('data-game-menu="help"'));
+});
+
+
+test('Rules is a dedicated Home reader linked from How to Play', () => {
+  assert.ok(html.includes('id="rulesPanel" class="panel rules-panel hidden"'));
+  assert.ok(html.includes('data-rules-target="rulesBasics"'));
+  assert.ok(html.includes('data-rules-target="rulesFleet"'));
+  assert.ok(html.includes('data-rules-target="rulesIslands"'));
+  assert.ok(html.includes('data-rules-target="rulesCombat"'));
+  assert.ok(html.includes('data-rules-target="rulesEvents"'));
+  assert.ok(html.includes('data-rules-target="rulesGoals"'));
+  assert.ok(app.includes("function openRules(returnTo = 'home')"));
+  assert.ok(app.includes("$('howToRulesBtn').addEventListener('click', () => openRules('how-to'))"));
+  assert.ok(app.includes("$('rulesBackBtn').addEventListener('click', closeRules)"));
   assert.ok(html.includes('data-game-menu="help"'));
 });
