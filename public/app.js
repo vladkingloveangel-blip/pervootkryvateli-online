@@ -978,7 +978,12 @@
   $('authDisplayName').addEventListener('keydown', e => {
     if (e.key === 'Enter') submitAuth('register');
   });
-  const HOME_SCREEN_IDS = ['homePrimaryAction', 'playFlow', 'entry', 'myGamesPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel'];
+  const WELCOME_SCREEN_ID = 'homePrimaryAction';
+  const HOME_SCREEN_IDS = ['playFlow', 'entry', 'myGamesPanel', 'profilePanel', 'settingsPanel', 'howToPlayPanel', 'rulesPanel'];
+
+  function hideWelcomeScreen() {
+    $(WELCOME_SCREEN_ID)?.classList.add('hidden');
+  }
 
   function hideHomeScreens() {
     for (const id of HOME_SCREEN_IDS) $(id)?.classList.add('hidden');
@@ -986,13 +991,20 @@
 
   function showHomeScreen(id) {
     closeHomeMenu();
+    hideWelcomeScreen();
     hideHomeScreens();
     $(id)?.classList.remove('hidden');
   }
 
-  function showHomePrimary() {
+  function showWelcomeScreen() {
     state.profileOpen = false;
-    showHomeScreen('homePrimaryAction');
+    closeHomeMenu();
+    hideHomeScreens();
+    $(WELCOME_SCREEN_ID)?.classList.remove('hidden');
+  }
+
+  function showHomePrimary() {
+    showWelcomeScreen();
   }
 
   function openMyGames() {
